@@ -490,7 +490,7 @@ def test_provisioning_specs_freeze_distinct_service_and_role_boundaries():
     ).hexdigest() == \
         "17e431e33221426151a6ceb3eb2214b1abc51a7b9390d508603f233742deca28"
     assert tenant.digest == \
-        "sha256:54a86af2f0dfc5573a81de6e40b99e4f347f87fdf7a43b03a60e45e80e455fa9"
+        "sha256:2ac8487b64d4fb09d7576ef1ee09ac1f2a3cc5b20558f0d2137620b897c7157c"
     assert audit.digest == \
         "sha256:9b9d06c6f6ac5527a32014ec1719a3cee9742d4d5ab7d8e8a4ff2797053824f7"
     assert next(
@@ -1123,8 +1123,54 @@ def test_selection_control_roles_and_one_use_capsule_are_closed() -> None:
         "tenantCurrentContextSelectionOwnerAdmissionSealer"
         in tenant.manifest()["preLedgerBootstrap"]
     )
+    write_lock_sealer = (
+        tenant.tenant_write_lock_selection_owner_admission_sealer
+    )
+    assert write_lock_sealer is not None
+    assert (
+        write_lock_sealer.qualified_function,
+        write_lock_sealer.execute_role,
+        write_lock_sealer.ledger_schema_name,
+        write_lock_sealer.ledger_name,
+        write_lock_sealer.target_schema_name,
+        write_lock_sealer.owner_role,
+    ) == (
+        "ofarm_infrastructure."
+        "seal_tenant_write_lock_selection_owner_admission",
+        "ofarm_migrator",
+        "ofarm",
+        "schema_migration",
+        "ofarm",
+        "ofarm_owner",
+    )
+    write_lock_source = write_lock_sealer.source
+    assert write_lock_source.count("GRANT EXECUTE ON FUNCTION") == 1
+    assert "0007_tenant_write_lock_selection_owner_admission.sql" in (
+        write_lock_source
+    )
+    assert "ofarm.take_tenant_write_lock()" in write_lock_source
+    for forbidden in (
+        "provisioning_spec_digest",
+        "source_sha256",
+        "source_byte_length",
+        "applied_prefix_digest",
+        "release_identity",
+        "execution_id",
+        "current_setting",
+        "EXECUTE format",
+        "EXECUTE USING",
+    ):
+        assert forbidden not in write_lock_source
+    assert (
+        "tenantWriteLockSelectionOwnerAdmissionSealer"
+        in tenant.manifest()["preLedgerBootstrap"]
+    )
     assert (
         "tenantBindingSelectionControlAdmissionSealer"
+        not in audit.manifest()["preLedgerBootstrap"]
+    )
+    assert (
+        "tenantWriteLockSelectionOwnerAdmissionSealer"
         not in audit.manifest()["preLedgerBootstrap"]
     )
 

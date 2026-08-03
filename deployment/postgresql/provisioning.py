@@ -856,6 +856,40 @@ def _configure_target(
                     )
                 )
 
+            if (
+                spec.tenant_write_lock_selection_owner_admission_sealer
+                is not None
+            ):
+                write_lock_sealer_spec = (
+                    spec.tenant_write_lock_selection_owner_admission_sealer
+                )
+                write_lock_sealer = sql.Identifier(
+                    write_lock_sealer_spec.schema_name,
+                    write_lock_sealer_spec.function_name,
+                )
+                target.execute(
+                    sql.SQL(
+                        "CREATE FUNCTION {}() RETURNS pg_catalog.void "
+                        "LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE "
+                        "SECURITY DEFINER "
+                        "SET search_path = pg_catalog, pg_temp AS {}"
+                    ).format(
+                        write_lock_sealer,
+                        sql.Literal(write_lock_sealer_spec.source),
+                    )
+                )
+                target.execute(
+                    sql.SQL(
+                        "REVOKE ALL PRIVILEGES ON FUNCTION {}() FROM PUBLIC"
+                    ).format(write_lock_sealer)
+                )
+                target.execute(
+                    sql.SQL("GRANT EXECUTE ON FUNCTION {}() TO {}").format(
+                        write_lock_sealer,
+                        sql.Identifier(write_lock_sealer_spec.execute_role),
+                    )
+                )
+
             for owner in spec.default_privilege_owner_roles:
                 target.execute(
                     sql.SQL(
@@ -2630,9 +2664,9 @@ def _backend_statistics_acl_differences(
 
 @dataclass(frozen=True, slots=True)
 class _TenantBindingAdmissionPhase:
-    """One closed durable phase for the independently governed V5/V6 capsules.
+    """One closed durable phase for the governed V5/V6/V7 capsules.
 
-    P2 is intentionally absent because it is an uncommitted transition, never
+    A3 is intentionally absent because it is an uncommitted transition, never
     a lawful durable state for the provisioning observer.
     """
 
@@ -2641,28 +2675,45 @@ class _TenantBindingAdmissionPhase:
     selection_grants_required: bool
     context_capsule_required: bool
     context_grants_required: bool
+    write_lock_capsule_required: bool
+    write_lock_grant_required: bool
 
 
-_TENANT_BINDING_ADMISSION_P0 = _TenantBindingAdmissionPhase(
-    name="P0",
+_TENANT_BINDING_ADMISSION_A0 = _TenantBindingAdmissionPhase(
+    name="A0",
     selection_capsule_required=True,
     selection_grants_required=False,
     context_capsule_required=True,
     context_grants_required=False,
+    write_lock_capsule_required=True,
+    write_lock_grant_required=False,
 )
-_TENANT_BINDING_ADMISSION_P1 = _TenantBindingAdmissionPhase(
-    name="P1",
+_TENANT_BINDING_ADMISSION_A1 = _TenantBindingAdmissionPhase(
+    name="A1",
     selection_capsule_required=False,
     selection_grants_required=True,
     context_capsule_required=True,
     context_grants_required=False,
+    write_lock_capsule_required=True,
+    write_lock_grant_required=False,
 )
-_TENANT_BINDING_ADMISSION_P3 = _TenantBindingAdmissionPhase(
-    name="P3",
+_TENANT_BINDING_ADMISSION_A2 = _TenantBindingAdmissionPhase(
+    name="A2",
     selection_capsule_required=False,
     selection_grants_required=True,
     context_capsule_required=False,
     context_grants_required=True,
+    write_lock_capsule_required=True,
+    write_lock_grant_required=False,
+)
+_TENANT_BINDING_ADMISSION_A4 = _TenantBindingAdmissionPhase(
+    name="A4",
+    selection_capsule_required=False,
+    selection_grants_required=True,
+    context_capsule_required=False,
+    context_grants_required=True,
+    write_lock_capsule_required=False,
+    write_lock_grant_required=True,
 )
 
 
@@ -2670,22 +2721,33 @@ def _tenant_binding_admission_phase(
     target: psycopg.Connection,
     spec: ProvisioningSpec,
 ) -> tuple[_TenantBindingAdmissionPhase | None, list[str]]:
-    """Classify the sole durable V5/V6 capsule-and-grant phase matrix."""
+    """Classify the sole durable V5/V6/V7 capsule-and-grant phase matrix."""
 
     selection_sealer = spec.tenant_binding_selection_control_admission_sealer
     context_sealer = (
         spec.tenant_current_context_selection_owner_admission_sealer
     )
-    if selection_sealer is None and context_sealer is None:
+    write_lock_sealer = (
+        spec.tenant_write_lock_selection_owner_admission_sealer
+    )
+    if (
+        selection_sealer is None
+        and context_sealer is None
+        and write_lock_sealer is None
+    ):
         return None, []
-    if selection_sealer is None or context_sealer is None:
+    if (
+        selection_sealer is None
+        or context_sealer is None
+        or write_lock_sealer is None
+    ):
         return None, ["tenant binding admission capsule family differs"]
     ledger_present = target.execute(
         "SELECT pg_catalog.to_regclass(%s) IS NOT NULL",
         (spec.migration_service.qualified_ledger,),
     ).fetchone()[0]
     if not ledger_present:
-        return _TENANT_BINDING_ADMISSION_P0, []
+        return _TENANT_BINDING_ADMISSION_A0, []
     ledger_columns = target.execute(
         """
         SELECT relation.relkind,
@@ -2724,7 +2786,9 @@ def _tenant_binding_admission_phase(
             "pg_catalog.max(filename) FILTER (WHERE version = 5), "
             "pg_catalog.max(service_identity) FILTER (WHERE version = 5), "
             "pg_catalog.max(filename) FILTER (WHERE version = 6), "
-            "pg_catalog.max(service_identity) FILTER (WHERE version = 6) "
+            "pg_catalog.max(service_identity) FILTER (WHERE version = 6), "
+            "pg_catalog.max(filename) FILTER (WHERE version = 7), "
+            "pg_catalog.max(service_identity) FILTER (WHERE version = 7) "
             "FROM {}"
         ).format(
             sql.Identifier(
@@ -2741,9 +2805,11 @@ def _tenant_binding_admission_phase(
         v5_service,
         v6_filename,
         v6_service,
+        v7_filename,
+        v7_service,
     ) = tuple(row or ())
     if count == 0 and minimum is None and maximum is None:
-        return _TENANT_BINDING_ADMISSION_P0, []
+        return _TENANT_BINDING_ADMISSION_A0, []
     if (
         isinstance(count, int)
         and 1 <= count <= 4
@@ -2753,8 +2819,10 @@ def _tenant_binding_admission_phase(
         and v5_service is None
         and v6_filename is None
         and v6_service is None
+        and v7_filename is None
+        and v7_service is None
     ):
-        return _TENANT_BINDING_ADMISSION_P0, []
+        return _TENANT_BINDING_ADMISSION_A0, []
     if (
         count,
         minimum,
@@ -2763,6 +2831,8 @@ def _tenant_binding_admission_phase(
         v5_service,
         v6_filename,
         v6_service,
+        v7_filename,
+        v7_service,
     ) == (
         5,
         1,
@@ -2771,8 +2841,10 @@ def _tenant_binding_admission_phase(
         "ofarm.tenant-postgresql.v1",
         None,
         None,
+        None,
+        None,
     ):
-        return _TENANT_BINDING_ADMISSION_P1, []
+        return _TENANT_BINDING_ADMISSION_A1, []
     if (
         count,
         minimum,
@@ -2781,6 +2853,8 @@ def _tenant_binding_admission_phase(
         v5_service,
         v6_filename,
         v6_service,
+        v7_filename,
+        v7_service,
     ) == (
         6,
         1,
@@ -2789,8 +2863,32 @@ def _tenant_binding_admission_phase(
         "ofarm.tenant-postgresql.v1",
         "0006_tenant_current_context_selection_owner_admission.sql",
         "ofarm.tenant-postgresql.v1",
+        None,
+        None,
     ):
-        return _TENANT_BINDING_ADMISSION_P3, []
+        return _TENANT_BINDING_ADMISSION_A2, []
+    if (
+        count,
+        minimum,
+        maximum,
+        v5_filename,
+        v5_service,
+        v6_filename,
+        v6_service,
+        v7_filename,
+        v7_service,
+    ) == (
+        7,
+        1,
+        7,
+        "0005_tenant_binding_selection_control_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+        "0006_tenant_current_context_selection_owner_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+        "0007_tenant_write_lock_selection_owner_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+    ):
+        return _TENANT_BINDING_ADMISSION_A4, []
     return None, ["tenant binding admission phase differs"]
 
 
@@ -2930,6 +3028,67 @@ def _tenant_current_context_owner_admission_acl_differences(
     return []
 
 
+def _tenant_write_lock_owner_admission_acl_differences(
+    target: psycopg.Connection,
+    spec: ProvisioningSpec,
+    *,
+    phase: _TenantBindingAdmissionPhase | None,
+) -> list[str]:
+    sealer = spec.tenant_write_lock_selection_owner_admission_sealer
+    lock = spec.tenant_write_lock
+    if sealer is None or lock is None:
+        return []
+    routine_present = target.execute(
+        "SELECT pg_catalog.to_regprocedure(%s) IS NOT NULL",
+        (lock.qualified_function + "()",),
+    ).fetchone()[0]
+    if not routine_present:
+        ledger_present = target.execute(
+            "SELECT pg_catalog.to_regclass(%s) IS NOT NULL",
+            (spec.migration_service.qualified_ledger,),
+        ).fetchone()[0]
+        if (
+            phase is not None
+            and phase.name == "A0"
+            and not ledger_present
+        ):
+            return []
+        return ["tenant write-lock selection-owner admission ACL differs"]
+    rows = target.execute(
+        """
+        SELECT CASE WHEN acl.grantee = 0 THEN 'PUBLIC'
+                    ELSE pg_catalog.pg_get_userbyid(acl.grantee) END,
+               pg_catalog.pg_get_userbyid(acl.grantor),
+               acl.privilege_type,
+               acl.is_grantable
+        FROM pg_catalog.pg_proc AS routine
+        JOIN pg_catalog.pg_namespace AS namespace
+             ON namespace.oid = routine.pronamespace
+        CROSS JOIN LATERAL pg_catalog.aclexplode(
+            COALESCE(
+                routine.proacl,
+                pg_catalog.acldefault('f', routine.proowner)
+            )
+        ) AS acl
+        WHERE namespace.nspname = %s
+          AND routine.proname = %s
+          AND pg_catalog.pg_get_function_identity_arguments(routine.oid) = ''
+        ORDER BY 1, 2, 3, 4
+        """,
+        (lock.schema_name, lock.function_name),
+    ).fetchall()
+    expected = {
+        (lock.owner_role, lock.owner_role, "EXECUTE", False),
+        ("ofarm_app", lock.owner_role, "EXECUTE", False),
+        ("ofarm_worker", lock.owner_role, "EXECUTE", False),
+    }
+    if phase is not None and phase.write_lock_grant_required:
+        expected.add((sealer.owner_role, lock.owner_role, "EXECUTE", False))
+    if {tuple(row) for row in rows} != expected:
+        return ["tenant write-lock selection-owner admission ACL differs"]
+    return []
+
+
 def _migration_lock_capsule_differences(
     target: psycopg.Connection, spec: ProvisioningSpec
 ) -> list[str]:
@@ -2948,6 +3107,10 @@ def _migration_lock_capsule_differences(
     context_capsule_required = (
         admission_phase is not None
         and admission_phase.context_capsule_required
+    )
+    write_lock_capsule_required = (
+        admission_phase is not None
+        and admission_phase.write_lock_capsule_required
     )
     rows = target.execute(
         """
@@ -3072,6 +3235,11 @@ def _migration_lock_capsule_differences(
     )
     if context_sealer is not None and context_capsule_required:
         expected_identities.add((context_sealer.function_name, ""))
+    write_lock_sealer = (
+        spec.tenant_write_lock_selection_owner_admission_sealer
+    )
+    if write_lock_sealer is not None and write_lock_capsule_required:
+        expected_identities.add((write_lock_sealer.function_name, ""))
     if set(row_map) != expected_identities:
         differences.append("migration-lock infrastructure routine differs")
     elif tuple(row_map[(lock.function_name, "")]) != expected_lock:
@@ -3186,6 +3354,43 @@ def _migration_lock_capsule_differences(
             ):
                 differences.append(
                     "tenant current-context selection-owner admission sealer differs"
+                )
+
+    write_lock_sealer_owner: str | None = None
+    if write_lock_sealer is not None and write_lock_capsule_required:
+        write_lock_sealer_row = row_map.get((write_lock_sealer.function_name, ""))
+        if write_lock_sealer_row is None:
+            differences.append(
+                "tenant write-lock selection-owner admission sealer differs"
+            )
+        else:
+            write_lock_sealer_owner = write_lock_sealer_row[2]
+            if (
+                write_lock_sealer_owner.startswith("ofarm_")
+                or tuple(write_lock_sealer_row[3:])
+                != (
+                    True,
+                    "plpgsql",
+                    "f",
+                    True,
+                    False,
+                    False,
+                    "v",
+                    "u",
+                    False,
+                    True,
+                    False,
+                    write_lock_sealer.source,
+                    None,
+                    ["search_path=pg_catalog, pg_temp"],
+                    100,
+                    0,
+                    True,
+                    True,
+                )
+            ):
+                differences.append(
+                    "tenant write-lock selection-owner admission sealer differs"
                 )
 
     acl_rows = target.execute(
@@ -3325,6 +3530,31 @@ def _migration_lock_capsule_differences(
                 ),
             }
         )
+    if (
+        write_lock_sealer is not None
+        and write_lock_capsule_required
+        and write_lock_sealer_owner is not None
+    ):
+        expected_acl.update(
+            {
+                (
+                    write_lock_sealer.function_name,
+                    "",
+                    write_lock_sealer_owner,
+                    write_lock_sealer_owner,
+                    "EXECUTE",
+                    False,
+                ),
+                (
+                    write_lock_sealer.function_name,
+                    "",
+                    write_lock_sealer.execute_role,
+                    write_lock_sealer_owner,
+                    "EXECUTE",
+                    False,
+                ),
+            }
+        )
     if {tuple(row) for row in acl_rows} != expected_acl:
         differences.append("migration-lock infrastructure routine ACL differs")
 
@@ -3383,6 +3613,13 @@ def _migration_lock_capsule_differences(
     )
     differences.extend(
         _tenant_current_context_owner_admission_acl_differences(
+            target,
+            spec,
+            phase=admission_phase,
+        )
+    )
+    differences.extend(
+        _tenant_write_lock_owner_admission_acl_differences(
             target,
             spec,
             phase=admission_phase,
@@ -3537,6 +3774,26 @@ def _unmigrated_object_differences(
         )
         try:
             unexpected_rows.remove(expected_context_sealer_routine)
+        except ValueError:
+            pass
+    write_lock_capsule_required = (
+        admission_phase is not None
+        and admission_phase.write_lock_capsule_required
+    )
+    if (
+        spec.tenant_write_lock_selection_owner_admission_sealer is not None
+        and write_lock_capsule_required
+    ):
+        write_lock_sealer = (
+            spec.tenant_write_lock_selection_owner_admission_sealer
+        )
+        expected_write_lock_sealer_routine = (
+            "routine",
+            write_lock_sealer.schema_name,
+            write_lock_sealer.function_name,
+        )
+        try:
+            unexpected_rows.remove(expected_write_lock_sealer_routine)
         except ValueError:
             pass
     if spec.native_verifier is not None:

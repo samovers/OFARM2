@@ -144,7 +144,7 @@ def test_tenant_v6_is_verifier_only_and_pins_the_closed_owner_admission():
     assert migration.source_sha256 == \
         "sha256:a61c668a2bae04026b8413385f8bc1b5fd43f08f8d5281501ff766a57d552b48"
     assert migration.byte_length == 8655
-    assert migration_set.digest == \
+    assert migration_set.prefix_digest(6) == \
         "sha256:209990a8a9ac60ab096b11d418051127b7c891e4bfc6cefdf282d72f3875d0de"
     assert b"observed_migration_count <> 6" in migration.source_bytes
     assert b"tenant current-context selection-owner admission ACL differs" in (
@@ -153,6 +153,41 @@ def test_tenant_v6_is_verifier_only_and_pins_the_closed_owner_admission():
     assert b"GRANT EXECUTE ON FUNCTION" not in migration.source_bytes
     assert b"ALTER FUNCTION ofarm.current_" not in migration.source_bytes
     assert b"CREATE ROLE" not in migration.source_bytes
+
+
+def test_tenant_v7_is_verifier_only_and_pins_write_lock_owner_admission():
+    migration_set = load_authoritative_migration_set(
+        PACKAGE_ROOT,
+        TENANT_SERVICE,
+    )
+    migration = migration_set.migrations[6]
+
+    assert migration.filename == \
+        "0007_tenant_write_lock_selection_owner_admission.sql"
+    assert migration.source_sha256 == \
+        "sha256:cf8594b6c456953004912722b168d6bdda7c6dbfc903ba8099b018e2f270dff7"
+    assert migration.byte_length == 7936
+    assert migration_set.digest == \
+        "sha256:5616797d1362c55c78175126edab29cc3e88c021ba0709e3766d3196d2b0126b"
+    assert b"observed_migration_count <> 7" in migration.source_bytes
+    assert b"tenant write-lock selection-owner admission ACL differs" in (
+        migration.source_bytes
+    )
+    assert b"GRANT EXECUTE ON FUNCTION" not in migration.source_bytes
+    assert b"ALTER FUNCTION ofarm.take_tenant_write_lock" not in (
+        migration.source_bytes
+    )
+    assert b"CREATE ROLE" not in migration.source_bytes
+    assert migration.source_bytes.count(
+        b"pg_catalog.length(verifier_definition) - pg_catalog.length("
+    ) == 7
+    assert b"routine_inventory_marker" in migration.source_bytes
+    assert b"write_lock_acl_check" in migration.source_bytes
+    assert b"old_migration_count" in migration.source_bytes
+    assert b"old_head_version" in migration.source_bytes
+    assert b"old_prefix_expression" in migration.source_bytes
+    assert b"old_catalog_digest" in migration.source_bytes
+    assert b"old_provisioning_digest" in migration.source_bytes
 
 
 @pytest.mark.parametrize("mutation", ("edited", "renamed", "future", "missing"))

@@ -92,6 +92,7 @@ The only accepted migrations are:
 - `kernel/migrations/0004_temporal_governance_runtime_bundle_role.sql`;
 - `kernel/migrations/0005_tenant_binding_selection_control_admission.sql`;
 - `kernel/migrations/0006_tenant_current_context_selection_owner_admission.sql`;
+- `kernel/migrations/0007_tenant_write_lock_selection_owner_admission.sql`;
 - `security_audit/migrations/0001_initial.sql`;
 - `security_audit/migrations/0002_hmac_v2_operations.sql`; and
 - `security_audit/migrations/0003_outcome_reason_vocabulary.sql`.
@@ -133,13 +134,23 @@ runner verifies the exact binder-attributed ACLs, drops only the V6 capsule, and
 runs the final structural verifier before commit. Migration `0006` itself is
 verifier-only and issues no grant.
 
-This P0/P1/P3 matrix is the sole durable phase authority: P0 through head 4 has
-both capsules and neither admission grant set; P1 at exact head 5 has only the
-V6 capsule, the V5 controller grants, and no owner grants; P3 at exact head 6
-has neither capsule and both exact grant sets. Any mixed ledger, capsule, or ACL
-state refuses without repair. Failure before commit restores P1. Lost commit
-acknowledgement reports an unknown outcome; reconnect accepts only exact P1 for
-retry or exact P3 as a verified no-op preserving the committed execution UUID.
+Tenant migration `0007` admits only the existing `NOLOGIN ofarm_owner` role to
+the existing no-argument `ofarm.take_tenant_write_lock()` wrapper. Fresh
+provisioning creates one static no-argument V7 capsule owned by the external
+provisioning superuser. The runner authenticates all nine V7 ledger fields,
+consumes only that capsule, verifies the exact lock-owner-attributed wrapper
+ACL, removes the capsule, restores the fixed migration execution role,
+re-authenticates the row, and runs the final structural verifier before commit.
+Migration `0007` itself is verifier-only and issues no privilege statement.
+
+The A0/A1/A2/A4 matrix is the sole durable phase authority. A0 through head 4
+has all three capsules and no admission grants. A1 at exact head 5 has the V5
+controller grants plus exact V6 and V7 capsules. A2 at exact head 6 has exact
+V5 and V6 grants plus the V7 capsule. A4 at exact head 7 has no capsule and all
+three exact grant sets. Any mixed ledger, capsule, or ACL state refuses without
+repair. Failure during V7 restores A2. Lost commit acknowledgement reports an
+unknown outcome; reconnect accepts only exact A2 for retry or exact A4 as a
+verified no-op preserving the committed execution UUID.
 
 The complete merged authority for V6 is the 50,383-byte
 `docs/rfcs/OFARM_Tenant_Current_Context_Selection_Owner_Admission_RFC_v0_1.md`
@@ -152,6 +163,15 @@ An existing pre-deployment target at durable head 5 or earlier that lacks the
 exact provisioning-owned V6 capsule is deliberately refused. This boundary
 authorizes no in-place upgrade or repair; that target must be reprovisioned
 before migration 0006 may run.
+
+The complete merged authority for V7 is the 45,758-byte
+`docs/rfcs/OFARM_Tenant_Write_Lock_Selection_Owner_Admission_RFC_v0_1.md` at
+`sha256:5745ad4b8b588be2b5a1b64b4b84aa757b23f8d2de00ca59e71de8ea304f51b0`.
+This admission does not add a login, role-assumption edge, raw advisory-lock
+grant, selection storage, activation function, RuntimeBundle integration,
+command, route, output, deployment repair, legacy behavior, or #192 behavior.
+An existing pre-deployment head-6 target without the exact V7 capsule is
+refused and must be reprovisioned; no in-place repair is authorized.
 
 The source and set digests cover exact bytes. The set framing uses the tagged,
 length-prefixed `OFARM_POSTGRESQL_MIGRATION_SET_V1` policy documented in
