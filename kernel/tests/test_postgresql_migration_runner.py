@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import secrets
 import socket
+import struct
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +32,7 @@ from deployment.postgresql.migration_runner import (
     MigrationRunReport,
     MigrationTargetError,
     _authenticate_tenant_binding_selection_control_admission_row,
+    _authenticate_tenant_current_context_selection_owner_admission_row,
     _begin_and_lock,
     _migrate_service_for_testing as migrate_service,
     initial_ledger_sql,
@@ -195,6 +197,279 @@ class _CommitAcknowledgementDropProxy:
                                     return
                                 tail = (tail + data)[-len(self._COMMIT_MARKER) :]
                                 continue
+                            client.sendall(data)
+                    except OSError as exc:
+                        if not self._stopped.is_set():
+                            self._errors.append(exc)
+                    finally:
+                        stop_relays()
+
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    client_future = executor.submit(forward_client)
+                    server_future = executor.submit(forward_server)
+                    client_future.result()
+                    server_future.result()
+        except OSError as exc:
+            if not self._stopped.is_set():
+                self._errors.append(exc)
+        finally:
+            self._stopped.set()
+
+
+class _V6LedgerBindSubstitutionProxy:
+    """Substitute one V6 ledger bind value at the real connection boundary."""
+
+    _INSERT_MARKER = (
+        b'INSERT INTO "ofarm"."schema_migration" '
+        b'(version, filename, source_sha256, source_byte_length, '
+        b'applied_prefix_digest, service_identity, '
+        b'provisioning_spec_digest, release_identity, execution_id)'
+    )
+    _FIELD_INDEX = {
+        field: index for index, field in enumerate(
+            (
+                "version",
+                "filename",
+                "source_sha256",
+                "source_byte_length",
+                "applied_prefix_digest",
+                "service_identity",
+                "provisioning_spec_digest",
+                "release_identity",
+                "execution_id",
+            )
+        )
+    }
+
+    def __init__(self, upstream_dsn: str, substituted_field: str) -> None:
+        parameters = psycopg.conninfo.conninfo_to_dict(upstream_dsn)
+        host = parameters.get("host")
+        if not host or host.startswith("/"):
+            pytest.skip("a TCP migrator DSN is required for ledger substitution")
+        self._upstream = (host, int(parameters.get("port") or 5432))
+        self._substituted_field = substituted_field
+        self._listener = socket.create_server(("127.0.0.1", 0), backlog=1)
+        self._listener.settimeout(10)
+        self._stopped = Event()
+        self.parameter_substituted = Event()
+        self._errors: list[BaseException] = []
+        self._thread = Thread(target=self._serve, daemon=True)
+        parameters.pop("hostaddr", None)
+        parameters.update(
+            host="127.0.0.1",
+            port=str(self._listener.getsockname()[1]),
+            sslmode="disable",
+            connect_timeout="5",
+        )
+        self.dsn = psycopg.conninfo.make_conninfo(**parameters)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def close(self) -> None:
+        self._stopped.set()
+        self._listener.close()
+        self._thread.join(timeout=10)
+        if self._thread.is_alive():
+            raise AssertionError("ledger substitution proxy did not stop")
+        if self._errors:
+            raise AssertionError(
+                "ledger substitution proxy failed"
+            ) from self._errors[0]
+
+    @staticmethod
+    def _cstring_end(payload: bytes, start: int) -> int:
+        end = payload.find(b"\x00", start)
+        if end < 0:
+            raise AssertionError("PostgreSQL frontend cstring is incomplete")
+        return end
+
+    def _substitute_value(self, value: bytes, format_code: int) -> bytes:
+        field = self._substituted_field
+        if field == "version":
+            if format_code == 0:
+                return b"7"
+            return (7).to_bytes(len(value), "big", signed=True)
+        if field == "filename":
+            replacement = value.replace(b"owner", b"ownez", 1)
+            if replacement == value:
+                raise AssertionError("V6 filename bind value is not recognizable")
+            return replacement
+        if field == "source_sha256":
+            return b"sha256:" + b"0" * 64
+        if field == "source_byte_length":
+            if format_code == 0:
+                return str(int(value) + 1).encode("ascii")
+            number = int.from_bytes(value, "big", signed=True) + 1
+            return number.to_bytes(len(value), "big", signed=True)
+        if field == "applied_prefix_digest":
+            return b"sha256:" + b"1" * 64
+        if field == "service_identity":
+            return value[:-1] + (b"2" if value[-1:] != b"2" else b"3")
+        if field == "provisioning_spec_digest":
+            return b"sha256:" + b"2" * 64
+        if field == "release_identity":
+            return value[:-1] + (b"x" if value[-1:] != b"x" else b"y")
+        if field == "execution_id":
+            replacement = bytearray(value)
+            if format_code == 0:
+                replacement[-1] = (
+                    ord("0") if replacement[-1] != ord("0") else ord("1")
+                )
+            else:
+                replacement[-1] = replacement[-1] ^ 1
+            return bytes(replacement)
+        raise AssertionError(f"unsupported V6 ledger field {field!r}")
+
+    def _rewrite_bind(self, frame: bytes) -> bytes:
+        payload = frame[5:]
+        portal_end = self._cstring_end(payload, 0)
+        statement_start = portal_end + 1
+        statement_end = self._cstring_end(payload, statement_start)
+        offset = statement_end + 1
+        format_count = struct.unpack_from("!H", payload, offset)[0]
+        offset += 2
+        formats = [
+            struct.unpack_from("!H", payload, offset + index * 2)[0]
+            for index in range(format_count)
+        ]
+        offset += format_count * 2
+        parameter_count = struct.unpack_from("!H", payload, offset)[0]
+        offset += 2
+        parameters: list[tuple[int, int, int]] = []
+        for _index in range(parameter_count):
+            length_offset = offset
+            length = struct.unpack_from("!i", payload, offset)[0]
+            offset += 4
+            if length < 0:
+                parameters.append((length_offset, offset, offset))
+                continue
+            value_start = offset
+            offset += length
+            parameters.append((length_offset, value_start, offset))
+
+        target_index = self._FIELD_INDEX[self._substituted_field]
+        if target_index >= len(parameters):
+            raise AssertionError("V6 ledger bind parameter list is incomplete")
+        length_offset, value_start, value_end = parameters[target_index]
+        if value_start == value_end:
+            raise AssertionError("V6 ledger bind parameter is null or empty")
+        if format_count == 0:
+            format_code = 0
+        elif format_count == 1:
+            format_code = formats[0]
+        elif format_count == parameter_count:
+            format_code = formats[target_index]
+        else:
+            raise AssertionError("PostgreSQL bind format list is malformed")
+        replacement = self._substitute_value(
+            payload[value_start:value_end],
+            format_code,
+        )
+        rewritten_payload = (
+            payload[:length_offset]
+            + struct.pack("!i", len(replacement))
+            + replacement
+            + payload[value_end:]
+        )
+        self.parameter_substituted.set()
+        return (
+            b"B"
+            + struct.pack("!I", len(rewritten_payload) + 4)
+            + rewritten_payload
+        )
+
+    def _serve(self) -> None:
+        try:
+            client, _address = self._listener.accept()
+            with client, socket.create_connection(
+                self._upstream,
+                timeout=10,
+            ) as upstream:
+                client.settimeout(10)
+                upstream.settimeout(10)
+                v6_statements: set[bytes] = set()
+
+                def stop_relays() -> None:
+                    self._stopped.set()
+                    for relay_socket in (client, upstream):
+                        try:
+                            relay_socket.shutdown(socket.SHUT_RDWR)
+                        except OSError:
+                            pass
+
+                def forward_client() -> None:
+                    buffer = b""
+                    startup_forwarded = False
+                    try:
+                        while not self._stopped.is_set():
+                            data = client.recv(65_536)
+                            if not data:
+                                return
+                            buffer += data
+                            while True:
+                                header_size = 5 if startup_forwarded else 4
+                                if len(buffer) < header_size:
+                                    break
+                                if startup_forwarded:
+                                    frame_size = 1 + struct.unpack_from(
+                                        "!I", buffer, 1
+                                    )[0]
+                                else:
+                                    frame_size = struct.unpack_from(
+                                        "!I", buffer, 0
+                                    )[0]
+                                if len(buffer) < frame_size:
+                                    break
+                                frame, buffer = (
+                                    buffer[:frame_size],
+                                    buffer[frame_size:],
+                                )
+                                if not startup_forwarded:
+                                    startup_forwarded = True
+                                elif frame[:1] == b"P":
+                                    payload = frame[5:]
+                                    name_end = self._cstring_end(payload, 0)
+                                    query_start = name_end + 1
+                                    query_end = self._cstring_end(
+                                        payload,
+                                        query_start,
+                                    )
+                                    statement_name = payload[:name_end]
+                                    if self._INSERT_MARKER in payload[
+                                        query_start:query_end
+                                    ]:
+                                        v6_statements.add(statement_name)
+                                    else:
+                                        v6_statements.discard(statement_name)
+                                elif (
+                                    frame[:1] == b"B"
+                                    and not self.parameter_substituted.is_set()
+                                ):
+                                    payload = frame[5:]
+                                    portal_end = self._cstring_end(payload, 0)
+                                    statement_start = portal_end + 1
+                                    statement_end = self._cstring_end(
+                                        payload,
+                                        statement_start,
+                                    )
+                                    if payload[
+                                        statement_start:statement_end
+                                    ] in v6_statements:
+                                        frame = self._rewrite_bind(frame)
+                                upstream.sendall(frame)
+                    except OSError as exc:
+                        if not self._stopped.is_set():
+                            self._errors.append(exc)
+                    finally:
+                        stop_relays()
+
+                def forward_server() -> None:
+                    try:
+                        while not self._stopped.is_set():
+                            data = upstream.recv(65_536)
+                            if not data:
+                                return
                             client.sendall(data)
                     except OSError as exc:
                         if not self._stopped.is_set():
@@ -916,6 +1191,73 @@ def test_v5_capsule_requires_the_complete_current_runner_row() -> None:
             )
 
 
+def test_v6_capsule_requires_all_nine_current_runner_row_fields() -> None:
+    migration_set = load_migration_set(
+        Path(__file__).resolve().parents[2],
+        TENANT_SERVICE,
+    )
+    migration = migration_set.migrations[5]
+    release_identity = "ofarm-tests/issue-176-v6-row"
+    execution_id = uuid4()
+    exact_row = (
+        6,
+        "0006_tenant_current_context_selection_owner_admission.sql",
+        migration.source_sha256,
+        migration.byte_length,
+        migration_set.prefix_digest(6),
+        TENANT_SERVICE.identity,
+        TENANT_PROVISIONING_SPEC.digest,
+        release_identity,
+        execution_id,
+    )
+
+    class RowConnection:
+        def __init__(self, row):
+            self.row = row
+
+        def execute(self, _statement):
+            return self
+
+        def fetchone(self):
+            return self.row
+
+    _authenticate_tenant_current_context_selection_owner_admission_row(
+        RowConnection(exact_row),  # type: ignore[arg-type]
+        TENANT_PROVISIONING_SPEC,
+        migration_set,
+        migration,
+        release_identity,
+        execution_id,
+    )
+
+    wrong_values = (
+        5,
+        "0006_wrong.sql",
+        "sha256:" + "0" * 64,
+        migration.byte_length + 1,
+        "sha256:" + "1" * 64,
+        SECURITY_AUDIT_SERVICE.identity,
+        "sha256:" + "2" * 64,
+        "ofarm-tests/other-release",
+        uuid4(),
+    )
+    for index, wrong_value in enumerate(wrong_values):
+        wrong_row = list(exact_row)
+        wrong_row[index] = wrong_value
+        with pytest.raises(
+            MigrationDirtyError,
+            match="admission row is not exact",
+        ):
+            _authenticate_tenant_current_context_selection_owner_admission_row(
+                RowConnection(tuple(wrong_row)),  # type: ignore[arg-type]
+                TENANT_PROVISIONING_SPEC,
+                migration_set,
+                migration,
+                release_identity,
+                execution_id,
+            )
+
+
 def test_v5_precommit_failure_restores_v4_capsule_and_absent_grants(
     tenant_target: _TenantTarget,
     monkeypatch,
@@ -923,6 +1265,11 @@ def test_v5_precommit_failure_restores_v4_capsule_and_absent_grants(
     full_set = load_migration_set(
         Path(__file__).resolve().parents[2],
         TENANT_SERVICE,
+    )
+    v5_set = MigrationSet(
+        service=TENANT_SERVICE,
+        migrations=full_set.migrations[:5],
+        digest=full_set.prefix_digest(5),
     )
     v4_set = MigrationSet(
         service=TENANT_SERVICE,
@@ -938,26 +1285,37 @@ def test_v5_precommit_failure_restores_v4_capsule_and_absent_grants(
         execution_id=uuid4(),
     )
 
-    def refuse_final_structure(*_args, **_kwargs):
+    original_consume = (
+        migration_runner_module
+        ._consume_tenant_binding_selection_control_admission_sealer
+    )
+
+    def refuse_after_capsule(*args, **kwargs):
+        original_consume(*args, **kwargs)
         raise MigrationDirtyError("injected V5 final verification refusal")
 
     monkeypatch.setattr(
         migration_runner_module,
-        "_verify_final_service_structure",
-        refuse_final_structure,
+        "_consume_tenant_binding_selection_control_admission_sealer",
+        refuse_after_capsule,
     )
     with pytest.raises(
         MigrationDirtyError,
         match="injected V5 final verification refusal",
     ):
-        migrate_authoritative_service(
+        migrate_service(
             admin_dsn=tenant_target.admin_dsn,
             migrator_dsn=tenant_target.migrator_dsn,
             spec=TENANT_PROVISIONING_SPEC,
-            migration_set=full_set,
+            migration_set=v5_set,
             release_identity=RELEASE_IDENTITY + "-v5-refusal",
             execution_id=uuid4(),
         )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_consume_tenant_binding_selection_control_admission_sealer",
+        original_consume,
+    )
 
     sealer = (
         TENANT_PROVISIONING_SPEC
@@ -1007,11 +1365,11 @@ def test_v5_precommit_failure_restores_v4_capsule_and_absent_grants(
             MigrationTargetError,
             match="tenant binding selection-control admission ACL differs",
         ):
-            migrate_authoritative_service(
+            migrate_service(
                 admin_dsn=tenant_target.admin_dsn,
                 migrator_dsn=tenant_target.migrator_dsn,
                 spec=TENANT_PROVISIONING_SPEC,
-                migration_set=full_set,
+                migration_set=v5_set,
                 release_identity=RELEASE_IDENTITY + "-v4-with-grant",
                 execution_id=uuid4(),
             )
@@ -1031,11 +1389,11 @@ def test_v5_precommit_failure_restores_v4_capsule_and_absent_grants(
         )
 
     with pytest.raises(MigrationTargetError, match="sealer differs"):
-        migrate_authoritative_service(
+        migrate_service(
             admin_dsn=tenant_target.admin_dsn,
             migrator_dsn=tenant_target.migrator_dsn,
             spec=TENANT_PROVISIONING_SPEC,
-            migration_set=full_set,
+            migration_set=v5_set,
             release_identity=RELEASE_IDENTITY + "-v4-missing-capsule",
             execution_id=uuid4(),
         )
@@ -1048,6 +1406,11 @@ def test_v5_precommit_backend_loss_reconnects_from_exact_v4(
     full_set = load_migration_set(
         Path(__file__).resolve().parents[2],
         TENANT_SERVICE,
+    )
+    v5_set = MigrationSet(
+        service=TENANT_SERVICE,
+        migrations=full_set.migrations[:5],
+        digest=full_set.prefix_digest(5),
     )
     v4_set = MigrationSet(
         service=TENANT_SERVICE,
@@ -1084,11 +1447,11 @@ def test_v5_precommit_backend_loss_reconnects_from_exact_v4(
     )
     uncertain_execution_id = uuid4()
     with pytest.raises(MigrationOutcomeUnknown) as uncertain:
-        migrate_authoritative_service(
+        migrate_service(
             admin_dsn=tenant_target.admin_dsn,
             migrator_dsn=tenant_target.migrator_dsn,
             spec=TENANT_PROVISIONING_SPEC,
-            migration_set=full_set,
+            migration_set=v5_set,
             release_identity=RELEASE_IDENTITY + "-disconnect-unknown",
             execution_id=uncertain_execution_id,
         )
@@ -1124,11 +1487,11 @@ def test_v5_precommit_backend_loss_reconnects_from_exact_v4(
         ).fetchone() == (0,)
 
     monkeypatch.setattr(migration_runner_module, "_commit", original_commit)
-    recovered = migrate_authoritative_service(
+    recovered = migrate_service(
         admin_dsn=tenant_target.admin_dsn,
         migrator_dsn=tenant_target.migrator_dsn,
         spec=TENANT_PROVISIONING_SPEC,
-        migration_set=full_set,
+        migration_set=v5_set,
         release_identity=RELEASE_IDENTITY + "-disconnect-recovered",
         execution_id=uuid4(),
     )
@@ -1167,6 +1530,11 @@ def test_v5_postcommit_acknowledgement_loss_reconnects_as_verified_noop(
         Path(__file__).resolve().parents[2],
         TENANT_SERVICE,
     )
+    v5_set = MigrationSet(
+        service=TENANT_SERVICE,
+        migrations=full_set.migrations[:5],
+        digest=full_set.prefix_digest(5),
+    )
     v4_set = MigrationSet(
         service=TENANT_SERVICE,
         migrations=full_set.migrations[:4],
@@ -1186,11 +1554,11 @@ def test_v5_postcommit_acknowledgement_loss_reconnects_as_verified_noop(
     uncertain_execution_id = uuid4()
     try:
         with pytest.raises(MigrationOutcomeUnknown) as uncertain:
-            migrate_authoritative_service(
+            migrate_service(
                 admin_dsn=tenant_target.admin_dsn,
                 migrator_dsn=proxy.dsn,
                 spec=TENANT_PROVISIONING_SPEC,
-                migration_set=full_set,
+                migration_set=v5_set,
                 release_identity=RELEASE_IDENTITY + "-ack-loss-unknown",
                 execution_id=uncertain_execution_id,
             )
@@ -1252,26 +1620,12 @@ def test_v5_postcommit_acknowledgement_loss_reconnects_as_verified_noop(
                 False,
             ),
         ]
-    with psycopg.connect(tenant_target.migrator_dsn) as verifier_connection:
-        verifier_connection.execute("SET ROLE ofarm_owner")
-        verifier = verifier_connection.execute(
-            "SELECT * FROM ofarm.verify_tenant_structure()"
-        ).fetchone()
-        assert tuple(verifier[5:11]) == (
-            TENANT_PROVISIONING_SPEC.digest,
-            TENANT_SERVICE.identity,
-            5,
-            full_set.digest,
-            5,
-            False,
-        )
-
     retry_execution_id = uuid4()
-    recovered = migrate_authoritative_service(
+    recovered = migrate_service(
         admin_dsn=tenant_target.admin_dsn,
         migrator_dsn=tenant_target.migrator_dsn,
         spec=TENANT_PROVISIONING_SPEC,
-        migration_set=full_set,
+        migration_set=v5_set,
         release_identity=RELEASE_IDENTITY + "-ack-loss-reconnect",
         execution_id=retry_execution_id,
     )
@@ -1289,6 +1643,513 @@ def test_v5_postcommit_acknowledgement_loss_reconnects_as_verified_noop(
             "WHERE version = 5) "
             "FROM ofarm.schema_migration"
         ).fetchone() == (5, 5, uncertain_execution_id)
+
+
+def _advance_tenant_target_to_v5(
+    tenant_target: _TenantTarget,
+) -> MigrationSet:
+    full_set = load_migration_set(
+        Path(__file__).resolve().parents[2],
+        TENANT_SERVICE,
+    )
+    v5_set = MigrationSet(
+        service=TENANT_SERVICE,
+        migrations=full_set.migrations[:5],
+        digest=full_set.prefix_digest(5),
+    )
+    migrate_service(
+        admin_dsn=tenant_target.admin_dsn,
+        migrator_dsn=tenant_target.migrator_dsn,
+        spec=TENANT_PROVISIONING_SPEC,
+        migration_set=v5_set,
+        release_identity=RELEASE_IDENTITY + "-v5-prefix",
+        execution_id=uuid4(),
+    )
+    return full_set
+
+
+def _current_context_owner_admission_state(
+    target_admin_dsn: str,
+) -> tuple[tuple[int, int], bool, list[tuple[object, ...]]]:
+    sealer = (
+        TENANT_PROVISIONING_SPEC
+        .tenant_current_context_selection_owner_admission_sealer
+    )
+    assert sealer is not None
+    with psycopg.connect(target_admin_dsn, autocommit=True) as admin:
+        ledger = admin.execute(
+            "SELECT pg_catalog.count(*), pg_catalog.max(version) "
+            "FROM ofarm.schema_migration"
+        ).fetchone()
+        capsule_present = admin.execute(
+            "SELECT pg_catalog.to_regprocedure(%s) IS NOT NULL",
+            (sealer.qualified_function + "()",),
+        ).fetchone()[0]
+        rows = admin.execute(
+            """
+            SELECT routine.proname::text,
+                   pg_catalog.oidvectortypes(routine.proargtypes),
+                   grantee.rolname::text,
+                   pg_catalog.pg_get_userbyid(acl.grantor),
+                   acl.privilege_type,
+                   acl.is_grantable
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+                 ON namespace.oid = routine.pronamespace
+            CROSS JOIN LATERAL pg_catalog.aclexplode(
+                COALESCE(
+                    routine.proacl,
+                    pg_catalog.acldefault('f', routine.proowner)
+                )
+            ) AS acl
+            JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
+            WHERE namespace.nspname = 'ofarm'
+              AND routine.proname = ANY (%s::text[])
+              AND pg_catalog.oidvectortypes(routine.proargtypes) = ''
+              AND grantee.rolname = ANY (%s::text[])
+            ORDER BY 1, 2, 3, 4, 5, 6
+            """,
+            (
+                ["current_authenticated_principal_ref", "current_tenant_id"],
+                [
+                    "ofarm_owner",
+                    "ofarm_command_runtime_bundle_selection_controller",
+                    "ofarm_command_runtime_bundle_selection_control_login",
+                    "ofarm_migrator",
+                ],
+            ),
+        ).fetchall()
+    return tuple(ledger), capsule_present, [tuple(row) for row in rows]
+
+
+_EXPECTED_CURRENT_CONTEXT_OWNER_ADMISSION = [
+    (
+        "current_authenticated_principal_ref",
+        "",
+        "ofarm_owner",
+        "ofarm_binder",
+        "EXECUTE",
+        False,
+    ),
+    (
+        "current_tenant_id",
+        "",
+        "ofarm_owner",
+        "ofarm_binder",
+        "EXECUTE",
+        False,
+    ),
+]
+
+
+_V6_LEDGER_FIELDS = (
+    "version",
+    "filename",
+    "source_sha256",
+    "source_byte_length",
+    "applied_prefix_digest",
+    "service_identity",
+    "provisioning_spec_digest",
+    "release_identity",
+    "execution_id",
+)
+
+
+@pytest.mark.parametrize("substituted_field", _V6_LEDGER_FIELDS)
+def test_v6_live_ledger_substitution_refuses_before_capsule_use(
+    tenant_target: _TenantTarget,
+    substituted_field: str,
+) -> None:
+    full_set = _advance_tenant_target_to_v5(tenant_target)
+    assert _current_context_owner_admission_state(
+        tenant_target.target_admin_dsn
+    ) == ((5, 5), True, [])
+
+    proxy = _V6LedgerBindSubstitutionProxy(
+        tenant_target.migrator_dsn,
+        substituted_field,
+    )
+    proxy.start()
+    try:
+        if substituted_field == "version":
+            expected_error = pytest.raises(
+                MigrationExecutionError,
+                match="schema_migration_filename_check",
+            )
+        elif substituted_field == "service_identity":
+            expected_error = pytest.raises(
+                MigrationExecutionError,
+                match="schema_migration_service_check",
+            )
+        elif substituted_field in {"release_identity", "execution_id"}:
+            expected_error = pytest.raises(
+                MigrationDirtyError,
+                match=(
+                    "tenant current-context selection-owner admission row "
+                    "is not exact"
+                ),
+            )
+        else:
+            expected_error = pytest.raises(
+                MigrationDirtyError,
+                match="migration history is not the exact local prefix",
+            )
+        with expected_error:
+            migrate_authoritative_service(
+                admin_dsn=tenant_target.admin_dsn,
+                migrator_dsn=proxy.dsn,
+                spec=TENANT_PROVISIONING_SPEC,
+                migration_set=full_set,
+                release_identity=RELEASE_IDENTITY + "-v6-substitution",
+                execution_id=uuid4(),
+            )
+    finally:
+        proxy.close()
+
+    assert proxy.parameter_substituted.is_set()
+    assert _current_context_owner_admission_state(
+        tenant_target.target_admin_dsn
+    ) == ((5, 5), True, [])
+    verified = verify_service_infrastructure(
+        tenant_target.admin_dsn,
+        TENANT_PROVISIONING_SPEC,
+    )
+    assert verified.provisioning_spec_digest == TENANT_PROVISIONING_SPEC.digest
+
+
+def test_v6_row_is_authenticated_before_and_after_capsule_consumption(
+    tenant_target: _TenantTarget,
+    monkeypatch,
+) -> None:
+    full_set = _advance_tenant_target_to_v5(tenant_target)
+    sealer = (
+        TENANT_PROVISIONING_SPEC
+        .tenant_current_context_selection_owner_admission_sealer
+    )
+    assert sealer is not None
+    events: list[object] = []
+    authentication_count = 0
+    transition_verified = False
+    original_authenticate = (
+        migration_runner_module
+        ._authenticate_tenant_current_context_selection_owner_admission_row
+    )
+    original_consume = (
+        migration_runner_module
+        ._consume_tenant_current_context_selection_owner_admission_sealer
+    )
+    original_boundary = migration_runner_module._locked_boundary_differences
+    original_final = migration_runner_module._verify_final_service_structure
+
+    def trace_authentication(connection, *args, **kwargs):
+        nonlocal authentication_count
+        original_authenticate(connection, *args, **kwargs)
+        authentication_count += 1
+        state = connection.execute(
+            """
+            SELECT CURRENT_USER::text,
+                   EXISTS (
+                       SELECT 1
+                       FROM pg_catalog.pg_proc AS capsule
+                       JOIN pg_catalog.pg_namespace AS capsule_namespace
+                         ON capsule_namespace.oid = capsule.pronamespace
+                       WHERE capsule_namespace.nspname = %s
+                         AND capsule.proname = %s
+                         AND pg_catalog.pg_get_function_identity_arguments(
+                                 capsule.oid
+                             ) = ''
+                   ),
+                   (
+                       SELECT pg_catalog.count(*)
+                       FROM pg_catalog.pg_proc AS routine
+                       JOIN pg_catalog.pg_namespace AS namespace
+                         ON namespace.oid = routine.pronamespace
+                       CROSS JOIN LATERAL pg_catalog.aclexplode(
+                           COALESCE(
+                               routine.proacl,
+                               pg_catalog.acldefault('f', routine.proowner)
+                           )
+                       ) AS acl
+                       JOIN pg_catalog.pg_roles AS grantee
+                         ON grantee.oid = acl.grantee
+                       WHERE namespace.nspname = 'ofarm'
+                         AND routine.proname = ANY (%s::text[])
+                         AND pg_catalog.oidvectortypes(routine.proargtypes) = ''
+                         AND grantee.rolname = 'ofarm_owner'
+                   )
+            """,
+            (
+                sealer.schema_name,
+                sealer.function_name,
+                ["current_authenticated_principal_ref", "current_tenant_id"],
+            ),
+        ).fetchone()
+        events.append(("authenticate", *tuple(state or ())))
+
+    def trace_consumption(*args, **kwargs):
+        events.append("consume")
+        return original_consume(*args, **kwargs)
+
+    def trace_boundary(*args, **kwargs):
+        if authentication_count and not transition_verified:
+            events.append("boundary")
+        return original_boundary(*args, **kwargs)
+
+    def trace_final(*args, **kwargs):
+        nonlocal transition_verified
+        if not transition_verified:
+            events.append("final")
+            transition_verified = True
+        return original_final(*args, **kwargs)
+
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_authenticate_tenant_current_context_selection_owner_admission_row",
+        trace_authentication,
+    )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_consume_tenant_current_context_selection_owner_admission_sealer",
+        trace_consumption,
+    )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_locked_boundary_differences",
+        trace_boundary,
+    )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_verify_final_service_structure",
+        trace_final,
+    )
+
+    migrated = migrate_authoritative_service(
+        admin_dsn=tenant_target.admin_dsn,
+        migrator_dsn=tenant_target.migrator_dsn,
+        spec=TENANT_PROVISIONING_SPEC,
+        migration_set=full_set,
+        release_identity=RELEASE_IDENTITY + "-v6-order",
+        execution_id=uuid4(),
+    )
+    assert migrated.applied_versions == (6,)
+    assert events == [
+        ("authenticate", "ofarm_owner", True, 0),
+        "consume",
+        ("authenticate", "ofarm_owner", False, 2),
+        "boundary",
+        "final",
+    ]
+    assert _current_context_owner_admission_state(
+        tenant_target.target_admin_dsn
+    ) == ((6, 6), False, _EXPECTED_CURRENT_CONTEXT_OWNER_ADMISSION)
+
+
+def test_v6_precommit_failure_restores_exact_v5_and_mixed_states_refuse(
+    tenant_target: _TenantTarget,
+    monkeypatch,
+) -> None:
+    full_set = _advance_tenant_target_to_v5(tenant_target)
+    assert _current_context_owner_admission_state(
+        tenant_target.target_admin_dsn
+    ) == ((5, 5), True, [])
+
+    original_consume = (
+        migration_runner_module
+        ._consume_tenant_current_context_selection_owner_admission_sealer
+    )
+
+    def refuse_after_capsule(*args, **kwargs):
+        original_consume(*args, **kwargs)
+        raise MigrationDirtyError("injected V6 final verification refusal")
+
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_consume_tenant_current_context_selection_owner_admission_sealer",
+        refuse_after_capsule,
+    )
+    with pytest.raises(
+        MigrationDirtyError,
+        match="injected V6 final verification refusal",
+    ):
+        migrate_authoritative_service(
+            admin_dsn=tenant_target.admin_dsn,
+            migrator_dsn=tenant_target.migrator_dsn,
+            spec=TENANT_PROVISIONING_SPEC,
+            migration_set=full_set,
+            release_identity=RELEASE_IDENTITY + "-v6-refusal",
+            execution_id=uuid4(),
+        )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_consume_tenant_current_context_selection_owner_admission_sealer",
+        original_consume,
+    )
+    assert _current_context_owner_admission_state(
+        tenant_target.target_admin_dsn
+    ) == ((5, 5), True, [])
+
+    with psycopg.connect(
+        tenant_target.target_admin_dsn,
+        autocommit=True,
+    ) as admin:
+        admin.execute(
+            "GRANT EXECUTE ON FUNCTION ofarm.current_tenant_id() "
+            "TO ofarm_owner"
+        )
+    try:
+        with pytest.raises(MigrationTargetError, match="admission ACL differs"):
+            migrate_authoritative_service(
+                admin_dsn=tenant_target.admin_dsn,
+                migrator_dsn=tenant_target.migrator_dsn,
+                spec=TENANT_PROVISIONING_SPEC,
+                migration_set=full_set,
+                release_identity=RELEASE_IDENTITY + "-v5-one-owner-grant",
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(
+            tenant_target.target_admin_dsn,
+            autocommit=True,
+        ) as admin:
+            admin.execute(
+                "REVOKE EXECUTE ON FUNCTION ofarm.current_tenant_id() "
+                "FROM ofarm_owner"
+            )
+
+    sealer = (
+        TENANT_PROVISIONING_SPEC
+        .tenant_current_context_selection_owner_admission_sealer
+    )
+    assert sealer is not None
+    with psycopg.connect(
+        tenant_target.target_admin_dsn,
+        autocommit=True,
+    ) as admin:
+        admin.execute(
+            sql.SQL("DROP FUNCTION {}()").format(
+                sql.Identifier(sealer.schema_name, sealer.function_name)
+            )
+        )
+    with pytest.raises(MigrationTargetError, match="sealer differs"):
+        migrate_authoritative_service(
+            admin_dsn=tenant_target.admin_dsn,
+            migrator_dsn=tenant_target.migrator_dsn,
+            spec=TENANT_PROVISIONING_SPEC,
+            migration_set=full_set,
+            release_identity=RELEASE_IDENTITY + "-v5-missing-v6-capsule",
+            execution_id=uuid4(),
+        )
+
+
+def test_v6_precommit_backend_loss_reconnects_from_exact_v5(
+    tenant_target: _TenantTarget,
+    monkeypatch,
+) -> None:
+    full_set = _advance_tenant_target_to_v5(tenant_target)
+    original_commit = migration_runner_module._commit
+
+    def terminate_backend_at_commit(connection, migration, execution_id):
+        with psycopg.connect(
+            tenant_target.target_admin_dsn,
+            autocommit=True,
+        ) as admin:
+            terminated = admin.execute(
+                "SELECT pg_catalog.pg_terminate_backend(%s)",
+                (connection.info.backend_pid,),
+            ).fetchone()
+        assert terminated == (True,)
+        original_commit(connection, migration, execution_id)
+
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_commit",
+        terminate_backend_at_commit,
+    )
+    uncertain_execution_id = uuid4()
+    with pytest.raises(MigrationOutcomeUnknown) as uncertain:
+        migrate_authoritative_service(
+            admin_dsn=tenant_target.admin_dsn,
+            migrator_dsn=tenant_target.migrator_dsn,
+            spec=TENANT_PROVISIONING_SPEC,
+            migration_set=full_set,
+            release_identity=RELEASE_IDENTITY + "-v6-disconnect-unknown",
+            execution_id=uncertain_execution_id,
+        )
+    assert uncertain.value.version == 6
+    assert uncertain.value.execution_id == uncertain_execution_id
+    assert _current_context_owner_admission_state(
+        tenant_target.target_admin_dsn
+    ) == ((5, 5), True, [])
+
+    monkeypatch.setattr(migration_runner_module, "_commit", original_commit)
+    recovered = migrate_authoritative_service(
+        admin_dsn=tenant_target.admin_dsn,
+        migrator_dsn=tenant_target.migrator_dsn,
+        spec=TENANT_PROVISIONING_SPEC,
+        migration_set=full_set,
+        release_identity=RELEASE_IDENTITY + "-v6-disconnect-recovered",
+        execution_id=uuid4(),
+    )
+    assert recovered.previous_version == 5
+    assert recovered.applied_versions == (6,)
+    assert recovered.final_version == 6
+    assert _current_context_owner_admission_state(
+        tenant_target.target_admin_dsn
+    ) == ((6, 6), False, _EXPECTED_CURRENT_CONTEXT_OWNER_ADMISSION)
+
+
+def test_v6_postcommit_acknowledgement_loss_recovers_as_verified_noop(
+    tenant_target: _TenantTarget,
+) -> None:
+    full_set = _advance_tenant_target_to_v5(tenant_target)
+    proxy = _CommitAcknowledgementDropProxy(tenant_target.migrator_dsn)
+    proxy.start()
+    uncertain_execution_id = uuid4()
+    try:
+        with pytest.raises(MigrationOutcomeUnknown) as uncertain:
+            migrate_authoritative_service(
+                admin_dsn=tenant_target.admin_dsn,
+                migrator_dsn=proxy.dsn,
+                spec=TENANT_PROVISIONING_SPEC,
+                migration_set=full_set,
+                release_identity=RELEASE_IDENTITY + "-v6-ack-loss-unknown",
+                execution_id=uncertain_execution_id,
+            )
+        assert uncertain.value.version == 6
+        assert uncertain.value.execution_id == uncertain_execution_id
+    finally:
+        proxy.close()
+    assert proxy.acknowledgement_dropped.is_set()
+    assert _current_context_owner_admission_state(
+        tenant_target.target_admin_dsn
+    ) == ((6, 6), False, _EXPECTED_CURRENT_CONTEXT_OWNER_ADMISSION)
+
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            "SELECT execution_id FROM ofarm.schema_migration WHERE version = 6"
+        ).fetchone() == (uncertain_execution_id,)
+
+    retry_execution_id = uuid4()
+    recovered = migrate_authoritative_service(
+        admin_dsn=tenant_target.admin_dsn,
+        migrator_dsn=tenant_target.migrator_dsn,
+        spec=TENANT_PROVISIONING_SPEC,
+        migration_set=full_set,
+        release_identity=RELEASE_IDENTITY + "-v6-ack-loss-reconnect",
+        execution_id=retry_execution_id,
+    )
+    assert recovered.previous_version == 6
+    assert recovered.applied_versions == ()
+    assert recovered.final_version == 6
+    assert recovered.execution_id == retry_execution_id
+    assert recovered.observed_head_execution_id == uncertain_execution_id
+    assert recovered.verified_noop is True
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            "SELECT pg_catalog.count(*), pg_catalog.max(version), "
+            "(SELECT execution_id FROM ofarm.schema_migration "
+            "WHERE version = 6) FROM ofarm.schema_migration"
+        ).fetchone() == (6, 6, uncertain_execution_id)
 
 
 def test_resumes_at_0002_and_preserves_the_stable_0001_prefix(

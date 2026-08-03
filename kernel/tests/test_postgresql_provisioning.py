@@ -490,7 +490,7 @@ def test_provisioning_specs_freeze_distinct_service_and_role_boundaries():
     ).hexdigest() == \
         "17e431e33221426151a6ceb3eb2214b1abc51a7b9390d508603f233742deca28"
     assert tenant.digest == \
-        "sha256:e15a5d5903681e2796c70ca2cac19b1aa85d3538589f99046a01c3663f5d8556"
+        "sha256:54a86af2f0dfc5573a81de6e40b99e4f347f87fdf7a43b03a60e45e80e455fa9"
     assert audit.digest == \
         "sha256:9b9d06c6f6ac5527a32014ec1719a3cee9742d4d5ab7d8e8a4ff2797053824f7"
     assert next(
@@ -1076,6 +1076,51 @@ def test_selection_control_roles_and_one_use_capsule_are_closed() -> None:
         assert forbidden not in source
     assert (
         "tenantBindingSelectionControlAdmissionSealer"
+        in tenant.manifest()["preLedgerBootstrap"]
+    )
+
+    context_sealer = (
+        tenant.tenant_current_context_selection_owner_admission_sealer
+    )
+    assert context_sealer is not None
+    assert (
+        context_sealer.qualified_function,
+        context_sealer.execute_role,
+        context_sealer.ledger_schema_name,
+        context_sealer.ledger_name,
+        context_sealer.target_schema_name,
+        context_sealer.owner_role,
+    ) == (
+        "ofarm_infrastructure."
+        "seal_tenant_current_context_selection_owner_admission",
+        "ofarm_migrator",
+        "ofarm",
+        "schema_migration",
+        "ofarm",
+        "ofarm_owner",
+    )
+    context_source = context_sealer.source
+    assert context_source.count("GRANT EXECUTE ON FUNCTION") == 2
+    assert "0006_tenant_current_context_selection_owner_admission.sql" in (
+        context_source
+    )
+    assert "ofarm.tenant-postgresql.v1" in context_source
+    assert "current_tenant_id()" in context_source
+    assert "current_authenticated_principal_ref()" in context_source
+    for forbidden in (
+        "provisioning_spec_digest",
+        "source_sha256",
+        "source_byte_length",
+        "applied_prefix_digest",
+        "release_identity",
+        "execution_id",
+        "current_setting",
+        "EXECUTE format",
+        "EXECUTE USING",
+    ):
+        assert forbidden not in context_source
+    assert (
+        "tenantCurrentContextSelectionOwnerAdmissionSealer"
         in tenant.manifest()["preLedgerBootstrap"]
     )
     assert (
@@ -2437,7 +2482,10 @@ def test_tenant_owner_sealer_and_bigint_lock_grant_are_exactly_isolated(
     tenant_lock = spec.tenant_write_lock
     assert sealer is not None
     selection_sealer = spec.tenant_binding_selection_control_admission_sealer
-    assert selection_sealer is not None
+    context_sealer = (
+        spec.tenant_current_context_selection_owner_admission_sealer
+    )
+    assert selection_sealer is not None and context_sealer is not None
     assert tenant_lock is not None
     admin_dsn = provisioned_services["tenantAdmin"]
     target_dsn = _database_dsn(admin_dsn, spec.database_name)
@@ -2488,6 +2536,31 @@ def test_tenant_owner_sealer_and_bigint_lock_grant_are_exactly_isolated(
             selection_sealer.source,
         )
         assert admin.execute(
+            """
+            SELECT owner.rolsuper,
+                   pg_catalog.left(owner.rolname::text, 6) = 'ofarm_',
+                   routine.prosecdef,
+                   language.lanname::text,
+                   routine.prosrc
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+                 ON namespace.oid = routine.pronamespace
+            JOIN pg_catalog.pg_roles AS owner ON owner.oid = routine.proowner
+            JOIN pg_catalog.pg_language AS language
+                 ON language.oid = routine.prolang
+            WHERE namespace.nspname = %s
+              AND routine.proname = %s
+              AND pg_catalog.pg_get_function_identity_arguments(routine.oid) = ''
+            """,
+            (context_sealer.schema_name, context_sealer.function_name),
+        ).fetchone() == (
+            True,
+            False,
+            True,
+            "plpgsql",
+            context_sealer.source,
+        )
+        assert admin.execute(
             "SELECT pg_catalog.has_function_privilege("
             "'ofarm_migrator', %s, 'EXECUTE')",
             (sealer.qualified_function + "()",),
@@ -2508,6 +2581,16 @@ def test_tenant_owner_sealer_and_bigint_lock_grant_are_exactly_isolated(
             "'EXECUTE')",
             (selection_sealer.qualified_function + "()",),
         ).fetchone() == (False,)
+        assert admin.execute(
+            "SELECT pg_catalog.has_function_privilege("
+            "'ofarm_migrator', %s, 'EXECUTE'), "
+            "pg_catalog.has_function_privilege("
+            "'ofarm_app', %s, 'EXECUTE')",
+            (
+                context_sealer.qualified_function + "()",
+                context_sealer.qualified_function + "()",
+            ),
+        ).fetchone() == (True, False)
         assert admin.execute(
             "SELECT pg_catalog.has_function_privilege("
             "%s, 'pg_catalog.pg_advisory_xact_lock(bigint)', 'EXECUTE')",
@@ -2584,6 +2667,31 @@ def test_migration_lock_capsule_drift_refuses_without_repair(
     finally:
         with psycopg.connect(target_dsn, autocommit=True) as admin:
             admin.execute(sql.SQL("ALTER FUNCTION {}() VOLATILE").format(sealer))
+    verify_service(admin_dsn, spec)
+
+    context_sealer_spec = (
+        spec.tenant_current_context_selection_owner_admission_sealer
+    )
+    assert context_sealer_spec is not None
+    context_sealer = sql.Identifier(
+        context_sealer_spec.schema_name,
+        context_sealer_spec.function_name,
+    )
+    with psycopg.connect(target_dsn, autocommit=True) as admin:
+        admin.execute(
+            sql.SQL("ALTER FUNCTION {}() STABLE").format(context_sealer)
+        )
+    try:
+        with pytest.raises(
+            ProvisioningDriftError,
+            match="current-context selection-owner admission sealer",
+        ):
+            verify_service(admin_dsn, spec)
+    finally:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("ALTER FUNCTION {}() VOLATILE").format(context_sealer)
+            )
     verify_service(admin_dsn, spec)
 
     with psycopg.connect(target_dsn, autocommit=True) as admin:
