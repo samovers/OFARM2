@@ -1,7 +1,7 @@
 # OFARM2 Temporal Candidate Conformance Selection-Storage Admission — Phase A Contract v0.1
 
-**Status:** proposed Phase A contract; documentation-only, unapproved, and
-without conformance, database, selection, runtime, or deployment effect
+**Status:** architect-approved Phase A contract; documentation-only and without
+conformance, database, selection, runtime, or deployment effect
 
 **Contract identity:**
 `ofarm.temporal-candidate-conformance-selection-storage-admission.issue176.v0.1`
@@ -1001,3 +1001,205 @@ is this intended RFC, its only differences from the approved canonical design
 bytes are the truthful status transition and one complete approval appendix,
 and every recorded byte identity, prerequisite, review reference, decision
 card reference, and architect user-message reference verifies exactly.
+
+## Appendix A — Architect approval record
+
+This appendix is the one documentation-only approval record authorized by the
+designated architect. The underlying approved design remains the exact
+`51807`-byte proposed design identified below. The architect-approved status
+metadata above and this appendix are the only publication differences allowed
+by section 13.3.
+
+### A.1 Approved decision identity
+
+- contract identity:
+  `ofarm.temporal-candidate-conformance-selection-storage-admission.issue176.v0.1`;
+- intended path:
+  `docs/rfcs/OFARM_Temporal_Candidate_Conformance_Selection_Storage_Admission_RFC_v0_1.md`;
+- reviewed base: `d7d5f99e5677add8616510af4690cee210d75548`;
+- final reviewed PR head: `e170960bc69305ecb0e93b03b7ec5b021768b5d5`;
+- canonical approved-design encoding: UTF-8 with LF line endings and exactly
+  one terminal LF;
+- canonical approved-design byte length: `51807`; and
+- canonical approved-design SHA-256:
+  `sha256:22d5a95aeac98ad218cd44efe30703ea26226b4bbdef67634c506a2862d5490b`.
+
+The proposed and unapproved status wording inside those approved design bytes
+is preserved by identity. Publication changes only the status metadata above
+as expressly permitted by section 13.3.
+
+### A.2 Approval authority and provenance
+
+- Codex task: `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`;
+- live decision-card turn: `019fc82a-57af-7eb2-8fe7-5051e551623c`;
+- live decision-card stable item reference: `item-1994`;
+- live decision-card underlying message reference:
+  `msg_0b558b271be97d89016a70afd190b4819192f4ad1f2d3e2e22`;
+- live decision-card message timestamp: `2026-08-03T15:13:24.082Z`;
+- canonical decision-card extraction: UTF-8 with LF line endings, beginning
+  with `OFARM2 COMPLETE LIVE DECISION CARD` and ending with
+  `END OF OFARM2 COMPLETE LIVE DECISION CARD`, with no terminal LF;
+- canonical decision-card byte length: `13374`;
+- canonical decision-card SHA-256:
+  `sha256:40699df4be53db9e357bd1e6610ecedff7a76c74c7f05842ec03278d766e85c5`;
+- architect approval turn: `019fc836-5d20-7b31-b0d3-7429e12cce1f`;
+- architect user-message stable item reference: `item-1995`;
+- architect underlying user-message reference:
+  `msg_019fc836-5d6c-7a90-910a-57b39980817a`;
+- architect user-message timestamp: `2026-08-03T15:20:33.900Z`;
+- canonical approval-sentence encoding: UTF-8 with no terminal LF;
+- canonical approval-sentence byte length: `541`; and
+- canonical approval-sentence SHA-256:
+  `sha256:e5ac009a36f7c25524720c09f73069e80de6887a53792b249175620de5b848f4`.
+
+The architect's exact user-authored approval sentence was:
+
+> I explicitly approve the Phase A design of contract ofarm.temporal-candidate-conformance-selection-storage-admission.issue176.v0.1 at sha256:22d5a95aeac98ad218cd44efe30703ea26226b4bbdef67634c506a2862d5490b (51,807 bytes) in Codex task 019fa821-93c9-7ef1-8c94-1c0e92ea46b9 and authorize its one-file documentation approval record with exactly the provenance, permitted effect, non-effects, preservation rules, and next required sequence stated in the complete decision card displayed immediately before this approval request in the same task.
+
+The architect authored that exact sentence as a later message in the same
+Codex task after the complete live decision card. Typing it or copying it
+directly from that card is valid under section 13.2. It was not inferred from
+repository credentials, GitHub activity, PR authorship, review, comment,
+reaction, merge, generic approval, or an AI-generated message.
+
+### A.3 Exact prerequisite identities
+
+The approval preserves every prerequisite identity in sections 4.2 through
+4.7:
+
+- architecture report:
+  `reference/law/OFARM_Platform_Runtime_and_Product_Architecture_RC2_1.md`,
+  `96406` bytes,
+  `sha256:76357c6c7c184893f80219720f6343a682a859098f3703eb84c282fba0c02256`;
+- ADR 0001: `docs/adr/0001-tenancy-and-schema-migrations.md`, `147112`
+  bytes,
+  `sha256:bc49e566ddbdf98868162aa7ccca0940fa76fca1bfaaa261c8c831dbb5515a4d`;
+- ADR 0002: `docs/adr/0002-valid-time-and-knowledge-time.md`, `61427`
+  bytes,
+  `sha256:c23cb57616207f2f6d39103e429ea778d794ef85d2b198057806c8228d608796`;
+- ADR 0003: `docs/adr/0003-tenant-capability-trust-and-binder.md`, `93419`
+  bytes,
+  `sha256:b188f4d60e46887fde4231e73bb00adb9bd70b75e807627e8a3906389a0fa5be`;
+- parent contract identity:
+  `ofarm.tenant-command-runtime-bundle-selection-activation-admission.issue176.v0.1`;
+- parent path:
+  `docs/rfcs/OFARM_Tenant_Command_RuntimeBundle_Selection_Activation_Admission_RFC_v0_1.md`,
+  `52382` bytes,
+  `sha256:af69370fe268e0632318c95d3e60d83046a49d0948f2ba9cb05d2744ae82d6eb`;
+- admitted selection-binding identity:
+  `ofarm.tenant-command-runtime-bundle-selection.commit-operation-claim-draft.v0.1`;
+- selection schema:
+  `contracts/candidates/temporal_runtime_bundle_selection/OFARM_TenantCommandRuntimeBundleSelectionBinding_schema_v0_1.json`,
+  `17252` bytes,
+  `sha256:56604a52465ffc027382e99dea96f2c9bc1bd2479cbaff30dec6bd39c08e6b3d`;
+- selection binding:
+  `contracts/candidates/temporal_runtime_bundle_selection/OFARM_TenantCommandRuntimeBundleSelection_candidate_v0_1.json`,
+  `15993` file bytes,
+  `sha256:1500ffbbfdf11207a6657848fce12618347f767578e55dc070bb282dc5775aac`,
+  `13287` canonical bytes,
+  `sha256:56fb0f14a2514b34428841cb7bfc8681bb577ea3ecf57598be480683fb68524f`;
+- persistence-admission contract:
+  `docs/rfcs/OFARM_Temporal_Governance_Production_RuntimeBundle_Persistence_Admission_RFC_v0_1.md`,
+  `37254` bytes,
+  `sha256:40a20c5053857664cfbb2d6ac2814c6136125eb9908635495af9377e9d9f0870`;
+- migration `0004_temporal_governance_runtime_bundle_role.sql`, `6464` bytes,
+  `sha256:0c51948be7cebf2c1523d472ca44a57e32942bd358124e126ccaf2bad248ecc8`;
+- selection-control tenant-binding RFC:
+  `docs/rfcs/OFARM_Tenant_Binding_Selection_Control_Admission_RFC_v0_1.md`,
+  `32169` bytes,
+  `sha256:c1d02969811be0d5b02bdae158cb48e5d8148356ca9d4bac956c8861d529c37a`,
+  implementation head `79b2769e80fa530e19b642f0f7b3972fb331b338`,
+  implementation merge `c3adb8e47a01690920c539de9c54fb18c581cdaa`;
+- current-context selection-owner RFC:
+  `docs/rfcs/OFARM_Tenant_Current_Context_Selection_Owner_Admission_RFC_v0_1.md`,
+  `50383` bytes,
+  `sha256:af85e259230b69edeba80ddc2eea2f070a601fd3888fd463ce595f9cc446b13d`,
+  implementation head `2694465e81ba0e646c663c5a769ccd6afe3505eb`,
+  implementation merge `a1a2ae2249b3578f1479d8a979eb84d5aab7c331`;
+- tenant-write-lock selection-owner RFC:
+  `docs/rfcs/OFARM_Tenant_Write_Lock_Selection_Owner_Admission_RFC_v0_1.md`,
+  `45758` bytes,
+  `sha256:5745ad4b8b588be2b5a1b64b4b84aa757b23f8d2de00ca59e71de8ea304f51b0`,
+  implementation head `568b3a1db58fb97e61fdf5a22c4abd2adc6a15e6`,
+  implementation merge `d7d5f99e5677add8616510af4690cee210d75548`;
+- stable tenant migration prefix through migration 0003:
+  `sha256:ba7a193e96ca78d01edf529ed2e20bbd1810c0a3a0c13bc717969e8c5c739bf0`;
+- immutable tenant migration prefix through version 7:
+  `sha256:5616797d1362c55c78175126edab29cc3e88c021ba0709e3766d3196d2b0126b`;
+- migration 0005: `8545` bytes,
+  `sha256:fde66e835f8c4456d7404eb00b99292e267f573f8b126f781f3ed55bd5e8df9a`;
+- migration 0006: `8655` bytes,
+  `sha256:a61c668a2bae04026b8413385f8bc1b5fd43f08f8d5281501ff766a57d552b48`;
+- migration 0007: `7936` bytes,
+  `sha256:cf8594b6c456953004912722b168d6bdda7c6dbfc903ba8099b018e2f270dff7`;
+- tenant provisioning-spec digest:
+  `sha256:2ac8487b64d4fb09d7576ef1ee09ac1f2a3cc5b20558f0d2137620b897c7157c`;
+- V7 absent-state final tenant structural-verifier digest:
+  `sha256:fcc0e96b4520ffe51ddb5537df24040e4d5948a22b3c387351346cc588e87ee5`;
+  and
+- V7 absent-state external tenant catalog-verifier digest:
+  `sha256:026bb61026a9f752fc8dde84bca0e3cbbab374d0ac8f0ba942a72654e44f5f1a`.
+
+### A.4 Review evidence
+
+- PR: `#282`;
+- initial design review: issue comment `5166025097`;
+- precision re-review: issue comment `5166885403`;
+- final exact-head technical review: Review `4845534120`; and
+- exact reviewed head: `e170960bc69305ecb0e93b03b7ec5b021768b5d5`.
+
+Review `4845534120` states that final technical review passes, no blocker
+remains, the latest clarification is accepted, and the next lawful stage is
+this exact approval record followed by publication-byte and provenance
+re-review.
+
+### A.5 Permitted effect and non-effects
+
+The approval has exactly one permitted effect: the exact `51807`-byte
+canonical Phase A design becomes architect-approved and its one-file
+documentation approval record is authorized.
+
+The approval does not authorize conformance implementation or any checker
+change; migration 0008 or its execution; the adapter; database storage or
+mutation; a database role, ownership, membership, privilege, or grant;
+retained tenant selection or a selected RuntimeBundle instance; RuntimeBundle
+or profile activation; runtime integration; `COMMIT_OPERATION_CLAIM_DRAFT`
+integration; authorization behavior; routes or semantic-surface expansion;
+materialization, qualification, promotion, or publication; current-state
+reads; historical or WINDOW execution; outputs or receipts; deployment;
+legacy behavior; or any #192 behavior.
+
+No candidate artifact, active registry, RuntimeBundle selection source,
+profile, migration, database object, command, route, output, legacy authority,
+or #192 authority changes through this approval.
+
+### A.6 Preservation rules
+
+This published RFC preserves the approved decision, trust model, authority
+pins, classifier inventories, state model, authority map, invariants, negative
+cases, non-goals, verification, file boundaries, stop conditions, and
+merge-stop rule byte-for-byte. Only the status metadata and this appendix
+differ from the approved design.
+
+The approval record must not merge if any identity, prerequisite, review
+reference, decision-card reference, or architect user-message reference fails
+to verify. Phase B must authenticate the complete merged RFC path, contract
+identity, byte length, and SHA-256. The approved-design digest cannot substitute
+for that complete merged identity.
+
+Before deployment, this provisional Codex approval workflow must be replaced
+by independently human-controlled and independently verifiable signing or
+approval.
+
+### A.7 Next required sequence
+
+1. Run the required documentation and package conformance checks.
+2. Re-review the exact publication bytes and approval provenance.
+3. Merge only if every identity and reference verifies.
+4. Compute the complete merged RFC byte length and SHA-256.
+5. Obtain a separate explicit in-scope request for conformance Phase B.
+6. Make Phase B authenticate the complete merged RFC identity before applying
+   the exception.
+7. Implement and merge only the closed conformance allowlist in section 10.
+8. Rerun conformance on current `main`.
+9. Stop before the separately authorized database Phase B.
