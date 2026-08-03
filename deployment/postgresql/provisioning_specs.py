@@ -891,6 +891,96 @@ class TenantCurrentContextSelectionOwnerAdmissionSealerSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class TenantWriteLockSelectionOwnerAdmissionSealerSpec:
+    """One-use V7 capsule for the tenant write-lock owner admission."""
+
+    schema_name: str
+    function_name: str
+    execute_role: str
+    ledger_schema_name: str
+    ledger_name: str
+    target_schema_name: str
+    owner_role: str
+
+    @property
+    def qualified_function(self) -> str:
+        return f"{self.schema_name}.{self.function_name}"
+
+    @property
+    def source(self) -> str:
+        return " ".join(
+            (
+                "BEGIN",
+                "IF (SELECT pg_catalog.count(*) = 7 "
+                "AND pg_catalog.max(version) = 7 "
+                "AND pg_catalog.max(filename) FILTER (WHERE version = 7) = "
+                "'0007_tenant_write_lock_selection_owner_admission.sql' "
+                "AND pg_catalog.max(service_identity) "
+                "FILTER (WHERE version = 7) = "
+                "'ofarm.tenant-postgresql.v1' "
+                f"FROM {self.ledger_schema_name}.{self.ledger_name}) "
+                "IS DISTINCT FROM TRUE THEN",
+                "RAISE EXCEPTION USING ERRCODE = '55000', "
+                "MESSAGE = 'tenant write-lock selection-owner admission "
+                "ordering marker differs';",
+                "END IF;",
+                "GRANT EXECUTE ON FUNCTION "
+                f"{self.target_schema_name}.take_tenant_write_lock() "
+                f"TO {self.owner_role};",
+                f"GRANT CREATE ON SCHEMA {self.schema_name} "
+                f"TO {self.execute_role};",
+                f"ALTER FUNCTION {self.qualified_function}() SECURITY INVOKER;",
+                f"ALTER FUNCTION {self.qualified_function}() OWNER TO "
+                f"{self.execute_role};",
+                f"REVOKE CREATE ON SCHEMA {self.schema_name} "
+                f"FROM {self.execute_role};",
+                "END",
+            )
+        )
+
+    def manifest(self) -> dict[str, object]:
+        return {
+            "qualifiedName": self.qualified_function,
+            "argumentTypes": [],
+            "returnType": "pg_catalog.void",
+            "ownerCategory": "external-provisioning-superuser",
+            "language": "plpgsql",
+            "securityDefiner": True,
+            "strict": False,
+            "leakproof": False,
+            "volatility": "VOLATILE",
+            "parallelSafety": "UNSAFE",
+            "searchPath": ["pg_catalog", "pg_temp"],
+            "source": self.source,
+            "executeRoles": [self.execute_role],
+            "orderingMarker": {
+                "ledger": f"{self.ledger_schema_name}.{self.ledger_name}",
+                "rowCount": 7,
+                "headVersion": 7,
+                "headFilename": (
+                    "0007_tenant_write_lock_selection_owner_admission.sql"
+                ),
+                "headServiceIdentity": "ofarm.tenant-postgresql.v1",
+            },
+            "grants": [
+                {
+                    "schema": self.target_schema_name,
+                    "name": "take_tenant_write_lock",
+                    "argumentTypes": [],
+                    "grantee": self.owner_role,
+                }
+            ],
+            "consumedAfterMigrationVersion": 7,
+            "postConsumption": {
+                "securityInvoker": True,
+                "owner": self.execute_role,
+                "droppedBeforeCommit": True,
+                "transientSchemaCreatePrivilegesAbsent": True,
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ProvisioningSpec:
     """One database on one independently provisioned PostgreSQL service."""
 
@@ -914,6 +1004,9 @@ class ProvisioningSpec:
     )
     tenant_current_context_selection_owner_admission_sealer: (
         TenantCurrentContextSelectionOwnerAdmissionSealerSpec | None
+    )
+    tenant_write_lock_selection_owner_admission_sealer: (
+        TenantWriteLockSelectionOwnerAdmissionSealerSpec | None
     )
     native_verifier: NativeVerifierSpec | None
     roles: tuple[RoleSpec, ...]
@@ -1033,6 +1126,16 @@ class ProvisioningSpec:
                         )
                     }
                     if self.tenant_current_context_selection_owner_admission_sealer
+                    is not None
+                    else {}
+                ),
+                **(
+                    {
+                        "tenantWriteLockSelectionOwnerAdmissionSealer": (
+                            self.tenant_write_lock_selection_owner_admission_sealer.manifest()
+                        )
+                    }
+                    if self.tenant_write_lock_selection_owner_admission_sealer
                     is not None
                     else {}
                 ),
@@ -1803,6 +1906,19 @@ _TENANT_CURRENT_CONTEXT_SELECTION_OWNER_ADMISSION_SEALER = (
 )
 
 
+_TENANT_WRITE_LOCK_SELECTION_OWNER_ADMISSION_SEALER = (
+    TenantWriteLockSelectionOwnerAdmissionSealerSpec(
+        schema_name="ofarm_infrastructure",
+        function_name="seal_tenant_write_lock_selection_owner_admission",
+        execute_role="ofarm_migrator",
+        ledger_schema_name="ofarm",
+        ledger_name="schema_migration",
+        target_schema_name="ofarm",
+        owner_role="ofarm_owner",
+    )
+)
+
+
 _TENANT_NATIVE_VERIFIER = NativeVerifierSpec(
     schema_name="ofarm_crypto",
     installer_role="ofarm_crypto_installer",
@@ -1841,6 +1957,9 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
     ),
     tenant_current_context_selection_owner_admission_sealer=(
         _TENANT_CURRENT_CONTEXT_SELECTION_OWNER_ADMISSION_SEALER
+    ),
+    tenant_write_lock_selection_owner_admission_sealer=(
+        _TENANT_WRITE_LOCK_SELECTION_OWNER_ADMISSION_SEALER
     ),
     native_verifier=_TENANT_NATIVE_VERIFIER,
     roles=(
@@ -2053,6 +2172,7 @@ SECURITY_AUDIT_PROVISIONING_SPEC = ProvisioningSpec(
     tenant_initial_owner_sealer=None,
     tenant_binding_selection_control_admission_sealer=None,
     tenant_current_context_selection_owner_admission_sealer=None,
+    tenant_write_lock_selection_owner_admission_sealer=None,
     native_verifier=None,
     roles=(
         RoleSpec("ofarm_security_audit_owner", False, False, False, -1),
@@ -2439,6 +2559,9 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
     context_owner_admission_sealer = (
         spec.tenant_current_context_selection_owner_admission_sealer
     )
+    write_lock_owner_admission_sealer = (
+        spec.tenant_write_lock_selection_owner_admission_sealer
+    )
     native_verifier = spec.native_verifier
     if spec == TENANT_PROVISIONING_SPEC:
         if tenant_lock != _TENANT_WRITE_LOCK:
@@ -2461,6 +2584,13 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
             raise ProvisioningSpecError(
                 "tenant current-context selection-owner admission sealer is not exact"
             )
+        if (
+            write_lock_owner_admission_sealer
+            != _TENANT_WRITE_LOCK_SELECTION_OWNER_ADMISSION_SEALER
+        ):
+            raise ProvisioningSpecError(
+                "tenant write-lock selection-owner admission sealer is not exact"
+            )
         if native_verifier != _TENANT_NATIVE_VERIFIER:
             raise ProvisioningSpecError("tenant native verifier boundary is not exact")
     elif (
@@ -2469,6 +2599,7 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
         or sealer is not None
         or selection_admission_sealer is not None
         or context_owner_admission_sealer is not None
+        or write_lock_owner_admission_sealer is not None
         or native_verifier is not None
     ):
         raise ProvisioningSpecError(
@@ -2706,6 +2837,50 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
         ):
             raise ProvisioningSpecError(
                 "tenant current-context selection-owner admission sealer identity differs"
+            )
+
+    if write_lock_owner_admission_sealer is not None:
+        for value, label in (
+            (write_lock_owner_admission_sealer.schema_name, "write-lock sealer schema"),
+            (
+                write_lock_owner_admission_sealer.function_name,
+                "write-lock sealer function",
+            ),
+            (write_lock_owner_admission_sealer.execute_role, "write-lock sealer caller"),
+            (
+                write_lock_owner_admission_sealer.ledger_schema_name,
+                "write-lock sealer ledger schema",
+            ),
+            (
+                write_lock_owner_admission_sealer.ledger_name,
+                "write-lock sealer ledger",
+            ),
+            (
+                write_lock_owner_admission_sealer.target_schema_name,
+                "write-lock sealer target schema",
+            ),
+            (write_lock_owner_admission_sealer.owner_role, "write-lock sealer grantee"),
+        ):
+            _validate_identifier(value, label)
+        if (
+            write_lock_owner_admission_sealer.schema_name,
+            write_lock_owner_admission_sealer.function_name,
+            write_lock_owner_admission_sealer.execute_role,
+            write_lock_owner_admission_sealer.ledger_schema_name,
+            write_lock_owner_admission_sealer.ledger_name,
+            write_lock_owner_admission_sealer.target_schema_name,
+            write_lock_owner_admission_sealer.owner_role,
+        ) != (
+            lock.schema_name,
+            "seal_tenant_write_lock_selection_owner_admission",
+            "ofarm_migrator",
+            spec.migration_service.schema_name,
+            spec.migration_service.ledger_name,
+            spec.schema_name,
+            spec.database_owner,
+        ):
+            raise ProvisioningSpecError(
+                "tenant write-lock selection-owner admission sealer identity differs"
             )
 
     expected_memberships: set[tuple[str, str]] = set()

@@ -36,6 +36,10 @@ TENANT_CURRENT_CONTEXT_SELECTION_OWNER_ADMISSION_RFC = (
     PACKAGE_ROOT
     / "docs/rfcs/OFARM_Tenant_Current_Context_Selection_Owner_Admission_RFC_v0_1.md"
 )
+TENANT_WRITE_LOCK_SELECTION_OWNER_ADMISSION_RFC = (
+    PACKAGE_ROOT
+    / "docs/rfcs/OFARM_Tenant_Write_Lock_Selection_Owner_Admission_RFC_v0_1.md"
+)
 
 
 def _write_migration(root: Path, relative_directory: str, name: str, data: bytes) -> None:
@@ -71,6 +75,27 @@ def test_v6_admission_pins_the_complete_merged_child_contract():
     assert hashlib.sha256(source).hexdigest() == (
         "af85e259230b69edeba80ddc2eea2f070a601fd3888fd463ce595f9cc446b13d"
     )
+
+
+def test_v7_admission_pins_the_complete_merged_child_contract():
+    source = TENANT_WRITE_LOCK_SELECTION_OWNER_ADMISSION_RFC.read_bytes()
+    text = source.decode("utf-8")
+
+    assert len(source) == 45_758
+    assert hashlib.sha256(source).hexdigest() == (
+        "5745ad4b8b588be2b5a1b64b4b84aa757b23f8d2de00ca59e71de8ea304f51b0"
+    )
+    assert text.startswith(
+        "# OFARM2 Tenant Write-Lock Selection-Owner Admission — "
+        "Phase A Contract v0.1\n"
+    )
+    assert (
+        "**Contract identity:** "
+        "ofarm.tenant-write-lock-selection-owner-admission.issue176.v0.1"
+    ) in text
+    assert (
+        "**Status:** architect-approved Phase A contract; documentation-only"
+    ) in text
 
 
 @pytest.mark.parametrize(
@@ -144,7 +169,7 @@ def test_tenant_v6_is_verifier_only_and_pins_the_closed_owner_admission():
     assert migration.source_sha256 == \
         "sha256:a61c668a2bae04026b8413385f8bc1b5fd43f08f8d5281501ff766a57d552b48"
     assert migration.byte_length == 8655
-    assert migration_set.digest == \
+    assert migration_set.prefix_digest(6) == \
         "sha256:209990a8a9ac60ab096b11d418051127b7c891e4bfc6cefdf282d72f3875d0de"
     assert b"observed_migration_count <> 6" in migration.source_bytes
     assert b"tenant current-context selection-owner admission ACL differs" in (
@@ -153,6 +178,45 @@ def test_tenant_v6_is_verifier_only_and_pins_the_closed_owner_admission():
     assert b"GRANT EXECUTE ON FUNCTION" not in migration.source_bytes
     assert b"ALTER FUNCTION ofarm.current_" not in migration.source_bytes
     assert b"CREATE ROLE" not in migration.source_bytes
+
+
+def test_tenant_v7_is_verifier_only_and_pins_write_lock_owner_admission():
+    migration_set = load_authoritative_migration_set(
+        PACKAGE_ROOT,
+        TENANT_SERVICE,
+    )
+    migration = migration_set.migrations[6]
+
+    assert migration.filename == \
+        "0007_tenant_write_lock_selection_owner_admission.sql"
+    assert migration.source_sha256 == \
+        "sha256:cf8594b6c456953004912722b168d6bdda7c6dbfc903ba8099b018e2f270dff7"
+    assert migration.byte_length == 7936
+    assert migration_set.digest == \
+        "sha256:5616797d1362c55c78175126edab29cc3e88c021ba0709e3766d3196d2b0126b"
+    assert b"observed_migration_count <> 7" in migration.source_bytes
+    assert b"tenant write-lock selection-owner admission ACL differs" in (
+        migration.source_bytes
+    )
+    for forbidden_statement in (
+        b"GRANT ",
+        b"REVOKE ",
+        b"CREATE ROLE",
+        b"ALTER ROLE",
+        b"ALTER FUNCTION",
+        b"ALTER PROCEDURE",
+    ):
+        assert forbidden_statement not in migration.source_bytes
+    assert migration.source_bytes.count(
+        b"pg_catalog.length(verifier_definition) - pg_catalog.length("
+    ) == 7
+    assert b"routine_inventory_marker" in migration.source_bytes
+    assert b"write_lock_acl_check" in migration.source_bytes
+    assert b"old_migration_count" in migration.source_bytes
+    assert b"old_head_version" in migration.source_bytes
+    assert b"old_prefix_expression" in migration.source_bytes
+    assert b"old_catalog_digest" in migration.source_bytes
+    assert b"old_provisioning_digest" in migration.source_bytes
 
 
 @pytest.mark.parametrize("mutation", ("edited", "renamed", "future", "missing"))

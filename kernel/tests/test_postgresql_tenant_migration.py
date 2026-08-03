@@ -114,6 +114,8 @@ class TenantTarget:
     v4_admission_evidence: tuple[str, ...]
     v5_report: object
     v5_admission_evidence: tuple[str, ...]
+    v6_report: object
+    v6_admission_evidence: tuple[str, ...]
     first_report: object
     noop_report: object
 
@@ -312,7 +314,15 @@ def _assert_v4_admission_capsules_are_inert(
         TENANT_PROVISIONING_SPEC
         .tenant_current_context_selection_owner_admission_sealer
     )
-    assert sealer is not None and context_sealer is not None
+    write_lock_sealer = (
+        TENANT_PROVISIONING_SPEC
+        .tenant_write_lock_selection_owner_admission_sealer
+    )
+    assert (
+        sealer is not None
+        and context_sealer is not None
+        and write_lock_sealer is not None
+    )
     with psycopg.connect(target_admin_dsn) as admin:
         rows = admin.execute(
             """
@@ -335,7 +345,11 @@ def _assert_v4_admission_capsules_are_inert(
             """,
             (
                 sealer.schema_name,
-                [sealer.function_name, context_sealer.function_name],
+                [
+                    sealer.function_name,
+                    context_sealer.function_name,
+                    write_lock_sealer.function_name,
+                ],
             ),
         ).fetchall()
         assert rows == [
@@ -354,6 +368,14 @@ def _assert_v4_admission_capsules_are_inert(
                 True,
                 "plpgsql",
                 context_sealer.source,
+            ),
+            (
+                write_lock_sealer.function_name,
+                True,
+                False,
+                True,
+                "plpgsql",
+                write_lock_sealer.source,
             ),
         ]
         assert admin.execute(
@@ -390,7 +412,7 @@ def _assert_v4_admission_capsules_are_inert(
             control.execute("SELECT ofarm.create_tenant_challenge()")
 
     with psycopg.connect(migrator_dsn) as migrator:
-        for capsule in (sealer, context_sealer):
+        for capsule in (sealer, context_sealer, write_lock_sealer):
             with pytest.raises(
                 psycopg.errors.ObjectNotInPrerequisiteState,
                 match="ordering marker differs",
@@ -404,10 +426,13 @@ def _assert_v4_admission_capsules_are_inert(
     return (
         "selection-capsule-present",
         "context-capsule-present",
+        "write-lock-capsule-present",
         "selection-grants-absent",
         "owner-grants-absent",
+        "write-lock-owner-grant-absent",
         "selection-early-call-refused",
         "context-early-call-refused",
+        "write-lock-early-call-refused",
     )
 
 
@@ -424,16 +449,26 @@ def _assert_v5_context_admission_is_inert(
         TENANT_PROVISIONING_SPEC
         .tenant_current_context_selection_owner_admission_sealer
     )
-    assert selection_sealer is not None and context_sealer is not None
+    write_lock_sealer = (
+        TENANT_PROVISIONING_SPEC
+        .tenant_write_lock_selection_owner_admission_sealer
+    )
+    assert (
+        selection_sealer is not None
+        and context_sealer is not None
+        and write_lock_sealer is not None
+    )
     with psycopg.connect(target_admin_dsn) as admin:
         assert admin.execute(
             "SELECT pg_catalog.to_regprocedure(%s), "
+            "pg_catalog.to_regprocedure(%s) IS NOT NULL, "
             "pg_catalog.to_regprocedure(%s) IS NOT NULL",
             (
                 selection_sealer.qualified_function + "()",
                 context_sealer.qualified_function + "()",
+                write_lock_sealer.qualified_function + "()",
             ),
-        ).fetchone() == (None, True)
+        ).fetchone() == (None, True, True)
         assert admin.execute(
             "SELECT pg_catalog.count(*), pg_catalog.max(version) "
             "FROM ofarm.schema_migration"
@@ -467,6 +502,105 @@ def _assert_v5_context_admission_is_inert(
         ).fetchone() == (2, 0)
 
     with psycopg.connect(migrator_dsn) as migrator:
+        for capsule in (context_sealer, write_lock_sealer):
+            with pytest.raises(
+                psycopg.errors.ObjectNotInPrerequisiteState,
+                match="ordering marker differs",
+            ):
+                migrator.execute(
+                    sql.SQL("SELECT {}()").format(
+                        sql.Identifier(
+                            capsule.schema_name,
+                            capsule.function_name,
+                        )
+                    )
+                )
+            migrator.rollback()
+    return (
+        "selection-capsule-absent",
+        "selection-grants-exact",
+        "context-capsule-present",
+        "write-lock-capsule-present",
+        "owner-grants-absent",
+        "write-lock-owner-grant-absent",
+        "context-early-call-refused",
+        "write-lock-early-call-refused",
+    )
+
+
+def _assert_v6_write_lock_admission_is_inert(
+    *,
+    target_admin_dsn: str,
+    migrator_dsn: str,
+) -> tuple[str, ...]:
+    selection_sealer = (
+        TENANT_PROVISIONING_SPEC
+        .tenant_binding_selection_control_admission_sealer
+    )
+    context_sealer = (
+        TENANT_PROVISIONING_SPEC
+        .tenant_current_context_selection_owner_admission_sealer
+    )
+    write_lock_sealer = (
+        TENANT_PROVISIONING_SPEC
+        .tenant_write_lock_selection_owner_admission_sealer
+    )
+    assert (
+        selection_sealer is not None
+        and context_sealer is not None
+        and write_lock_sealer is not None
+    )
+    with psycopg.connect(target_admin_dsn) as admin:
+        assert admin.execute(
+            "SELECT pg_catalog.to_regprocedure(%s), "
+            "pg_catalog.to_regprocedure(%s), "
+            "pg_catalog.to_regprocedure(%s) IS NOT NULL",
+            (
+                selection_sealer.qualified_function + "()",
+                context_sealer.qualified_function + "()",
+                write_lock_sealer.qualified_function + "()",
+            ),
+        ).fetchone() == (None, None, True)
+        assert admin.execute(
+            "SELECT pg_catalog.count(*), pg_catalog.max(version) "
+            "FROM ofarm.schema_migration"
+        ).fetchone() == (6, 6)
+        rows = admin.execute(
+            """
+            SELECT grantee.rolname::text,
+                   pg_catalog.pg_get_userbyid(acl.grantor),
+                   acl.privilege_type,
+                   acl.is_grantable
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+                 ON namespace.oid = routine.pronamespace
+            CROSS JOIN LATERAL pg_catalog.aclexplode(
+                COALESCE(
+                    routine.proacl,
+                    pg_catalog.acldefault('f', routine.proowner)
+                )
+            ) AS acl
+            JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
+            WHERE namespace.nspname = 'ofarm'
+              AND routine.proname = 'take_tenant_write_lock'
+              AND pg_catalog.pg_get_function_identity_arguments(
+                      routine.oid
+                  ) = ''
+            ORDER BY 1, 2, 3, 4
+            """
+        ).fetchall()
+        assert [tuple(row) for row in rows] == [
+            ("ofarm_app", "ofarm_tenant_lock_owner", "EXECUTE", False),
+            (
+                "ofarm_tenant_lock_owner",
+                "ofarm_tenant_lock_owner",
+                "EXECUTE",
+                False,
+            ),
+            ("ofarm_worker", "ofarm_tenant_lock_owner", "EXECUTE", False),
+        ]
+
+    with psycopg.connect(migrator_dsn) as migrator:
         with pytest.raises(
             psycopg.errors.ObjectNotInPrerequisiteState,
             match="ordering marker differs",
@@ -474,17 +608,19 @@ def _assert_v5_context_admission_is_inert(
             migrator.execute(
                 sql.SQL("SELECT {}()").format(
                     sql.Identifier(
-                        context_sealer.schema_name,
-                        context_sealer.function_name,
+                        write_lock_sealer.schema_name,
+                        write_lock_sealer.function_name,
                     )
                 )
             )
     return (
         "selection-capsule-absent",
+        "context-capsule-absent",
+        "write-lock-capsule-present",
         "selection-grants-exact",
-        "context-capsule-present",
-        "owner-grants-absent",
-        "context-early-call-refused",
+        "context-owner-grants-exact",
+        "write-lock-owner-grant-absent",
+        "write-lock-early-call-refused",
     )
 
 
@@ -567,6 +703,23 @@ def tenant_target() -> TenantTarget:
             target_admin_dsn=target_admin_dsn,
             migrator_dsn=migrator_dsn,
         )
+        v6_set = MigrationSet(
+            service=TENANT_SERVICE,
+            migrations=migration_set.migrations[:6],
+            digest=migration_set.prefix_digest(6),
+        )
+        v6_report = _migrate_service_for_testing(
+            admin_dsn=admin_dsn,
+            migrator_dsn=migrator_dsn,
+            spec=spec,
+            migration_set=v6_set,
+            release_identity=f"{RELEASE_IDENTITY}-v6-prefix",
+            execution_id=uuid4(),
+        )
+        v6_admission_evidence = _assert_v6_write_lock_admission_is_inert(
+            target_admin_dsn=target_admin_dsn,
+            migrator_dsn=migrator_dsn,
+        )
         first_report = migrate_service(
             admin_dsn=admin_dsn,
             migrator_dsn=migrator_dsn,
@@ -595,6 +748,8 @@ def tenant_target() -> TenantTarget:
             v4_admission_evidence=v4_admission_evidence,
             v5_report=v5_report,
             v5_admission_evidence=v5_admission_evidence,
+            v6_report=v6_report,
+            v6_admission_evidence=v6_admission_evidence,
             first_report=first_report,
             noop_report=noop_report,
         )
@@ -1517,22 +1672,38 @@ def test_authoritative_source_ledger_contract_and_apply_noop(
     assert tenant_target.v4_admission_evidence == (
         "selection-capsule-present",
         "context-capsule-present",
+        "write-lock-capsule-present",
         "selection-grants-absent",
         "owner-grants-absent",
+        "write-lock-owner-grant-absent",
         "selection-early-call-refused",
         "context-early-call-refused",
+        "write-lock-early-call-refused",
     )
     assert tenant_target.v5_report.applied_versions == (5,)
     assert tenant_target.v5_admission_evidence == (
         "selection-capsule-absent",
         "selection-grants-exact",
         "context-capsule-present",
+        "write-lock-capsule-present",
         "owner-grants-absent",
+        "write-lock-owner-grant-absent",
         "context-early-call-refused",
+        "write-lock-early-call-refused",
     )
-    assert tenant_target.first_report.applied_versions == (6,)
+    assert tenant_target.v6_report.applied_versions == (6,)
+    assert tenant_target.v6_admission_evidence == (
+        "selection-capsule-absent",
+        "context-capsule-absent",
+        "write-lock-capsule-present",
+        "selection-grants-exact",
+        "context-owner-grants-exact",
+        "write-lock-owner-grant-absent",
+        "write-lock-early-call-refused",
+    )
+    assert tenant_target.first_report.applied_versions == (7,)
     assert tenant_target.noop_report.applied_versions == ()
-    assert tenant_target.noop_report.final_version == 6
+    assert tenant_target.noop_report.final_version == 7
 
 
 def test_tenant_knowledge_position_catalog_is_structurally_compatible(
@@ -4588,6 +4759,118 @@ def test_context_storage_rls_copy_search_path_and_lock_namespace(
         assert advisory_locks == [(1,)]
 
 
+def test_write_lock_owner_admission_preserves_wrapper_and_raw_lock_custody(
+    tenant_target: TenantTarget,
+) -> None:
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        row = admin.execute(
+            """
+            SELECT owner.rolname::text,
+                   language.lanname::text,
+                   routine.prokind,
+                   routine.prosecdef,
+                   routine.proleakproof,
+                   routine.proisstrict,
+                   routine.provolatile,
+                   routine.proparallel,
+                   routine.proretset,
+                   routine.prorettype = 'pg_catalog.void'::pg_catalog.regtype,
+                   COALESCE(routine.proconfig, ARRAY[]::text[]),
+                   pg_catalog.encode(
+                       pg_catalog.sha256(
+                           pg_catalog.convert_to(routine.prosrc, 'UTF8')
+                       ),
+                       'hex'
+                   )
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+                 ON namespace.oid = routine.pronamespace
+            JOIN pg_catalog.pg_roles AS owner ON owner.oid = routine.proowner
+            JOIN pg_catalog.pg_language AS language
+                 ON language.oid = routine.prolang
+            WHERE namespace.nspname = 'ofarm'
+              AND routine.proname = 'take_tenant_write_lock'
+              AND pg_catalog.pg_get_function_identity_arguments(
+                      routine.oid
+                  ) = ''
+            """
+        ).fetchone()
+        assert tuple(row) == (
+            "ofarm_tenant_lock_owner",
+            "plpgsql",
+            "f",
+            True,
+            False,
+            False,
+            "v",
+            "u",
+            False,
+            True,
+            ["search_path=pg_catalog, pg_temp"],
+            "38c75f051ee82b75c2e872fe2e191874e17984da7183add568f481d2eadb0de8",
+        )
+        acl = admin.execute(
+            """
+            SELECT CASE WHEN acl.grantee = 0 THEN 'PUBLIC'
+                        ELSE pg_catalog.pg_get_userbyid(acl.grantee) END,
+                   pg_catalog.pg_get_userbyid(acl.grantor),
+                   acl.privilege_type,
+                   acl.is_grantable
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+                 ON namespace.oid = routine.pronamespace
+            CROSS JOIN LATERAL pg_catalog.aclexplode(
+                COALESCE(
+                    routine.proacl,
+                    pg_catalog.acldefault('f', routine.proowner)
+                )
+            ) AS acl
+            WHERE routine.oid =
+                  'ofarm.take_tenant_write_lock()'::pg_catalog.regprocedure
+            ORDER BY 1, 2, 3, 4
+            """
+        ).fetchall()
+        assert [tuple(item) for item in acl] == [
+            ("ofarm_app", "ofarm_tenant_lock_owner", "EXECUTE", False),
+            ("ofarm_owner", "ofarm_tenant_lock_owner", "EXECUTE", False),
+            (
+                "ofarm_tenant_lock_owner",
+                "ofarm_tenant_lock_owner",
+                "EXECUTE",
+                False,
+            ),
+            ("ofarm_worker", "ofarm_tenant_lock_owner", "EXECUTE", False),
+        ]
+        assert admin.execute(
+            "SELECT pg_catalog.has_function_privilege("
+            "'ofarm_owner', "
+            "'pg_catalog.pg_advisory_xact_lock(bigint)', 'EXECUTE')"
+        ).fetchone() == (False,)
+
+
+def test_unbound_owner_write_lock_call_refuses_without_advisory_lock(
+    tenant_target: TenantTarget,
+) -> None:
+    with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+        migrator.execute("SET LOCAL ROLE ofarm_owner")
+        migrator.execute("SAVEPOINT unbound_write_lock")
+        with pytest.raises(
+            psycopg.errors.InsufficientPrivilege,
+            match="verified tenant context is absent",
+        ):
+            migrator.execute("SELECT ofarm.take_tenant_write_lock()")
+        migrator.execute("ROLLBACK TO SAVEPOINT unbound_write_lock")
+        assert migrator.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM pg_catalog.pg_locks AS lock
+            WHERE lock.pid = pg_catalog.pg_backend_pid()
+              AND lock.locktype = 'advisory'
+              AND lock.granted
+            """
+        ).fetchone() == (0,)
+
+
 def test_tenant_write_lock_serializes_same_tenant_but_not_different_tenant(
     tenant_target: TenantTarget,
     authority: TenantAuthority,
@@ -6931,7 +7214,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:b8f5c3ed14d0347493bdf09e0d2e355ecf5feb361189b87f69194b92ac57b3b9"
+                "sha256:fcc0e96b4520ffe51ddb5537df24040e4d5948a22b3c387351346cc588e87ee5"
             )
         finally:
             migrator.rollback()
@@ -7620,10 +7903,10 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:b8f5c3ed14d0347493bdf09e0d2e355ecf5feb361189b87f69194b92ac57b3b9"
+        "sha256:fcc0e96b4520ffe51ddb5537df24040e4d5948a22b3c387351346cc588e87ee5"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
-    assert row[7] == 6
-    assert row[9] == 6
+    assert row[7] == 7
+    assert row[9] == 7
     assert row[10] is False
