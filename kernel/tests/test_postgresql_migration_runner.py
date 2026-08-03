@@ -12,7 +12,7 @@ import secrets
 import socket
 import struct
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Event, Thread
 from typing import Mapping
@@ -45,6 +45,7 @@ from deployment.postgresql.migration_sets import (
     TENANT_SERVICE,
     MigrationService,
     MigrationSet,
+    load_authoritative_migration_set,
     load_migration_set,
 )
 from deployment.postgresql.provisioning import (
@@ -1848,7 +1849,11 @@ def test_v6_live_ledger_substitution_refuses_before_capsule_use(
     tenant_target: _TenantTarget,
     substituted_field: str,
 ) -> None:
-    full_set = _advance_tenant_target_to_v5(tenant_target)
+    _advance_tenant_target_to_v5(tenant_target)
+    full_set = load_authoritative_migration_set(
+        Path(__file__).resolve().parents[2],
+        TENANT_SERVICE,
+    )
     assert _current_context_owner_admission_state(
         tenant_target.target_admin_dsn
     ) == ((5, 5), True, [])
@@ -1883,7 +1888,7 @@ def test_v6_live_ledger_substitution_refuses_before_capsule_use(
                 match="migration history is not the exact local prefix",
             )
         with expected_error:
-            migrate_service(
+            migrate_authoritative_service(
                 admin_dsn=tenant_target.admin_dsn,
                 migrator_dsn=proxy.dsn,
                 spec=TENANT_PROVISIONING_SPEC,
@@ -1903,6 +1908,27 @@ def test_v6_live_ledger_substitution_refuses_before_capsule_use(
         TENANT_PROVISIONING_SPEC,
     )
     assert verified.provisioning_spec_digest == TENANT_PROVISIONING_SPEC.digest
+
+
+def test_v7_capsule_refuses_an_absent_write_lock_target() -> None:
+    migration_set = load_authoritative_migration_set(
+        Path(__file__).resolve().parents[2],
+        TENANT_SERVICE,
+    )
+    malformed_spec = replace(
+        TENANT_PROVISIONING_SPEC,
+        tenant_write_lock=None,
+    )
+
+    with pytest.raises(
+        MigrationDirtyError,
+        match="tenant write-lock selection-owner admission target is absent",
+    ):
+        migration_runner_module._consume_tenant_write_lock_selection_owner_admission_sealer(
+            object(),  # type: ignore[arg-type]
+            malformed_spec,
+            migration_set.migrations[6],
+        )
 
 
 def test_v6_row_is_authenticated_before_and_after_capsule_consumption(
@@ -2309,6 +2335,187 @@ def _write_lock_owner_admission_state(
             """
         ).fetchall()
     return tuple(ledger), capsule_present, [tuple(row) for row in rows]
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_error"),
+    (
+        (
+            "security_mode",
+            "tenant write-lock selection-owner admission sealer differs",
+        ),
+        (
+            "owner",
+            "tenant write-lock selection-owner admission sealer differs",
+        ),
+        (
+            "acl",
+            "migration-lock infrastructure routine ACL differs",
+        ),
+    ),
+    ids=("security-mode", "owner", "acl"),
+)
+def test_v7_hostile_capsule_drift_refuses_without_repair(
+    tenant_target: _TenantTarget,
+    mutation: str,
+    expected_error: str,
+) -> None:
+    full_set = _advance_tenant_target_to_v6(tenant_target)
+    sealer = (
+        TENANT_PROVISIONING_SPEC
+        .tenant_write_lock_selection_owner_admission_sealer
+    )
+    assert sealer is not None
+    capsule = sql.Identifier(sealer.schema_name, sealer.function_name)
+    with psycopg.connect(
+        tenant_target.target_admin_dsn,
+        autocommit=True,
+    ) as admin:
+        original_owner = admin.execute(
+            """
+            SELECT pg_catalog.pg_get_userbyid(routine.proowner)
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = routine.pronamespace
+            WHERE namespace.nspname = %s
+              AND routine.proname = %s
+              AND pg_catalog.pg_get_function_identity_arguments(
+                      routine.oid
+                  ) = ''
+            """,
+            (sealer.schema_name, sealer.function_name),
+        ).fetchone()[0]
+        if mutation == "security_mode":
+            admin.execute(
+                sql.SQL("ALTER FUNCTION {}() SECURITY INVOKER").format(capsule)
+            )
+        elif mutation == "owner":
+            admin.execute(
+                sql.SQL("ALTER FUNCTION {}() OWNER TO {}").format(
+                    capsule,
+                    sql.Identifier(sealer.execute_role),
+                )
+            )
+        else:
+            admin.execute(
+                sql.SQL("GRANT EXECUTE ON FUNCTION {}() TO PUBLIC").format(
+                    capsule
+                )
+            )
+
+    try:
+        with pytest.raises(
+            MigrationTargetError,
+            match=expected_error,
+        ) as refused:
+            migrate_authoritative_service(
+                admin_dsn=tenant_target.admin_dsn,
+                migrator_dsn=tenant_target.migrator_dsn,
+                spec=TENANT_PROVISIONING_SPEC,
+                migration_set=full_set,
+                release_identity=RELEASE_IDENTITY + "-v7-capsule-drift",
+                execution_id=uuid4(),
+            )
+
+        failure = str(refused.value)
+        protected_values = (
+            *tenant_target.passwords.values(),
+            tenant_target.admin_dsn,
+            tenant_target.target_admin_dsn,
+            tenant_target.migrator_dsn,
+        )
+        assert all(value not in failure for value in protected_values)
+        assert "advisory_lock_key" not in failure
+        assert _write_lock_owner_admission_state(
+            tenant_target.target_admin_dsn
+        ) == ((6, 6), True, _EXPECTED_WRITE_LOCK_ACL_A2)
+        with psycopg.connect(
+            tenant_target.target_admin_dsn,
+            autocommit=True,
+        ) as admin:
+            drifted = admin.execute(
+                """
+                SELECT pg_catalog.pg_get_userbyid(routine.proowner),
+                       routine.prosecdef,
+                       EXISTS (
+                           SELECT 1
+                           FROM pg_catalog.aclexplode(
+                               COALESCE(
+                                   routine.proacl,
+                                   pg_catalog.acldefault(
+                                       'f', routine.proowner
+                                   )
+                               )
+                           ) AS acl
+                           WHERE acl.grantee = 0
+                             AND acl.privilege_type = 'EXECUTE'
+                       )
+                FROM pg_catalog.pg_proc AS routine
+                JOIN pg_catalog.pg_namespace AS namespace
+                  ON namespace.oid = routine.pronamespace
+                WHERE namespace.nspname = %s
+                  AND routine.proname = %s
+                  AND pg_catalog.pg_get_function_identity_arguments(
+                          routine.oid
+                      ) = ''
+                """,
+                (sealer.schema_name, sealer.function_name),
+            ).fetchone()
+        if mutation == "security_mode":
+            assert drifted == (original_owner, False, False)
+        elif mutation == "owner":
+            assert drifted[0] == sealer.execute_role
+        else:
+            assert drifted == (original_owner, True, True)
+    finally:
+        with psycopg.connect(
+            tenant_target.target_admin_dsn,
+            autocommit=True,
+        ) as admin:
+            if mutation == "security_mode":
+                admin.execute(
+                    sql.SQL("ALTER FUNCTION {}() SECURITY DEFINER").format(
+                        capsule
+                    )
+                )
+            elif mutation == "owner":
+                admin.execute(
+                    sql.SQL("ALTER FUNCTION {}() OWNER TO {}").format(
+                        capsule,
+                        sql.Identifier(original_owner),
+                    )
+                )
+                admin.execute(
+                    sql.SQL(
+                        "REVOKE ALL PRIVILEGES ON FUNCTION {}() FROM PUBLIC"
+                    ).format(capsule)
+                )
+                admin.execute(
+                    sql.SQL(
+                        "REVOKE ALL PRIVILEGES ON FUNCTION {}() FROM {}"
+                    ).format(capsule, sql.Identifier(sealer.execute_role))
+                )
+                admin.execute(
+                    sql.SQL("GRANT EXECUTE ON FUNCTION {}() TO {}").format(
+                        capsule,
+                        sql.Identifier(sealer.execute_role),
+                    )
+                )
+            else:
+                admin.execute(
+                    sql.SQL("REVOKE EXECUTE ON FUNCTION {}() FROM PUBLIC").format(
+                        capsule
+                    )
+                )
+
+    assert _write_lock_owner_admission_state(
+        tenant_target.target_admin_dsn
+    ) == ((6, 6), True, _EXPECTED_WRITE_LOCK_ACL_A2)
+    verified = verify_service_infrastructure(
+        tenant_target.admin_dsn,
+        TENANT_PROVISIONING_SPEC,
+    )
+    assert verified.provisioning_spec_digest == TENANT_PROVISIONING_SPEC.digest
 
 
 _V7_LEDGER_FIELDS = (

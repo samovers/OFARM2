@@ -36,6 +36,10 @@ TENANT_CURRENT_CONTEXT_SELECTION_OWNER_ADMISSION_RFC = (
     PACKAGE_ROOT
     / "docs/rfcs/OFARM_Tenant_Current_Context_Selection_Owner_Admission_RFC_v0_1.md"
 )
+TENANT_WRITE_LOCK_SELECTION_OWNER_ADMISSION_RFC = (
+    PACKAGE_ROOT
+    / "docs/rfcs/OFARM_Tenant_Write_Lock_Selection_Owner_Admission_RFC_v0_1.md"
+)
 
 
 def _write_migration(root: Path, relative_directory: str, name: str, data: bytes) -> None:
@@ -71,6 +75,27 @@ def test_v6_admission_pins_the_complete_merged_child_contract():
     assert hashlib.sha256(source).hexdigest() == (
         "af85e259230b69edeba80ddc2eea2f070a601fd3888fd463ce595f9cc446b13d"
     )
+
+
+def test_v7_admission_pins_the_complete_merged_child_contract():
+    source = TENANT_WRITE_LOCK_SELECTION_OWNER_ADMISSION_RFC.read_bytes()
+    text = source.decode("utf-8")
+
+    assert len(source) == 45_758
+    assert hashlib.sha256(source).hexdigest() == (
+        "5745ad4b8b588be2b5a1b64b4b84aa757b23f8d2de00ca59e71de8ea304f51b0"
+    )
+    assert text.startswith(
+        "# OFARM2 Tenant Write-Lock Selection-Owner Admission — "
+        "Phase A Contract v0.1\n"
+    )
+    assert (
+        "**Contract identity:** "
+        "ofarm.tenant-write-lock-selection-owner-admission.issue176.v0.1"
+    ) in text
+    assert (
+        "**Status:** architect-approved Phase A contract; documentation-only"
+    ) in text
 
 
 @pytest.mark.parametrize(
@@ -173,11 +198,15 @@ def test_tenant_v7_is_verifier_only_and_pins_write_lock_owner_admission():
     assert b"tenant write-lock selection-owner admission ACL differs" in (
         migration.source_bytes
     )
-    assert b"GRANT EXECUTE ON FUNCTION" not in migration.source_bytes
-    assert b"ALTER FUNCTION ofarm.take_tenant_write_lock" not in (
-        migration.source_bytes
-    )
-    assert b"CREATE ROLE" not in migration.source_bytes
+    for forbidden_statement in (
+        b"GRANT ",
+        b"REVOKE ",
+        b"CREATE ROLE",
+        b"ALTER ROLE",
+        b"ALTER FUNCTION",
+        b"ALTER PROCEDURE",
+    ):
+        assert forbidden_statement not in migration.source_bytes
     assert migration.source_bytes.count(
         b"pg_catalog.length(verifier_definition) - pg_catalog.length("
     ) == 7

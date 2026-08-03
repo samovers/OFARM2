@@ -1194,8 +1194,12 @@ def _consume_tenant_write_lock_selection_owner_admission_sealer(
 
     sealer = spec.tenant_write_lock_selection_owner_admission_sealer
     lock = spec.tenant_write_lock
-    if sealer is None or lock is None:
+    if sealer is None:
         return
+    if lock is None:
+        raise MigrationDirtyError(
+            "tenant write-lock selection-owner admission target is absent"
+        )
     if (
         migration.version,
         migration.filename,
