@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import ast
 import copy
+import hashlib
+import inspect
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -118,7 +120,159 @@ def _role_snapshot(
     return temporal.TenantMigrationAuthoritySnapshot(
         migration_set=SimpleNamespace(migrations=entries),
         version_3_prefix=temporal.KNOWLEDGE_STORAGE_MIGRATION_PREFIX_DIGEST,
+        version_7_prefix=temporal.TENANT_V7_PREFIX_DIGEST,
     )
+
+
+def _selection_storage_migration_snapshot(
+    *,
+    classified: bool,
+    migration_source: bytes | None = None,
+    migration_filename: str | None = None,
+    marker_migration_version: int | None = None,
+) -> temporal.TenantMigrationAuthoritySnapshot:
+    baseline = temporal.load_tenant_migration_authority_snapshot()
+    migrations = list(baseline.migration_set.migrations)
+    if marker_migration_version is not None:
+        original = migrations[marker_migration_version - 1]
+        changed_source = original.source_bytes + (
+            b"\n" + temporal.SELECTION_STORAGE_MARKERS[0].encode("ascii")
+        )
+        migrations[marker_migration_version - 1] = SimpleNamespace(
+            version=original.version,
+            filename=original.filename,
+            source_bytes=changed_source,
+            source_sha256="sha256:" + hashlib.sha256(changed_source).hexdigest(),
+            byte_length=len(changed_source),
+        )
+    if classified:
+        source = migration_source or (
+            "\n".join(temporal.SELECTION_STORAGE_MARKERS) + "\n"
+        ).encode("ascii")
+        migrations.append(
+            SimpleNamespace(
+                version=8,
+                filename=(
+                    migration_filename
+                    or Path(temporal.SELECTION_STORAGE_MIGRATION_RELATIVE_PATH).name
+                ),
+                source_bytes=source,
+                source_sha256=("sha256:" + hashlib.sha256(source).hexdigest()),
+                byte_length=len(source),
+            )
+        )
+    migration_set = SimpleNamespace(
+        migrations=tuple(migrations),
+        digest=(
+            "sha256:" + "8" * 64 if classified else temporal.TENANT_V7_PREFIX_DIGEST
+        ),
+        prefix_digest=lambda version: (
+            temporal.TENANT_V7_PREFIX_DIGEST
+            if version == 7
+            else temporal.KNOWLEDGE_STORAGE_MIGRATION_PREFIX_DIGEST
+        ),
+    )
+    return temporal.TenantMigrationAuthoritySnapshot(
+        migration_set=migration_set,
+        version_3_prefix=temporal.KNOWLEDGE_STORAGE_MIGRATION_PREFIX_DIGEST,
+        version_7_prefix=temporal.TENANT_V7_PREFIX_DIGEST,
+    )
+
+
+def _selection_storage_python_snapshot(
+    package_root: Path,
+    *,
+    adapter_text: str | None = None,
+    init_text: str = "# intentionally no adapter re-export\n",
+    extra_sources: tuple[tuple[str, str, str], ...] = (),
+    graph: dict[str, tuple[object, ...]] | None = None,
+) -> temporal.PythonSourceAuthoritySnapshot:
+    sources: dict[str, Path] = {}
+
+    def add_source(module: str, relative_path: str, source: str) -> None:
+        path = package_root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
+        sources[module] = path
+
+    add_source(
+        "deployment.postgresql",
+        "deployment/postgresql/__init__.py",
+        init_text,
+    )
+    if adapter_text is not None:
+        add_source(
+            temporal.SELECTION_STORAGE_ADAPTER_MODULE,
+            temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH,
+            adapter_text,
+        )
+    for module, relative_path, source in extra_sources:
+        add_source(module, relative_path, source)
+    trees = {
+        module: ast.parse(source_path.read_text(encoding="utf-8"))
+        for module, source_path in sources.items()
+    }
+    return temporal.PythonSourceAuthoritySnapshot(
+        sources=sources,
+        graph=graph or {module: () for module in sources},
+        trees=trees,
+    )
+
+
+def _python_marker_text(*markers: str) -> str:
+    return "".join(f"# {marker}\n" for marker in markers)
+
+
+def _prepare_selection_storage_classifier(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    classified: bool,
+    migration_source: bytes | None = None,
+    migration_filename: str | None = None,
+    adapter_text: str | None = None,
+    init_text: str = "# intentionally no adapter re-export\n",
+    extra_sources: tuple[tuple[str, str, str], ...] = (),
+    graph: dict[str, tuple[object, ...]] | None = None,
+    marker_migration_version: int | None = None,
+) -> tuple[
+    temporal.TenantMigrationAuthoritySnapshot,
+    temporal.PythonSourceAuthoritySnapshot,
+]:
+    migration_authority = _selection_storage_migration_snapshot(
+        classified=classified,
+        migration_source=migration_source,
+        migration_filename=migration_filename,
+        marker_migration_version=marker_migration_version,
+    )
+    marker_text = _python_marker_text(*temporal.SELECTION_STORAGE_MARKERS)
+    python_authority = _selection_storage_python_snapshot(
+        tmp_path,
+        adapter_text=(marker_text if classified else None)
+        if adapter_text is None
+        else adapter_text,
+        init_text=init_text,
+        extra_sources=extra_sources,
+        graph=graph,
+    )
+    if classified:
+        migration_path = tmp_path / temporal.SELECTION_STORAGE_MIGRATION_RELATIVE_PATH
+        migration_path.parent.mkdir(parents=True, exist_ok=True)
+        migration_path.write_bytes(
+            migration_authority.migration_set.migrations[7].source_bytes
+        )
+    monkeypatch.setattr(temporal, "PACKAGE_ROOT", tmp_path)
+    monkeypatch.setattr(
+        temporal,
+        "_current_tenant_provisioning_digest",
+        lambda _python_authority: temporal.TENANT_PROVISIONING_SPEC_DIGEST,
+    )
+    monkeypatch.setattr(
+        temporal,
+        "_current_tenant_catalog_digest",
+        lambda _python_authority: temporal.TENANT_V7_EXTERNAL_CATALOG_DIGEST,
+    )
+    return migration_authority, python_authority
 
 
 def _tenant_literal_source(
@@ -254,7 +408,10 @@ def _coordinate() -> dict:
 
 
 def test_temporal_candidate_governance_is_complete_and_inactive():
-    temporal.validate_candidate_governance()
+    assert (
+        temporal.validate_candidate_governance()
+        == temporal.SELECTION_STORAGE_STATE_ABSENT
+    )
 
 
 def test_temporal_card_errata_trace_is_pinned():
@@ -1332,10 +1489,12 @@ def test_migration_authority_failures_become_temporal_refusals(
         temporal.load_tenant_migration_authority_snapshot()
 
 
-def test_complete_check_reads_one_authority_source_and_one_migration_snapshot(
+def test_complete_check_reads_one_migration_and_python_authority_snapshot(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
+    from conformance import rewrite_architecture_check as architecture
+
     source = _migration_authority_source() + (
         "\n_original_temporal_loader = load_authoritative_migration_set\n"
         "_temporal_loader_calls = 0\n"
@@ -1364,6 +1523,9 @@ def test_complete_check_reads_one_authority_source_and_one_migration_snapshot(
     counting_path = CountingAuthorityPath(authority_path)
     original_sha256 = temporal._sha256
     original_glob = Path.glob
+    original_sources = architecture._module_sources
+    original_graph = architecture._import_graph
+    python_calls = {"sources": 0, "graph": 0}
 
     def refuse_checker_sql_reread(path: Path) -> str:
         if path.suffix == ".sql":
@@ -1375,6 +1537,14 @@ def test_complete_check_reads_one_authority_source_and_one_migration_snapshot(
             raise AssertionError("checker performed a migration glob")
         return original_glob(path, pattern, **kwargs)
 
+    def counted_sources(root: Path):
+        python_calls["sources"] += 1
+        return original_sources(root)
+
+    def counted_graph(sources):
+        python_calls["graph"] += 1
+        return original_graph(sources)
+
     monkeypatch.setattr(
         temporal,
         "MIGRATION_SET_AUTHORITY_PATH",
@@ -1382,9 +1552,12 @@ def test_complete_check_reads_one_authority_source_and_one_migration_snapshot(
     )
     monkeypatch.setattr(temporal, "_sha256", refuse_checker_sql_reread)
     monkeypatch.setattr(Path, "glob", refuse_migration_glob)
+    monkeypatch.setattr(architecture, "_module_sources", counted_sources)
+    monkeypatch.setattr(architecture, "_import_graph", counted_graph)
 
     temporal.validate_candidate_governance()
     assert counting_path.read_count == 1
+    assert python_calls == {"sources": 1, "graph": 1}
 
 
 @pytest.mark.parametrize(
@@ -1647,3 +1820,631 @@ def test_candidate_paths_are_not_frozen_or_active_contract_directories():
         assert not relative_path.startswith(
             ("contracts/kernel/", "contracts/core/", "contracts/platform/")
         )
+
+
+def test_selection_storage_complete_merged_authority_is_exact():
+    temporal.validate_selection_storage_prerequisite_authorities()
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("missing", "length", "digest", "symlink"),
+)
+def test_selection_storage_self_authority_refuses_every_substitution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+):
+    source = temporal.SELECTION_STORAGE_CONFORMANCE_RFC_PATH.read_bytes()
+    authority_path = tmp_path / "selection-storage-conformance.md"
+    if mutation == "length":
+        authority_path.write_bytes(source + b"\n")
+    elif mutation == "digest":
+        authority_path.write_bytes(b"!" + source[1:])
+    elif mutation == "symlink":
+        target = tmp_path / "authority-target.md"
+        target.write_bytes(source)
+        authority_path.symlink_to(target)
+    monkeypatch.setattr(
+        temporal,
+        "SELECTION_STORAGE_CONFORMANCE_RFC_PATH",
+        authority_path,
+    )
+    with pytest.raises(temporal.TemporalCandidateError):
+        temporal.validate_selection_storage_prerequisite_authorities()
+
+
+@pytest.mark.parametrize(
+    "path_attribute",
+    (
+        "ARCHITECTURE_REPORT_PATH",
+        "ADR_0001_PATH",
+        "ADR_PATH",
+        "ADR_0003_PATH",
+        "SELECTION_STORAGE_PARENT_RFC_PATH",
+        "PERSISTENCE_ADMISSION_RFC_PATH",
+        "TENANT_BINDING_SELECTION_CONTROL_RFC_PATH",
+        "TENANT_CURRENT_CONTEXT_SELECTION_OWNER_RFC_PATH",
+        "TENANT_WRITE_LOCK_SELECTION_OWNER_RFC_PATH",
+        "RUNTIME_BUNDLE_SELECTION_SCHEMA_PATH",
+        "RUNTIME_BUNDLE_SELECTION_BINDING_PATH",
+    ),
+)
+def test_selection_storage_refuses_each_changed_prerequisite_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    path_attribute: str,
+):
+    source = getattr(temporal, path_attribute).read_bytes()
+    changed_path = tmp_path / Path(getattr(temporal, path_attribute)).name
+    changed_path.write_bytes(b"!" + source[1:])
+    monkeypatch.setattr(temporal, path_attribute, changed_path)
+    with pytest.raises(temporal.TemporalCandidateError, match="digest differs"):
+        temporal.validate_selection_storage_prerequisite_authorities()
+
+
+def test_selection_storage_refuses_changed_canonical_binding_identity(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        temporal,
+        "RUNTIME_BUNDLE_SELECTION_CANONICAL_BYTE_LENGTH",
+        temporal.RUNTIME_BUNDLE_SELECTION_CANONICAL_BYTE_LENGTH + 1,
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="canonical binding identity differs",
+    ):
+        temporal.validate_selection_storage_prerequisite_authorities()
+
+
+def test_selection_storage_private_python_inventory_change_refuses(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from conformance import rewrite_architecture_check as architecture
+
+    def changed_signature(_root: Path):
+        raise TypeError("synthetic private-helper change")
+
+    monkeypatch.setattr(architecture, "_module_sources", changed_signature)
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="Python source authority failed",
+    ):
+        temporal.load_python_source_authority_snapshot()
+
+
+def test_selection_storage_exact_absent_state_passes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=False,
+    )
+    assert (
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+        == temporal.SELECTION_STORAGE_STATE_ABSENT
+    )
+
+
+def test_selection_storage_exact_classified_pair_passes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=True,
+    )
+    assert (
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+        == temporal.SELECTION_STORAGE_STATE_CLASSIFIED
+    )
+
+
+@pytest.mark.parametrize("version", (4, 5, 6, 7))
+def test_selection_storage_refuses_each_changed_v4_to_v7_migration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    version: int,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=False,
+    )
+    migrations = list(migration_authority.migration_set.migrations)
+    original = migrations[version - 1]
+    migrations[version - 1] = SimpleNamespace(
+        version=original.version,
+        filename=f"{version:04d}_changed.sql",
+        source_bytes=original.source_bytes,
+        source_sha256=original.source_sha256,
+        byte_length=original.byte_length,
+    )
+    changed = temporal.TenantMigrationAuthoritySnapshot(
+        migration_set=SimpleNamespace(
+            migrations=tuple(migrations),
+            digest=temporal.TENANT_V7_PREFIX_DIGEST,
+            prefix_digest=lambda _version: temporal.TENANT_V7_PREFIX_DIGEST,
+        ),
+        version_3_prefix=temporal.KNOWLEDGE_STORAGE_MIGRATION_PREFIX_DIGEST,
+        version_7_prefix=temporal.TENANT_V7_PREFIX_DIGEST,
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match=f"migration {version:04d} differs",
+    ):
+        temporal.validate_selection_storage_classification(
+            changed,
+            python_authority,
+        )
+
+
+def test_selection_storage_refuses_changed_v7_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=False,
+    )
+    changed = temporal.TenantMigrationAuthoritySnapshot(
+        migration_set=migration_authority.migration_set,
+        version_3_prefix=migration_authority.version_3_prefix,
+        version_7_prefix="sha256:" + "0" * 64,
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="version-7 stable prefix differs",
+    ):
+        temporal.validate_selection_storage_classification(
+            changed,
+            python_authority,
+        )
+
+
+def test_selection_storage_refuses_changed_provisioning_digest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=False,
+    )
+    monkeypatch.setattr(
+        temporal,
+        "_current_tenant_provisioning_digest",
+        lambda _python_authority: "sha256:" + "0" * 64,
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="provisioning-spec digest differs",
+    ):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+def test_selection_storage_v7_refuses_changed_external_catalog_digest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=False,
+    )
+    monkeypatch.setattr(
+        temporal,
+        "_current_tenant_catalog_digest",
+        lambda _python_authority: "sha256:" + "0" * 64,
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="external catalog-verifier digest differs",
+    ):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+def test_selection_storage_v8_does_not_guess_future_catalog_digest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=True,
+    )
+    monkeypatch.setattr(
+        temporal,
+        "_current_tenant_catalog_digest",
+        lambda _python_authority: "sha256:" + "0" * 64,
+    )
+    assert (
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+        == temporal.SELECTION_STORAGE_STATE_CLASSIFIED
+    )
+
+
+def test_selection_storage_file_on_disk_without_authenticated_v8_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=False,
+    )
+    migration_path = tmp_path / temporal.SELECTION_STORAGE_MIGRATION_RELATIVE_PATH
+    migration_path.parent.mkdir(parents=True)
+    migration_path.write_text("-- unauthenticated 0008\n", encoding="utf-8")
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="outside authenticated V7",
+    ):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+@pytest.mark.parametrize("present_path", ("migration", "adapter"))
+def test_selection_storage_partial_production_pair_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    present_path: str,
+):
+    classified = present_path == "migration"
+    marker_text = _python_marker_text(*temporal.SELECTION_STORAGE_MARKERS)
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=classified,
+        adapter_text=None if classified else marker_text,
+    )
+    if classified:
+        adapter_path = tmp_path / temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH
+        adapter_path.unlink()
+        python_authority.sources.pop(temporal.SELECTION_STORAGE_ADAPTER_MODULE)
+        python_authority.trees.pop(temporal.SELECTION_STORAGE_ADAPTER_MODULE)
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="production path pair is partial",
+    ):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+def test_selection_storage_wrong_v8_filename_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=True,
+        migration_filename="0008_wrong_selection.sql",
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="migration path differs",
+    ):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+@pytest.mark.parametrize("carrier", ("migration", "adapter"))
+def test_selection_storage_one_marker_on_authorized_path_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    carrier: str,
+):
+    one_marker = temporal.SELECTION_STORAGE_MARKERS[0]
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=True,
+        migration_source=(one_marker + "\n").encode("ascii")
+        if carrier == "migration"
+        else None,
+        adapter_text=_python_marker_text(one_marker) if carrier == "adapter" else None,
+    )
+    with pytest.raises(temporal.TemporalCandidateError, match="marker pair differs"):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+def test_selection_storage_marker_in_another_migration_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=True,
+        marker_migration_version=1,
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="another authenticated migration",
+    ):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+def test_selection_storage_symlink_adapter_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=True,
+    )
+    adapter_path = tmp_path / temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH
+    source = adapter_path.read_text(encoding="utf-8")
+    adapter_path.unlink()
+    target = tmp_path / "adapter-copy.py"
+    target.write_text(source, encoding="utf-8")
+    adapter_path.symlink_to(target)
+    with pytest.raises(temporal.TemporalCandidateError, match="adapter path differs"):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+@pytest.mark.parametrize("carrier", ("migration", "adapter"))
+def test_selection_storage_non_regular_or_symlinked_path_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    carrier: str,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=True,
+    )
+    relative_path = (
+        temporal.SELECTION_STORAGE_MIGRATION_RELATIVE_PATH
+        if carrier == "migration"
+        else temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH
+    )
+    path = tmp_path / relative_path
+    path.unlink()
+    if carrier == "migration":
+        target = tmp_path / "migration-copy.sql"
+        target.write_bytes(migration_authority.migration_set.migrations[7].source_bytes)
+        path.symlink_to(target)
+        expected = "migration path differs"
+    else:
+        path.mkdir()
+        expected = "adapter path differs"
+    with pytest.raises(temporal.TemporalCandidateError, match=expected):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+def test_selection_storage_adapter_alias_module_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=True,
+    )
+    adapter_path = python_authority.sources.pop(
+        temporal.SELECTION_STORAGE_ADAPTER_MODULE
+    )
+    adapter_tree = python_authority.trees.pop(temporal.SELECTION_STORAGE_ADAPTER_MODULE)
+    python_authority.sources["deployment.postgresql.selection_alias"] = adapter_path
+    python_authority.trees["deployment.postgresql.selection_alias"] = adapter_tree
+    with pytest.raises(temporal.TemporalCandidateError, match="adapter path differs"):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+@pytest.mark.parametrize(
+    ("module", "relative_path"),
+    (
+        ("kernel.dormant_selection_copy", "kernel/dormant_selection_copy.py"),
+        ("kernel.api_selection_wrapper", "kernel/api_selection_wrapper.py"),
+        (
+            "profile_si_ffs.tests.test_selection_copy",
+            "profile_si_ffs/tests/test_selection_copy.py",
+        ),
+    ),
+)
+def test_selection_storage_marker_copy_in_production_python_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    module: str,
+    relative_path: str,
+):
+    marker_text = _python_marker_text(*temporal.SELECTION_STORAGE_MARKERS)
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=True,
+        extra_sources=((module, relative_path, marker_text),),
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="another production Python source",
+    ):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+def test_selection_storage_adapter_reexport_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=True,
+        init_text=("from .tenant_command_runtime_bundle_selection import apply\n"),
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="deployment.postgresql.__init__",
+    ):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+@pytest.mark.parametrize("root", ("kernel.api", "kernel.legacy_m1.api"))
+def test_selection_storage_adapter_import_closure_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    root: str,
+):
+    edge = SimpleNamespace(
+        target=temporal.SELECTION_STORAGE_ADAPTER_MODULE,
+        line=1,
+    )
+    graph = {
+        root: (edge,),
+        temporal.SELECTION_STORAGE_ADAPTER_MODULE: (),
+    }
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=True,
+        graph=graph,
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="adapter entered the .* import closure",
+    ):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+@pytest.mark.parametrize(
+    ("module", "relative_path"),
+    (
+        (
+            "conformance.temporal_contract_candidate_check",
+            "conformance/temporal_contract_candidate_check.py",
+        ),
+        (
+            "kernel.tests.test_synthetic_selection",
+            "kernel/tests/test_synthetic_selection.py",
+        ),
+    ),
+)
+def test_selection_storage_reachable_exemption_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    module: str,
+    relative_path: str,
+):
+    edge = SimpleNamespace(target=module, line=1)
+    graph = {"kernel.api": (edge,), module: ()}
+    marker_text = _python_marker_text(*temporal.SELECTION_STORAGE_MARKERS)
+    migration_authority, python_authority = _prepare_selection_storage_classifier(
+        tmp_path,
+        monkeypatch,
+        classified=True,
+        extra_sources=((module, relative_path, marker_text),),
+        graph=graph,
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="exemption entered the production import closure",
+    ):
+        temporal.validate_selection_storage_classification(
+            migration_authority,
+            python_authority,
+        )
+
+
+@pytest.mark.parametrize(
+    ("path_attribute", "label"),
+    (
+        ("RUNTIME_CATALOG_PATH", "active RuntimeBundle catalog"),
+        ("ACTIVE_ARTIFACT_SET_PATH", "ActiveArtifactSet"),
+        ("CAPABILITY_MANIFEST_PATH", "Capability Manifest"),
+    ),
+)
+def test_selection_storage_markers_refuse_each_active_non_python_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    path_attribute: str,
+    label: str,
+):
+    marker = temporal.RUNTIME_BUNDLE_SELECTION_CANONICAL_DIGEST
+    if path_attribute == "RUNTIME_CATALOG_PATH":
+        value = {"contractSchemas": [], "components": [{"marker": marker}]}
+        with pytest.raises(temporal.TemporalCandidateError, match=label):
+            temporal.validate_non_activation(value)
+        return
+    path = tmp_path / f"{path_attribute}.json"
+    path.write_text(marker, encoding="utf-8")
+    monkeypatch.setattr(temporal, path_attribute, path)
+    with pytest.raises(temporal.TemporalCandidateError, match=label):
+        temporal.validate_active_temporal_activation_inputs()
+
+
+def test_selection_storage_classifier_has_no_config_or_database_seam():
+    assert temporal.SELECTION_STORAGE_ALLOWED_PRODUCTION_PATHS == {
+        "kernel/migrations/0008_tenant_command_runtime_bundle_selection.sql",
+        "deployment/postgresql/tenant_command_runtime_bundle_selection.py",
+    }
+    signature = inspect.signature(temporal.validate_selection_storage_classification)
+    assert tuple(signature.parameters) == (
+        "migration_authority",
+        "python_authority",
+    )
+    source = inspect.getsource(temporal.validate_selection_storage_classification)
+    assert all(
+        forbidden not in source
+        for forbidden in (
+            "os.environ",
+            "argparse",
+            "CREATE TABLE",
+            "INSERT INTO",
+            "tenantId",
+            "credential",
+            "secret",
+        )
+    )

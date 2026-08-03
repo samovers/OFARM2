@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import copy
 import hashlib
+import importlib.util
 import json
 import re
 import sys
@@ -223,6 +224,36 @@ CAPABILITY_MANIFEST_PATH = (
     PACKAGE_ROOT
     / "profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
 )
+SELECTION_STORAGE_CONFORMANCE_RFC_PATH = (
+    PACKAGE_ROOT / "docs/rfcs/"
+    "OFARM_Temporal_Candidate_Conformance_Selection_Storage_Admission_"
+    "RFC_v0_1.md"
+)
+ARCHITECTURE_REPORT_PATH = (
+    PACKAGE_ROOT
+    / "reference/law/OFARM_Platform_Runtime_and_Product_Architecture_RC2_1.md"
+)
+ADR_0001_PATH = PACKAGE_ROOT / "docs/adr/0001-tenancy-and-schema-migrations.md"
+ADR_0003_PATH = PACKAGE_ROOT / "docs/adr/0003-tenant-capability-trust-and-binder.md"
+SELECTION_STORAGE_PARENT_RFC_PATH = (
+    PACKAGE_ROOT / "docs/rfcs/"
+    "OFARM_Tenant_Command_RuntimeBundle_Selection_Activation_Admission_"
+    "RFC_v0_1.md"
+)
+TENANT_BINDING_SELECTION_CONTROL_RFC_PATH = (
+    PACKAGE_ROOT / "docs/rfcs/"
+    "OFARM_Tenant_Binding_Selection_Control_Admission_RFC_v0_1.md"
+)
+TENANT_CURRENT_CONTEXT_SELECTION_OWNER_RFC_PATH = (
+    PACKAGE_ROOT / "docs/rfcs/"
+    "OFARM_Tenant_Current_Context_Selection_Owner_Admission_RFC_v0_1.md"
+)
+TENANT_WRITE_LOCK_SELECTION_OWNER_RFC_PATH = (
+    PACKAGE_ROOT / "docs/rfcs/"
+    "OFARM_Tenant_Write_Lock_Selection_Owner_Admission_RFC_v0_1.md"
+)
+PROVISIONING_SPECS_PATH = PACKAGE_ROOT / "deployment/postgresql/provisioning_specs.py"
+CATALOG_IDENTITY_PATH = PACKAGE_ROOT / "deployment/postgresql/catalog_identity.py"
 
 CONTRACT_VERSION = "ofarm.temporal-coordinate.v0.1"
 CONTRACT_ID = "https://ofarm.dev/schema/temporal-coordinate/v0.1"
@@ -327,6 +358,104 @@ RUNTIME_BUNDLE_SELECTION_SCHEMA_DIGEST = (
 )
 RUNTIME_BUNDLE_SELECTION_BINDING_DIGEST = (
     "1500ffbbfdf11207a6657848fce12618347f767578e55dc070bb282dc5775aac"
+)
+RUNTIME_BUNDLE_SELECTION_BINDING_BYTE_LENGTH = 15993
+RUNTIME_BUNDLE_SELECTION_SCHEMA_BYTE_LENGTH = 17252
+RUNTIME_BUNDLE_SELECTION_CANONICAL_BYTE_LENGTH = 13287
+RUNTIME_BUNDLE_SELECTION_CANONICAL_DIGEST = (
+    "sha256:56fb0f14a2514b34428841cb7bfc8681bb577ea3ecf57598be480683fb68524f"
+)
+SELECTION_STORAGE_CONFORMANCE_CONTRACT_ID = (
+    "ofarm.temporal-candidate-conformance-selection-storage-admission.issue176.v0.1"
+)
+SELECTION_STORAGE_CONFORMANCE_RFC_BYTE_LENGTH = 62540
+SELECTION_STORAGE_CONFORMANCE_RFC_DIGEST = (
+    "716a45927846d068f595f81288b8d29ecc07891bcaf848e0284eb91ece4abc8d"
+)
+SELECTION_STORAGE_PARENT_RFC_BYTE_LENGTH = 52382
+SELECTION_STORAGE_PARENT_RFC_DIGEST = (
+    "af69370fe268e0632318c95d3e60d83046a49d0948f2ba9cb05d2744ae82d6eb"
+)
+ARCHITECTURE_REPORT_BYTE_LENGTH = 96406
+ARCHITECTURE_REPORT_DIGEST = (
+    "76357c6c7c184893f80219720f6343a682a859098f3703eb84c282fba0c02256"
+)
+ADR_0001_BYTE_LENGTH = 147112
+ADR_0001_DIGEST = "bc49e566ddbdf98868162aa7ccca0940fa76fca1bfaaa261c8c831dbb5515a4d"
+ADR_0002_BYTE_LENGTH = 61427
+ADR_0002_DIGEST = "c23cb57616207f2f6d39103e429ea778d794ef85d2b198057806c8228d608796"
+ADR_0003_BYTE_LENGTH = 93419
+ADR_0003_DIGEST = "b188f4d60e46887fde4231e73bb00adb9bd70b75e807627e8a3906389a0fa5be"
+TENANT_BINDING_SELECTION_CONTROL_RFC_BYTE_LENGTH = 32169
+TENANT_BINDING_SELECTION_CONTROL_RFC_DIGEST = (
+    "c1d02969811be0d5b02bdae158cb48e5d8148356ca9d4bac956c8861d529c37a"
+)
+TENANT_CURRENT_CONTEXT_SELECTION_OWNER_RFC_BYTE_LENGTH = 50383
+TENANT_CURRENT_CONTEXT_SELECTION_OWNER_RFC_DIGEST = (
+    "af85e259230b69edeba80ddc2eea2f070a601fd3888fd463ce595f9cc446b13d"
+)
+TENANT_WRITE_LOCK_SELECTION_OWNER_RFC_BYTE_LENGTH = 45758
+TENANT_WRITE_LOCK_SELECTION_OWNER_RFC_DIGEST = (
+    "5745ad4b8b588be2b5a1b64b4b84aa757b23f8d2de00ca59e71de8ea304f51b0"
+)
+SELECTION_STORAGE_MIGRATION_RELATIVE_PATH = (
+    "kernel/migrations/0008_tenant_command_runtime_bundle_selection.sql"
+)
+SELECTION_STORAGE_ADAPTER_RELATIVE_PATH = (
+    "deployment/postgresql/tenant_command_runtime_bundle_selection.py"
+)
+SELECTION_STORAGE_ADAPTER_MODULE = (
+    "deployment.postgresql.tenant_command_runtime_bundle_selection"
+)
+SELECTION_STORAGE_ALLOWED_PRODUCTION_PATHS = frozenset(
+    {
+        SELECTION_STORAGE_MIGRATION_RELATIVE_PATH,
+        SELECTION_STORAGE_ADAPTER_RELATIVE_PATH,
+    }
+)
+SELECTION_STORAGE_MARKERS = (
+    RUNTIME_BUNDLE_SELECTION_BINDING_ID,
+    RUNTIME_BUNDLE_SELECTION_CANONICAL_DIGEST,
+)
+SELECTION_STORAGE_STATE_ABSENT = "CONFORMANT_ABSENT"
+SELECTION_STORAGE_STATE_CLASSIFIED = "CONFORMANT_CLASSIFIED"
+TENANT_V7_PREFIX_DIGEST = (
+    "sha256:5616797d1362c55c78175126edab29cc3e88c021ba0709e3766d3196d2b0126b"
+)
+TENANT_PROVISIONING_SPEC_DIGEST = (
+    "sha256:2ac8487b64d4fb09d7576ef1ee09ac1f2a3cc5b20558f0d2137620b897c7157c"
+)
+TENANT_V7_STRUCTURAL_VERIFIER_DIGEST = (
+    "sha256:fcc0e96b4520ffe51ddb5537df24040e4d5948a22b3c387351346cc588e87ee5"
+)
+TENANT_V7_EXTERNAL_CATALOG_DIGEST = (
+    "sha256:026bb61026a9f752fc8dde84bca0e3cbbab374d0ac8f0ba942a72654e44f5f1a"
+)
+TENANT_V4_TO_V7_MIGRATION_IDENTITIES = (
+    (
+        4,
+        RUNTIME_BUNDLE_PERSISTENCE_MIGRATION_FILENAME,
+        6464,
+        "sha256:0c51948be7cebf2c1523d472ca44a57e32942bd358124e126ccaf2bad248ecc8",
+    ),
+    (
+        5,
+        "0005_tenant_binding_selection_control_admission.sql",
+        8545,
+        "sha256:fde66e835f8c4456d7404eb00b99292e267f573f8b126f781f3ed55bd5e8df9a",
+    ),
+    (
+        6,
+        "0006_tenant_current_context_selection_owner_admission.sql",
+        8655,
+        "sha256:a61c668a2bae04026b8413385f8bc1b5fd43f08f8d5281501ff766a57d552b48",
+    ),
+    (
+        7,
+        "0007_tenant_write_lock_selection_owner_admission.sql",
+        7936,
+        "sha256:cf8594b6c456953004912722b168d6bdda7c6dbfc903ba8099b018e2f270dff7",
+    ),
 )
 PROMOTION_SCHEMA_VERSION = "ofarm.temporal-governance-promotion-binding.v0.1"
 PROMOTION_SCHEMA_ID = (
@@ -439,16 +568,27 @@ class _AuthenticatedMigration(Protocol):
 
 class _AuthenticatedMigrationSet(Protocol):
     migrations: tuple[_AuthenticatedMigration, ...]
+    digest: str
 
     def prefix_digest(self, version: int) -> str: ...
 
 
 @dataclass(frozen=True)
 class TenantMigrationAuthoritySnapshot:
-    """One production-authenticated migration release and its stable V3 cut."""
+    """One production-authenticated migration release and its stable cuts."""
 
     migration_set: _AuthenticatedMigrationSet
     version_3_prefix: str
+    version_7_prefix: str
+
+
+@dataclass(frozen=True)
+class PythonSourceAuthoritySnapshot:
+    """One retained architecture-owned Python inventory and import graph."""
+
+    sources: dict[str, Path]
+    graph: dict[str, tuple[object, ...]]
+    trees: dict[str, ast.Module]
 
 
 @dataclass(frozen=True)
@@ -1067,6 +1207,105 @@ def validate_selection_binding(value: object) -> None:
         )
 
 
+def _validate_exact_authority(
+    path: Path,
+    byte_length: int,
+    digest: str,
+    label: str,
+) -> bytes:
+    if path.is_symlink() or not path.is_file():
+        raise TemporalCandidateError(f"{label} authority is missing or substituted")
+    try:
+        value = path.read_bytes()
+    except OSError as exc:
+        raise TemporalCandidateError(f"{label} authority is unreadable") from exc
+    if len(value) != byte_length:
+        raise TemporalCandidateError(f"{label} authority byte length differs")
+    if hashlib.sha256(value).hexdigest() != digest:
+        raise TemporalCandidateError(f"{label} authority digest differs")
+    return value
+
+
+def _selection_storage_prerequisite_pins() -> tuple[tuple[Path, int, str, str], ...]:
+    return (
+        (
+            ARCHITECTURE_REPORT_PATH,
+            ARCHITECTURE_REPORT_BYTE_LENGTH,
+            ARCHITECTURE_REPORT_DIGEST,
+            "architecture report",
+        ),
+        (ADR_0001_PATH, ADR_0001_BYTE_LENGTH, ADR_0001_DIGEST, "ADR 0001"),
+        (ADR_PATH, ADR_0002_BYTE_LENGTH, ADR_0002_DIGEST, "ADR 0002"),
+        (ADR_0003_PATH, ADR_0003_BYTE_LENGTH, ADR_0003_DIGEST, "ADR 0003"),
+        (
+            SELECTION_STORAGE_PARENT_RFC_PATH,
+            SELECTION_STORAGE_PARENT_RFC_BYTE_LENGTH,
+            SELECTION_STORAGE_PARENT_RFC_DIGEST,
+            "selection-storage parent",
+        ),
+        (
+            PERSISTENCE_ADMISSION_RFC_PATH,
+            PERSISTENCE_ADMISSION_RFC_BYTE_LENGTH,
+            PERSISTENCE_ADMISSION_RFC_DIGEST,
+            "RuntimeBundle persistence-admission",
+        ),
+        (
+            TENANT_BINDING_SELECTION_CONTROL_RFC_PATH,
+            TENANT_BINDING_SELECTION_CONTROL_RFC_BYTE_LENGTH,
+            TENANT_BINDING_SELECTION_CONTROL_RFC_DIGEST,
+            "tenant binding selection-control",
+        ),
+        (
+            TENANT_CURRENT_CONTEXT_SELECTION_OWNER_RFC_PATH,
+            TENANT_CURRENT_CONTEXT_SELECTION_OWNER_RFC_BYTE_LENGTH,
+            TENANT_CURRENT_CONTEXT_SELECTION_OWNER_RFC_DIGEST,
+            "tenant current-context selection-owner",
+        ),
+        (
+            TENANT_WRITE_LOCK_SELECTION_OWNER_RFC_PATH,
+            TENANT_WRITE_LOCK_SELECTION_OWNER_RFC_BYTE_LENGTH,
+            TENANT_WRITE_LOCK_SELECTION_OWNER_RFC_DIGEST,
+            "tenant write-lock selection-owner",
+        ),
+        (
+            RUNTIME_BUNDLE_SELECTION_SCHEMA_PATH,
+            RUNTIME_BUNDLE_SELECTION_SCHEMA_BYTE_LENGTH,
+            RUNTIME_BUNDLE_SELECTION_SCHEMA_DIGEST,
+            "RuntimeBundle-selection schema",
+        ),
+        (
+            RUNTIME_BUNDLE_SELECTION_BINDING_PATH,
+            RUNTIME_BUNDLE_SELECTION_BINDING_BYTE_LENGTH,
+            RUNTIME_BUNDLE_SELECTION_BINDING_DIGEST,
+            "RuntimeBundle-selection binding",
+        ),
+    )
+
+
+def validate_selection_storage_prerequisite_authorities() -> None:
+    self_bytes = _validate_exact_authority(
+        SELECTION_STORAGE_CONFORMANCE_RFC_PATH,
+        SELECTION_STORAGE_CONFORMANCE_RFC_BYTE_LENGTH,
+        SELECTION_STORAGE_CONFORMANCE_RFC_DIGEST,
+        "selection-storage conformance",
+    )
+    if SELECTION_STORAGE_CONFORMANCE_CONTRACT_ID.encode("ascii") not in self_bytes:
+        raise TemporalCandidateError(
+            "selection-storage conformance contract identity differs"
+        )
+    for path, byte_length, digest, label in _selection_storage_prerequisite_pins():
+        _validate_exact_authority(path, byte_length, digest, label)
+    if (
+        _canonical_json_length(RUNTIME_BUNDLE_SELECTION_BINDING_PATH)
+        != RUNTIME_BUNDLE_SELECTION_CANONICAL_BYTE_LENGTH
+        or _canonical_json_digest(RUNTIME_BUNDLE_SELECTION_BINDING_PATH)
+        != RUNTIME_BUNDLE_SELECTION_CANONICAL_DIGEST
+    ):
+        raise TemporalCandidateError(
+            "RuntimeBundle-selection canonical binding identity differs"
+        )
+
+
 def _schema_version(path: Path) -> str:
     schema = _load_json(path)
     value = (
@@ -1259,8 +1498,15 @@ def _execute_migration_authority_source(source_text: str) -> types.ModuleType:
 
 def _validated_migration_set_shape(value: object) -> _AuthenticatedMigrationSet:
     migrations = getattr(value, "migrations", None)
+    digest = getattr(value, "digest", None)
     prefix_digest = getattr(value, "prefix_digest", None)
-    if type(migrations) is not tuple or not migrations or not callable(prefix_digest):
+    if (
+        type(migrations) is not tuple
+        or not migrations
+        or type(digest) is not str
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None
+        or not callable(prefix_digest)
+    ):
         raise TemporalCandidateError(
             "authenticated tenant migration-set shape differs"
         )
@@ -1287,7 +1533,7 @@ def load_tenant_migration_authority_snapshot() -> TenantMigrationAuthoritySnapsh
             source_text,
             filename=str(MIGRATION_SET_AUTHORITY_PATH),
         )
-    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+    except (AttributeError, OSError, TypeError, UnicodeDecodeError, SyntaxError) as exc:
         raise TemporalCandidateError(
             "tenant migration-set authority is not parseable"
         ) from exc
@@ -1351,9 +1597,25 @@ def load_tenant_migration_authority_snapshot() -> TenantMigrationAuthoritySnapsh
         raise TemporalCandidateError(
             "parsed and authenticated tenant version-3 prefixes differ"
         )
+    authenticated_version_7_prefix = ""
+    if len(migration_set.migrations) >= 7:
+        try:
+            authenticated_version_7_prefix = migration_set.prefix_digest(7)
+        except Exception as exc:
+            raise TemporalCandidateError(
+                "authenticated tenant migration-set version-7 prefix failed"
+            ) from exc
+        if (
+            type(authenticated_version_7_prefix) is not str
+            or authenticated_version_7_prefix != TENANT_V7_PREFIX_DIGEST
+        ):
+            raise TemporalCandidateError(
+                "authenticated tenant version-7 prefix differs"
+            )
     return TenantMigrationAuthoritySnapshot(
         migration_set=migration_set,
         version_3_prefix=authenticated_version_3_prefix,
+        version_7_prefix=authenticated_version_7_prefix,
     )
 
 
@@ -2869,23 +3131,346 @@ def validate_runtime_selector_paths(binding: dict[str, object]) -> None:
         )
 
 
-def validate_runtime_selection_isolation() -> None:
+def load_python_source_authority_snapshot() -> PythonSourceAuthoritySnapshot:
     package_root = str(PACKAGE_ROOT)
     if package_root not in sys.path:
         sys.path.insert(0, package_root)
     from conformance import rewrite_architecture_check as architecture
 
-    sources = architecture._module_sources(PACKAGE_ROOT)
-    graph, _trees = architecture._import_graph(sources)
+    try:
+        sources = architecture._module_sources(PACKAGE_ROOT)
+        graph, trees = architecture._import_graph(sources)
+    except (
+        AttributeError,
+        OSError,
+        TypeError,
+        UnicodeDecodeError,
+        SyntaxError,
+    ) as exc:
+        raise TemporalCandidateError(
+            "architecture-owned Python source authority failed"
+        ) from exc
+    if type(sources) is not dict or type(graph) is not dict or type(trees) is not dict:
+        raise TemporalCandidateError(
+            "architecture-owned Python source authority shape differs"
+        )
+    return PythonSourceAuthoritySnapshot(
+        sources=sources,
+        graph=cast(dict[str, tuple[object, ...]], graph),
+        trees=trees,
+    )
+
+
+def validate_runtime_selection_isolation(
+    python_authority: PythonSourceAuthoritySnapshot,
+) -> None:
+    from conformance import rewrite_architecture_check as architecture
+
     for roots, label in (
         (architecture.PRODUCTION_IMPORT_ROOTS, "production"),
         (architecture.LEGACY_IMPORT_ROOTS, "legacy"),
     ):
-        reachable = architecture._reachable_paths(graph, roots)
+        reachable = architecture._reachable_paths(
+            cast(dict[str, tuple[object, ...]], python_authority.graph),
+            roots,
+        )
         if "kernel.temporal_carriers" in reachable:
             raise TemporalCandidateError(
                 f"carrier selector entered the {label} import closure"
             )
+        if SELECTION_STORAGE_ADAPTER_MODULE in reachable:
+            raise TemporalCandidateError(
+                f"selection-storage adapter entered the {label} import closure"
+            )
+        for module in reachable:
+            path = python_authority.sources.get(module)
+            if path is not None and _selection_storage_python_exempt(path):
+                raise TemporalCandidateError(
+                    "selection-storage conformance exemption entered the "
+                    f"{label} import closure"
+                )
+
+
+def _selection_storage_python_exempt(path: Path) -> bool:
+    try:
+        relative = path.relative_to(PACKAGE_ROOT).as_posix()
+    except ValueError:
+        return False
+    return relative == "conformance/temporal_contract_candidate_check.py" or (
+        relative.startswith("kernel/tests/")
+    )
+
+
+def _load_fixed_python_authority_module(
+    module_name: str,
+    path: Path,
+) -> types.ModuleType:
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise TemporalCandidateError(
+            f"{module_name} Python authority loader is unavailable"
+        )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:
+        raise TemporalCandidateError(
+            f"{module_name} Python authority failed to load"
+        ) from exc
+    return module
+
+
+def _current_tenant_provisioning_digest(
+    python_authority: PythonSourceAuthoritySnapshot,
+) -> str:
+    module_paths = {
+        name: python_authority.sources.get(name)
+        for name in (
+            "deployment.postgresql.migration_sets",
+            "deployment.postgresql.native_release_identity",
+            "deployment.postgresql.tenant_contract",
+            "deployment.postgresql.provisioning_specs",
+        )
+    }
+    if module_paths[
+        "deployment.postgresql.provisioning_specs"
+    ] != PROVISIONING_SPECS_PATH or any(path is None for path in module_paths.values()):
+        raise TemporalCandidateError(
+            "tenant provisioning-spec source authority differs"
+        )
+    names = (
+        "deployment",
+        "deployment.postgresql",
+        *module_paths,
+    )
+    previous = {name: sys.modules.get(name) for name in names}
+    deployment_package = types.ModuleType("deployment")
+    deployment_package.__path__ = [str(PACKAGE_ROOT / "deployment")]
+    postgresql_package = types.ModuleType("deployment.postgresql")
+    postgresql_package.__path__ = [str(PACKAGE_ROOT / "deployment/postgresql")]
+    try:
+        sys.modules["deployment"] = deployment_package
+        sys.modules["deployment.postgresql"] = postgresql_package
+        loaded_modules: dict[str, types.ModuleType] = {}
+        for name, path in module_paths.items():
+            if path is None:
+                raise TemporalCandidateError(
+                    "tenant provisioning-spec source authority differs"
+                )
+            loaded_modules[name] = _load_fixed_python_authority_module(name, path)
+        provisioning_module = loaded_modules["deployment.postgresql.provisioning_specs"]
+        provisioning_spec = getattr(
+            provisioning_module,
+            "TENANT_PROVISIONING_SPEC",
+            None,
+        )
+        digest = getattr(provisioning_spec, "digest", None)
+    finally:
+        for name in reversed(names):
+            prior = previous[name]
+            if prior is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = prior
+    if type(digest) is not str:
+        raise TemporalCandidateError(
+            "tenant provisioning-spec digest authority differs"
+        )
+    return digest
+
+
+def _current_tenant_catalog_digest(
+    python_authority: PythonSourceAuthoritySnapshot,
+) -> str:
+    module_name = "deployment.postgresql.catalog_identity"
+    if python_authority.sources.get(module_name) != CATALOG_IDENTITY_PATH:
+        raise TemporalCandidateError("tenant catalog identity source differs")
+    tree = python_authority.trees.get(module_name)
+    if not isinstance(tree, ast.Module):
+        raise TemporalCandidateError("tenant catalog identity tree differs")
+    assignments = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and node.target.id == "TENANT_CATALOG_VERIFIER_DIGEST"
+    ]
+    if len(assignments) != 1 or not isinstance(assignments[0].value, ast.Constant):
+        raise TemporalCandidateError("tenant catalog identity literal differs")
+    digest = assignments[0].value.value
+    if type(digest) is not str:
+        raise TemporalCandidateError("tenant catalog identity literal differs")
+    return digest
+
+
+def _validate_tenant_v7_migration_authority(
+    migration_authority: TenantMigrationAuthoritySnapshot,
+) -> None:
+    migrations = migration_authority.migration_set.migrations
+    if tuple(migration.version for migration in migrations) not in (
+        tuple(range(1, 8)),
+        tuple(range(1, 9)),
+    ):
+        raise TemporalCandidateError(
+            "tenant selection-storage migration release is not exact V7 or V8"
+        )
+    if (
+        migration_authority.version_3_prefix
+        != KNOWLEDGE_STORAGE_MIGRATION_PREFIX_DIGEST
+    ):
+        raise TemporalCandidateError("tenant version-3 stable prefix differs")
+    try:
+        version_7_prefix = migration_authority.migration_set.prefix_digest(7)
+    except Exception as exc:
+        raise TemporalCandidateError("tenant version-7 stable prefix failed") from exc
+    if (
+        migration_authority.version_7_prefix != TENANT_V7_PREFIX_DIGEST
+        or version_7_prefix != TENANT_V7_PREFIX_DIGEST
+    ):
+        raise TemporalCandidateError("tenant version-7 stable prefix differs")
+    for version, filename, byte_length, digest in TENANT_V4_TO_V7_MIGRATION_IDENTITIES:
+        migration = migrations[version - 1]
+        if (
+            migration.version != version
+            or migration.filename != filename
+            or migration.byte_length != byte_length
+            or migration.source_sha256 != digest
+            or len(migration.source_bytes) != byte_length
+            or "sha256:" + hashlib.sha256(migration.source_bytes).hexdigest() != digest
+        ):
+            raise TemporalCandidateError(
+                f"authenticated tenant migration {version:04d} differs"
+            )
+    if (
+        len(migrations) == 7
+        and migration_authority.migration_set.digest != TENANT_V7_PREFIX_DIGEST
+    ):
+        raise TemporalCandidateError("authenticated tenant V7 release digest differs")
+    version_7_source = migrations[6].source_bytes
+    if (
+        version_7_source.count(TENANT_V7_STRUCTURAL_VERIFIER_DIGEST.encode("ascii"))
+        != 1
+    ):
+        raise TemporalCandidateError("tenant V7 structural-verifier identity differs")
+
+
+def _read_retained_python_sources(
+    python_authority: PythonSourceAuthoritySnapshot,
+) -> dict[str, str]:
+    source_texts: dict[str, str] = {}
+    for module, path in python_authority.sources.items():
+        try:
+            path.relative_to(PACKAGE_ROOT)
+            source_texts[module] = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            raise TemporalCandidateError(
+                "retained Python source inventory is unreadable or escaped"
+            ) from exc
+    return source_texts
+
+
+def validate_selection_storage_classification(
+    migration_authority: TenantMigrationAuthoritySnapshot,
+    python_authority: PythonSourceAuthoritySnapshot,
+) -> str:
+    _validate_tenant_v7_migration_authority(migration_authority)
+    if (
+        _current_tenant_provisioning_digest(python_authority)
+        != TENANT_PROVISIONING_SPEC_DIGEST
+    ):
+        raise TemporalCandidateError("tenant provisioning-spec digest differs")
+
+    migrations = migration_authority.migration_set.migrations
+    migration_8 = migrations[7] if len(migrations) == 8 else None
+    migration_path = PACKAGE_ROOT / SELECTION_STORAGE_MIGRATION_RELATIVE_PATH
+    migration_path_present = migration_path.exists() or migration_path.is_symlink()
+    if migration_8 is None:
+        if migration_path_present:
+            raise TemporalCandidateError(
+                "selection-storage migration path is outside authenticated V7"
+            )
+    elif (
+        migration_8.version != 8
+        or migration_8.filename != Path(SELECTION_STORAGE_MIGRATION_RELATIVE_PATH).name
+        or migration_8.byte_length != len(migration_8.source_bytes)
+        or migration_8.source_sha256
+        != "sha256:" + hashlib.sha256(migration_8.source_bytes).hexdigest()
+        or not migration_path.is_file()
+        or migration_path.is_symlink()
+    ):
+        raise TemporalCandidateError(
+            "authenticated selection-storage migration path differs"
+        )
+
+    marker_bytes = tuple(marker.encode("ascii") for marker in SELECTION_STORAGE_MARKERS)
+    for migration in migrations:
+        occurrences = tuple(marker in migration.source_bytes for marker in marker_bytes)
+        if migration.version == 8:
+            if occurrences != (True, True):
+                raise TemporalCandidateError(
+                    "selection-storage migration marker pair differs"
+                )
+        elif any(occurrences):
+            raise TemporalCandidateError(
+                "selection-storage marker entered another authenticated migration"
+            )
+
+    adapter_path = PACKAGE_ROOT / SELECTION_STORAGE_ADAPTER_RELATIVE_PATH
+    adapter_path_present = adapter_path.exists() or adapter_path.is_symlink()
+    adapter_inventory_path = python_authority.sources.get(
+        SELECTION_STORAGE_ADAPTER_MODULE
+    )
+    if adapter_path_present != (migration_8 is not None):
+        raise TemporalCandidateError(
+            "selection-storage production path pair is partial"
+        )
+    if adapter_path_present and (
+        adapter_path.is_symlink()
+        or not adapter_path.is_file()
+        or adapter_inventory_path != adapter_path
+    ):
+        raise TemporalCandidateError("selection-storage adapter path differs")
+    if not adapter_path_present and adapter_inventory_path is not None:
+        raise TemporalCandidateError(
+            "selection-storage adapter inventory presence differs"
+        )
+
+    source_texts = _read_retained_python_sources(python_authority)
+    for module, path in python_authority.sources.items():
+        occurrences = tuple(
+            marker in source_texts[module] for marker in SELECTION_STORAGE_MARKERS
+        )
+        if path == adapter_path:
+            if occurrences != (True, True):
+                raise TemporalCandidateError(
+                    "selection-storage adapter marker pair differs"
+                )
+        elif not _selection_storage_python_exempt(path) and any(occurrences):
+            raise TemporalCandidateError(
+                "selection-storage marker entered another production Python source"
+            )
+
+    postgresql_init = source_texts.get("deployment.postgresql")
+    if adapter_path_present and (
+        postgresql_init is None
+        or "tenant_command_runtime_bundle_selection" in postgresql_init
+    ):
+        raise TemporalCandidateError(
+            "selection-storage adapter entered deployment.postgresql.__init__"
+        )
+    validate_runtime_selection_isolation(python_authority)
+
+    if migration_8 is None:
+        if (
+            _current_tenant_catalog_digest(python_authority)
+            != TENANT_V7_EXTERNAL_CATALOG_DIGEST
+        ):
+            raise TemporalCandidateError(
+                "tenant V7 external catalog-verifier digest differs"
+            )
+        return SELECTION_STORAGE_STATE_ABSENT
+    return SELECTION_STORAGE_STATE_CLASSIFIED
 
 
 def _sha256(path: Path) -> str:
@@ -2951,6 +3536,11 @@ def validate_non_activation(runtime_catalog: object) -> None:
     ):
         raise TemporalCandidateError(
             "candidate role entered the active RuntimeBundle catalog"
+        )
+    runtime_catalog_text = json.dumps(runtime_catalog, sort_keys=True)
+    if any(marker in runtime_catalog_text for marker in SELECTION_STORAGE_MARKERS):
+        raise TemporalCandidateError(
+            "selection-storage marker entered the active RuntimeBundle catalog"
         )
 
 
@@ -3019,6 +3609,7 @@ def validate_active_temporal_activation_inputs() -> None:
         RUNTIME_BUNDLE_CARRIER_ROLE,
         RUNTIME_BUNDLE_SELECTION_SCHEMA_VERSION,
         RUNTIME_BUNDLE_SELECTION_BINDING_ID,
+        RUNTIME_BUNDLE_SELECTION_CANONICAL_DIGEST,
         RUNTIME_BUNDLE_SELECTION_EXECUTION_POSTURE,
         PROMOTION_SCHEMA_VERSION,
         PROMOTION_BINDING_ID,
@@ -3060,8 +3651,10 @@ def validate_temporal_card_errata_trace(errata: str) -> None:
         )
 
 
-def validate_candidate_governance() -> None:
+def validate_candidate_governance() -> str:
+    validate_selection_storage_prerequisite_authorities()
     migration_authority = load_tenant_migration_authority_snapshot()
+    python_authority = load_python_source_authority_snapshot()
     coordinate_schema = _load_json(COORDINATE_SCHEMA_PATH)
     carrier_schema = _load_json(CARRIER_SCHEMA_PATH)
     carrier_matrix = _load_json(CARRIER_MATRIX_PATH)
@@ -3112,7 +3705,6 @@ def validate_candidate_governance() -> None:
     validate_promotion_dependency_consistency()
     validate_runtime_selection_binding()
     validate_runtime_selector_paths(selection_binding)
-    validate_runtime_selection_isolation()
 
     manifest = _load_json(MANIFEST_PATH)
     entries = manifest.get("entries")
@@ -3539,6 +4131,10 @@ def validate_candidate_governance() -> None:
     validate_non_activation(runtime_catalog)
     validate_runtime_bundle_carrier_role_posture(migration_authority)
     validate_active_temporal_activation_inputs()
+    return validate_selection_storage_classification(
+        migration_authority,
+        python_authority,
+    )
 
 
 def _coordinate_value(
