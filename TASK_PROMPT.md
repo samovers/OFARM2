@@ -215,9 +215,47 @@ acceptance evidence, and smallest verification.
 
 Stop after Phase A and wait for explicit approval.
 
+### Pre-deployment decision card
+
+For a prospective pre-deployment decision governed by the AI-assisted workflow
+in `AGENTS.md`, first create or reuse the one draft pull request containing the
+reviewed Phase A contract. Show one complete plain-English card containing all
+decision fields required by that workflow, including the draft PR's stable
+reference and the exact approval sentence. Then wait.
+
+Recognize approval only from that exact later task-user message in the same
+Codex task. Before implementation, verify that the original card and approval
+items remain directly retrievable with stable references and in the required
+order. The task user does not verify hashes, bytes, inventories, or repository
+mechanics. If the original items, role, task, order, or named PR cannot be
+verified, stop without recognizing approval.
+
 ## Phase B: implementation
 
 Only begin after the complete design contract is approved.
+
+### Standing authority for an approved pre-deployment card
+
+An approved card authorizes work only in its already-named draft pull request.
+Record compact AI-attested evidence containing the decision identity and
+version, task/card/approval stable references, exact approval sentence,
+observed role and order, named PR, and the provisional-evidence limitation.
+The task message remains authority; the record is evidence only.
+
+Without another confirmation, the AI may perform only the in-envelope
+implementation, tests, documentation, mechanical evidence, commits, pushes,
+review handling, and merge authorized by the card and approved technical
+contract. The technical contract's exact path allowlist must be a subset of the
+card envelope, and every changed path must be inside that exact allowlist.
+
+Before merge, post the compact scope report required by `AGENTS.md`, show any
+bootstrap diff required by the approved contract, and recheck exact-head
+review, all required checks, no demonstrated Blocker, the live original task
+items, the named-PR binding, and absence of later cancellation. Material
+expansion, another trust boundary or PR, lost evidence, ambiguity, or conflict
+with the card stops for a new decision version. A stronger accepted procedure
+continues to control its exact action. This authority is pre-deployment only
+and never authorizes deployment or another production authority action.
 
 Before editing, reproduce the approved invariant traceability table. Implement
 the approved architecture, not a historical patch.
