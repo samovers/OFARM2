@@ -1,7 +1,7 @@
 <!-- BEGIN OFARM2 ARCHITECTURE PYTHON SOURCE SNAPSHOT PHASE A DESIGN -->
 # OFARM2 Architecture Python Source Snapshot Admission — Phase A Contract v0.1
 
-**Status:** proposed Phase A contract; documentation-only and unapproved
+**Status:** architect-approved Phase A contract; documentation-only and without implementation, temporal, database, runtime, deployment, legacy, or #192 effect
 
 **Contract identity:**
 `ofarm.architecture-python-source-snapshot-admission.issue176.v0.1`
@@ -1489,3 +1489,184 @@ design bytes. It is not an approval record.
 The exact approval sentence is:
 
 > I explicitly approve the Phase A design of contract ofarm.architecture-python-source-snapshot-admission.issue176.v0.1 at sha256:fa7501d83bf56662e6c88abe896d7e57680e31d3e3e60219a5b6d4195cb79f64 (71,575 bytes) in Codex task 019fa821-93c9-7ef1-8c94-1c0e92ea46b9 and authorize one documentation-only approval record with exactly the provenance, permitted effect, non-effects, preservation rules, and next required sequence stated in the complete decision card displayed immediately before this approval request in the same task.
+
+## Appendix A — Architect approval record
+
+This appendix is the one documentation-only approval record authorized by the
+designated architect. The underlying approved design remains the exact
+`71575`-byte proposed design identified below. The exact top-level status-line
+replacement above and this appendix are the only publication differences
+allowed by section 15.4.
+
+### A.1 Approved decision identity
+
+- contract identity:
+  `ofarm.architecture-python-source-snapshot-admission.issue176.v0.1`;
+- snapshot interface identity:
+  `ofarm.architecture-python-source-snapshot.v1`;
+- intended path:
+  `docs/rfcs/OFARM_Architecture_Python_Source_Snapshot_Admission_RFC_v0_1.md`;
+- reviewed base: `b81fd35aa88ae57172c9c68688367dd3a584e0be`;
+- final reviewed PR head:
+  `9bb2e116a798147b7e92b8c1f9159f176eee796b`;
+- canonical approved-design encoding: UTF-8 with LF line endings, no BOM, and
+  exactly one terminal LF;
+- canonical approved-design byte length: `71575`; and
+- canonical approved-design SHA-256:
+  `sha256:fa7501d83bf56662e6c88abe896d7e57680e31d3e3e60219a5b6d4195cb79f64`.
+
+The proposed and unapproved top-level status line inside those approved design
+bytes is preserved by identity. Publication replaces only that exact complete
+line at the mechanically fixed section 15.4 location. No other canonical
+design byte changes.
+
+### A.2 Approval authority and provenance
+
+- Codex task: `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`;
+- live decision-card turn: `019fcc61-2a41-7953-8009-7074b86b968d`;
+- live decision-card agent-message stable reference: `item-2197`;
+- live decision-card message timestamp: `2026-08-04T10:51:41Z`;
+- canonical decision-card extraction: UTF-8 with LF line endings, beginning
+  with `OFARM2 COMPLETE LIVE DECISION CARD` and ending with
+  `END OF OFARM2 COMPLETE LIVE DECISION CARD`, with no terminal LF;
+- canonical decision-card byte length: `28146`;
+- canonical decision-card SHA-256:
+  `sha256:0a6fce48ebc772421343f0ed5b6c13065b48666cf1e7baa8f0d1a7feef3fe274`;
+- rejected fenced-attempt turn: `019fcc66-9ca2-7582-b55e-0e78e5f22255`;
+- rejected fenced-attempt user-message stable reference: `item-2198`;
+- rejected fenced-attempt timestamp: `2026-08-04T10:51:44Z`;
+- rejection agent-message stable reference: `item-2199`;
+- rejection timestamp: `2026-08-04T10:51:52Z`;
+- architect approval turn: `019fcc67-192d-7ba2-aeb6-da54c4dfe93a`;
+- architect user-message stable reference: `item-2200`;
+- architect decision timestamp: `2026-08-04T10:52:16Z`;
+- canonical approval-sentence encoding: UTF-8 with no terminal LF;
+- canonical approval-sentence byte length: `524`; and
+- canonical approval-sentence SHA-256:
+  `sha256:58686e5811aaf23a717690f5f71812d1bb11340545e002ee7e66cd70327c2b7c`.
+
+The architect's exact user-authored approval sentence was:
+
+> I explicitly approve the Phase A design of contract ofarm.architecture-python-source-snapshot-admission.issue176.v0.1 at sha256:fa7501d83bf56662e6c88abe896d7e57680e31d3e3e60219a5b6d4195cb79f64 (71,575 bytes) in Codex task 019fa821-93c9-7ef1-8c94-1c0e92ea46b9 and authorize one documentation-only approval record with exactly the provenance, permitted effect, non-effects, preservation rules, and next required sequence stated in the complete decision card displayed immediately before this approval request in the same task.
+
+The architect authored that exact sentence as a later plain-text message in the
+same task. The earlier fenced message added wrapper bytes and was explicitly
+rejected; it created no approval or repository record. It introduced no
+competing card and no design change. The later exact sentence is the approval.
+It was not inferred from repository credentials, GitHub activity, PR
+authorship, review, comment, reaction, merge, generic approval, or an
+AI-generated message.
+
+### A.3 Exact authority and context identities
+
+- accepted architecture context:
+  `reference/law/OFARM_Platform_Runtime_and_Product_Architecture_RC2_1.md`,
+  `96406` bytes,
+  `sha256:76357c6c7c184893f80219720f6343a682a859098f3703eb84c282fba0c02256`;
+- exact reviewed problem baseline:
+  `conformance/rewrite_architecture_check.py`, `28594` bytes,
+  `sha256:23c0584bdf0f0acdf89c7b80cb861f1a2515372affbb3f9b11fccf31637222c1`;
+  and
+- unchanged dependent temporal contract:
+  `docs/rfcs/OFARM_Temporal_Candidate_Conformance_Selection_Storage_Admission_RFC_v0_1.md`,
+  `62540` bytes,
+  `sha256:716a45927846d068f595f81288b8d29ecc07891bcaf848e0284eb91ece4abc8d`.
+
+The temporal contract grants no authority to edit this architecture interface
+and is not amended by this approval.
+
+### A.4 Review evidence
+
+- PR: `#284`;
+- predecessor PR #283 review locator `4847814084` paired with commit
+  `9ee9f6856bafd26cfef6914074bffc230bb0c599`;
+- initial PR #284 review locator `4850399233` paired with commit
+  `5688cec0d17bacbdbb0adbef1fea0931673c25d5`;
+- PR #284 re-review locator `4851231679` paired with commit
+  `d1e55bc6a5dadfa630d0d752f06915e7142a4afc`;
+- PR #284 final-status re-review locator `4852101645` paired with commit
+  `dc2dbafdb16febe35d4caea4be7d5c675b2ef957`;
+- PR #284 refinement-review issue-comment locator `5177444229` paired with
+  commit `87a4db951025ef305ca7467980a37d61f79cc764`;
+- final exact-head re-review issue-comment locator `5177919469` paired with
+  commit `9bb2e116a798147b7e92b8c1f9159f176eee796b`; and
+- exact-head hosted conformance run: `30899888192`.
+
+Review and comment IDs are non-authoritative locators. Their paired commit
+SHAs bind the repository bytes reviewed. Neither locators nor commits are
+architect approval or implementation authority. Final re-review comment
+`5177919469` states that all findings are resolved, independently reproduces
+the design and approval-sentence identities, verifies the behavior-neutral
+reviewed-base promise, and leaves nothing open. Hosted conformance passed its
+main, amd64, arm64, and canonical-index jobs at the exact reviewed head.
+
+### A.5 Permitted effect and non-effects
+
+The approval has exactly one permitted effect: the exact `71575`-byte
+canonical Phase A design becomes architect-approved and this one-file
+documentation approval record is authorized.
+
+The approval does not authorize B1, B2, or B3 implementation; PR #283 work;
+an edit to either current temporal consumer; a temporal contract amendment;
+temporal identity, carrier-row, digest, migration-marker, or selection-marker
+classification; catalog, provisioning, marker, temporal, or dynamic-import
+policy; repository-module execution as evidence; a schema, migration, adapter,
+database role, grant, function, policy, row, tenant selection, or knowledge
+position; RuntimeBundle selection, profile activation, active-registry change,
+semantic route, command integration, materialization, current or historical
+read, window, output, deployment, legacy behavior, or #192 behavior.
+
+No active or candidate artifact, ERRATA, manifest, digest, lifecycle decision,
+frozen reference law, ADR 0002, production semantic surface, or
+production-versus-legacy firewall-policy meaning changes through this
+approval. No runtime behavior changes and no temporal artifact activates.
+
+### A.6 Preservation rules
+
+This published RFC preserves the approved decision, trust model, authority
+map, public interface, descriptor, execution profile, resource limits, state
+and acquisition model, refusal vocabulary, graph and reachability rules,
+invariants, negative cases, staged B1/B2/B3 architecture, non-goals,
+verification, file boundaries, stop conditions, and merge-stop rule
+byte-for-byte. Only the exact top-level status-line replacement and this
+appendix differ from the approved design. Section 17 and its design and
+approval-sentence identities remain unchanged.
+
+Production and legacy roots remain exact, separate, ordered, and bound by one
+descriptor. The production semantic surface remains closed. Temporal
+candidates remain governed and inactive. PR #283 remains stopped. #192 remains
+separate. The Codex approval transport remains provisional and pre-deployment.
+
+This approval record must not merge if reverse reconstruction does not recover
+the exact `71575` approved design bytes, if the card or approval provenance
+fails to verify, if a changed path falls outside this RFC, or if hosted
+conformance fails at the publication head. Before deployment, this provisional
+workflow must be replaced by independently human-controlled and independently
+verifiable signing or approval.
+
+After merge, B1 must authenticate the complete merged RFC path, contract
+identity, byte length, and SHA-256. The pre-publication approved-design digest
+cannot substitute for that complete merged identity. Merge and complete
+identity do not authorize B1 without a separate explicit request.
+
+### A.7 Next required sequence
+
+1. Run the required documentation, identity, reverse-reconstruction, and
+   package conformance checks on this publication head.
+2. Obtain mandatory publication-byte and approval-provenance re-review with
+   direct access to the cited Codex task evidence.
+3. Merge this documentation-only Phase A RFC only if every identity,
+   reference, preservation rule, changed-file boundary, and hosted check
+   verifies.
+4. Compute the complete merged RFC UTF-8 byte length and SHA-256.
+5. Obtain a separate explicit architecture B1 implementation request.
+6. Implement, review, and merge only B1 within its closed architecture
+   allowlist.
+7. Draft, approve, implement, and merge the separately owned temporal B2
+   migration.
+8. Prove both external consumers and all five private references are absent.
+9. Obtain a separate explicit architecture B3 request and remove the temporary
+   adapters only in B3.
+10. Only then reconsider a replacement for PR #283.
+
+This approval record does not authorize implementation, merge, or deployment.
