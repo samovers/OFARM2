@@ -389,7 +389,7 @@ class PythonSourceSnapshotV1:
         "_private_asts",
         "_production_reachability",
         "_root_path",
-        "_sealed",
+        "_builder_seal",
         "_source_file_count",
         "_total_ast_nodes",
         "_total_import_edges",
@@ -398,65 +398,6 @@ class PythonSourceSnapshotV1:
 
     def __new__(cls) -> typing.NoReturn:
         raise TypeError("PythonSourceSnapshotV1 is built only by its builder")
-
-    def _initialize(
-        self,
-        *,
-        descriptor: PythonSourceSnapshotDescriptorV1,
-        contract_authority: PythonSourceContractAuthorityV1,
-        root_path: pathlib.Path,
-        modules_by_name: dict[str, PythonSourceUnitV1],
-        modules_by_relative_path: dict[str, PythonSourceUnitV1],
-        private_asts: dict[str, ast.Module],
-        import_graph: dict[str, tuple[PythonImportEdgeV1, ...]],
-        production_reachability: dict[str, tuple[str, ...]],
-        legacy_reachability: dict[str, tuple[str, ...]],
-        source_file_count: int,
-        total_source_bytes: int,
-        total_ast_nodes: int,
-        total_import_edges: int,
-        content_sha256: str,
-    ) -> None:
-        object.__setattr__(self, "_descriptor", descriptor)
-        object.__setattr__(self, "_contract_authority", contract_authority)
-        object.__setattr__(self, "_root_path", root_path)
-        object.__setattr__(
-            self,
-            "_modules_by_name",
-            types.MappingProxyType(dict(modules_by_name)),
-        )
-        object.__setattr__(
-            self,
-            "_modules_by_relative_path",
-            types.MappingProxyType(dict(modules_by_relative_path)),
-        )
-        object.__setattr__(
-            self,
-            "_private_asts",
-            types.MappingProxyType(dict(private_asts)),
-        )
-        object.__setattr__(
-            self,
-            "_import_graph",
-            types.MappingProxyType(dict(import_graph)),
-        )
-        object.__setattr__(
-            self,
-            "_production_reachability",
-            types.MappingProxyType(dict(production_reachability)),
-        )
-        object.__setattr__(
-            self,
-            "_legacy_reachability",
-            types.MappingProxyType(dict(legacy_reachability)),
-        )
-        object.__setattr__(self, "_source_file_count", source_file_count)
-        object.__setattr__(self, "_total_source_bytes", total_source_bytes)
-        object.__setattr__(self, "_total_ast_nodes", total_ast_nodes)
-        object.__setattr__(self, "_total_import_edges", total_import_edges)
-        object.__setattr__(self, "_content_sha256", content_sha256)
-        object.__setattr__(self, "_ast_copy_calls", 0)
-        object.__setattr__(self, "_sealed", True)
 
     def __setattr__(self, name: str, value: object) -> None:
         raise AttributeError(f"{type(self).__name__} is immutable")
@@ -524,6 +465,8 @@ class PythonSourceSnapshotV1:
         return self._content_sha256
 
     def ast_for(self, module_name: str) -> ast.Module:
+        if not _is_builder_snapshot(self):
+            raise TypeError("snapshot must be builder-sealed")
         if type(module_name) is not str:
             raise TypeError("module_name must be str")
         tree = self._private_asts.get(module_name)
@@ -668,6 +611,8 @@ def _absolute_path_components(
         _refuse(limit_code)
     try:
         raw = os.fsencode(lexical)
+        if len(raw) > _FIXED_DESCRIPTOR_V1.maximum_root_path_bytes:
+            _refuse(limit_code)
         decoded = raw.decode("utf-8", errors="strict")
     except (UnicodeDecodeError, UnicodeEncodeError):
         _refuse(encoding_code)
@@ -870,6 +815,17 @@ def _authenticate_full_execution_profile() -> None:
         os.name != "posix"
         or sys.getfilesystemencoding() != _FIXED_DESCRIPTOR_V1.filesystem_encoding
         or sys.getfilesystemencodeerrors() != _FIXED_DESCRIPTOR_V1.filesystem_errors
+        or any(
+            not hasattr(os.stat_result, field)
+            for field in (
+                "st_dev",
+                "st_ino",
+                "st_mode",
+                "st_size",
+                "st_mtime_ns",
+                "st_ctime_ns",
+            )
+        )
     ):
         _refuse(
             PythonSourceSnapshotRefusalCodeV1.UNSUPPORTED_FILESYSTEM_PROFILE,
@@ -1115,11 +1071,23 @@ def _acquire_source(root_fd: int, candidate: _CandidateV1) -> bytes:
     file_fd = -1
     try:
         if len(components) > 1:
-            parent_fd, owned_parent = _open_inventory_directory(
-                root_fd,
-                components[:-1],
-                None,
-            )
+            try:
+                parent_fd, owned_parent = _open_inventory_directory(
+                    root_fd,
+                    components[:-1],
+                    None,
+                )
+            except PythonSourceSnapshotRefusal as exc:
+                if exc.code in {
+                    PythonSourceSnapshotRefusalCodeV1.INVENTORY_CHANGED,
+                    PythonSourceSnapshotRefusalCodeV1.NON_DIRECTORY_COMPONENT,
+                    PythonSourceSnapshotRefusalCodeV1.SYMLINK_COMPONENT,
+                }:
+                    raise PythonSourceSnapshotRefusal(
+                        PythonSourceSnapshotRefusalCodeV1.INVENTORY_CHANGED,
+                        relative,
+                    ) from exc
+                raise
         leaf = components[-1]
         try:
             before = os.stat(
@@ -1127,33 +1095,49 @@ def _acquire_source(root_fd: int, candidate: _CandidateV1) -> bytes:
                 dir_fd=parent_fd,
                 follow_symlinks=False,
             )
-        except OSError as exc:
+        except FileNotFoundError as exc:
             raise PythonSourceSnapshotRefusal(
-                PythonSourceSnapshotRefusalCodeV1.SOURCE_ACQUISITION_FAILED,
+                PythonSourceSnapshotRefusalCodeV1.INVENTORY_CHANGED,
                 relative,
             ) from exc
-        if stat.S_ISLNK(before.st_mode):
-            _refuse(
-                PythonSourceSnapshotRefusalCodeV1.SYMLINK_COMPONENT,
-                relative,
-            )
-        if not stat.S_ISREG(before.st_mode):
-            _refuse(
-                PythonSourceSnapshotRefusalCodeV1.NON_REGULAR_SOURCE,
-                relative,
-            )
-        try:
-            file_fd = os.open(leaf, _file_open_flags(), dir_fd=parent_fd)
-            opened = os.fstat(file_fd)
         except OSError as exc:
             raise PythonSourceSnapshotRefusal(
                 PythonSourceSnapshotRefusalCodeV1.SOURCE_ACQUISITION_FAILED,
                 relative,
             ) from exc
         expected = _candidate_source_fingerprint(candidate)
-        if _source_fingerprint(before) != expected or _source_fingerprint(
-            opened
-        ) != expected:
+        if _source_fingerprint(before) != expected:
+            _refuse(PythonSourceSnapshotRefusalCodeV1.SOURCE_CHANGED, relative)
+        try:
+            file_fd = os.open(leaf, _file_open_flags(), dir_fd=parent_fd)
+            opened = os.fstat(file_fd)
+        except OSError as exc:
+            try:
+                observed = os.stat(
+                    leaf,
+                    dir_fd=parent_fd,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                raise PythonSourceSnapshotRefusal(
+                    PythonSourceSnapshotRefusalCodeV1.INVENTORY_CHANGED,
+                    relative,
+                ) from exc
+            except OSError:
+                raise PythonSourceSnapshotRefusal(
+                    PythonSourceSnapshotRefusalCodeV1.SOURCE_ACQUISITION_FAILED,
+                    relative,
+                ) from exc
+            if _source_fingerprint(observed) != expected:
+                raise PythonSourceSnapshotRefusal(
+                    PythonSourceSnapshotRefusalCodeV1.SOURCE_CHANGED,
+                    relative,
+                ) from exc
+            raise PythonSourceSnapshotRefusal(
+                PythonSourceSnapshotRefusalCodeV1.SOURCE_ACQUISITION_FAILED,
+                relative,
+            ) from exc
+        if _source_fingerprint(opened) != expected:
             _refuse(PythonSourceSnapshotRefusalCodeV1.SOURCE_CHANGED, relative)
         try:
             retained = _read_descriptor_once(file_fd, candidate[5])
@@ -1336,9 +1320,9 @@ def _content_digest(
     return f"sha256:{hashlib.sha256(canonical).hexdigest()}"
 
 
-def build_python_source_snapshot(
+def _derive_python_source_snapshot_state(
     root: pathlib.Path,
-) -> PythonSourceSnapshotV1:
+) -> dict[str, object]:
     _fixed_bootstrap_profile_preflight()
     _authenticate_complete_contract()
     _authenticate_full_execution_profile()
@@ -1465,24 +1449,98 @@ def build_python_source_snapshot(
         total_ast_nodes,
         total_import_edges,
     )
-    snapshot = object.__new__(PythonSourceSnapshotV1)
-    snapshot._initialize(
-        descriptor=_FIXED_DESCRIPTOR_V1,
-        contract_authority=_FIXED_CONTRACT_AUTHORITY_V1,
-        root_path=root,
-        modules_by_name=modules,
-        modules_by_relative_path=by_relative,
-        private_asts=private_asts,
-        import_graph=graph,
-        production_reachability=production,
-        legacy_reachability=legacy,
-        source_file_count=len(modules),
-        total_source_bytes=total_source_bytes,
-        total_ast_nodes=total_ast_nodes,
-        total_import_edges=total_import_edges,
-        content_sha256=content_sha256,
+    return {
+        "_descriptor": _FIXED_DESCRIPTOR_V1,
+        "_contract_authority": _FIXED_CONTRACT_AUTHORITY_V1,
+        "_root_path": root,
+        "_modules_by_name": types.MappingProxyType(dict(modules)),
+        "_modules_by_relative_path": types.MappingProxyType(dict(by_relative)),
+        "_private_asts": types.MappingProxyType(dict(private_asts)),
+        "_import_graph": types.MappingProxyType(dict(graph)),
+        "_production_reachability": types.MappingProxyType(dict(production)),
+        "_legacy_reachability": types.MappingProxyType(dict(legacy)),
+        "_source_file_count": len(modules),
+        "_total_source_bytes": total_source_bytes,
+        "_total_ast_nodes": total_ast_nodes,
+        "_total_import_edges": total_import_edges,
+        "_content_sha256": content_sha256,
+        "_ast_copy_calls": 0,
+    }
+
+
+def _snapshot_builder_and_guard() -> tuple[
+    typing.Callable[[pathlib.Path], PythonSourceSnapshotV1],
+    typing.Callable[[object], bool],
+]:
+    builder_seal = object()
+    authority_slots = (
+        "_contract_authority",
+        "_content_sha256",
+        "_descriptor",
+        "_import_graph",
+        "_legacy_reachability",
+        "_modules_by_name",
+        "_modules_by_relative_path",
+        "_private_asts",
+        "_production_reachability",
+        "_root_path",
+        "_source_file_count",
+        "_total_ast_nodes",
+        "_total_import_edges",
+        "_total_source_bytes",
     )
-    return snapshot
+
+    def builder(root: pathlib.Path) -> PythonSourceSnapshotV1:
+        state = _derive_python_source_snapshot_state(root)
+        snapshot = object.__new__(PythonSourceSnapshotV1)
+        for name, value in state.items():
+            object.__setattr__(snapshot, name, value)
+        state.clear()
+        object.__setattr__(
+            snapshot,
+            "_builder_seal",
+            (
+                builder_seal,
+                id(snapshot),
+                tuple(
+                    id(object.__getattribute__(snapshot, name))
+                    for name in authority_slots
+                ),
+            ),
+        )
+        return snapshot
+
+    def accepts(snapshot: object) -> bool:
+        if type(snapshot) is not PythonSourceSnapshotV1:
+            return False
+        try:
+            seal = object.__getattribute__(snapshot, "_builder_seal")
+        except AttributeError:
+            return False
+        try:
+            return (
+                type(seal) is tuple
+                and len(seal) == 3
+                and seal[0] is builder_seal
+                and seal[1] == id(snapshot)
+                and seal[2]
+                == tuple(
+                    id(object.__getattribute__(snapshot, name))
+                    for name in authority_slots
+                )
+            )
+        except AttributeError:
+            return False
+
+    return builder, accepts
+
+
+build_python_source_snapshot, _is_builder_snapshot = (
+    _snapshot_builder_and_guard()
+)
+build_python_source_snapshot.__name__ = "build_python_source_snapshot"
+build_python_source_snapshot.__qualname__ = "build_python_source_snapshot"
+del _snapshot_builder_and_guard
 
 
 def _line_count(unit: PythonSourceUnitV1) -> int:
@@ -1499,10 +1557,7 @@ def _import_graph(
     collections.abc.Mapping[str, tuple[PythonImportEdgeV1, ...]],
     collections.abc.Mapping[str, ast.Module],
 ]:
-    if (
-        type(snapshot) is not PythonSourceSnapshotV1
-        or getattr(snapshot, "_sealed", False) is not True
-    ):
+    if not _is_builder_snapshot(snapshot):
         raise TypeError("snapshot must be PythonSourceSnapshotV1")
     return snapshot.import_graph, types.MappingProxyType({})
 
@@ -1701,10 +1756,7 @@ def _snapshot_and_trees(
         if type(source) is PythonSourceSnapshotV1
         else build_python_source_snapshot(source)
     )
-    if (
-        type(snapshot) is not PythonSourceSnapshotV1
-        or getattr(snapshot, "_sealed", False) is not True
-    ):
+    if not _is_builder_snapshot(snapshot):
         raise TypeError("source must be pathlib.Path or PythonSourceSnapshotV1")
     return snapshot, trees if trees is not None else _snapshot_trees(snapshot)
 
