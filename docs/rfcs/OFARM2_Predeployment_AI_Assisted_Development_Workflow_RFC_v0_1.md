@@ -167,9 +167,10 @@ spelling, formatting, or wording corrections and unchanged redisplay may retain
 it, but only the newest stable card-item reference remains live. An approved
 card cannot be semantically changed under the same version.
 
-Before soliciting approval, the AI must verify that the task surface assigned
-the live card a directly retrievable stable item reference. If it cannot, the
-workflow stops. The task user does not inspect or approve that reference.
+Before recognizing a later message as approval or beginning implementation,
+the AI must verify that the task surface assigned the live card a directly
+retrievable stable item reference. If it cannot, the workflow stops. The task
+user does not inspect or approve that reference.
 
 The exact approval sentence is:
 
