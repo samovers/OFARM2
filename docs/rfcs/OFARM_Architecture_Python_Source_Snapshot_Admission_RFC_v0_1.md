@@ -22,7 +22,13 @@
 `9ee9f6856bafd26cfef6914074bffc230bb0c599`, and PR #284 review
 `4850399233` at `5688cec0d17bacbdbb0adbef1fea0931673c25d5` and re-review
 `4851231679` at `d1e55bc6a5dadfa630d0d752f06915e7142a4afc` and final-status
-re-review `4852101645` at `dc2dbafdb16febe35d4caea4be7d5c675b2ef957`
+re-review `4852101645` at `dc2dbafdb16febe35d4caea4be7d5c675b2ef957`,
+and PR #284 refinement-review comment `5177444229` at
+`87a4db951025ef305ca7467980a37d61f79cc764`
+
+GitHub review and comment IDs are non-authoritative locators only. Each paired
+commit SHA is the binding evidence of the repository bytes reviewed. Neither a
+locator nor its paired SHA is architect approval or implementation authority.
 
 **Primary trust boundary:** architecture-checker ownership and integrity of the
 repository Python-source inventory, retained source evidence, parsed syntax,
@@ -970,12 +976,13 @@ content.
   copies are detached and call-bounded; mutation cannot affect retained state.
 - **APSS-009 — Deterministic graph and BFS.** Equal retained records under the
   exact profile produce equal graph and ordered first-discovered reachability.
-- **APSS-010 — One architecture snapshot per run.** B1 `main()` builds one
-  snapshot and supplies every Python source, line-count, AST, policy, graph,
-  and reachability observation from it.
+- **APSS-010 — One architecture snapshot per run and behavior-neutral base.**
+  B1 `main()` builds one snapshot and supplies every Python source, line-count,
+  AST, policy, graph, and reachability observation from it. On the exact
+  reviewed base, its existing successful return behavior remains unchanged.
 - **APSS-011 — Temporary adapters have no authority.** B1 adapters accept and
-  return only sealed-snapshot evidence, perform no path read, and disappear
-  after both named consumers migrate.
+  return only sealed-snapshot evidence, perform no path read, consume no AST
+  copy budget, and disappear after both named consumers migrate.
 - **APSS-012 — Static evidence is not runtime proof.** No missing edge becomes
   proof of absent dynamic loading or catalog, provisioning, temporal,
   selection, or runtime authority.
@@ -1042,7 +1049,8 @@ Future B1 must prove:
 | `sys.path` or `sys.modules` has a competing name | no effect on inventory, graph, or digest |
 | Complete architecture checker runs | one builder call supplies all Python observations |
 | B1 `_module_sources(root)` is called by a current consumer | returns one sealed `PythonSourceSnapshotV1`, never a path mapping |
-| B1 `_import_graph(snapshot)` is called | returns snapshot graph and detached AST views without source read |
+| B1 `_import_graph(snapshot)` is called | returns snapshot graph and an immutable empty AST mapping without source read or AST copy; copy budget unchanged |
+| B1 runs on the exact reviewed base | existing `kernel/tests/test_rewrite_architecture.py::test_rewrite_architecture_budgets` remains unchanged and proves `main() == 0`; otherwise B1 stops |
 | A temporary root alias is rebound or altered before `_reachable_paths` | `UNSUPPORTED_REACHABILITY_ROOTS`; no narrowed closure |
 | Temporary adapter receives a path mapping or non-snapshot | refuse; old input contract is gone |
 | A consumer treats static non-reachability as dynamic-import proof | invalid claim; stop for consumer contract |
@@ -1075,10 +1083,12 @@ def _import_graph(
     ...
 ```
 
-`_import_graph` requires the exact snapshot type, returns its immutable graph
-and one bounded detached AST copy for every module, and performs no open, stat,
-walk, parse, or path read. `_reachable_paths` may remain temporarily as the
-existing pure graph function. `PRODUCTION_IMPORT_ROOTS` and
+`_import_graph` requires the exact snapshot type and returns its immutable
+graph plus an immutable empty AST mapping. The empty mapping preserves the
+current two-value call shape because both named consumers discard that value;
+the adapter calls no `ast_for`, consumes no AST-copy budget, and performs no
+open, stat, walk, parse, or path read. `_reachable_paths` may remain
+temporarily as the existing pure graph function. `PRODUCTION_IMPORT_ROOTS` and
 `LEGACY_IMPORT_ROOTS` may remain only as exact tuple aliases equal to the v1
 descriptor; snapshot construction and architecture `main()` do not read those
 mutable aliases as authority.
@@ -1092,6 +1102,13 @@ pure traversal over the graph argument and reads no source path.
 
 This is a compatibility call shape, not a compatibility authority. The old
 path-mapping return type and path-reading graph input are deleted in B1.
+
+B1 must preserve `main() == 0` on the exact reviewed base and must leave
+`kernel/tests/test_rewrite_architecture.py` unchanged. Its existing
+`test_rewrite_architecture_budgets` assertion is therefore a required
+behavior-neutrality check, not an authorization to edit a sibling test module.
+If the assertion cannot remain green within the section 13.2 allowlist, B1
+stops for a separately reviewed boundary rather than widening its own scope.
 
 ### 12.2 B2 — separate temporal-owner migration
 
@@ -1251,6 +1268,7 @@ command:
 test -x "$CPYTHON_3_12_13"
 "$CPYTHON_3_12_13" -c 'import platform, sys; assert platform.python_implementation() == "CPython" and sys.version_info[:3] == (3, 12, 13)'
 "$CPYTHON_3_12_13" -m pytest -q kernel/tests/test_rewrite_architecture_check.py
+"$CPYTHON_3_12_13" -m pytest -q kernel/tests/test_rewrite_architecture.py
 "$CPYTHON_3_12_13" -m pytest -q kernel/tests/test_temporal_carriers.py
 "$CPYTHON_3_12_13" conformance/rewrite_architecture_check.py
 "$CPYTHON_3_12_13" conformance/temporal_contract_candidate_check.py
@@ -1274,8 +1292,8 @@ consumers still pass through the temporary adapters without path reads.
 | APSS-007 | builder with no import/execution seam | raising and sentinel-writing source never executes |
 | APSS-008 | tuple-backed public values and bounded `ast_for` | assignment and `object.__setattr__` against all four record types, map/copy mutation, unknown module, 513th copy call |
 | APSS-009 | exact graph and ordered BFS | static forms, edge bounds, root order, first-path preservation, directory-order independence |
-| APSS-010 | B1 `main()` composition | exactly one builder call; no Python path read outside builder |
-| APSS-011 | exact B1 adapters and later B3 search | snapshot return, no path input/read, both existing consumers green, exact removal condition |
+| APSS-010 | B1 `main()` composition | exactly one builder call; no Python path read outside builder; unchanged sibling test proves `main() == 0` on reviewed base |
+| APSS-011 | exact B1 adapters and later B3 search | snapshot return, no path input/read, immutable empty AST mapping with unchanged copy budget, both existing consumers green, exact removal condition |
 | APSS-012, APSS-013 | static-only interface and unchanged visitors | dynamic syntax makes no guessed edge; existing firewall cases remain green |
 | APSS-014, APSS-015 | changed-file boundaries and stop checks | no temporal, runtime, database, legacy, or #192 file in B1/B3 |
 
@@ -1460,14 +1478,14 @@ design bytes. It is not an approval record.
 
 - canonical design encoding: UTF-8, LF only, no BOM, exactly one terminal LF;
 - canonical extraction: section 15.1;
-- canonical design byte length: `70064`;
+- canonical design byte length: `71575`;
 - canonical design SHA-256:
-  `sha256:27a36f1c0c5795a3262cb58dee4363fbc719d53be370ef4bec48ced50a459b67`;
+  `sha256:fa7501d83bf56662e6c88abe896d7e57680e31d3e3e60219a5b6d4195cb79f64`;
 - approval-sentence encoding: UTF-8 with no terminal LF;
 - approval-sentence byte length: `524`;
 - approval-sentence SHA-256:
-  `sha256:0863e69f092db7c9b15358b19b0278ec3b086117674412e045f0dbd3e4d29a2e`.
+  `sha256:58686e5811aaf23a717690f5f71812d1bb11340545e002ee7e66cd70327c2b7c`.
 
 The exact approval sentence is:
 
-> I explicitly approve the Phase A design of contract ofarm.architecture-python-source-snapshot-admission.issue176.v0.1 at sha256:27a36f1c0c5795a3262cb58dee4363fbc719d53be370ef4bec48ced50a459b67 (70,064 bytes) in Codex task 019fa821-93c9-7ef1-8c94-1c0e92ea46b9 and authorize one documentation-only approval record with exactly the provenance, permitted effect, non-effects, preservation rules, and next required sequence stated in the complete decision card displayed immediately before this approval request in the same task.
+> I explicitly approve the Phase A design of contract ofarm.architecture-python-source-snapshot-admission.issue176.v0.1 at sha256:fa7501d83bf56662e6c88abe896d7e57680e31d3e3e60219a5b6d4195cb79f64 (71,575 bytes) in Codex task 019fa821-93c9-7ef1-8c94-1c0e92ea46b9 and authorize one documentation-only approval record with exactly the provenance, permitted effect, non-effects, preservation rules, and next required sequence stated in the complete decision card displayed immediately before this approval request in the same task.
