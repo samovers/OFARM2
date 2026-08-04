@@ -1,7 +1,8 @@
 # OFARM2 Pre-Deployment AI-Assisted Development Workflow — Phase A Contract v0.1
 
-**Status:** proposed and inactive; documentation-only; no workflow authority
-until approved and implemented; no deployment or production effect
+**Status:** architect-approved; Phase B implementation authorized only in PR
+`https://github.com/samovers/OFARM2/pull/285`; workflow inactive until that PR
+merges; no deployment or production effect
 
 **Contract identity:**
 `ofarm2.predeployment-ai-assisted-development-workflow.v0.1`
@@ -634,3 +635,17 @@ live card for `PREDEPLOYMENT-WORKFLOW-001` version `2`, naming
 ```text
 I approve OFARM2 decision PREDEPLOYMENT-WORKFLOW-001 version 2.
 ```
+
+## Appendix A — Compact architect-approval evidence
+
+- **Decision:** `PREDEPLOYMENT-WORKFLOW-001`, version `2`.
+- **Codex task:** `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`.
+- **Complete live card:** stable reference `item-2363` in that task.
+- **Architect approval:** stable reference `item-2364`, observed as a later
+  task-user message in the same task.
+- **Exact approval sentence:** `I approve OFARM2 decision PREDEPLOYMENT-WORKFLOW-001 version 2.`
+- **Implementation PR:** `https://github.com/samovers/OFARM2/pull/285`.
+- **Evidence posture:** these task references and role/order observations are
+  provisional AI-attested evidence of the architect's decision. This appendix
+  is not approval authority, deployment authority, or an independently
+  verifiable identity claim.
