@@ -20,7 +20,8 @@
 
 **Review evidence:** PR #283 review `4847814084` at
 `9ee9f6856bafd26cfef6914074bffc230bb0c599`, and PR #284 review
-`4850399233` at `5688cec0d17bacbdbb0adbef1fea0931673c25d5`
+`4850399233` at `5688cec0d17bacbdbb0adbef1fea0931673c25d5` and re-review
+`4851231679` at `d1e55bc6a5dadfa630d0d752f06915e7142a4afc`
 
 **Primary trust boundary:** architecture-checker ownership and integrity of the
 repository Python-source inventory, retained source evidence, parsed syntax,
@@ -123,7 +124,8 @@ invocation. The transition is:
 
 ```text
 untrusted filesystem tree
--> authenticated v1 contract and execution profile
+-> fixed non-authoritative bootstrap capability preflight
+-> authenticated v1 contract and full execution profile
 -> bounded validated acquisition
 -> sealed retained snapshot
 -> deterministic read-only observations
@@ -177,9 +179,15 @@ is never proof that dynamic loading is absent.
 
 ### 5.1 Governing contract authority
 
-Before checking the execution profile or caller root, B1 must authenticate the
-complete merged bytes of this RFC at the exact fixed path under the
-architecture module's package root. B1 constants pin:
+Before inspecting any caller root, B1 performs only the implementation-fixed
+bootstrap capability preflight in section 6.2, establishes descriptor-relative
+custody of the fixed authority path, and authenticates the complete merged
+bytes of this RFC. The bootstrap is not source or contract authority, accepts
+no caller value, and grants no eligibility. Its sole purpose is to prove that
+the minimum operations needed to authenticate the fixed RFC path exist.
+
+The RFC is at the exact fixed path under the architecture module's package
+root. B1 constants pin:
 
 - contract identity;
 - exact RFC path;
@@ -191,15 +199,22 @@ publication re-review, and merge. The approved pre-publication design digest,
 status prose, returned interface identity, PR state, GitHub activity, caller
 claim, or branch state cannot substitute for the complete merged identity.
 
-Custody of that authority path uses the same descriptor-relative, no-follow
-filesystem profile as source acquisition. The architecture package root is the
-lexical absolute `Path(__file__).parent.parent` supplied by exact CPython; it
-must already be absolute and is never passed through `resolve()` or realpath.
-Its ancestors are opened from the filesystem anchor under section 6.3. Every
+Custody of that authority path uses the bootstrap subset of the same
+descriptor-relative, no-follow operations later authenticated as the full
+filesystem profile. The architecture package root is the lexical absolute
+`Path(__file__).parent.parent` supplied by the running interpreter. It must
+already be absolute and is never passed through `resolve()` or realpath. Its
+ancestors are opened from the filesystem anchor under section 6.3. Every
 component below the retained package-root descriptor is a real directory
 except the final RFC target, which is one regular file. No component may be a
 symbolic link. A missing, aliased, multiply resolved, non-regular, or inexact
-authority refuses before the caller root is inspected.
+authority refuses before full-profile authentication and before the caller
+root is inspected.
+
+Only after the complete RFC authenticates may B1 authenticate the exact full
+descriptor, CPython and grammar profile, filesystem-name encoding, and
+remaining filesystem capabilities. The full authenticated values must equal
+sections 5.3 and 6 exactly; the bootstrap cannot widen or replace them.
 
 The accepted architecture context remains:
 
@@ -244,13 +259,14 @@ class PythonSourceSnapshotRefusal(RuntimeError):
         relative_path: str | None = None,
     ) -> None: ...
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class PythonSourceSnapshotDescriptorV1:
+class PythonSourceSnapshotDescriptorV1(typing.NamedTuple):
     interface_identity: str
     python_implementation: str
     python_version: tuple[int, int, int]
     ast_feature_version: tuple[int, int]
     filesystem_profile: str
+    filesystem_encoding: str
+    filesystem_errors: str
     encoding: str
     included_suffix: str
     excluded_component_exact: tuple[str, ...]
@@ -263,6 +279,11 @@ class PythonSourceSnapshotDescriptorV1:
     maximum_source_files: int
     maximum_source_bytes_per_file: int
     maximum_total_source_bytes: int
+    maximum_root_path_bytes: int
+    maximum_root_components: int
+    maximum_inventory_directories: int
+    maximum_inventory_entries: int
+    maximum_inventory_depth: int
     maximum_relative_path_bytes: int
     maximum_ast_nodes_per_file: int
     maximum_total_ast_nodes: int
@@ -271,15 +292,13 @@ class PythonSourceSnapshotDescriptorV1:
     maximum_total_import_edges: int
     maximum_ast_copy_calls: int
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class PythonSourceContractAuthorityV1:
+class PythonSourceContractAuthorityV1(typing.NamedTuple):
     contract_identity: str
     rfc_relative_path: str
     byte_length: int
     sha256: str
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class PythonSourceUnitV1:
+class PythonSourceUnitV1(typing.NamedTuple):
     module_name: str
     relative_path: str
     source_bytes: bytes
@@ -289,8 +308,7 @@ class PythonSourceUnitV1:
     ast_node_count: int
     ast_depth: int
 
-@dataclasses.dataclass(frozen=True, slots=True, order=True)
-class PythonImportEdgeV1:
+class PythonImportEdgeV1(typing.NamedTuple):
     line: int
     target: str
 
@@ -320,8 +338,11 @@ def build_python_source_snapshot(
 ) -> PythonSourceSnapshotV1: ...
 ```
 
-Every listed snapshot attribute is a read-only property or a frozen value.
-Both module maps, the graph map, and both reachability maps are
+The four public records are exact tuple-backed immutable `typing.NamedTuple`
+types, not frozen dataclasses. Field assignment and
+`object.__setattr__(record, field, value)` cannot alter them. Every listed
+snapshot attribute is a read-only property or an immutable value. Both module
+maps, the graph map, and both reachability maps are
 `types.MappingProxyType` views over construction dictionaries whose mutable
 aliases are discarded before sealing. Map keys and relative paths are strings;
 paths always use `/`. Graph edges and reachability paths are tuples.
@@ -343,7 +364,7 @@ builder evidence.
 
 ### 5.3 Exact descriptor fields and values
 
-Every successful snapshot carries one structurally equal frozen descriptor
+Every successful snapshot carries one structurally equal tuple-backed descriptor
 with exactly these fields and values:
 
 | Field | Exact v1 value |
@@ -353,6 +374,8 @@ with exactly these fields and values:
 | `python_version` | `(3, 12, 13)` |
 | `ast_feature_version` | `(3, 12)` |
 | `filesystem_profile` | `POSIX_DESCRIPTOR_RELATIVE_NOFOLLOW_STAT_NS_V1` |
+| `filesystem_encoding` | `utf-8` |
+| `filesystem_errors` | `surrogateescape` |
 | `encoding` | `UTF-8-STRICT` |
 | `included_suffix` | `.py` |
 | `excluded_component_exact` | `("__pycache__",)` |
@@ -365,6 +388,11 @@ with exactly these fields and values:
 | `maximum_source_files` | `512` |
 | `maximum_source_bytes_per_file` | `524288` |
 | `maximum_total_source_bytes` | `8388608` |
+| `maximum_root_path_bytes` | `1024` |
+| `maximum_root_components` | `64` |
+| `maximum_inventory_directories` | `256` |
+| `maximum_inventory_entries` | `2048` |
+| `maximum_inventory_depth` | `16` |
 | `maximum_relative_path_bytes` | `256` |
 | `maximum_ast_nodes_per_file` | `65536` |
 | `maximum_total_ast_nodes` | `1048576` |
@@ -397,6 +425,7 @@ DUPLICATE_MODULE_NAME
 SOURCE_ACQUISITION_FAILED
 SOURCE_CHANGED
 INVENTORY_CHANGED
+INVALID_PATH_ENCODING
 INVALID_UTF8
 INVALID_PYTHON_SYNTAX
 MISSING_REQUIRED_IMPORT_ROOT
@@ -408,9 +437,10 @@ UNSUPPORTED_REACHABILITY_ROOTS
 `PythonSourceSnapshotRefusal` is the sole governed refusal exception. Its
 constructor accepts exactly `code` and optional root-relative POSIX
 `relative_path`. Human diagnostic text is not authority. Expected untrusted
-input failures, `UnicodeDecodeError`, `SyntaxError`, bounded `MemoryError`, and
-bounded `RecursionError` are translated to this closed enum. A trusted-code bug
-is not relabelled as an input refusal.
+input failures, filesystem-name conversion failures, `UnicodeDecodeError`,
+`UnicodeEncodeError`, `SyntaxError`, bounded `MemoryError`, and bounded
+`RecursionError` are translated to this closed enum. A trusted-code bug is not
+relabelled as an input refusal.
 
 Every enum member's string value is exactly its listed uppercase name.
 
@@ -419,8 +449,10 @@ code requires a reviewed v2 or a reviewed v1 amendment before implementation.
 
 ### 5.5 Equality and digest rules
 
-Frozen descriptor, contract-authority, source-unit, and import-edge equality is
-ordinary exact dataclass structural equality. `PythonSourceSnapshotV1`
+Descriptor, contract-authority, source-unit, and import-edge equality is
+ordinary tuple-backed `NamedTuple` value equality. Their exact returned types
+remain fixed by section 5.2, and neither ordinary assignment nor
+`object.__setattr__` can alter a record. `PythonSourceSnapshotV1`
 equality compares every public field above except the private AST-copy counter;
 it compares source bytes and text, not only digests. A snapshot is unhashable.
 The private AST mapping is not compared separately because the exact execution
@@ -481,6 +513,7 @@ identity is checkout-location independent.
 
 | Decision | Sole authority | Explicitly non-authoritative inputs |
 | --- | --- | --- |
+| Contract-auth bootstrap | fixed B1 constants and section 6.2 minimum capability set | caller root, descriptor argument, environment profile |
 | Interface meaning | complete merged identity of this RFC | interface self-claim, PR state, caller prose |
 | Execution semantics | exact descriptor runtime and filesystem profile | host convenience, newest installed Python |
 | Architecture source root | fixed `ROOT` passed by `main()` | command line, environment, profile, route |
@@ -499,7 +532,8 @@ identity is checkout-location independent.
 
 ### 6.1 Python and grammar profile
 
-Before root inspection, the builder requires:
+After complete contract authentication and before caller-root inspection, the
+builder requires:
 
 ```text
 platform.python_implementation() == "CPython"
@@ -519,15 +553,28 @@ ast.parse(
 )
 ```
 
-The hosted conformance workflow pins CPython 3.12.13. The local Codex bundled
-runtime also provides CPython 3.12.13. A different implementation, patch
-version, or feature version refuses independently before the source root is
-inspected. A later Python upgrade changes the reviewed descriptor rather than
-silently changing retained AST meaning.
+The hosted conformance workflow pins CPython 3.12.13. That hosted pin is review
+evidence, not self-attestation by an arbitrary local `python3`. A different
+implementation, patch version, or feature version refuses independently after
+contract authentication and before the caller source root is inspected. A
+later Python upgrade changes the reviewed descriptor rather than silently
+changing retained AST meaning.
 
 ### 6.2 Filesystem capability profile
 
-`POSIX_DESCRIPTOR_RELATIVE_NOFOLLOW_STAT_NS_V1` requires all of:
+The implementation-fixed `FIXED_CONTRACT_AUTH_BOOTSTRAP_V1` preflight is the
+only step allowed before contract-authority custody. It accepts no argument,
+uses no descriptor returned to a caller, and inspects no caller root. It checks
+only fixed standard-library capability declarations and the POSIX filesystem
+anchor needed to use `O_DIRECTORY`, `O_NOFOLLOW`, descriptor-relative open,
+no-follow stat, `fstat`, and nanosecond metadata on the fixed RFC path. A
+missing bootstrap operation refuses as `UNSUPPORTED_FILESYSTEM_PROFILE` before
+the contract path or caller root is inspected.
+
+After that preflight, B1 establishes custody of the fixed contract-authority
+path and authenticates the complete RFC. Only then does it authenticate the
+full `POSIX_DESCRIPTOR_RELATIVE_NOFOLLOW_STAT_NS_V1` profile. The full profile
+requires all of:
 
 - `os.name == "posix"`;
 - usable `O_RDONLY`, `O_DIRECTORY`, `O_CLOEXEC`, and `O_NOFOLLOW` flags;
@@ -535,14 +582,19 @@ silently changing retained AST meaning.
 - `lstat` and `fstat` results containing `st_dev`, `st_ino`, `st_mode`,
   `st_size`, `st_mtime_ns`, and `st_ctime_ns`;
 - no-follow inspection of every path component;
-- stable regular-file and directory mode classification; and
-- exact root-relative POSIX path encoding under strict UTF-8.
+- stable regular-file and directory mode classification;
+- `sys.getfilesystemencoding() == "utf-8"`;
+- `sys.getfilesystemencodeerrors() == "surrogateescape"`; and
+- exact raw-byte reconstruction and strict-UTF-8 admission of public POSIX
+  root-relative paths under section 7.2.
 
-The builder performs a capability preflight with no caller source path. A
-missing flag, field, descriptor-relative operation, or no-follow guarantee
-refuses as `UNSUPPORTED_FILESYSTEM_PROFILE` before root inspection. Linux and
-Darwin may satisfy this one capability contract; operating-system name alone
-does not self-attest compliance.
+The authenticated descriptor must equal both filesystem string fields and the
+full profile identity in section 5.3. A mismatch in an implementation, patch,
+grammar, filesystem encoding, error handler, flag, field,
+descriptor-relative operation, or no-follow guarantee refuses through its
+exact section 5.4 code before caller-root inspection. Linux and Darwin may
+satisfy this one capability contract; operating-system name alone does not
+self-attest compliance.
 
 The trusted operating system owns the stated descriptor and metadata
 semantics. A filesystem or kernel that lies about them is an excluded
@@ -550,55 +602,119 @@ compromise, not a second execution profile.
 
 ### 6.3 Root and authority ancestor custody
 
-The caller root must be absolute. Beginning at its filesystem anchor, the
-builder opens every lexical ancestor component in order using the previously
-opened directory descriptor with `O_DIRECTORY | O_NOFOLLOW`. Every ancestor
-and the final root must be a real directory and must match its no-follow
-metadata. No `resolve()`, realpath substitution, or symlinked ancestor can turn
-another tree into the requested root.
+After the fixed bootstrap preflight, the architecture package root is checked
+against the implementation-fixed copies of the v1 root byte/component bounds.
+Its filesystem bytes must round-trip through strict UTF-8. B1 opens every
+lexical ancestor from its POSIX filesystem anchor using the previously opened
+directory descriptor with `O_DIRECTORY | O_NOFOLLOW`, then opens the fixed RFC
+path relative to the retained package-root descriptor. Intermediate components
+are real directories and the final RFC is one regular non-symlink file. A
+bootstrap-bound, encoding, custody, or identity failure refuses as
+`CONTRACT_AUTHORITY_MISMATCH`. No caller root has yet been inspected.
 
-The fixed contract authority path uses the same component walk relative to the
-trusted architecture package root: intermediate components are real
-directories; the final RFC target is one regular non-symlink file. Included
-source paths use the retained root descriptor: intermediate components are real
-directories; final sources are regular non-symlink files.
+After the complete contract and full profile authenticate, the caller root must
+be an absolute `pathlib.Path`. Its lexical string is rejected before encoding
+when it contains more than 1024 code points; its
+`os.fsencode(os.fspath(root))` bytes must then be at most 1024 bytes, decode
+under strict UTF-8 to the same lexical string, and contain at most 64
+components after the POSIX anchor. Empty, `.` or `..` components are invalid.
+Beginning at its filesystem anchor, the builder opens
+every lexical ancestor component in order with the same descriptor-relative
+no-follow operations. Every ancestor and the final root must be a real
+directory and match its no-follow metadata. No `resolve()`, realpath
+substitution, or symlinked ancestor can turn another tree into the requested
+root.
+
+Included source paths use the retained caller-root descriptor: intermediate
+components are real directories and final sources are regular non-symlink
+files. Root path encoding failure is `INVALID_PATH_ENCODING`; a root byte or
+component bound breach is `RESOURCE_LIMIT_EXCEEDED`; and a structural root
+failure uses the exact custody code in section 5.4.
 
 ## 7. Inventory, resource limits, and acquisition
 
 ### 7.1 Measurement basis and fixed limits
 
-The limits in section 5.3 are based on the reviewed base under CPython 3.12.13:
+Repository-derived limits in section 5.3 are based on the reviewed base in a
+clean checkout under CPython 3.12.13. The clean inventory-entry measurement
+includes the checkout's one `.git` administrative entry, which is counted and
+then excluded. Absolute root measurements are from the controlled Phase A
+worktree because checkout location is environmental rather than commit data.
 
 | Measurement | Base value | v1 limit |
 | --- | ---: | ---: |
+| absolute root lexical path | 118 UTF-8 bytes | 1024 bytes |
+| absolute root components after anchor | 7 | 64 |
+| inventory directories, including root | 65 | 256 |
+| inspected inventory entries | 546 | 2048 |
+| maximum inspected entry depth | 4 components | 16 components |
 | included Python files | 191 | 512 |
 | largest source file | 298900 bytes | 524288 bytes |
 | total source bytes | 4085162 | 8388608 |
-| longest relative path | 69 UTF-8 bytes | 256 bytes |
+| longest inspected relative path | 123 UTF-8 bytes | 256 bytes |
 | largest AST | 26156 nodes | 65536 nodes |
 | total AST nodes | 446545 | 1048576 |
 | maximum AST depth | 19 | 64 |
 | most static edges in one module | 20 | 128 |
 | total static edges | 740 | 4096 |
 
-The headroom is deliberate and finite. A limit change is a versioned contract
+Generated excluded cache entries can raise an observed checkout count without
+changing candidate membership; they still consume the entry budget. The
+headroom is deliberate and finite. A limit change is a versioned contract
 change, not a caller configuration or automatic response to repository growth.
 
 ### 7.2 Closed inventory
 
-The builder walks once from the retained root descriptor without following
-symbolic links. Candidate paths sort by root-relative POSIX path. Only leaf
-names ending exactly in `.py` are considered.
+Inventory uses exactly two bounded metadata walks from the retained root
+descriptor: one before source-byte acquisition and one metadata-only walk after
+all admitted bytes are retained. Neither walk follows symbolic links. They use
+an iterative directory queue, retain at most the root descriptor plus one
+current directory descriptor, and apply the same rules and limits.
+
+Each walk counts the retained root as one inventory directory. It counts every
+entry returned from an opened, non-excluded directory toward the 2048-entry
+limit, including hidden entries, `__pycache__`, non-Python files, Python files,
+and entries later refused. A hidden or `__pycache__` directory itself counts as
+an entry but is not opened and its descendants are not counted. Every ordinary
+non-excluded directory opened, including the root, counts toward the
+256-directory limit. The root-relative component count of every inspected entry
+must not exceed 16. Exceeding any counter refuses immediately as
+`RESOURCE_LIMIT_EXCEEDED`.
+
+Each yielded entry is counted and checked before it is appended to the current
+sorting batch; the 2049th entry is not retained. A current batch therefore
+contains at most 2048 entries, and the traversal never first materializes an
+unbounded directory listing.
+
+For each inspected name, the walker reconstructs the exact underlying bytes
+with `os.fsencode(entry.name)` under the authenticated `utf-8` and
+`surrogateescape` profile. It constructs the raw root-relative POSIX path from
+component bytes before creating a public string. More than 256 raw bytes
+refuses as `RESOURCE_LIMIT_EXCEEDED`. Otherwise every component and complete
+path must decode with strict UTF-8, reproduce the exact `entry.name` values,
+contain no surrogate code point, and round-trip to the same raw bytes through
+`os.fsencode`; failure refuses as `INVALID_PATH_ENCODING`. No invalid pathname
+can reach JSON encoding or `content_sha256` generation.
+
+Within each opened directory, the bounded entry batch sorts by raw component
+bytes. The bounded directory queue sorts by full raw root-relative path. The
+pre-inventory's admitted Python candidates then sort by full raw root-relative
+POSIX path. Mutable entry batches are discarded after their directory is
+processed. Globally retained inventory metadata is limited to at most 256
+queued directory paths and 512 candidate records; non-Python entry metadata is
+not retained after classification.
 
 A relative path is excluded when any relative component equals `__pycache__`
-or begins with `.`. Every other `.py` entry is a candidate. Each intermediate
-component must be a real directory. Each final candidate must be a regular
-non-symlink file. Two included paths may not identify the same `(st_dev,
-st_ino)`. A symlink directory in an included namespace, symlink `.py`, FIFO,
-device, socket, or hard-linked second Python path refuses the whole build.
+or begins with `.`. Every other inspected entry is classified without following
+links. Any non-excluded symbolic link refuses as `SYMLINK_COMPONENT`. An
+ordinary directory is queued within the directory and depth limits. Only a
+regular leaf whose name ends exactly in `.py` is a candidate; another `.py`
+kind refuses as `NON_REGULAR_SOURCE`. Every other ordinary non-Python leaf is
+counted and ignored. Two included paths may not identify the same `(st_dev,
+st_ino)`.
 
-Files without the exact `.py` suffix are outside this snapshot. Their absence
-creates no conformance allowance.
+Files without the exact `.py` suffix are outside source authority. Their
+contents are not read, and their absence creates no conformance allowance.
 
 ### 7.3 Module naming and required roots
 
@@ -618,7 +734,7 @@ graph derivation. A missing production or legacy root refuses with
 
 ### 7.4 Preflight before bulk allocation
 
-The pre-inventory records for every candidate:
+The bounded pre-acquisition inventory records for every admitted candidate:
 
 ```text
 relative path
@@ -630,25 +746,41 @@ mtime_ns
 ctime_ns
 ```
 
-Before reading source bytes, it refuses when file count, any relative-path
-UTF-8 byte length, any nonnegative regular-file size, or total declared size
-exceeds its exact descriptor limit. It also refuses negative or unrepresentable
-metadata. This prevents bulk source retention outside the reviewed envelope.
+The directory, entry, depth, raw relative-path, and pathname-encoding checks in
+section 7.2 occur monotonically while walking, before source retention. Before
+reading source bytes, the builder also refuses when candidate count, any
+nonnegative regular-file size, or total declared size exceeds its exact
+descriptor limit. It refuses negative or unrepresentable metadata. This bounds
+traversal, sorting, candidate metadata, and bulk source retention inside the
+reviewed envelope.
 
-### 7.5 One retained byte acquisition
+### 7.5 One retained byte acquisition between bounded inventories
+
+The exact acquisition order is:
+
+```text
+one bounded pre-acquisition metadata inventory
+-> one descriptor read-to-EOF for each admitted Python source
+-> one bounded metadata-only post-acquisition inventory
+```
 
 Each candidate is opened descriptor-relative with no-follow flags. The open
 descriptor must match the pre-inventory regular `(device, inode)`. The builder
 performs one sequential byte acquisition through stable EOF; multiple
-operating-system read calls are allowed, but reopen and rewind are not. The
-retained length must equal the preflight size and remain within both byte
-limits. Post-read descriptor metadata must equal the pre-inventory fingerprint.
+operating-system read calls are allowed, but reopen, rewind, and source-byte
+reread are not. The retained length must equal the preflight size and remain
+within both byte limits. Post-read descriptor metadata must equal the
+pre-inventory fingerprint.
 
-After all bytes are retained, one metadata-only post-inventory validation must
-equal the ordered pre-inventory exactly. It reads no source bytes and grants no
-second authority. An open failure, stable-EOF failure, added, removed, renamed,
-relinked, observably edited, or kind-changed candidate refuses without a
-partial snapshot.
+After all bytes are retained, the post-inventory repeats section 7.2's bounded
+metadata walk and must produce exactly the same ordered candidate records as
+the pre-inventory. It reads no source bytes and grants no second authority. A
+limit breach retains its `RESOURCE_LIMIT_EXCEEDED` meaning. Otherwise an open
+failure, stable-EOF failure, added, removed, renamed, relinked, observably
+edited, or kind-changed candidate refuses as `INVENTORY_CHANGED` or
+`SOURCE_CHANGED` without a partial snapshot. Changes only to ignored ordinary
+non-Python leaf contents do not change source authority, but their entries and
+directory shape remain bounded during both walks.
 
 ### 7.6 Decode, parse, and bounded AST
 
@@ -737,12 +869,12 @@ and checker process before handling untrusted source.
 
 ### 9.3 Untrusted inputs and actors
 
-Repository Python bytes, filenames, directory order, symlinks, hard links,
-invalid text, invalid syntax, large or deeply nested valid syntax, import
-statements, module-level code, runtime self-description, and caller root are
-untrusted. They may produce one sealed bounded snapshot or one closed refusal.
-They cannot select semantics, profiles, roots, limits, exceptions, or contract
-identity.
+Repository Python bytes, raw filename bytes, directory breadth and depth,
+non-Python entries, directory order, symlinks, hard links, invalid text,
+invalid syntax, large or deeply nested valid syntax, import statements,
+module-level code, runtime self-description, and caller root are untrusted.
+They may produce one sealed bounded snapshot or one closed refusal. They cannot
+select semantics, profiles, roots, limits, exceptions, or contract identity.
 
 Ordinary source addition, removal, rename, edit, or substitution before,
 during, or after acquisition is in scope under the observations defined in
@@ -752,10 +884,12 @@ sections 6 and 7.
 
 Compromise of CPython, the operating system, filesystem guarantees, SHA-256,
 trusted dependencies, checker implementation, architect, or repository review
-and release custody is outside this static boundary. Hostile in-process memory
-mutation, kernel metadata forgery, and an attacker that changes and restores
-source plus all observed identities and nanosecond metadata within one
-acquisition are also excluded.
+and release custody is outside this static boundary. Low-level hostile
+in-process memory mutation that bypasses Python's ordinary object model, kernel
+metadata forgery, and an attacker that changes and restores source plus all
+observed identities and nanosecond metadata within one acquisition are also
+excluded. Ordinary field assignment and `object.__setattr__` attempts against
+public records are in scope and cannot mutate the tuple-backed records.
 
 These exclusions do not allow ordinary repository modules to execute, mutate
 checker state, select roots or limits, supply digests, or self-attest.
@@ -766,9 +900,11 @@ The only terminal outcomes are `SEALED` and `REFUSED`:
 
 ```text
 UNBUILT
+-> FIXED_BOOTSTRAP_PROFILE_PREFLIGHTED
+-> CONTRACT_AUTHORITY_CUSTODY_ESTABLISHED
 -> CONTRACT_AUTHENTICATED
--> EXECUTION_PROFILE_AUTHENTICATED
--> ROOT_CUSTODY_ESTABLISHED
+-> FULL_DESCRIPTOR_PROFILE_AUTHENTICATED
+-> CALLER_ROOT_CUSTODY_ESTABLISHED
 -> PRE_INVENTORY_BOUNDED
 -> BYTES_RETAINED
 -> POST_INVENTORY_MATCHED
@@ -785,11 +921,14 @@ Any expected untrusted-input failure transitions to `REFUSED`. `SEALED` and
 only at `SEALED`; no partial inventory, record, AST, graph, or closure is
 returned earlier.
 
-Contract and execution-profile authentication happen before caller-root
-inspection. Source bounds precede bulk retention. Inventory validation precedes
-parsing. AST bounds precede graph derivation. Required root presence precedes
-graph derivation and reachability. Sealing discards mutable construction
-aliases.
+Only the fixed bootstrap capability preflight and fixed contract-authority
+custody may precede complete contract authentication. Neither inspects the
+caller root. Full descriptor and execution-profile authentication happen after
+the RFC authenticates and before caller-root inspection. The bounded
+pre-inventory precedes bulk retention; the bounded post-inventory follows the
+single source-byte acquisition and precedes parsing. AST bounds precede graph
+derivation. Required root presence precedes graph derivation and reachability.
+Sealing discards mutable construction aliases.
 
 The builder's only external effects are bounded filesystem reads. It creates no
 file, cache, registry entry, database row, import, module object, network call,
@@ -801,27 +940,33 @@ content.
 
 ### 11.1 Invariants
 
-- **APSS-001 — Complete merged contract first.** No execution-profile or root
-  inspection begins until the complete merged RFC authority authenticates.
+- **APSS-001 — Fixed bootstrap, then complete contract.** Before complete RFC
+  authentication, only the minimum implementation-fixed capability preflight
+  and custody of the fixed authority path may occur; no caller-root inspection
+  or source eligibility decision may begin.
 - **APSS-002 — Closed interface and descriptor.** Every public type, field,
   method, refusal code, profile, root, and limit equals section 5; callers
   cannot add or select authority.
-- **APSS-003 — Exact execution profile.** CPython, patch version, grammar
-  feature version, and filesystem capabilities authenticate independently
-  before root inspection.
+- **APSS-003 — Exact full execution profile.** After the RFC authenticates,
+  CPython, patch version, grammar feature version, filesystem encoding/error
+  handler, and every filesystem capability authenticate independently before
+  caller-root inspection.
 - **APSS-004 — Closed bounded inventory.** Section 7 alone owns membership,
-  naming, link posture, required roots, and resource limits.
+  naming, raw-path admission, link posture, required roots, and every root,
+  directory, entry, depth, source, AST, graph, and copy limit.
 - **APSS-005 — One byte authority.** Each source has one descriptor-relative
   byte acquisition; retained bytes alone own text, digest, AST, graph,
   reachability, and later source observations.
-- **APSS-006 — Acquisition consistency.** Any observed source or inventory
-  transition refuses without a partial snapshot.
+- **APSS-006 — Acquisition consistency.** One bounded pre-inventory, one byte
+  acquisition per admitted source, and one bounded metadata-only post-inventory
+  are the only sequence; any observed candidate transition refuses without a
+  partial snapshot.
 - **APSS-007 — No checked-code execution.** No snapshot operation imports,
   executes, evaluates, or compiles an inventoried module to executable
   bytecode.
-- **APSS-008 — Immutable bounded authority.** Public source authority is
-  immutable; AST copies are detached and call-bounded; mutation cannot affect
-  retained state.
+- **APSS-008 — Immutable bounded authority.** Public authority records are
+  tuple-backed and immutable under assignment and `object.__setattr__`; AST
+  copies are detached and call-bounded; mutation cannot affect retained state.
 - **APSS-009 — Deterministic graph and BFS.** Equal retained records under the
   exact profile produce equal graph and ordered first-discovered reachability.
 - **APSS-010 — One architecture snapshot per run.** B1 `main()` builds one
@@ -849,17 +994,20 @@ Future B1 must prove:
 
 | Case | Required result |
 | --- | --- |
-| Complete merged RFC missing, wrong length, same-length wrong digest, symlinked, aliased, or multiply resolved | `CONTRACT_AUTHORITY_MISMATCH` before profile or root inspection |
-| Python implementation differs | `UNSUPPORTED_PYTHON_IMPLEMENTATION` before root inspection |
-| CPython patch version differs | `UNSUPPORTED_PYTHON_VERSION` before root inspection |
-| AST feature version differs | `UNSUPPORTED_AST_FEATURE_VERSION` before root inspection |
-| One required filesystem capability is absent | `UNSUPPORTED_FILESYSTEM_PROFILE` before root inspection |
+| One fixed bootstrap operation or capability declaration is absent | `UNSUPPORTED_FILESYSTEM_PROFILE`; no fixed contract path or caller root inspection |
+| Complete merged RFC missing, wrong length, same-length wrong digest, symlinked, aliased, multiply resolved, or beyond fixed bootstrap root bounds | `CONTRACT_AUTHORITY_MISMATCH` after bootstrap and before full profile or caller-root inspection |
+| Python implementation differs | `UNSUPPORTED_PYTHON_IMPLEMENTATION` after contract authentication and before caller-root inspection |
+| CPython patch version differs | `UNSUPPORTED_PYTHON_VERSION` after contract authentication and before caller-root inspection |
+| AST feature version differs | `UNSUPPORTED_AST_FEATURE_VERSION` after contract authentication and before caller-root inspection |
+| Full filesystem capability, filesystem encoding, or error handler differs | `UNSUPPORTED_FILESYSTEM_PROFILE` after contract authentication and before caller-root inspection |
 | Caller supplies descriptor, roots, limits, encoding, graph rules, or profile | closed builder signature accepts no such argument |
 | Returned descriptor or public schema is inspected | exact section 5 names, types, values, maps, and no extra authority-bearing field |
 | Root is relative, absent, or non-directory | `INVALID_ROOT` |
+| Caller-root lexical path exceeds 1024 code points, 1024 encoded bytes, or 64 components | `RESOURCE_LIMIT_EXCEEDED` before ancestor custody |
+| Caller root or any inspected entry fails raw-byte strict-UTF-8 round-trip, including a surrogate-escaped byte | `INVALID_PATH_ENCODING`; no public path, JSON manifest, or digest |
 | Any root ancestor is a symlink | `SYMLINK_COMPONENT`; no resolution into eligibility |
 | An intermediate source component is not a real directory | `NON_DIRECTORY_COMPONENT` |
-| Included directory or `.py` leaf is a symlink | `SYMLINK_COMPONENT`; never followed |
+| Any non-excluded inventory entry is a symlink | `SYMLINK_COMPONENT`; never followed |
 | Included `.py` is FIFO, device, socket, or other non-regular entry | `NON_REGULAR_SOURCE` |
 | Two included paths share device/inode | `DUPLICATE_FILE_IDENTITY` |
 | `package.py` and `package/__init__.py` coexist | `DUPLICATE_MODULE_NAME` |
@@ -867,8 +1015,10 @@ Future B1 must prove:
 | Hidden or `__pycache__` Python source exists | excluded with no module or edge |
 | `kernel/tests` or `profile_si_ffs/tests` source exists | included; interface has no test-family exception |
 | One fixed production or legacy root is missing | `MISSING_REQUIRED_IMPORT_ROOT`; no empty closure |
+| Inventory would open directory 257, inspect entry 2049, or inspect depth 17 | bounded inventory `RESOURCE_LIMIT_EXCEEDED`; no source bytes read on pre-inventory breach |
+| Excessive ordinary directories or non-Python entries contain no `.py` files | same directory/entry/depth limits apply; no source-count bypass |
 | File count exceeds 512 | preflight `RESOURCE_LIMIT_EXCEEDED` |
-| Relative path exceeds 256 UTF-8 bytes | preflight `RESOURCE_LIMIT_EXCEEDED` |
+| Any inspected raw relative path exceeds 256 bytes | bounded inventory `RESOURCE_LIMIT_EXCEEDED` before strict decoding or public string construction |
 | One file declares more than 524288 bytes | preflight `RESOURCE_LIMIT_EXCEEDED` |
 | Declared total exceeds 8388608 bytes | preflight `RESOURCE_LIMIT_EXCEEDED` |
 | Retained size differs from preflight | `SOURCE_CHANGED` |
@@ -878,7 +1028,8 @@ Future B1 must prove:
 | Per-file or total AST nodes, AST depth, per-module edges, or total edges exceed v1 | `RESOURCE_LIMIT_EXCEEDED` |
 | Bounded parse or deep-copy raises `MemoryError` or `RecursionError` | `RESOURCE_LIMIT_EXCEEDED`; no partial public state |
 | Path changes after `SEALED` | retained fields, equality, digest, AST copies, graph, and reachability remain unchanged |
-| Public mapping, tuple, frozen record, descriptor, or root tuple mutation is attempted | mutation unavailable or refused |
+| Public mapping, tuple-backed record, descriptor, source unit, edge, or root tuple field assignment is attempted | mutation unavailable or refused; reachable snapshot value unchanged |
+| `object.__setattr__` targets a descriptor, contract authority, source unit, or graph edge | operation cannot alter the tuple-backed record or any reachable snapshot value |
 | Returned AST copy is mutated and another copy requested | later copy and snapshot fields remain unchanged |
 | `ast_for` succeeds 512 times and is called again | `AST_COPY_LIMIT_EXCEEDED`; authority fields unchanged |
 | Unknown module is requested | exact `KeyError`; copy budget unchanged |
@@ -1082,16 +1233,27 @@ git diff --name-only origin/main...HEAD
 ```
 
 The final command names only this RFC.
+This documentation-only Phase A check satisfies repository packaging policy; it
+is not evidence that an arbitrary `python3` satisfies the future snapshot
+execution profile.
 
 ### 14.2 Future B1 verification
 
-Verification runs under exact CPython 3.12.13 and includes:
+`CPYTHON_3_12_13` below denotes an absolute executable path established by the
+hosted workflow's exact CPython 3.12.13 setup or by a separately authenticated
+local environment. A missing, relative, or search-path-only value is invalid
+evidence. Verification first authenticates the implementation and complete
+patch version, then uses that same absolute executable for every Python
+command:
 
 ```text
-python3 -m pytest -q kernel/tests/test_rewrite_architecture_check.py
-python3 conformance/rewrite_architecture_check.py
-python3 conformance/temporal_contract_candidate_check.py
-python3 conformance/ofarm_pkg_contract_check.py
+test -x "$CPYTHON_3_12_13"
+"$CPYTHON_3_12_13" -c 'import platform, sys; assert platform.python_implementation() == "CPython" and sys.version_info[:3] == (3, 12, 13)'
+"$CPYTHON_3_12_13" -m pytest -q kernel/tests/test_rewrite_architecture_check.py
+"$CPYTHON_3_12_13" -m pytest -q kernel/tests/test_temporal_carriers.py
+"$CPYTHON_3_12_13" conformance/rewrite_architecture_check.py
+"$CPYTHON_3_12_13" conformance/temporal_contract_candidate_check.py
+"$CPYTHON_3_12_13" conformance/ofarm_pkg_contract_check.py
 git diff --check
 ```
 
@@ -1103,13 +1265,13 @@ consumers still pass through the temporary adapters without path reads.
 
 | Invariant | Future seam | Required evidence |
 | --- | --- | --- |
-| APSS-001 | fixed complete-RFC authenticator | missing, length mismatch, same-length digest mismatch, symlink, alias refuse before profile/root |
+| APSS-001 | fixed bootstrap plus complete-RFC authenticator | each bootstrap capability absent independently; missing, length mismatch, same-length digest mismatch, symlink, alias refuse before full profile/caller root; no caller-root observation before contract |
 | APSS-002 | exact public types and descriptor constant | schema inspection, rejected extra args, exact values, no extra authority field |
-| APSS-003 | execution-profile validator | implementation, patch, grammar, and filesystem capabilities substituted independently and refused |
-| APSS-004 | inventory, naming, preflight limits, required roots | exclusions, included tests, links, kinds, hard links, collisions, absent roots, every limit boundary |
-| APSS-005, APSS-006 | descriptor-relative acquisition and pre/post fingerprints | retained mutation isolation and observable acquisition transitions |
+| APSS-003 | full execution-profile validator | implementation, patch, grammar, filesystem encoding/error handler, and capabilities substituted independently after contract authentication and refused before caller root |
+| APSS-004 | bounded inventory, raw-path admission, naming, required roots | undecodable POSIX name, exclusions, included tests, links, kinds, hard links, collisions, absent roots, excessive ordinary directories/non-Python entries/depth, every limit boundary |
+| APSS-005, APSS-006 | descriptor-relative acquisition between two bounded inventories | exactly one source-byte acquisition, no reread, retained mutation isolation, candidate transition and both-inventory limit tests |
 | APSS-007 | builder with no import/execution seam | raising and sentinel-writing source never executes |
-| APSS-008 | frozen public values and bounded `ast_for` | map/record/copy mutation, unknown module, 513th copy call |
+| APSS-008 | tuple-backed public values and bounded `ast_for` | assignment and `object.__setattr__` against all four record types, map/copy mutation, unknown module, 513th copy call |
 | APSS-009 | exact graph and ordered BFS | static forms, edge bounds, root order, first-path preservation, directory-order independence |
 | APSS-010 | B1 `main()` composition | exactly one builder call; no Python path read outside builder |
 | APSS-011 | exact B1 adapters and later B3 search | snapshot return, no path input/read, both existing consumers green, exact removal condition |
@@ -1218,8 +1380,9 @@ cannot be verified, the PR remains unmergeable without a repository patch.
 After publication merges, compute the entire merged RFC's UTF-8 byte length and
 SHA-256, including the status transition, markers, section 17, and appendix.
 The B1 implementation constants pin those complete values. B1 refuses before
-profile/root inspection when they differ. The pre-publication design digest
-cannot substitute.
+full-profile authentication or caller-root inspection when they differ; only
+the fixed bootstrap and authority-path custody may precede that refusal. The
+pre-publication design digest cannot substitute.
 
 Merge and complete identity still do not authorize B1. A separate explicit
 user request naming architecture B1 under this contract is required.
@@ -1277,14 +1440,14 @@ design bytes. It is not an approval record.
 
 - canonical design encoding: UTF-8, LF only, no BOM, exactly one terminal LF;
 - canonical extraction: section 15.1;
-- canonical design byte length: `57444`;
+- canonical design byte length: `69134`;
 - canonical design SHA-256:
-  `sha256:31cacaf2089a4bafccb2eab369525fc275142600638545eec3817d55a5acb562`;
+  `sha256:25f704d4348e9a46c9fa8d7f72183fdd51b8a3ff2cc6cfaa59e27fccf8ee2a8a`;
 - approval-sentence encoding: UTF-8 with no terminal LF;
 - approval-sentence byte length: `524`;
 - approval-sentence SHA-256:
-  `sha256:2f19e9cea4fe966cf276a35188973017888b4cb0faeb368cb285b7bed0285010`.
+  `sha256:326028b5ecf28832c7170e5dcc8861035ee2f63d52354e560761474bc923d70a`.
 
 The exact approval sentence is:
 
-> I explicitly approve the Phase A design of contract ofarm.architecture-python-source-snapshot-admission.issue176.v0.1 at sha256:31cacaf2089a4bafccb2eab369525fc275142600638545eec3817d55a5acb562 (57,444 bytes) in Codex task 019fa821-93c9-7ef1-8c94-1c0e92ea46b9 and authorize one documentation-only approval record with exactly the provenance, permitted effect, non-effects, preservation rules, and next required sequence stated in the complete decision card displayed immediately before this approval request in the same task.
+> I explicitly approve the Phase A design of contract ofarm.architecture-python-source-snapshot-admission.issue176.v0.1 at sha256:25f704d4348e9a46c9fa8d7f72183fdd51b8a3ff2cc6cfaa59e27fccf8ee2a8a (69,134 bytes) in Codex task 019fa821-93c9-7ef1-8c94-1c0e92ea46b9 and authorize one documentation-only approval record with exactly the provenance, permitted effect, non-effects, preservation rules, and next required sequence stated in the complete decision card displayed immediately before this approval request in the same task.
