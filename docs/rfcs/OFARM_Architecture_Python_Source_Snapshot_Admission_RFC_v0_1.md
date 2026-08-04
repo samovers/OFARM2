@@ -21,7 +21,8 @@
 **Review evidence:** PR #283 review `4847814084` at
 `9ee9f6856bafd26cfef6914074bffc230bb0c599`, and PR #284 review
 `4850399233` at `5688cec0d17bacbdbb0adbef1fea0931673c25d5` and re-review
-`4851231679` at `d1e55bc6a5dadfa630d0d752f06915e7142a4afc`
+`4851231679` at `d1e55bc6a5dadfa630d0d752f06915e7142a4afc` and final-status
+re-review `4852101645` at `dc2dbafdb16febe35d4caea4be7d5c675b2ef957`
 
 **Primary trust boundary:** architecture-checker ownership and integrity of the
 repository Python-source inventory, retained source evidence, parsed syntax,
@@ -1158,9 +1159,9 @@ docs/rfcs/OFARM_Architecture_Python_Source_Snapshot_Admission_RFC_v0_1.md
 ```
 
 Before approval it remains proposed and unapproved. After exact approval under
-section 15, the same one-file PR may make only the truthful status transition
-and append one complete approval appendix. It may not contain code, tests,
-temporal amendments, or generated inventory changes.
+section 15, the same one-file PR may make only the exact section 15.4
+status-line replacement and append one complete approval appendix. It may not
+contain code, tests, temporal amendments, or generated inventory changes.
 
 ### 13.2 Future B1 and B3 architecture allowlist
 
@@ -1338,11 +1339,27 @@ evidence, not a substitute.
 
 ### 15.4 Permitted publication differences
 
-Only after exact approval may the one-file Phase A PR:
+Only after exact approval may the one-file Phase A PR perform these two
+differences:
 
-1. change the status metadata from proposed and unapproved to
-   architect-approved; and
+1. replace the exact complete line immediately after the first blank line
+   following the H1 title; that location is the sole top-level `Status` field:
+
+   ```text
+   **Status:** proposed Phase A contract; documentation-only and unapproved
+   ```
+
+   with this exact complete line:
+
+   ```text
+   **Status:** architect-approved Phase A contract; documentation-only and without implementation, temporal, database, runtime, deployment, legacy, or #192 effect
+   ```
+
 2. append one `Appendix A — Architect approval record` after section 17.
+
+No other status, provisional-design, review-disposition, gate, or merge-stop
+text changes during publication. The exact status-line replacement above is the
+sole permitted edit inside canonical design bytes.
 
 No derived identity in section 17 changes. No decision, interface, descriptor,
 profile, limit, trust rule, authority map, state, invariant, negative case,
@@ -1360,9 +1377,9 @@ non-effect, preservation rules, and next sequence.
 
 Before merge, a reviewer with direct task access must verify:
 
-1. proposed design reconstructed from the publication equals section 17's
-   exact bytes;
-2. only the status transition and one appendix differ;
+1. proposed design reconstructed by reversing the exact section 15.4
+   status-line replacement equals section 17's exact bytes;
+2. only that exact status-line replacement and one appendix differ;
 3. card bytes and identity recompute under section 15.2;
 4. the exact later message is user-authored by the designated architect in the
    same task and equals section 17's sentence bytes;
@@ -1378,7 +1395,8 @@ cannot be verified, the PR remains unmergeable without a repository patch.
 ### 15.6 Complete merged authority and separate B1 request
 
 After publication merges, compute the entire merged RFC's UTF-8 byte length and
-SHA-256, including the status transition, markers, section 17, and appendix.
+SHA-256, including the exact status-line replacement, markers, section 17, and
+appendix.
 The B1 implementation constants pin those complete values. B1 refuses before
 full-profile authentication or caller-root inspection when they differ; only
 the fixed bootstrap and authority-path custody may precede that refusal. The
@@ -1395,9 +1413,10 @@ independently verifiable signing or approval.
 
 ### 16.1 Provisional design record
 
-The current document is **proposed, unapproved, and therefore not yet an
-accepted design**. If its exact canonical bytes are approved and published, the
-v1 snapshot architecture is intended to be non-provisional and may be replaced
+At canonical design freeze, the repository record is proposed and unapproved.
+Section 15 governs the sole later status-line replacement and approval
+appendix. If the exact canonical bytes are approved and published, the v1
+snapshot architecture is intended to be non-provisional and may be replaced
 only through a later reviewed version or amendment. The Codex approval
 transport remains provisional before deployment.
 
@@ -1412,8 +1431,8 @@ descriptor/version change, never silent widening.
 Open design decisions: none. Temporal catalog, provisioning, dynamic-import,
 and marker rules are deliberately owned by the later temporal amendment.
 
-- **Blockers:** exact technical re-review and architect approval have not yet
-  occurred.
+- **Pre-publication gates:** this canonical design requires a passing final
+  exact-head technical review and exact architect approval before publication.
 - **Follow-ups:** B1 after approval/publication and separate request; temporal
   B2 after its own contract; architecture B3 after exact consumer removal.
 - **Preferences:** none recorded.
@@ -1423,8 +1442,9 @@ and marker rules are deliberately owned by the later temporal amendment.
 This PR must not merge while proposed or unapproved. After exact approval, the
 documentation publication must not merge until the mandatory publication-byte
 and provenance re-review passes, its sole changed path is this RFC, its only
-differences are the truthful status transition and one complete appendix, and
-every design, card, approval, review, and provenance identity verifies exactly.
+differences are the exact section 15.4 status-line replacement and one complete
+appendix, and every design, card, approval, review, and provenance identity
+verifies exactly.
 
 Once those conditions pass and no demonstrated in-scope Blocker remains, merge
 the Phase A documentation PR. New ideas, Preferences, and non-blocking
@@ -1440,14 +1460,14 @@ design bytes. It is not an approval record.
 
 - canonical design encoding: UTF-8, LF only, no BOM, exactly one terminal LF;
 - canonical extraction: section 15.1;
-- canonical design byte length: `69134`;
+- canonical design byte length: `70064`;
 - canonical design SHA-256:
-  `sha256:25f704d4348e9a46c9fa8d7f72183fdd51b8a3ff2cc6cfaa59e27fccf8ee2a8a`;
+  `sha256:27a36f1c0c5795a3262cb58dee4363fbc719d53be370ef4bec48ced50a459b67`;
 - approval-sentence encoding: UTF-8 with no terminal LF;
 - approval-sentence byte length: `524`;
 - approval-sentence SHA-256:
-  `sha256:326028b5ecf28832c7170e5dcc8861035ee2f63d52354e560761474bc923d70a`.
+  `sha256:0863e69f092db7c9b15358b19b0278ec3b086117674412e045f0dbd3e4d29a2e`.
 
 The exact approval sentence is:
 
-> I explicitly approve the Phase A design of contract ofarm.architecture-python-source-snapshot-admission.issue176.v0.1 at sha256:25f704d4348e9a46c9fa8d7f72183fdd51b8a3ff2cc6cfaa59e27fccf8ee2a8a (69,134 bytes) in Codex task 019fa821-93c9-7ef1-8c94-1c0e92ea46b9 and authorize one documentation-only approval record with exactly the provenance, permitted effect, non-effects, preservation rules, and next required sequence stated in the complete decision card displayed immediately before this approval request in the same task.
+> I explicitly approve the Phase A design of contract ofarm.architecture-python-source-snapshot-admission.issue176.v0.1 at sha256:27a36f1c0c5795a3262cb58dee4363fbc719d53be370ef4bec48ced50a459b67 (70,064 bytes) in Codex task 019fa821-93c9-7ef1-8c94-1c0e92ea46b9 and authorize one documentation-only approval record with exactly the provenance, permitted effect, non-effects, preservation rules, and next required sequence stated in the complete decision card displayed immediately before this approval request in the same task.
