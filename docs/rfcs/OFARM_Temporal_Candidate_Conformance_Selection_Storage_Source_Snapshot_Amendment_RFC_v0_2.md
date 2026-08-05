@@ -80,10 +80,30 @@ the reviewed and versioned architecture authority carried by the returned
 snapshot. They are never accepted from caller data, configuration,
 environment, repository content outside that authority, or a lookalike object.
 
+Both temporal consumers derive the lexical package root without filesystem
+canonicalization:
+
+```python
+# conformance/temporal_contract_candidate_check.py
+PACKAGE_ROOT = Path(__file__).parent.parent
+
+# kernel/tests/test_temporal_carriers.py
+PACKAGE_ROOT = Path(__file__).parents[2]
+```
+
+Under the fixed CPython profile, each `__file__` is an absolute lexical path.
+Neither consumer calls `resolve()`, `absolute()`, realpath, or another
+normalizer before the public builder obtains descriptor-relative no-follow
+custody. A non-absolute root refuses through the architecture builder; the
+temporal consumer does not repair or replace it.
+
 Temporal B2 directly uses:
 
 ```text
+snapshot.contract_authority
+snapshot.descriptor
 snapshot.modules_by_relative_path
+snapshot.import_graph
 snapshot.production_reachability
 snapshot.legacy_reachability
 ```
@@ -150,13 +170,20 @@ In the approved v0.1 contract, this amendment replaces only:
 
 - the Python-source trusted input in section 3;
 - the Python source inventory paragraph in section 5.2;
-- the graph, root, and reachability mechanism in section 5.4;
-- invariants TCSS-003 and TCSS-004 only to the extent that they name the
-  private inventory and graph helpers;
+- the graph, root, reachability, initializer-import, and static-only isolation
+  mechanism in section 5.4;
+- invariant TCSS-004 only to the extent that it names the private inventory
+  and graph helpers;
+- invariant TCSS-011 and the directly related section 8 negative cases only to
+  clarify that closure reachability is static AST evidence and to bind the
+  initializer-import evidence defined here;
 - the private-helper negative case in section 8;
 - the future Phase B file boundary and verification steps in sections 10 and
   11 only as stated in sections 10 and 11 here; and
-- the private-helper stop condition in section 12.
+- the private-helper stop condition in section 12; and
+- implicit use of v0.1 section 13 for this amendment's own approval and
+  publication. Section 14 here is the complete amendment-specific adaptation;
+  it does not alter v0.1's completed approval record.
 
 If wording in those exact clauses conflicts with this amendment, this v0.2
 amendment controls. No other v0.1 clause is replaced, relaxed, widened, or
@@ -277,7 +304,8 @@ Temporal B2 does not trust:
 - a caller-supplied contract identity, interface identity, root set,
   reachability map, marker exception, path eligibility, or conformance state;
 - caller-constructed lookalikes, subclasses, mocks, monkeypatches, or mutable
-  mappings offered as a source snapshot;
+  mappings as source authority; no supported temporal entry point accepts a
+  snapshot or evidence parameter;
 - repository filenames, contents, symlinks, marker text, comments, generated
   files, test fixtures, or dormant modules to define their own eligibility;
 - environment variables, configuration, profiles, database contents, network
@@ -324,7 +352,7 @@ contract requires.
 | Marker occurrence classification in retained Python sources | temporal checker under v0.1 as amended here | inspect `PythonSourceUnitV1.source_text` from `modules_by_relative_path` | filesystem rereads, module execution, reachability alone |
 | SQL production inventory | v0.1 retained authenticated tenant `MigrationSet` | preserve unchanged | Python snapshot, SQL glob, later path read |
 | Active non-Python inventory | the three exact v0.1 fixed paths | preserve unchanged | repository-wide discovery, caller list |
-| Static adapter isolation | snapshot-owned production and legacy reachability maps | require exact adapter module absent from both closures | temporary root aliases, runtime observation |
+| Static adapter isolation | snapshot-owned import graph plus production and legacy reachability maps | refuse an initializer edge to the exact adapter and require the adapter key absent from both closures | temporal graph reconstruction, temporary root aliases, runtime observation |
 | Dynamic-import prohibition | existing architecture checker and its accepted architecture law | require that checker to pass as a separate merge gate | temporal duplicate scanner or a claim derived only from static reachability |
 | Database migration 0008 semantics and adapter behavior | later approved database Phase B | no use or effect | classifier result, this amendment |
 | Tenant selection and governed command activation | later RuntimeBundle-selection and command authorities | no use or effect | marker presence, conformance state |
@@ -348,10 +376,14 @@ One supported invocation of
 4. Call `build_python_source_snapshot(PACKAGE_ROOT)` exactly once. Propagate a
    builder refusal as temporal-checker refusal. Do not fall back to a private
    helper, path walk, partial scan, or previously cached result.
-5. Require the returned value to be the exact architecture-governed
-   `PythonSourceSnapshotV1`, with the exact contract authority and descriptor
-   interface identity in section 2.1. A lookalike, subclass, wrong authority,
-   wrong interface, or caller-provided value refuses.
+5. Apply defensive compatibility assertions to the trusted builder's direct
+   return: exact `PythonSourceSnapshotV1` type, exact contract authority, and
+   exact descriptor interface identity and root fields in sections 2.1 and
+   7.2. A type, authority, interface, or root-field mismatch refuses. Remaining
+   descriptor semantics stay trusted builder evidence and are not copied into
+   a second temporal descriptor. No supported caller supplies a snapshot
+   parameter, and temporal B2 neither calls nor reproduces the private
+   architecture seal guard `_is_builder_snapshot`.
 6. Retain that one snapshot for the remainder of the complete invocation.
 7. Apply the v0.1 marker classifier to retained
    `snapshot.modules_by_relative_path` source units. Marker detection uses the
@@ -360,9 +392,10 @@ One supported invocation of
    `Migration.source_bytes`.
 9. Inspect the three exact active non-Python authorities using the unchanged
    v0.1 rules.
-10. For adapter isolation, use the retained snapshot's
-    `production_reachability` and `legacy_reachability` directly. Do not
-    recompute a graph or closure and do not supply root tuples.
+10. For adapter isolation, use the retained snapshot's `import_graph`,
+    `production_reachability`, and `legacy_reachability` directly under section
+    7.2. Do not reparse source, recompute a graph or closure, or supply root
+    tuples.
 11. Return only the v0.1 lawful result: `CONFORMANT_ABSENT`,
     `CONFORMANT_CLASSIFIED`, or refusal. No result creates an operational state
     transition.
@@ -421,36 +454,97 @@ law or this contract's isolation rule refuses as applicable.
 
 ### 7.2 Static adapter isolation
 
-The exact adapter module name is derived only by the architecture snapshot's
-fixed module-naming law from the exact v0.1 allowed path:
+The exact identities are:
 
 ```text
+initializer path:
+deployment/postgresql/__init__.py
+
+initializer module:
+deployment.postgresql
+
+adapter path:
 deployment/postgresql/tenant_command_runtime_bundle_selection.py
+
+adapter module:
+deployment.postgresql.tenant_command_runtime_bundle_selection
 ```
 
-Temporal B2 must bind one implementation constant to the exact expected module
-identity and verify that the snapshot's source unit for the allowed path has
-that module identity. Path and module disagreement refuses; the checker does
-not guess an alias.
+The module names follow only from the architecture snapshot's fixed module-
+naming law. Temporal B2 binds the four exact path/module constants above; it
+does not infer or accept an alias.
 
-The adapter module must not appear in any closure tuple in either:
+In `CONFORMANT_CLASSIFIED`, the adapter path must exist in
+`snapshot.modules_by_relative_path`, and its retained source unit's
+`module_name` must equal the exact adapter module. A missing unit or mismatch
+refuses. In `CONFORMANT_ABSENT`, the adapter path and module are absent by
+definition; the module-identity check is not run and absence does not become a
+refusal.
+
+The fixed root families are carried only by the exact descriptor:
 
 ```text
-snapshot.production_reachability
-snapshot.legacy_reachability
+snapshot.descriptor.production_import_roots
+  = ("kernel.api", "kernel.application_runtime")
+
+snapshot.descriptor.legacy_import_roots
+  = ("kernel.legacy_m1.api", "kernel.legacy_m1.runtime")
 ```
 
-The map keys are the snapshot-owned fixed roots. Temporal B2 neither declares
-nor passes roots. It verifies that the snapshot descriptor and returned maps
-carry the exact architecture v1 fixed families, then uses every closure in
-both maps. A missing root, extra root, narrowed map, wrong descriptor, or
-adapter occurrence refuses through the governed snapshot or the temporal
-check.
+The two reachability maps do not map roots to closures. Each is a complete
+union closure keyed by every reachable module name. Each value is the exact
+first-discovered ordered path from one fixed root to its key, as sealed by the
+architecture builder:
 
-The adapter must remain absent from
-`deployment/postgresql/__init__.py` re-exports exactly as v0.1 requires. Any
-static import or re-export that places it in a production or legacy closure
-refuses.
+```text
+snapshot.production_reachability:
+  reachable production module -> first-discovered production path
+
+snapshot.legacy_reachability:
+  reachable legacy module -> first-discovered legacy path
+```
+
+Temporal B2 verifies the exact descriptor interface identity and the two exact
+root fields. The remaining descriptor fields stay architecture-owned. As
+structural compatibility assertions, it verifies that every fixed root is
+present in its corresponding map with value `(root,)` and that every retained
+path is non-empty, begins with one exact root from that family, and ends with
+its mapping key. It then refuses if the exact adapter module is a key in either
+map. It does not scan path values for eligibility and does not reconstruct
+reachability.
+
+Semantic closure completeness, deterministic first discovery, and absence of a
+narrowed or widened map remain trusted architecture-builder evidence. A
+trusted builder returning a structurally plausible but incomplete or expanded
+closure is an architecture defect or trusted-code compromise under section
+4.4, not a temporal input that B2 independently detects.
+
+The initializer rule is independent of fixed-root reachability. When the
+initializer path is present in `snapshot.modules_by_relative_path`, its source
+unit must name the exact initializer module and `snapshot.import_graph` must
+contain that module's graph entry. Any `PythonImportEdgeV1` in that entry whose
+`target` is the exact adapter module refuses.
+
+The architecture graph records the exact edge for all of these static forms
+when the retained adapter exists, including aliases and statements nested under
+functions, classes, or `TYPE_CHECKING`:
+
+```python
+import deployment.postgresql.tenant_command_runtime_bundle_selection
+from deployment.postgresql import tenant_command_runtime_bundle_selection
+from . import tenant_command_runtime_bundle_selection
+from .tenant_command_runtime_bundle_selection import selected_binding
+```
+
+In `CONFORMANT_ABSENT`, the adapter is not a retained module and therefore
+cannot be an architecture-v1 graph target. Running the same exact edge check
+does not turn lawful pair absence into refusal. The unchanged architecture
+checker still owns syntax and dynamic-import policy.
+
+This section replaces v0.1 section 5.4 and clarifies v0.1 TCSS-011 only for
+static AST evidence. It preserves the refusal for a static initializer import
+or re-export and for static reachability from either fixed family. It neither
+adds nor implies a runtime or computed-loading guarantee.
 
 ### 7.3 Dynamic-import authority remains separate
 
@@ -533,11 +627,19 @@ contract rather than widening this amendment.
   repository search finds none of the five private names in either current
   temporal consumer.
 - **TCSSS-017 — Production-versus-legacy firewall remains closed.** The exact
-  fixed production and legacy closure families are both checked; neither may
-  import, re-export, or wrap the adapter.
+  fixed production and legacy closure families are both checked by exact
+  adapter-key absence, and the initializer graph entry carries no exact adapter
+  edge.
 - **TCSSS-018 — Fail closed.** Missing, inexact, unsupported, ambiguous, or
   multiply classified evidence refuses. No fallback path produces a conformant
   state.
+- **TCSSS-019 — Lexical root custody.** Both temporal consumers derive their
+  exact absolute lexical package root from `__file__` without `resolve()`,
+  realpath, or normalization before the public builder takes custody.
+- **TCSSS-020 — Byte-closed approval.** Approval binds this amendment's exact
+  canonical design bytes in the fixed Codex task; publication changes only the
+  exact status block and appends one complete approval record; temporal B2
+  authenticates the complete merged amendment before applying it.
 
 ## 9. Required negative cases
 
@@ -549,17 +651,23 @@ Focused verification must prove these outcomes through supported entry points:
 | The v0.1 selection-storage authority is missing or inexact | refuse before applying its exception |
 | The architecture source-snapshot authority or interface is missing or inexact | builder or temporal checker refuses; no fallback scan |
 | The public builder refuses for any governed filesystem, profile, resource, encoding, parse, graph, or authority reason | temporal checker refuses with no partial classifier result |
-| A lookalike, subclass, mock, wrong-authority snapshot, or caller-provided map is offered | refuse; do not classify it |
+| The trusted builder's direct return has the wrong exact public type, contract authority, descriptor interface, or root fields | defensive compatibility assertion refuses; no caller-supplied evidence seam exists |
 | A second builder call occurs during one complete invocation | focused test fails |
 | Marker classification opens, resolves, stats, globs, walks, imports, or reparses a Python path after snapshot construction | focused test fails |
 | Marker classification and isolation use different snapshots | focused test fails |
 | Either temporal consumer refers to any of the five private architecture names | repository-search and focused tests fail |
 | A temporal implementation declares its own production or legacy root tuple | review and focused contract test fail |
-| A snapshot root map is missing, narrowed, widened, or inconsistent with its exact descriptor | builder or temporal checker refuses |
-| The exact adapter path maps to an unexpected module identity | refuse |
-| The adapter appears in any production reachability closure | refuse |
-| The adapter appears in any legacy reachability closure | refuse |
-| The adapter is imported or re-exported by `deployment/postgresql/__init__.py` | refuse |
+| Either consumer uses `resolve()`, realpath, `absolute()`, or another pre-builder normalizer to derive `PACKAGE_ROOT` | source-structure test fails; no alternate root is admitted |
+| A descriptor root tuple differs from the exact v1 family | defensive compatibility assertion refuses |
+| A fixed root is missing from its corresponding map or does not map to `(root,)` | defensive compatibility assertion refuses |
+| A retained reachability path is empty, begins outside its exact root family, or ends somewhere other than its mapping key | defensive compatibility assertion refuses |
+| The trusted builder returns a structurally plausible but semantically narrowed or widened closure | architecture defect or trusted-code compromise; temporal B2 does not recompute or independently accept it |
+| `CONFORMANT_ABSENT` has no adapter source unit | pass the module-identity and initializer-edge subchecks; absence alone never refuses |
+| In `CONFORMANT_CLASSIFIED`, the exact adapter path is missing or maps to an unexpected module identity | refuse |
+| The exact adapter module is a key in the production reachability map | refuse |
+| The exact adapter module is a key in the legacy reachability map | refuse |
+| A present initializer path maps to a module other than exact `deployment.postgresql` or lacks its graph entry | defensive compatibility assertion refuses |
+| The initializer graph entry contains the exact adapter target through an absolute import, package import, relative import, alias, nested scope, or `TYPE_CHECKING` | refuse |
 | A temporal change adds a duplicate dynamic-import detector or claims runtime loading is impossible from static reachability | stop; architecture authority remains separate |
 | Only one of migration 0008 and the adapter exists | refuse under unchanged v0.1 state law |
 | Either marker occurs in any other production-classified Python source | refuse, regardless of reachability |
@@ -631,8 +739,8 @@ The smallest coherent implementation:
 3. calls the public architecture builder once;
 4. implements the closed v0.1 Python marker classifier on retained source
    units;
-5. uses the same snapshot's owned reachability maps for static adapter
-   isolation;
+5. uses the same snapshot's owned import graph and reachability maps for static
+   adapter isolation;
 6. preserves the v0.1 SQL and active non-Python classifiers;
 7. removes all five private architecture references from both temporal
    consumers; and
@@ -655,10 +763,11 @@ Temporal B2 does not authorize:
 - any #192 behavior.
 
 Architecture B3 may be requested only after temporal B2 is merged on current
-`main`, repository search proves no external use of the five private names,
-and the complete package check passes. The database Phase B remains subject to
-its own approved contract and separate explicit request. Neither may travel in
-the temporal B2 PR.
+`main`, repository search proves no external call or use of the three private
+helpers or the two root aliases (the five exact names in section 1), and the
+complete package check passes. The database Phase B remains subject to its own
+approved contract and separate explicit request. Neither may travel in the
+temporal B2 PR.
 
 ### 11.4 Elegance audit
 
@@ -722,7 +831,10 @@ rg -n '_module_sources|_import_graph|_reachable_paths|PRODUCTION_IMPORT_ROOTS|LE
 
 That search must return no match. Focused tests must also prove one public
 builder call, shared-snapshot evidence, exact v0.1 absent/classified states,
-all new refusal cases, and unchanged SQL and active-authority classification.
+exact descriptor-root and reachability-entry structure, exact adapter-key
+absence, all four initializer import forms plus aliases and nested imports,
+lexical root derivation without normalization, all other new refusal cases,
+and unchanged SQL and active-authority classification.
 
 If collected node IDs change, regenerate the canonical inventory mechanically
 and prove the change contains exactly the canonical node-ID difference. A
@@ -740,8 +852,10 @@ count-only comparison is insufficient.
 | TCSSS-010 | v0.1 classifier implementation | synthetic marker in checker/test inventory never satisfies implementation pair | temporal governance tests |
 | TCSSS-013 | temporal result API remains conformance-only | changed-file and import scans show no storage/runtime consumer; conformant vectors create no side effect | focused tests and diff review |
 | TCSSS-014/015 | PR boundary | any out-of-allowlist path fails changed-file gate | exact name-only diff |
-| TCSSS-017 | snapshot reachability use in temporal checker and carrier test | adapter imported from either fixed family refuses | temporal carrier tests |
+| TCSSS-017 | snapshot import-graph and reachability use in temporal checker and carrier test | initializer edge or adapter key in either fixed family refuses | temporal carrier and governance tests |
 | TCSSS-018 | all supported checker entry points | each missing, altered, ambiguous, or unsupported evidence vector returns refusal and no conformant result | temporal tests and both conformance CLIs |
+| TCSSS-019 | package-root constants in both temporal consumers | source-structure test rejects `resolve`, realpath, `absolute`, or another pre-builder normalizer | temporal governance and carrier tests |
+| TCSSS-020 | this RFC's publication record and temporal checker authority constants | reconstructed design, card, approval, publication, or complete merged identity mismatch stops or refuses | publication re-review and package check |
 
 ## 13. Stop conditions
 
@@ -775,90 +889,276 @@ true:
 13. temporal B2 cannot remove all five private references from both named
     consumers within its exact allowlist; or
 14. architecture B3, database Phase B, or another later boundary is proposed in
-    the same PR.
+    the same PR;
+15. temporal B2 needs the private architecture seal guard or another private
+    architecture API; or
+16. either temporal consumer needs path resolution or normalization before the
+    public builder takes lexical root custody.
 
 When a stop condition occurs, report the authority expansion and propose a
 separate prerequisite, follow-up, or stacked PR. Do not append the other trust
 boundary merely to clear a review or conformance failure.
 
-## 14. Approval, publication, and later execution sequence
+## 14. Amendment-specific byte-authenticated approval and publication
 
-The approved v0.1 contract's exact-action approval procedure is stronger than
-the general pre-deployment workflow and remains binding for this amendment.
-This proposed draft is not an approval request and grants no implementation
-authority.
+This section is the complete amendment-specific adaptation of the stronger
+v0.1 section 13 procedure. It governs approval and publication of this v0.2
+amendment only. It neither rewrites nor substitutes for v0.1's completed
+approval record. Before the exact transition below, this design grants no
+implementation authority.
 
-The required sequence is:
+### 14.1 Canonical design bytes
 
-1. publish this one-file proposed Phase A draft in a draft PR;
-2. obtain technical review of the exact design head;
-3. resolve review findings within this one-file boundary;
-4. compute the final canonical proposed-design UTF-8 byte length and SHA-256;
-5. display one complete live plain-English decision card in the designated
-   Codex task, binding the exact design, effects, non-effects, preservation
-   rules, and next sequence;
-6. receive the exact approval sentence as a later user-authored message in that
-   same task;
-7. add only the truthful approval-status transition and one approval record to
-   this RFC;
-8. re-review that publication to prove the approved design was preserved;
-9. merge the documentation-only Phase A PR;
-10. compute the complete merged RFC UTF-8 byte length and SHA-256, including
-    the approval record;
-11. receive a separate explicit request to implement temporal B2 under that
-    complete merged authority;
-12. implement, review, and merge only the section 11.2 allowlist; and
-13. stop before architecture B3, database Phase B, governed command
-    integration, routes, reads, outputs, or #192 work.
+The canonical design:
 
-Typing or copying the exact approval sentence from the complete live decision
-card displayed earlier in the same Codex task is valid. An approval sentence
-or card digest copied from another task, another decision card, another
-decision, documentation, a template, a PR, a GitHub review/comment/reaction,
-repository credentials, or AI-authored or AI-sent text other than that complete
-live decision card is invalid. PR authorship, commit authorship, mergeability,
-merge, GitHub credentials, and generic words such as "approve" or "go" do not
-substitute for the exact approval transition.
+- is UTF-8;
+- uses LF line endings only;
+- contains no CR byte and no UTF-8 BOM;
+- begins with this document's first `#` byte;
+- ends after the final period of the merge-stop rule at the end of section
+  15.1; and
+- includes the LF ending that final line, with exactly one terminal LF in the
+  extracted design identity.
 
-The approval record is evidence of the architect's decision, not a substitute
-for it. Until the sequence reaches step 11, temporal B2 remains unauthorized.
+The exact canonical design byte length and SHA-256 are computed only after all
+technical Blockers are resolved at one reviewed design head. They are not
+self-declared while wording is still changing. Any later protected-design edit
+creates a different design identity and requires a replacement review, card,
+and approval.
+
+The proposed top-level status block in the canonical design is the exact old
+block reproduced in section 14.3. The Appendix A publication record is not part
+of the canonical design identity.
+
+### 14.2 Complete live card and human authority
+
+Approval may be solicited only in Codex task:
+
+```text
+019fa821-93c9-7ef1-8c94-1c0e92ea46b9
+```
+
+The AI must first display one complete live plain-English decision card in that
+task. Canonical card extraction:
+
+- is UTF-8 with LF only and no CR or BOM;
+- begins with the exact line
+  `OFARM2 COMPLETE LIVE DECISION CARD`;
+- ends with the exact line
+  `END OF OFARM2 COMPLETE LIVE DECISION CARD`; and
+- excludes a terminal LF from the card byte identity.
+
+The card must state:
+
+- this exact contract identity, RFC path, reviewed base, draft PR, and final
+  reviewed design head;
+- the canonical design encoding, byte length, and SHA-256;
+- the card's extraction rule;
+- the problem, recommended decision, primary trust boundary, and authority map;
+- the primary risk and its bound;
+- the one permitted approval effect and every non-effect;
+- the decision-level invariants and exact future B2 maximum path envelope;
+- the verification gates, reapproval triggers, provisional posture, and next
+  required sequence; and
+- the exact approval sentence, its UTF-8 byte length, and SHA-256, excluding a
+  terminal LF from the sentence identity.
+
+The card's reapproval triggers are any changed protected-design byte, decision
+identity or version, trust boundary, authority, material effect or non-effect,
+invariant, maximum path envelope, named draft PR, or final reviewed design
+head; a replacement card or later cancellation; or loss of directly
+inspectable task evidence. A triggered change requires a replacement technical
+review and complete card before any new approval request.
+
+Immediately after the extracted card, outside its canonical bytes, the AI must
+display the card's exact UTF-8 byte length and SHA-256 and then solicit only the
+exact approval sentence. The approval request is invalid if that external card
+identity does not recompute or if another card or changed design intervenes.
+
+The exact approval sentence is derived by replacing the two angle-bracketed
+placeholders in this one-line template and changing no other byte:
+
+```text
+I explicitly approve the Phase A design of contract ofarm.temporal-candidate-conformance-selection-storage-source-snapshot-amendment.issue176.v0.2 at sha256:<CANONICAL_DESIGN_SHA256> (<CANONICAL_DESIGN_BYTE_LENGTH_WITH_COMMAS> bytes) in Codex task 019fa821-93c9-7ef1-8c94-1c0e92ea46b9 and authorize one documentation-only approval record with exactly the provenance, permitted effect, non-effects, preservation rules, and next required sequence stated in the complete decision card displayed immediately before this approval request in the same task.
+```
+
+`<CANONICAL_DESIGN_SHA256>` is replaced by the exact 64-character lowercase
+hexadecimal digest. `<CANONICAL_DESIGN_BYTE_LENGTH_WITH_COMMAS>` is replaced by
+the exact positive decimal byte length with standard three-digit comma
+grouping. The live card contains the fully substituted sentence with no angle
+brackets.
+
+The designated architect must send that exact sentence as the entire text of a
+later user-authored message in the same task. Typing it or copying it directly
+from that complete live card is valid. An approval sentence or card digest
+copied from another task, card, decision, document, template, AI output other
+than that complete live card, PR, GitHub review/comment/reaction, or any other
+source is invalid. AI/tool messages, repository credentials, PR or commit
+authorship, mergeability, merge, and generic words such as `approve` or `go`
+never count.
+
+Before recognizing approval, the AI must directly retrieve the complete card
+and later user message with stable task references; verify their exact bytes,
+task, ordering, user authorship, and timestamps; verify no intervening
+replacement card, changed design, or later cancellation; and fail closed if
+the original task evidence has been compacted, summarized, lost, or cannot be
+independently inspected. The user message is the architect's decision. The
+repository appendix is evidence of that decision, not a substitute for it.
+
+### 14.3 Exact publication differences and closed appendix
+
+Only after valid approval may the exact top-level status block immediately
+after the document title change from:
+
+```text
+**Status:** proposed and inactive Phase A amendment; documentation-only,
+unapproved, and without conformance, database, selection, runtime, deployment,
+legacy, output, or #192 effect
+```
+
+to:
+
+```text
+**Status:** architect-approved Phase A amendment; documentation-only and
+without conformance, database, selection, runtime, deployment, legacy, output,
+or #192 effect
+```
+
+No other occurrence of either block changes. After the section 15.1 merge-stop
+rule and its canonical terminal LF, publication appends exactly one additional
+LF and one `## Appendix A — Architect approval record`. The appendix has this
+closed field set:
+
+1. contract identity, RFC path, reviewed base, draft PR, and exact approved
+   design head;
+2. canonical approved-design encoding, byte length, and SHA-256;
+3. complete v0.1 and architecture-RFC identities from section 2.1, architecture
+   interface identity, and B1 merge sequencing evidence;
+4. Codex task identifier; card turn, stable item and underlying message
+   references, timestamp, extraction rule, byte length, and SHA-256;
+5. architect-approval turn, stable item and underlying message references,
+   timestamp, observed user authorship, exact sentence, sentence byte length,
+   and sentence SHA-256;
+6. exact-head technical review evidence that preceded the live card;
+7. the sole permitted effect and every non-effect;
+8. protected-design preservation and publication-byte reconstruction rules;
+   and
+9. the exact next required sequence through the separate temporal B2 request
+   and the stop before every later boundary.
+
+No schema, second record, currentness layer, service, database, or GitHub
+automation is created. The approval appendix is the only repository record.
+Publication-byte/provenance re-review is later external merge-gate evidence at
+the publication head; it is not written back into Appendix A and therefore
+does not create a circular publication identity.
+
+To reconstruct the approved canonical design from publication bytes, take the
+bytes from the document's first `#` through the LF ending section 15.1, exclude
+the following blank line and Appendix A, and replace only the first top-level
+approved status block with the exact proposed block above. The reconstructed
+bytes must equal the card's canonical design length and SHA-256 exactly.
+
+Any change to protected design text, a second status change, a different
+appendix heading, a missing or extra appendix field, an inexact reconstructed
+design, or a false provenance field invalidates publication and requires a new
+reviewed design and approval.
+
+### 14.4 Mandatory publication-byte and provenance re-review
+
+The documentation-only publication must receive a focused re-review at its
+exact head before merge. That reviewer must:
+
+1. prove that the only changed path remains this RFC;
+2. reconstruct and authenticate the complete canonical design under section
+   14.3;
+3. prove that the only publication differences are the exact status-block
+   replacement and one Appendix A;
+4. directly verify the complete live card and approval message in the fixed
+   Codex task, including stable references, exact bytes, ordering, authorship,
+   timestamps, and absence of a replacement or cancellation;
+5. verify every appendix field against repository and task evidence;
+6. verify all required hosted gates at the exact publication head; and
+7. state whether any demonstrated Blocker remains.
+
+GitHub credentials, a green workflow, or an internally consistent appendix
+cannot prove private Codex provenance. If direct task evidence is unavailable,
+merge remains conditional until a reviewer with direct access verifies it. No
+repository patch is required when the recorded evidence is exact; any mismatch
+requires corrected publication through this same byte-authenticated process.
+
+### 14.5 Permitted effect, non-effects, and next sequence
+
+Approval's sole permitted effect is to make this exact canonical Phase A design
+architect-approved and authorize the one-file status transition and Appendix A
+publication record.
+
+Approval does not authorize temporal B2 implementation, a checker or test
+change, migration 0008, the administrator adapter, database storage or
+mutation, a role or grant, tenant selection, RuntimeBundle or profile
+activation, runtime integration, `COMMIT_OPERATION_CLAIM_DRAFT`, a route,
+materialization, qualification, current-state read, historical or window
+execution, output, receipt, deployment, legacy behavior, architecture B3, or
+#192.
+
+After the truthful publication merges:
+
+1. compute the complete merged RFC UTF-8 byte length and SHA-256, including the
+   approved status and Appendix A;
+2. authenticate that complete merged identity against current `main`;
+3. receive a separate explicit request to implement temporal B2 under this
+   exact complete merged authority;
+4. reproduce the approved invariant traceability and implement only the
+   section 11.2 allowlist;
+5. review and merge temporal B2 only after all section 12 gates pass; and
+6. stop before architecture B3, database Phase B, governed-command
+   integration, routes, reads, outputs, or #192 work.
+
+Before deployment, this provisional Codex approval channel must be replaced by
+independently human-controlled and independently verifiable approval or
+signing.
 
 ## 15. Provisional design record and review disposition
 
-**Provisional design record:** Not provisional. This is a proposed, inactive,
-documentation-only Phase A amendment. It makes no repository artifact active
-and no temporal behavior available. The future B2 integration is the permanent
-public-evidence replacement planned by the architecture contract.
+**Provisional design record:** Not provisional. The future B2 integration is
+the permanent public-evidence replacement planned by the architecture
+contract. At canonical design freeze, the repository record uses the proposed
+and inactive status block reproduced in section 14.3. A valid later publication
+may replace only that top-level block and append Appendix A; this historical
+statement remains true in either state.
 
-The design is reviewable only as one closed temporal conformance boundary:
+The design is one closed temporal conformance boundary:
 
 - **authority:** approved v0.1 classifier law plus the governed public
   architecture snapshot;
 - **invariants:** one retained snapshot, no private bridge, unchanged closed
-  classifier, static-only reachability, and no operational transition;
+  classifier, exact public graph/reachability semantics, static-only isolation,
+  byte-closed approval, and no operational transition;
 - **non-goals:** every database, runtime, command, route, output, deployment,
   legacy, and #192 authority;
 - **smallest coherent change:** one Phase A RFC, then one separately requested
   temporal B2 PR over the exact four-path allowlist; and
 - **verification:** authenticated authorities, focused refusal tests, both
-  conformance checkers, package verification, private-name search, and exact
-  changed-file checks.
-
-No open design choice is delegated to temporal B2. If review identifies a need
-to change another authority, this Phase A draft must stop and name that
-boundary separately.
+  conformance checkers, package verification, private-name search, exact
+  changed-file checks, and publication-byte/provenance re-review.
 
 **Open decisions:** none. Review must not delegate an authority, path class,
-dynamic-import guarantee, or operational effect to implementation judgment.
+dynamic-import guarantee, approval substitution, or operational effect to
+implementation judgment. If review identifies a need to change another
+authority, work stops and names that boundary separately.
 
-**Current review disposition:**
+**Review disposition required before a live card:**
 
-- Blockers: none known before external technical review.
+- Blockers: none demonstrated at the final reviewed design head.
 - Follow-ups: architecture B3 and the separately governed database Phase B,
   each only after its own prerequisites and explicit request.
-- Preferences: none recorded.
+- Preferences: do not delay approval or expand this boundary.
 
-**Merge-stop rule:** the Phase A PR may merge only after its exact design is
-approved and the stronger publication procedure in section 14 passes with no
-demonstrated Blocker. New ideas, preferences, and non-blocking hardening remain
-separate Follow-ups and do not expand or reopen this boundary.
+### 15.1 Merge-stop rule
+
+The Phase A PR must not merge while its top-level status is proposed or
+unapproved. Its publication must not merge unless the exact canonical design
+has valid architect approval, the only publication differences are the exact
+status-block replacement and one complete Appendix A, the focused re-review in
+section 14.4 passes at the exact head, every hosted gate passes, and no
+demonstrated Blocker remains. New ideas, preferences, and non-blocking
+hardening remain separate Follow-ups and do not expand or reopen this boundary.
