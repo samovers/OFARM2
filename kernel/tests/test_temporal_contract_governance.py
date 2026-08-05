@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import ast
 import copy
+import hashlib
+import inspect
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -237,6 +239,71 @@ def _synthetic_tenant_authority(
         encoding="utf-8",
     )
     return package_root, authority_path
+
+
+def _selection_storage_source_snapshot(
+    tmp_path: Path,
+    overrides: dict[str, bytes] | None = None,
+):
+    package_root = tmp_path / "python-snapshot"
+    sources: dict[str, bytes] = {
+        "kernel/api.py": b"",
+        "kernel/application_runtime.py": b"",
+        "kernel/legacy_m1/api.py": b"",
+        "kernel/legacy_m1/runtime.py": b"",
+        temporal.POSTGRESQL_INITIALIZER_RELATIVE_PATH: b"",
+    }
+    for relative_path, _module, _length, _digest in (
+        *temporal.SELECTION_STORAGE_SOURCE_PINS,
+        temporal.SELECTION_STORAGE_ABSENT_CATALOG_PIN,
+    ):
+        sources[relative_path] = (PACKAGE_ROOT / relative_path).read_bytes()
+    sources.update(overrides or {})
+    for relative_path, source_bytes in sources.items():
+        path = package_root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(source_bytes)
+    return temporal.architecture.build_python_source_snapshot(package_root)
+
+
+def _selection_storage_v8_authority(
+    source_bytes: bytes,
+) -> temporal.TenantMigrationAuthoritySnapshot:
+    current = temporal.load_tenant_migration_authority_snapshot()
+    migration_8 = SimpleNamespace(
+        version=8,
+        filename=temporal.SELECTION_STORAGE_MIGRATION_FILENAME,
+        source_bytes=source_bytes,
+        source_sha256=(
+            "sha256:" + hashlib.sha256(source_bytes).hexdigest()
+        ),
+        byte_length=len(source_bytes),
+    )
+    v8_digest = "sha256:" + "8" * 64
+
+    class V8MigrationSet:
+        service = current.migration_set.service
+        migrations = (*current.migration_set.migrations, migration_8)
+        digest = v8_digest
+
+        def prefix_digest(self, version: int) -> str:
+            if version == 8:
+                return self.digest
+            return current.migration_set.prefix_digest(version)
+
+    return temporal.TenantMigrationAuthoritySnapshot(
+        migration_set=V8MigrationSet(),
+        version_3_prefix=current.version_3_prefix,
+    )
+
+
+def _selection_storage_python_markers() -> bytes:
+    return (
+        "\n".join(
+            f"# {marker}" for marker in temporal.SELECTION_STORAGE_MARKERS
+        )
+        + "\n"
+    ).encode("utf-8")
 
 
 def _coordinate() -> dict:
@@ -1647,3 +1714,440 @@ def test_candidate_paths_are_not_frozen_or_active_contract_directories():
         assert not relative_path.startswith(
             ("contracts/kernel/", "contracts/core/", "contracts/platform/")
         )
+
+
+def test_selection_storage_authenticates_amendment_first(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    observed: list[str] = []
+
+    def record(
+        relative_path: str,
+        _byte_length: int,
+        _sha256: str,
+        _contract_identity: str | None,
+    ) -> bytes:
+        observed.append(relative_path)
+        return b""
+
+    monkeypatch.setattr(temporal, "_authenticate_authority", record)
+    temporal.validate_selection_storage_authorities()
+
+    assert observed[0] == temporal.SELECTION_STORAGE_AMENDMENT_RELATIVE_PATH
+    assert observed[1:] == [
+        authority[0]
+        for authority in temporal.SELECTION_STORAGE_REQUIRED_AUTHORITIES
+    ]
+
+
+@pytest.mark.parametrize(
+    ("source_bytes", "byte_length", "sha256", "identity", "message"),
+    (
+        (b"contract: exact", 16, "sha256:" + "0" * 64, "exact", "byte length"),
+        (b"contract: exact", 15, "sha256:" + "0" * 64, "exact", "digest"),
+        (
+            b"contract: other",
+            15,
+            "sha256:" + hashlib.sha256(b"contract: other").hexdigest(),
+            "exact",
+            "contract identity",
+        ),
+    ),
+    ids=("wrong-length", "wrong-digest", "wrong-identity"),
+)
+def test_selection_storage_authority_refuses_inexact_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source_bytes: bytes,
+    byte_length: int,
+    sha256: str,
+    identity: str,
+    message: str,
+):
+    authority = tmp_path / "authority.md"
+    authority.write_bytes(source_bytes)
+    monkeypatch.setattr(temporal, "PACKAGE_ROOT", tmp_path)
+
+    with pytest.raises(temporal.TemporalCandidateError, match=message):
+        temporal._authenticate_authority(
+            authority.name,
+            byte_length,
+            sha256,
+            identity,
+        )
+
+
+def test_complete_check_uses_one_public_snapshot_and_one_initializer_ast(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    builder_calls: list[Path] = []
+    ast_calls: list[str] = []
+    original_builder = temporal.architecture.build_python_source_snapshot
+    original_ast_for = temporal.architecture.PythonSourceSnapshotV1.ast_for
+
+    def counted_builder(root: Path):
+        builder_calls.append(root)
+        return original_builder(root)
+
+    def counted_ast_for(snapshot, module_name: str):
+        ast_calls.append(module_name)
+        return original_ast_for(snapshot, module_name)
+
+    monkeypatch.setattr(
+        temporal.architecture,
+        "build_python_source_snapshot",
+        counted_builder,
+    )
+    monkeypatch.setattr(
+        temporal.architecture.PythonSourceSnapshotV1,
+        "ast_for",
+        counted_ast_for,
+    )
+
+    temporal.validate_candidate_governance()
+
+    assert builder_calls == [temporal.PACKAGE_ROOT]
+    assert ast_calls == [temporal.POSTGRESQL_INITIALIZER_MODULE]
+
+
+def test_selection_storage_current_state_is_exact_absent(tmp_path: Path):
+    snapshot = _selection_storage_source_snapshot(tmp_path)
+    authority = temporal.load_tenant_migration_authority_snapshot()
+
+    assert temporal._validate_selection_storage_conformance(
+        authority,
+        snapshot,
+    ) == temporal.SELECTION_STORAGE_CONFORMANT_ABSENT
+
+
+def test_selection_storage_exact_synthetic_pair_is_classified(tmp_path: Path):
+    source_bytes = _selection_storage_python_markers()
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: source_bytes},
+    )
+    authority = _selection_storage_v8_authority(source_bytes)
+
+    assert temporal._validate_selection_storage_conformance(
+        authority,
+        snapshot,
+    ) == temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+
+
+def test_selection_storage_classified_state_still_checks_initializer_ast(
+    tmp_path: Path,
+):
+    source_bytes = _selection_storage_python_markers()
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: source_bytes,
+            temporal.POSTGRESQL_INITIALIZER_RELATIVE_PATH: (
+                b"from . import tenant_command_runtime_bundle_selection\n"
+            ),
+        },
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="initializer imports",
+    ):
+        temporal._validate_selection_storage_conformance(
+            _selection_storage_v8_authority(source_bytes),
+            snapshot,
+        )
+
+
+def test_selection_storage_refuses_adapter_in_fixed_reachability(
+    tmp_path: Path,
+):
+    source_bytes = _selection_storage_python_markers()
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: source_bytes,
+            "kernel/api.py": (
+                b"import deployment.postgresql."
+                b"tenant_command_runtime_bundle_selection\n"
+            ),
+        },
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="production import closure",
+    ):
+        temporal._validate_selection_storage_conformance(
+            _selection_storage_v8_authority(source_bytes),
+            snapshot,
+        )
+
+
+@pytest.mark.parametrize("present_half", ("adapter", "migration"))
+def test_selection_storage_refuses_partial_implementation_pair(
+    tmp_path: Path,
+    present_half: str,
+):
+    source_bytes = _selection_storage_python_markers()
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: source_bytes,
+        }
+        if present_half == "adapter"
+        else None,
+    )
+    authority = (
+        temporal.load_tenant_migration_authority_snapshot()
+        if present_half == "adapter"
+        else _selection_storage_v8_authority(source_bytes)
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="implementation pair is incomplete",
+    ):
+        temporal._validate_selection_storage_conformance(authority, snapshot)
+
+
+def test_selection_storage_refuses_marker_in_other_production_source(
+    tmp_path: Path,
+):
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            "profile_si_ffs/tests/selection_leak.py": (
+                f"# {temporal.SELECTION_STORAGE_MARKERS[0]}\n".encode(
+                    "utf-8"
+                )
+            )
+        },
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="another production Python source",
+    ):
+        temporal._validate_selection_storage_conformance(
+            temporal.load_tenant_migration_authority_snapshot(),
+            snapshot,
+        )
+
+
+def test_selection_storage_verification_marker_never_satisfies_pair(
+    tmp_path: Path,
+):
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            "kernel/tests/selection_fixture.py": (
+                _selection_storage_python_markers()
+            )
+        },
+    )
+
+    assert temporal._validate_selection_storage_conformance(
+        temporal.load_tenant_migration_authority_snapshot(),
+        snapshot,
+    ) == temporal.SELECTION_STORAGE_CONFORMANT_ABSENT
+
+
+@pytest.mark.parametrize(
+    "initializer_source",
+    (
+        "import deployment.postgresql.tenant_command_runtime_bundle_selection\n",
+        (
+            "from deployment.postgresql import "
+            "tenant_command_runtime_bundle_selection\n"
+        ),
+        "from . import tenant_command_runtime_bundle_selection\n",
+        (
+            "from .tenant_command_runtime_bundle_selection "
+            "import selected_binding\n"
+        ),
+        "from ..postgresql import tenant_command_runtime_bundle_selection\n",
+        (
+            "from ..postgresql.tenant_command_runtime_bundle_selection "
+            "import selected_binding\n"
+        ),
+        (
+            "def nested():\n"
+            "    from . import tenant_command_runtime_bundle_selection as selected\n"
+        ),
+        (
+            "class Nested:\n"
+            "    from . import tenant_command_runtime_bundle_selection\n"
+        ),
+        (
+            "if TYPE_CHECKING:\n"
+            "    from .tenant_command_runtime_bundle_selection import *\n"
+        ),
+    ),
+    ids=(
+        "absolute-import",
+        "absolute-from",
+        "relative-from-package",
+        "relative-from-adapter",
+        "parent-relative-from-package",
+        "parent-relative-from-adapter",
+        "nested-alias",
+        "class-scope",
+        "type-checking-star",
+    ),
+)
+def test_selection_storage_refuses_every_initializer_import_form(
+    tmp_path: Path,
+    initializer_source: str,
+):
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.POSTGRESQL_INITIALIZER_RELATIVE_PATH: (
+                initializer_source.encode("utf-8")
+            )
+        },
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="initializer imports",
+    ):
+        temporal._validate_selection_storage_conformance(
+            temporal.load_tenant_migration_authority_snapshot(),
+            snapshot,
+        )
+
+
+@pytest.mark.parametrize(
+    "pin",
+    temporal.SELECTION_STORAGE_SOURCE_PINS,
+    ids=("provisioning-specs", "native-release-source", "tenant-contract"),
+)
+def test_selection_storage_source_pin_refuses_drift(
+    tmp_path: Path,
+    pin: tuple[str, str, int, str],
+):
+    relative_path = pin[0]
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {relative_path: (PACKAGE_ROOT / relative_path).read_bytes() + b"\n"},
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="Python source pin differs",
+    ):
+        temporal._validate_selection_storage_conformance(
+            temporal.load_tenant_migration_authority_snapshot(),
+            snapshot,
+        )
+
+
+def test_selection_storage_refuses_inexact_tenant_service(tmp_path: Path):
+    authority = temporal.load_tenant_migration_authority_snapshot()
+    migration_set = SimpleNamespace(
+        service=SimpleNamespace(
+            identity="caller-selected",
+            relative_directory="kernel/migrations",
+            schema_name="ofarm",
+            ledger_name="schema_migration",
+            qualified_ledger="ofarm.schema_migration",
+        ),
+        migrations=authority.migration_set.migrations,
+        digest=authority.migration_set.digest,
+        prefix_digest=authority.migration_set.prefix_digest,
+    )
+    changed = temporal.TenantMigrationAuthoritySnapshot(
+        migration_set=migration_set,
+        version_3_prefix=authority.version_3_prefix,
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="migration service differs",
+    ):
+        temporal._validate_selection_storage_conformance(
+            changed,
+            _selection_storage_source_snapshot(tmp_path),
+        )
+
+
+def test_selection_storage_lexical_root_is_not_normalized(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        temporal,
+        "PACKAGE_ROOT",
+        PACKAGE_ROOT / "kernel" / "..",
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="public Python source snapshot refused",
+    ):
+        temporal._build_selection_storage_snapshot()
+
+
+def test_classified_state_does_not_evaluate_obsolete_v7_catalog_pin(
+    tmp_path: Path,
+):
+    source_bytes = _selection_storage_python_markers()
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: source_bytes,
+            temporal.SELECTION_STORAGE_ABSENT_CATALOG_PIN[0]: b"# V8 owner\n",
+        },
+    )
+
+    assert temporal._validate_selection_storage_conformance(
+        _selection_storage_v8_authority(source_bytes),
+        snapshot,
+    ) == temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+
+
+def test_selection_storage_active_authority_refuses_marker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    active_path = tmp_path / "active.json"
+    active_path.write_text(
+        temporal.SELECTION_STORAGE_MARKERS[1],
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        temporal,
+        "SELECTION_STORAGE_ACTIVE_NON_PYTHON_PATHS",
+        (active_path,),
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="entered active path",
+    ):
+        temporal._validate_selection_storage_active_authorities()
+
+
+def test_selection_storage_evidence_uses_retained_sources_only():
+    evidence_source = "\n".join(
+        inspect.getsource(function)
+        for function in (
+            temporal._validate_source_pin,
+            temporal._classify_selection_storage_pair,
+            temporal._validate_selection_storage_isolation,
+            temporal._validate_selection_storage_conformance,
+        )
+    )
+    checker_source = (
+        PACKAGE_ROOT / "conformance/temporal_contract_candidate_check.py"
+    ).read_text(encoding="utf-8")
+    carrier_source = (
+        PACKAGE_ROOT / "kernel/tests/test_temporal_carriers.py"
+    ).read_text(encoding="utf-8")
+
+    assert "importlib" not in evidence_source
+    assert "exec(" not in evidence_source
+    assert "native_release_identity.json" not in evidence_source
+    assert "native_evidence_receipt.json" not in evidence_source
+    assert ".resolve()" not in checker_source
+    assert ".resolve()" not in carrier_source

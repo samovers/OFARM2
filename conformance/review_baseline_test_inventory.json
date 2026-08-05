@@ -11506,7 +11506,17 @@
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_classified_state_does_not_evaluate_obsolete_v7_catalog_pin",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_complete_check_reads_one_authority_source_and_one_migration_snapshot",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_complete_check_uses_one_public_snapshot_and_one_initializer_ast",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
@@ -11587,6 +11597,146 @@
     },
     {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_runtime_bundle_role_posture_uses_exact_authenticated_exception[0005_other.sql-False]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_active_authority_refuses_marker",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_authenticates_amendment_first",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_authority_refuses_inexact_bytes[wrong-digest]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_authority_refuses_inexact_bytes[wrong-identity]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_authority_refuses_inexact_bytes[wrong-length]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_classified_state_still_checks_initializer_ast",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_current_state_is_exact_absent",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_evidence_uses_retained_sources_only",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_exact_synthetic_pair_is_classified",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_lexical_root_is_not_normalized",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_adapter_in_fixed_reachability",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_every_initializer_import_form[absolute-from]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_every_initializer_import_form[absolute-import]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_every_initializer_import_form[class-scope]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_every_initializer_import_form[nested-alias]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_every_initializer_import_form[parent-relative-from-adapter]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_every_initializer_import_form[parent-relative-from-package]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_every_initializer_import_form[relative-from-adapter]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_every_initializer_import_form[relative-from-package]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_every_initializer_import_form[type-checking-star]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_inexact_tenant_service",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_marker_in_other_production_source",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_partial_implementation_pair[adapter]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_partial_implementation_pair[migration]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_source_pin_refuses_drift[native-release-source]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_source_pin_refuses_drift[provisioning-specs]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_source_pin_refuses_drift[tenant-contract]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_verification_marker_never_satisfies_pair",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
@@ -12041,8 +12191,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "596757cd11540d2e7212b6560e2f900d391b34cec936cf8a950f34a75ad615d6",
-  "entryCount": 2408,
+  "entriesSha256": "751cefbfdee1cdfe5d6ad37a4eb8e63e1db8b0d1c1c21e4c2a428794aa43fcaa",
+  "entryCount": 2438,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

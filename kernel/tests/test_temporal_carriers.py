@@ -14,7 +14,7 @@ from conformance import rewrite_architecture_check as architecture
 from kernel import temporal_carriers as temporal
 
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+PACKAGE_ROOT = Path(__file__).parents[2]
 BINDING_SCHEMA_PATH = (
     PACKAGE_ROOT
     / "contracts/candidates/temporal_carrier_selection/"
@@ -304,17 +304,39 @@ def test_selection_is_deterministic_and_does_not_mutate_inputs():
 
 
 def test_selector_is_absent_from_production_and_legacy_import_closures():
-    sources = architecture._module_sources(PACKAGE_ROOT)
-    graph, _trees = architecture._import_graph(sources)
+    snapshot = architecture.build_python_source_snapshot(PACKAGE_ROOT)
 
-    assert "kernel.temporal_carriers" not in architecture._reachable_paths(
-        graph,
-        architecture.PRODUCTION_IMPORT_ROOTS,
+    assert type(snapshot) is architecture.PythonSourceSnapshotV1
+    assert snapshot.contract_authority == (
+        architecture.PythonSourceContractAuthorityV1(
+            contract_identity=(
+                "ofarm.architecture-python-source-snapshot-admission."
+                "issue176.v0.1"
+            ),
+            rfc_relative_path=(
+                "docs/rfcs/"
+                "OFARM_Architecture_Python_Source_Snapshot_Admission_"
+                "RFC_v0_1.md"
+            ),
+            byte_length=82_758,
+            sha256=(
+                "sha256:6e4307077525f2bbb48992fa4c652ab75d279875063bd715cf21dc1f1d3216d5"
+            ),
+        )
     )
-    assert "kernel.temporal_carriers" not in architecture._reachable_paths(
-        graph,
-        architecture.LEGACY_IMPORT_ROOTS,
+    assert snapshot.descriptor.interface_identity == (
+        "ofarm.architecture-python-source-snapshot.v1"
     )
+    assert snapshot.descriptor.production_import_roots == (
+        "kernel.api",
+        "kernel.application_runtime",
+    )
+    assert snapshot.descriptor.legacy_import_roots == (
+        "kernel.legacy_m1.api",
+        "kernel.legacy_m1.runtime",
+    )
+    assert "kernel.temporal_carriers" not in snapshot.production_reachability
+    assert "kernel.temporal_carriers" not in snapshot.legacy_reachability
 
 
 def test_selector_artifacts_are_absent_from_runtime_and_profile_activation():

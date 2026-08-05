@@ -14,8 +14,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Protocol, cast
 
+PACKAGE_ROOT = Path(__file__).parent.parent
+if str(PACKAGE_ROOT) not in sys.path:
+    sys.path.insert(0, str(PACKAGE_ROOT))
 
-PACKAGE_ROOT = Path(__file__).resolve().parent.parent
+from conformance import rewrite_architecture_check as architecture  # noqa: E402
 COORDINATE_SCHEMA_RELATIVE_PATH = (
     "contracts/candidates/temporal_coordinate/"
     "OFARM_TemporalCoordinate_schema_v0_1.json"
@@ -223,6 +226,235 @@ CAPABILITY_MANIFEST_PATH = (
     PACKAGE_ROOT
     / "profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
 )
+
+SELECTION_STORAGE_AMENDMENT_RELATIVE_PATH = (
+    "docs/rfcs/"
+    "OFARM_Temporal_Candidate_Conformance_Selection_Storage_"
+    "Source_Snapshot_Amendment_RFC_v0_2.md"
+)
+SELECTION_STORAGE_AMENDMENT_CONTRACT_IDENTITY = (
+    "ofarm.temporal-candidate-conformance-selection-storage-"
+    "source-snapshot-amendment.issue176.v0.2"
+)
+SELECTION_STORAGE_AMENDMENT_BYTE_LENGTH = 93_049
+SELECTION_STORAGE_AMENDMENT_SHA256 = (
+    "sha256:820516d40956b6ea2a158413aea32a305aa078f20816ae35b257eb28491e5867"
+)
+SELECTION_STORAGE_V0_1_RELATIVE_PATH = (
+    "docs/rfcs/"
+    "OFARM_Temporal_Candidate_Conformance_Selection_Storage_"
+    "Admission_RFC_v0_1.md"
+)
+SELECTION_STORAGE_V0_1_CONTRACT_IDENTITY = (
+    "ofarm.temporal-candidate-conformance-selection-storage-"
+    "admission.issue176.v0.1"
+)
+PYTHON_SNAPSHOT_CONTRACT_IDENTITY = (
+    "ofarm.architecture-python-source-snapshot-admission.issue176.v0.1"
+)
+PYTHON_SNAPSHOT_INTERFACE_IDENTITY = (
+    "ofarm.architecture-python-source-snapshot.v1"
+)
+PYTHON_SNAPSHOT_RFC_RELATIVE_PATH = (
+    "docs/rfcs/"
+    "OFARM_Architecture_Python_Source_Snapshot_Admission_RFC_v0_1.md"
+)
+PYTHON_SNAPSHOT_RFC_BYTE_LENGTH = 82_758
+PYTHON_SNAPSHOT_RFC_SHA256 = (
+    "sha256:6e4307077525f2bbb48992fa4c652ab75d279875063bd715cf21dc1f1d3216d5"
+)
+SELECTION_STORAGE_REQUIRED_AUTHORITIES = (
+    (
+        SELECTION_STORAGE_V0_1_RELATIVE_PATH,
+        62_540,
+        "sha256:716a45927846d068f595f81288b8d29ecc07891bcaf848e0284eb91ece4abc8d",
+        SELECTION_STORAGE_V0_1_CONTRACT_IDENTITY,
+    ),
+    (
+        PYTHON_SNAPSHOT_RFC_RELATIVE_PATH,
+        PYTHON_SNAPSHOT_RFC_BYTE_LENGTH,
+        PYTHON_SNAPSHOT_RFC_SHA256,
+        PYTHON_SNAPSHOT_CONTRACT_IDENTITY,
+    ),
+    (
+        "reference/law/OFARM_Platform_Runtime_and_Product_Architecture_RC2_1.md",
+        96_406,
+        "sha256:76357c6c7c184893f80219720f6343a682a859098f3703eb84c282fba0c02256",
+        None,
+    ),
+    (
+        "docs/adr/0001-tenancy-and-schema-migrations.md",
+        147_112,
+        "sha256:bc49e566ddbdf98868162aa7ccca0940fa76fca1bfaaa261c8c831dbb5515a4d",
+        None,
+    ),
+    (
+        "docs/adr/0002-valid-time-and-knowledge-time.md",
+        61_427,
+        "sha256:c23cb57616207f2f6d39103e429ea778d794ef85d2b198057806c8228d608796",
+        None,
+    ),
+    (
+        "docs/adr/0003-tenant-capability-trust-and-binder.md",
+        93_419,
+        "sha256:b188f4d60e46887fde4231e73bb00adb9bd70b75e807627e8a3906389a0fa5be",
+        None,
+    ),
+    (
+        "docs/rfcs/"
+        "OFARM_Tenant_Command_RuntimeBundle_Selection_Activation_"
+        "Admission_RFC_v0_1.md",
+        52_382,
+        "sha256:af69370fe268e0632318c95d3e60d83046a49d0948f2ba9cb05d2744ae82d6eb",
+        (
+            "ofarm.tenant-command-runtime-bundle-selection-activation-"
+            "admission.issue176.v0.1"
+        ),
+    ),
+    (
+        "contracts/candidates/temporal_runtime_bundle_selection/"
+        "OFARM_TenantCommandRuntimeBundleSelectionBinding_schema_v0_1.json",
+        17_252,
+        "sha256:56604a52465ffc027382e99dea96f2c9bc1bd2479cbaff30dec6bd39c08e6b3d",
+        None,
+    ),
+    (
+        "contracts/candidates/temporal_runtime_bundle_selection/"
+        "OFARM_TenantCommandRuntimeBundleSelection_candidate_v0_1.json",
+        15_993,
+        "sha256:1500ffbbfdf11207a6657848fce12618347f767578e55dc070bb282dc5775aac",
+        None,
+    ),
+    (
+        "docs/rfcs/"
+        "OFARM_Temporal_Governance_Production_RuntimeBundle_"
+        "Persistence_Admission_RFC_v0_1.md",
+        37_254,
+        "sha256:40a20c5053857664cfbb2d6ac2814c6136125eb9908635495af9377e9d9f0870",
+        None,
+    ),
+    (
+        "docs/rfcs/OFARM_Tenant_Binding_Selection_Control_Admission_RFC_v0_1.md",
+        32_169,
+        "sha256:c1d02969811be0d5b02bdae158cb48e5d8148356ca9d4bac956c8861d529c37a",
+        None,
+    ),
+    (
+        "docs/rfcs/"
+        "OFARM_Tenant_Current_Context_Selection_Owner_Admission_RFC_v0_1.md",
+        50_383,
+        "sha256:af85e259230b69edeba80ddc2eea2f070a601fd3888fd463ce595f9cc446b13d",
+        None,
+    ),
+    (
+        "docs/rfcs/"
+        "OFARM_Tenant_Write_Lock_Selection_Owner_Admission_RFC_v0_1.md",
+        45_758,
+        "sha256:5745ad4b8b588be2b5a1b64b4b84aa757b23f8d2de00ca59e71de8ea304f51b0",
+        None,
+    ),
+)
+SELECTION_STORAGE_ALLOWED_PRODUCTION_PATHS = frozenset(
+    {
+        "kernel/migrations/0008_tenant_command_runtime_bundle_selection.sql",
+        "deployment/postgresql/tenant_command_runtime_bundle_selection.py",
+    }
+)
+SELECTION_STORAGE_MIGRATION_FILENAME = (
+    "0008_tenant_command_runtime_bundle_selection.sql"
+)
+SELECTION_STORAGE_ADAPTER_RELATIVE_PATH = (
+    "deployment/postgresql/tenant_command_runtime_bundle_selection.py"
+)
+SELECTION_STORAGE_ADAPTER_MODULE = (
+    "deployment.postgresql.tenant_command_runtime_bundle_selection"
+)
+POSTGRESQL_INITIALIZER_RELATIVE_PATH = "deployment/postgresql/__init__.py"
+POSTGRESQL_INITIALIZER_MODULE = "deployment.postgresql"
+SELECTION_STORAGE_MARKERS = (
+    (
+        "ofarm.tenant-command-runtime-bundle-selection."
+        "commit-operation-claim-draft.v0.1"
+    ),
+    "sha256:56fb0f14a2514b34428841cb7bfc8681bb577ea3ecf57598be480683fb68524f",
+)
+SELECTION_STORAGE_CONFORMANT_ABSENT = "CONFORMANT_ABSENT"
+SELECTION_STORAGE_CONFORMANT_CLASSIFIED = "CONFORMANT_CLASSIFIED"
+SELECTION_STORAGE_V3_PREFIX_DIGEST = (
+    "sha256:ba7a193e96ca78d01edf529ed2e20bbd1810c0a3a0c13bc717969e8c5c739bf0"
+)
+SELECTION_STORAGE_V7_DIGEST = (
+    "sha256:5616797d1362c55c78175126edab29cc3e88c021ba0709e3766d3196d2b0126b"
+)
+SELECTION_STORAGE_V7_MIGRATION_PINS = {
+    3: (
+        "0003_tenant_knowledge_position.sql",
+        6_565,
+        "sha256:d59af77e23fe012203696023ec343038dbcab5d5ffb9689be11ba67dca22f827",
+    ),
+    4: (
+        "0004_temporal_governance_runtime_bundle_role.sql",
+        6_464,
+        "sha256:0c51948be7cebf2c1523d472ca44a57e32942bd358124e126ccaf2bad248ecc8",
+    ),
+    5: (
+        "0005_tenant_binding_selection_control_admission.sql",
+        8_545,
+        "sha256:fde66e835f8c4456d7404eb00b99292e267f573f8b126f781f3ed55bd5e8df9a",
+    ),
+    6: (
+        "0006_tenant_current_context_selection_owner_admission.sql",
+        8_655,
+        "sha256:a61c668a2bae04026b8413385f8bc1b5fd43f08f8d5281501ff766a57d552b48",
+    ),
+    7: (
+        "0007_tenant_write_lock_selection_owner_admission.sql",
+        7_936,
+        "sha256:cf8594b6c456953004912722b168d6bdda7c6dbfc903ba8099b018e2f270dff7",
+    ),
+}
+SELECTION_STORAGE_V7_STRUCTURAL_DIGEST = (
+    "sha256:fcc0e96b4520ffe51ddb5537df24040e4d5948a22b3c387351346cc588e87ee5"
+)
+SELECTION_STORAGE_V7_CATALOG_DIGEST = (
+    "sha256:026bb61026a9f752fc8dde84bca0e3cbbab374d0ac8f0ba942a72654e44f5f1a"
+)
+SELECTION_STORAGE_PROVISIONING_DIGEST = (
+    "sha256:2ac8487b64d4fb09d7576ef1ee09ac1f2a3cc5b20558f0d2137620b897c7157c"
+)
+SELECTION_STORAGE_SOURCE_PINS = (
+    (
+        "deployment/postgresql/provisioning_specs.py",
+        "deployment.postgresql.provisioning_specs",
+        112_914,
+        "sha256:abeec08b9d2ba49eb0819a0376b23a7b6b433c07abd0e50a55c1cf1b309a93d7",
+    ),
+    (
+        "deployment/postgresql/native_release_identity.py",
+        "deployment.postgresql.native_release_identity",
+        73_323,
+        "sha256:1c09e7be38453543f49a1b789b357926f23f2527a9412a640ddc9a7b0e2f4f08",
+    ),
+    (
+        "deployment/postgresql/tenant_contract.py",
+        "deployment.postgresql.tenant_contract",
+        42_795,
+        "sha256:557a6f5215ec58df8b209190fc1c9b091102f2b658ddf497c8bfa006765be47e",
+    ),
+)
+SELECTION_STORAGE_ABSENT_CATALOG_PIN = (
+    "deployment/postgresql/catalog_identity.py",
+    "deployment.postgresql.catalog_identity",
+    12_016,
+    "sha256:20b985b703320b55887fd434213773144891e8dff4edf82ccbef6e5f3423dbfa",
+)
+SELECTION_STORAGE_ACTIVE_NON_PYTHON_PATHS = (
+    RUNTIME_CATALOG_PATH,
+    ACTIVE_ARTIFACT_SET_PATH,
+    CAPABILITY_MANIFEST_PATH,
+)
+FIXED_PRODUCTION_ROOTS = ("kernel.api", "kernel.application_runtime")
+FIXED_LEGACY_ROOTS = ("kernel.legacy_m1.api", "kernel.legacy_m1.runtime")
 
 CONTRACT_VERSION = "ofarm.temporal-coordinate.v0.1"
 CONTRACT_ID = "https://ofarm.dev/schema/temporal-coordinate/v0.1"
@@ -438,7 +670,9 @@ class _AuthenticatedMigration(Protocol):
 
 
 class _AuthenticatedMigrationSet(Protocol):
+    service: object
     migrations: tuple[_AuthenticatedMigration, ...]
+    digest: str
 
     def prefix_digest(self, version: int) -> str: ...
 
@@ -2869,19 +3103,435 @@ def validate_runtime_selector_paths(binding: dict[str, object]) -> None:
         )
 
 
-def validate_runtime_selection_isolation() -> None:
-    package_root = str(PACKAGE_ROOT)
-    if package_root not in sys.path:
-        sys.path.insert(0, package_root)
-    from conformance import rewrite_architecture_check as architecture
-
-    sources = architecture._module_sources(PACKAGE_ROOT)
-    graph, _trees = architecture._import_graph(sources)
-    for roots, label in (
-        (architecture.PRODUCTION_IMPORT_ROOTS, "production"),
-        (architecture.LEGACY_IMPORT_ROOTS, "legacy"),
+def _authenticate_authority(
+    relative_path: str,
+    byte_length: int,
+    sha256: str,
+    contract_identity: str | None,
+) -> bytes:
+    path = PACKAGE_ROOT / relative_path
+    if path.is_symlink() or not path.is_file():
+        raise TemporalCandidateError(
+            f"selection-storage authority is missing: {relative_path}"
+        )
+    try:
+        authority_bytes = path.read_bytes()
+    except OSError as exc:
+        raise TemporalCandidateError(
+            f"selection-storage authority is unreadable: {relative_path}"
+        ) from exc
+    if len(authority_bytes) != byte_length:
+        raise TemporalCandidateError(
+            f"selection-storage authority byte length differs: {relative_path}"
+        )
+    if "sha256:" + hashlib.sha256(authority_bytes).hexdigest() != sha256:
+        raise TemporalCandidateError(
+            f"selection-storage authority digest differs: {relative_path}"
+        )
+    if (
+        contract_identity is not None
+        and contract_identity.encode("utf-8") not in authority_bytes
     ):
-        reachable = architecture._reachable_paths(graph, roots)
+        raise TemporalCandidateError(
+            f"selection-storage contract identity differs: {relative_path}"
+        )
+    return authority_bytes
+
+
+def validate_selection_storage_authorities() -> None:
+    _authenticate_authority(
+        SELECTION_STORAGE_AMENDMENT_RELATIVE_PATH,
+        SELECTION_STORAGE_AMENDMENT_BYTE_LENGTH,
+        SELECTION_STORAGE_AMENDMENT_SHA256,
+        SELECTION_STORAGE_AMENDMENT_CONTRACT_IDENTITY,
+    )
+    for authority in SELECTION_STORAGE_REQUIRED_AUTHORITIES:
+        _authenticate_authority(*authority)
+
+
+def _build_selection_storage_snapshot() -> architecture.PythonSourceSnapshotV1:
+    try:
+        snapshot = architecture.build_python_source_snapshot(PACKAGE_ROOT)
+    except architecture.PythonSourceSnapshotRefusal as exc:
+        raise TemporalCandidateError(
+            f"public Python source snapshot refused: {exc.code.value}"
+        ) from exc
+    if type(snapshot) is not architecture.PythonSourceSnapshotV1:
+        raise TemporalCandidateError("public Python source snapshot type differs")
+    expected_authority = architecture.PythonSourceContractAuthorityV1(
+        contract_identity=PYTHON_SNAPSHOT_CONTRACT_IDENTITY,
+        rfc_relative_path=PYTHON_SNAPSHOT_RFC_RELATIVE_PATH,
+        byte_length=PYTHON_SNAPSHOT_RFC_BYTE_LENGTH,
+        sha256=PYTHON_SNAPSHOT_RFC_SHA256,
+    )
+    if snapshot.contract_authority != expected_authority:
+        raise TemporalCandidateError(
+            "public Python source snapshot authority differs"
+        )
+    descriptor = snapshot.descriptor
+    if (
+        descriptor.interface_identity != PYTHON_SNAPSHOT_INTERFACE_IDENTITY
+        or descriptor.production_import_roots != FIXED_PRODUCTION_ROOTS
+        or descriptor.legacy_import_roots != FIXED_LEGACY_ROOTS
+    ):
+        raise TemporalCandidateError(
+            "public Python source snapshot descriptor differs"
+        )
+    return snapshot
+
+
+def _validate_reachability_map(
+    reachability: object,
+    roots: tuple[str, ...],
+    label: str,
+) -> None:
+    if not hasattr(reachability, "items"):
+        raise TemporalCandidateError(f"{label} reachability map differs")
+    for root in roots:
+        if reachability.get(root) != (root,):
+            raise TemporalCandidateError(
+                f"{label} reachability root entry differs"
+            )
+    for module_name, path in reachability.items():
+        if (
+            type(module_name) is not str
+            or type(path) is not tuple
+            or not path
+            or path[0] not in roots
+            or path[-1] != module_name
+            or any(type(part) is not str for part in path)
+        ):
+            raise TemporalCandidateError(
+                f"{label} reachability path structure differs"
+            )
+
+
+def _validate_source_pin(
+    snapshot: architecture.PythonSourceSnapshotV1,
+    pin: tuple[str, str, int, str],
+) -> None:
+    relative_path, module_name, byte_length, sha256 = pin
+    unit = snapshot.modules_by_relative_path.get(relative_path)
+    if (
+        unit is None
+        or unit.relative_path != relative_path
+        or unit.module_name != module_name
+        or unit.byte_length != byte_length
+        or len(unit.source_bytes) != byte_length
+        or unit.sha256 != sha256
+        or "sha256:" + hashlib.sha256(unit.source_bytes).hexdigest() != sha256
+    ):
+        raise TemporalCandidateError(
+            f"selection-storage Python source pin differs: {relative_path}"
+        )
+
+
+def _validate_tenant_service(migration_set: _AuthenticatedMigrationSet) -> None:
+    service = migration_set.service
+    if (
+        getattr(service, "identity", None) != "ofarm.tenant-postgresql.v1"
+        or getattr(service, "relative_directory", None) != "kernel/migrations"
+        or getattr(service, "schema_name", None) != "ofarm"
+        or getattr(service, "ledger_name", None) != "schema_migration"
+        or getattr(service, "qualified_ledger", None) != "ofarm.schema_migration"
+    ):
+        raise TemporalCandidateError(
+            "authenticated tenant migration service differs"
+        )
+
+
+def _validate_v7_migration_prefix(
+    authority: TenantMigrationAuthoritySnapshot,
+) -> None:
+    migration_set = authority.migration_set
+    migrations = migration_set.migrations
+    if len(migrations) not in (7, 8):
+        raise TemporalCandidateError(
+            "selection-storage migration state is neither exact V7 nor V8"
+        )
+    if tuple(migration.version for migration in migrations) != tuple(
+        range(1, len(migrations) + 1)
+    ):
+        raise TemporalCandidateError(
+            "selection-storage migration versions are not contiguous"
+        )
+    for migration in migrations:
+        observed_digest = "sha256:" + hashlib.sha256(
+            migration.source_bytes
+        ).hexdigest()
+        if (
+            len(migration.source_bytes) != migration.byte_length
+            or migration.source_sha256 != observed_digest
+        ):
+            raise TemporalCandidateError(
+                f"authenticated migration bytes differ: {migration.filename}"
+            )
+    for version, expected in SELECTION_STORAGE_V7_MIGRATION_PINS.items():
+        migration = migrations[version - 1]
+        if (
+            migration.filename,
+            migration.byte_length,
+            migration.source_sha256,
+        ) != expected:
+            raise TemporalCandidateError(
+                f"selection-storage migration {version:04d} differs"
+            )
+    try:
+        prefix_3 = migration_set.prefix_digest(3)
+        prefix_7 = migration_set.prefix_digest(7)
+    except Exception as exc:
+        raise TemporalCandidateError(
+            "selection-storage migration prefix authentication failed"
+        ) from exc
+    if (
+        authority.version_3_prefix != SELECTION_STORAGE_V3_PREFIX_DIGEST
+        or prefix_3 != SELECTION_STORAGE_V3_PREFIX_DIGEST
+        or prefix_7 != SELECTION_STORAGE_V7_DIGEST
+    ):
+        raise TemporalCandidateError(
+            "selection-storage stable migration prefix differs"
+        )
+    _validate_tenant_service(migration_set)
+
+
+def _is_python_marker_exemption(relative_path: str) -> bool:
+    return relative_path == (
+        "conformance/temporal_contract_candidate_check.py"
+    ) or relative_path.startswith("kernel/tests/")
+
+
+def _classify_selection_storage_pair(
+    authority: TenantMigrationAuthoritySnapshot,
+    snapshot: architecture.PythonSourceSnapshotV1,
+) -> str:
+    migrations = authority.migration_set.migrations
+    adapter_unit = snapshot.modules_by_relative_path.get(
+        SELECTION_STORAGE_ADAPTER_RELATIVE_PATH
+    )
+    has_migration = len(migrations) == 8
+    has_adapter = adapter_unit is not None
+    if has_migration:
+        migration_8 = migrations[7]
+        if migration_8.filename != SELECTION_STORAGE_MIGRATION_FILENAME:
+            raise TemporalCandidateError(
+                "selection-storage version 0008 filename differs"
+            )
+    if has_migration != has_adapter:
+        raise TemporalCandidateError(
+            "selection-storage implementation pair is incomplete"
+        )
+    if (
+        not has_adapter
+        and SELECTION_STORAGE_ADAPTER_MODULE in snapshot.modules_by_name
+    ):
+        raise TemporalCandidateError(
+            "selection-storage adapter module occupies another path"
+        )
+
+    marker_bytes = tuple(
+        marker.encode("utf-8") for marker in SELECTION_STORAGE_MARKERS
+    )
+    for migration in migrations:
+        occurrences = tuple(
+            marker in migration.source_bytes for marker in marker_bytes
+        )
+        is_allowed = (
+            migration.version == 8
+            and migration.filename == SELECTION_STORAGE_MIGRATION_FILENAME
+        )
+        if any(occurrences) and not is_allowed:
+            raise TemporalCandidateError(
+                "selection-storage marker entered another authenticated migration"
+            )
+        if is_allowed and not all(occurrences):
+            raise TemporalCandidateError(
+                "selection-storage migration marker pair differs"
+            )
+
+    for relative_path, unit in snapshot.modules_by_relative_path.items():
+        occurrences = tuple(
+            marker in unit.source_text for marker in SELECTION_STORAGE_MARKERS
+        )
+        if relative_path == SELECTION_STORAGE_ADAPTER_RELATIVE_PATH:
+            if not all(occurrences):
+                raise TemporalCandidateError(
+                    "selection-storage adapter marker pair differs"
+                )
+        elif any(occurrences) and not _is_python_marker_exemption(relative_path):
+            raise TemporalCandidateError(
+                "selection-storage marker entered another production Python source"
+            )
+
+    if has_adapter:
+        if adapter_unit.module_name != SELECTION_STORAGE_ADAPTER_MODULE:
+            raise TemporalCandidateError(
+                "selection-storage adapter module identity differs"
+            )
+        return SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+    return SELECTION_STORAGE_CONFORMANT_ABSENT
+
+
+def _validate_initializer_import_prohibition(
+    snapshot: architecture.PythonSourceSnapshotV1,
+    state: str,
+) -> None:
+    initializer = snapshot.modules_by_relative_path.get(
+        POSTGRESQL_INITIALIZER_RELATIVE_PATH
+    )
+    if (
+        initializer is None
+        or initializer.module_name != POSTGRESQL_INITIALIZER_MODULE
+        or POSTGRESQL_INITIALIZER_MODULE not in snapshot.import_graph
+    ):
+        raise TemporalCandidateError(
+            "PostgreSQL initializer snapshot evidence differs"
+        )
+    try:
+        initializer_tree = snapshot.ast_for(POSTGRESQL_INITIALIZER_MODULE)
+    except (KeyError, architecture.PythonSourceSnapshotRefusal) as exc:
+        raise TemporalCandidateError(
+            "PostgreSQL initializer AST custody failed"
+        ) from exc
+    if type(initializer_tree) is not ast.Module:
+        raise TemporalCandidateError("PostgreSQL initializer AST type differs")
+
+    package_parts = ["deployment", "postgresql"]
+    for node in ast.walk(initializer_tree):
+        candidates: list[str] = []
+        if isinstance(node, ast.Import):
+            candidates.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level == 0:
+                base = node.module or ""
+            else:
+                keep = len(package_parts) - node.level + 1
+                base_parts = [] if keep < 0 else package_parts[:keep]
+                if node.module:
+                    base_parts.extend(node.module.split("."))
+                base = ".".join(base_parts)
+            if base:
+                candidates.append(base)
+            candidates.extend(
+                ".".join(part for part in (base, alias.name) if part)
+                for alias in node.names
+            )
+        if SELECTION_STORAGE_ADAPTER_MODULE in candidates:
+            raise TemporalCandidateError(
+                "PostgreSQL initializer imports the selection-storage adapter"
+            )
+
+    if state == SELECTION_STORAGE_CONFORMANT_CLASSIFIED and any(
+        edge.target == SELECTION_STORAGE_ADAPTER_MODULE
+        for edge in snapshot.import_graph[POSTGRESQL_INITIALIZER_MODULE]
+    ):
+        raise TemporalCandidateError(
+            "PostgreSQL initializer graph reaches the selection-storage adapter"
+        )
+
+
+def _validate_selection_storage_isolation(
+    snapshot: architecture.PythonSourceSnapshotV1,
+    state: str,
+) -> None:
+    for reachability, roots, label in (
+        (snapshot.production_reachability, FIXED_PRODUCTION_ROOTS, "production"),
+        (snapshot.legacy_reachability, FIXED_LEGACY_ROOTS, "legacy"),
+    ):
+        _validate_reachability_map(reachability, roots, label)
+        if SELECTION_STORAGE_ADAPTER_MODULE in reachability:
+            raise TemporalCandidateError(
+                f"selection-storage adapter entered the {label} import closure"
+            )
+        for unit in snapshot.modules_by_relative_path.values():
+            if (
+                _is_python_marker_exemption(unit.relative_path)
+                and unit.module_name in reachability
+            ):
+                raise TemporalCandidateError(
+                    f"temporal verification source entered the {label} import closure"
+                )
+    _validate_initializer_import_prohibition(snapshot, state)
+
+
+def _validate_selection_storage_active_authorities() -> None:
+    markers = (
+        *SELECTION_STORAGE_MARKERS,
+        *SELECTION_STORAGE_ALLOWED_PRODUCTION_PATHS,
+    )
+    for path in SELECTION_STORAGE_ACTIVE_NON_PYTHON_PATHS:
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise TemporalCandidateError(
+                f"active selection-storage authority is unreadable: {path.name}"
+            ) from exc
+        if any(marker in source for marker in markers):
+            raise TemporalCandidateError(
+                f"selection-storage authority entered active path: {path.name}"
+            )
+
+
+def _validate_selection_storage_conformance(
+    authority: TenantMigrationAuthoritySnapshot,
+    snapshot: architecture.PythonSourceSnapshotV1,
+) -> str:
+    _validate_v7_migration_prefix(authority)
+    state = _classify_selection_storage_pair(authority, snapshot)
+    for pin in SELECTION_STORAGE_SOURCE_PINS:
+        _validate_source_pin(snapshot, pin)
+    migration_7 = authority.migration_set.migrations[6]
+    if SELECTION_STORAGE_PROVISIONING_DIGEST.encode("utf-8") not in (
+        migration_7.source_bytes
+    ):
+        raise TemporalCandidateError(
+            "selection-storage provisioning migration evidence differs"
+        )
+    if state == SELECTION_STORAGE_CONFORMANT_ABSENT:
+        if (
+            authority.migration_set.digest != SELECTION_STORAGE_V7_DIGEST
+            or SELECTION_STORAGE_V7_STRUCTURAL_DIGEST.encode("utf-8")
+            not in migration_7.source_bytes
+        ):
+            raise TemporalCandidateError(
+                "selection-storage exact V7 absent authority differs"
+            )
+        _validate_source_pin(snapshot, SELECTION_STORAGE_ABSENT_CATALOG_PIN)
+        catalog_unit = snapshot.modules_by_relative_path[
+            SELECTION_STORAGE_ABSENT_CATALOG_PIN[0]
+        ]
+        if SELECTION_STORAGE_V7_CATALOG_DIGEST.encode("utf-8") not in (
+            catalog_unit.source_bytes
+        ):
+            raise TemporalCandidateError(
+                "selection-storage V7 catalog authority differs"
+            )
+    else:
+        try:
+            complete_digest = authority.migration_set.prefix_digest(8)
+        except Exception as exc:
+            raise TemporalCandidateError(
+                "selection-storage V8 migration authentication failed"
+            ) from exc
+        if (
+            type(authority.migration_set.digest) is not str
+            or authority.migration_set.digest == SELECTION_STORAGE_V7_DIGEST
+            or authority.migration_set.digest != complete_digest
+        ):
+            raise TemporalCandidateError(
+                "selection-storage V8 migration-set identity differs"
+            )
+    _validate_selection_storage_active_authorities()
+    _validate_selection_storage_isolation(snapshot, state)
+    return state
+
+
+def _validate_runtime_selection_isolation(
+    snapshot: architecture.PythonSourceSnapshotV1,
+) -> None:
+    for reachable, label in (
+        (snapshot.production_reachability, "production"),
+        (snapshot.legacy_reachability, "legacy"),
+    ):
         if "kernel.temporal_carriers" in reachable:
             raise TemporalCandidateError(
                 f"carrier selector entered the {label} import closure"
@@ -3061,7 +3711,13 @@ def validate_temporal_card_errata_trace(errata: str) -> None:
 
 
 def validate_candidate_governance() -> None:
+    validate_selection_storage_authorities()
     migration_authority = load_tenant_migration_authority_snapshot()
+    python_snapshot = _build_selection_storage_snapshot()
+    _validate_selection_storage_conformance(
+        migration_authority,
+        python_snapshot,
+    )
     coordinate_schema = _load_json(COORDINATE_SCHEMA_PATH)
     carrier_schema = _load_json(CARRIER_SCHEMA_PATH)
     carrier_matrix = _load_json(CARRIER_MATRIX_PATH)
@@ -3112,7 +3768,7 @@ def validate_candidate_governance() -> None:
     validate_promotion_dependency_consistency()
     validate_runtime_selection_binding()
     validate_runtime_selector_paths(selection_binding)
-    validate_runtime_selection_isolation()
+    _validate_runtime_selection_isolation(python_snapshot)
 
     manifest = _load_json(MANIFEST_PATH)
     entries = manifest.get("entries")
