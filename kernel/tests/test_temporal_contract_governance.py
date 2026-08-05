@@ -321,13 +321,13 @@ def _changed_migration(migration: object, **changes: object) -> SimpleNamespace:
 def _changed_selection_storage_authority(
     *,
     migrations: tuple[object, ...] | None = None,
-    digest: str | None = None,
+    digest: object | None = None,
     service: object | None = None,
     prefix_overrides: dict[int, object] | None = None,
 ) -> temporal.TenantMigrationAuthoritySnapshot:
     current = temporal.load_tenant_migration_authority_snapshot()
     selected_migrations = migrations or current.migration_set.migrations
-    selected_digest = digest or current.migration_set.digest
+    selected_digest = digest if digest is not None else current.migration_set.digest
     selected_service = service or current.migration_set.service
     overrides = prefix_overrides or {}
 
@@ -350,6 +350,23 @@ def _changed_selection_storage_authority(
         migration_set=ChangedMigrationSet(),
         version_3_prefix=current.version_3_prefix,
     )
+
+
+def _selection_storage_snapshot_view(
+    snapshot: object,
+    **overrides: object,
+) -> SimpleNamespace:
+    values = {
+        "contract_authority": snapshot.contract_authority,
+        "descriptor": snapshot.descriptor,
+        "modules_by_relative_path": snapshot.modules_by_relative_path,
+        "import_graph": snapshot.import_graph,
+        "production_reachability": snapshot.production_reachability,
+        "legacy_reachability": snapshot.legacy_reachability,
+        "ast_for": snapshot.ast_for,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
 
 
 def _coordinate() -> dict:
@@ -1843,6 +1860,59 @@ def test_selection_storage_authority_refuses_inexact_bytes(
         )
 
 
+@pytest.mark.parametrize("posture", ("missing", "symlink"))
+def test_selection_storage_authority_refuses_missing_or_symlink(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+):
+    authority = tmp_path / "authority.md"
+    if posture == "symlink":
+        target = tmp_path / "target.md"
+        target.write_text("exact", encoding="utf-8")
+        authority.symlink_to(target)
+    monkeypatch.setattr(temporal, "PACKAGE_ROOT", tmp_path)
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="selection-storage authority is missing",
+    ):
+        temporal._authenticate_authority(
+            authority.name,
+            5,
+            "sha256:" + hashlib.sha256(b"exact").hexdigest(),
+            None,
+        )
+
+
+def test_selection_storage_authority_refuses_read_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    authority = tmp_path / "authority.md"
+    authority.write_text("exact", encoding="utf-8")
+    original_read_bytes = Path.read_bytes
+
+    def read_bytes(path: Path) -> bytes:
+        if path == authority:
+            raise OSError("unavailable")
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(temporal, "PACKAGE_ROOT", tmp_path)
+    monkeypatch.setattr(Path, "read_bytes", read_bytes)
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="selection-storage authority is unreadable",
+    ):
+        temporal._authenticate_authority(
+            authority.name,
+            5,
+            "sha256:" + hashlib.sha256(b"exact").hexdigest(),
+            None,
+        )
+
+
 def test_complete_check_uses_one_public_snapshot_and_one_initializer_ast(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -2001,6 +2071,8 @@ def test_selection_storage_refuses_snapshot_compatibility_mismatch(
     mismatch: str,
 ):
     snapshot = _selection_storage_source_snapshot(tmp_path)
+    # This guard requires the exact sealed public type, so a protocol stub
+    # cannot reach its defensive authority and descriptor comparisons.
     if mismatch == "authority":
         object.__setattr__(
             snapshot,
@@ -2540,25 +2612,30 @@ def test_selection_storage_refuses_every_initializer_import_form(
 @pytest.mark.parametrize("missing", ("path", "graph"))
 def test_selection_storage_refuses_missing_initializer_evidence(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     missing: str,
 ):
     snapshot = _selection_storage_source_snapshot(tmp_path)
     if missing == "path":
         units = dict(snapshot.modules_by_relative_path)
         units.pop(temporal.POSTGRESQL_INITIALIZER_RELATIVE_PATH)
-        object.__setattr__(snapshot, "_modules_by_relative_path", units)
+        snapshot_view = _selection_storage_snapshot_view(
+            snapshot,
+            modules_by_relative_path=units,
+        )
     else:
         graph = dict(snapshot.import_graph)
         graph.pop(temporal.POSTGRESQL_INITIALIZER_MODULE)
-        object.__setattr__(snapshot, "_import_graph", graph)
+        snapshot_view = _selection_storage_snapshot_view(
+            snapshot,
+            import_graph=graph,
+        )
 
     with pytest.raises(
         temporal.TemporalCandidateError,
         match="initializer snapshot evidence differs",
     ):
         temporal._validate_initializer_import_prohibition(
-            snapshot,
+            snapshot_view,
             temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
         )
 
@@ -2572,14 +2649,17 @@ def test_selection_storage_refuses_initializer_module_identity_drift(
     units[temporal.POSTGRESQL_INITIALIZER_RELATIVE_PATH] = unit._replace(
         module_name="deployment.other"
     )
-    object.__setattr__(snapshot, "_modules_by_relative_path", units)
+    snapshot_view = _selection_storage_snapshot_view(
+        snapshot,
+        modules_by_relative_path=units,
+    )
 
     with pytest.raises(
         temporal.TemporalCandidateError,
         match="initializer snapshot evidence differs",
     ):
         temporal._validate_initializer_import_prohibition(
-            snapshot,
+            snapshot_view,
             temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
         )
 
@@ -2587,7 +2667,6 @@ def test_selection_storage_refuses_initializer_module_identity_drift(
 @pytest.mark.parametrize("failure", ("refusal", "wrong-type"))
 def test_selection_storage_refuses_initializer_ast_custody_failure(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     failure: str,
 ):
     snapshot = _selection_storage_source_snapshot(tmp_path)
@@ -2596,31 +2675,29 @@ def test_selection_storage_refuses_initializer_ast_custody_failure(
             temporal.architecture.PythonSourceSnapshotRefusalCodeV1.AST_COPY_LIMIT_EXCEEDED
         )
 
-        def ast_for(_snapshot: object, _module: str) -> ast.Module:
+        def ast_for(_module: str) -> ast.Module:
             raise refusal
 
         message = "initializer AST custody failed"
     else:
-        def ast_for(_snapshot: object, _module: str) -> ast.Module:
+        def ast_for(_module: str) -> ast.Module:
             return ast.Constant(value=None)  # type: ignore[return-value]
 
         message = "initializer AST type differs"
-    monkeypatch.setattr(
-        temporal.architecture.PythonSourceSnapshotV1,
-        "ast_for",
-        ast_for,
+    snapshot_view = _selection_storage_snapshot_view(
+        snapshot,
+        ast_for=ast_for,
     )
 
     with pytest.raises(temporal.TemporalCandidateError, match=message):
         temporal._validate_initializer_import_prohibition(
-            snapshot,
+            snapshot_view,
             temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
         )
 
 
 def test_selection_storage_refuses_classified_initializer_graph_edge(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     source_bytes = _selection_storage_python_markers()
     snapshot = _selection_storage_source_snapshot(
@@ -2634,11 +2711,10 @@ def test_selection_storage_refuses_classified_initializer_graph_edge(
             temporal.SELECTION_STORAGE_ADAPTER_MODULE,
         ),
     )
-    object.__setattr__(snapshot, "_import_graph", graph)
-    monkeypatch.setattr(
-        temporal.architecture.PythonSourceSnapshotV1,
-        "ast_for",
-        lambda _snapshot, _module: ast.parse(""),
+    snapshot_view = _selection_storage_snapshot_view(
+        snapshot,
+        import_graph=graph,
+        ast_for=lambda _module: ast.parse(""),
     )
 
     with pytest.raises(
@@ -2646,7 +2722,7 @@ def test_selection_storage_refuses_classified_initializer_graph_edge(
         match="initializer graph reaches",
     ):
         temporal._validate_initializer_import_prohibition(
-            snapshot,
+            snapshot_view,
             temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED,
         )
 
@@ -2756,6 +2832,45 @@ def test_selection_storage_classified_migration_set_identity_refuses_drift(
         )
 
 
+@pytest.mark.parametrize(
+    ("failure", "message"),
+    (
+        ("prefix-error", "V8 migration authentication failed"),
+        ("non-string-digest", "V8 migration-set identity differs"),
+        ("digest-mismatch", "V8 migration-set identity differs"),
+    ),
+)
+def test_selection_storage_refuses_classified_v8_identity_failure(
+    tmp_path: Path,
+    failure: str,
+    message: str,
+):
+    source_bytes = _selection_storage_python_markers()
+    v8 = _selection_storage_v8_authority(source_bytes)
+    digest: object = v8.migration_set.digest
+    prefix_overrides: dict[int, object] = {}
+    if failure == "prefix-error":
+        prefix_overrides[8] = ValueError("unavailable")
+    elif failure == "non-string-digest":
+        digest = 8
+    else:
+        digest = "sha256:" + "9" * 64
+        prefix_overrides[8] = "sha256:" + "8" * 64
+
+    with pytest.raises(temporal.TemporalCandidateError, match=message):
+        temporal._validate_selection_storage_conformance(
+            _changed_selection_storage_authority(
+                migrations=v8.migration_set.migrations,
+                digest=digest,
+                prefix_overrides=prefix_overrides,
+            ),
+            _selection_storage_source_snapshot(
+                tmp_path,
+                {temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: source_bytes},
+            ),
+        )
+
+
 def test_selection_storage_classified_adapter_module_refuses_drift(
     tmp_path: Path,
 ):
@@ -2769,7 +2884,10 @@ def test_selection_storage_classified_adapter_module_refuses_drift(
     units[temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH] = unit._replace(
         module_name="deployment.postgresql.other"
     )
-    object.__setattr__(snapshot, "_modules_by_relative_path", units)
+    snapshot_view = _selection_storage_snapshot_view(
+        snapshot,
+        modules_by_relative_path=units,
+    )
 
     with pytest.raises(
         temporal.TemporalCandidateError,
@@ -2777,7 +2895,7 @@ def test_selection_storage_classified_adapter_module_refuses_drift(
     ):
         temporal._classify_selection_storage_pair(
             _selection_storage_v8_authority(source_bytes),
-            snapshot,
+            snapshot_view,
         )
 
 
@@ -2833,11 +2951,32 @@ def test_selection_storage_lexical_root_is_not_normalized(
         temporal._build_selection_storage_snapshot()
 
 
-def test_selection_storage_ordinary_lexical_root_matches_builder_custody():
+def test_selection_storage_ordinary_lexical_root_matches_builder_custody(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    expected = _selection_storage_source_snapshot(tmp_path)
+    monkeypatch.setattr(temporal, "PACKAGE_ROOT", expected.root_path)
+
     snapshot = temporal._build_selection_storage_snapshot()
 
-    assert temporal.PACKAGE_ROOT == temporal.PACKAGE_ROOT.resolve()
-    assert snapshot.root_path == temporal.PACKAGE_ROOT
+    assert snapshot.root_path == expected.root_path
+
+
+def test_selection_storage_symlinked_root_refuses_custody_divergence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    expected = _selection_storage_source_snapshot(tmp_path)
+    symlinked_root = tmp_path / "symlinked-python-snapshot"
+    symlinked_root.symlink_to(expected.root_path, target_is_directory=True)
+    monkeypatch.setattr(temporal, "PACKAGE_ROOT", symlinked_root)
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="public Python source snapshot refused: SYMLINK_COMPONENT",
+    ):
+        temporal._build_selection_storage_snapshot()
 
 
 def test_classified_state_does_not_evaluate_obsolete_v7_catalog_pin(
@@ -2885,6 +3024,55 @@ def test_selection_storage_active_authority_refuses_marker(
     with pytest.raises(
         temporal.TemporalCandidateError,
         match="entered active path",
+    ):
+        temporal._validate_selection_storage_active_authorities()
+
+
+@pytest.mark.parametrize(
+    "changed_index",
+    range(3),
+    ids=("runtime-catalog", "active-set", "capability-manifest"),
+)
+@pytest.mark.parametrize(
+    "failure",
+    ("missing", "read-error", "invalid-utf8"),
+)
+def test_selection_storage_active_authority_refuses_unreadable_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    changed_index: int,
+    failure: str,
+):
+    active_paths = tuple(tmp_path / f"active-{index}.json" for index in range(3))
+    for index, active_path in enumerate(active_paths):
+        if index != changed_index or failure != "missing":
+            active_path.write_bytes(
+                b"\xff" if index == changed_index and failure == "invalid-utf8"
+                else b"{}"
+            )
+    monkeypatch.setattr(
+        temporal,
+        "SELECTION_STORAGE_ACTIVE_NON_PYTHON_PATHS",
+        active_paths,
+    )
+    if failure == "read-error":
+        refused_path = active_paths[changed_index]
+        original_read_text = Path.read_text
+
+        def read_text(
+            path: Path,
+            *args: object,
+            **kwargs: object,
+        ) -> str:
+            if path == refused_path:
+                raise OSError("unavailable")
+            return original_read_text(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", read_text)
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="active selection-storage authority is unreadable",
     ):
         temporal._validate_selection_storage_active_authorities()
 
@@ -2948,6 +3136,7 @@ def test_selection_storage_evidence_uses_retained_sources_only():
     retained_snapshot_consumers = "\n".join(
         inspect.getsource(function)
         for function in (
+            temporal._validate_source_pin,
             temporal._classify_selection_storage_pair,
             temporal._validate_initializer_import_prohibition,
             temporal._validate_selection_storage_isolation,

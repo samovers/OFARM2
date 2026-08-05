@@ -3432,6 +3432,8 @@ def _validate_selection_storage_isolation(
     snapshot: architecture.PythonSourceSnapshotV1,
     state: str,
 ) -> None:
+    # The supported invocation reaches this helper only after
+    # _build_selection_storage_snapshot authenticated these descriptor roots.
     for reachability, roots, label in (
         (
             snapshot.production_reachability,

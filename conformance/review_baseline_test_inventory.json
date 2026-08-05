@@ -11631,6 +11631,51 @@
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_active_authority_refuses_unreadable_evidence[invalid-utf8-active-set]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_active_authority_refuses_unreadable_evidence[invalid-utf8-capability-manifest]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_active_authority_refuses_unreadable_evidence[invalid-utf8-runtime-catalog]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_active_authority_refuses_unreadable_evidence[missing-active-set]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_active_authority_refuses_unreadable_evidence[missing-capability-manifest]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_active_authority_refuses_unreadable_evidence[missing-runtime-catalog]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_active_authority_refuses_unreadable_evidence[read-error-active-set]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_active_authority_refuses_unreadable_evidence[read-error-capability-manifest]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_active_authority_refuses_unreadable_evidence[read-error-runtime-catalog]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_authenticates_amendment_first",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
@@ -11647,6 +11692,21 @@
     },
     {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_authority_refuses_inexact_bytes[wrong-length]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_authority_refuses_missing_or_symlink[missing]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_authority_refuses_missing_or_symlink[symlink]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_authority_refuses_read_failure",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
@@ -11722,6 +11782,21 @@
     },
     {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_classified_initializer_graph_edge",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_classified_v8_identity_failure[digest-mismatch-V8 migration-set identity differs]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_classified_v8_identity_failure[non-string-digest-V8 migration-set identity differs]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_refuses_classified_v8_identity_failure[prefix-error-V8 migration authentication failed]",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
@@ -12017,6 +12092,11 @@
     },
     {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_source_pin_refuses_drift[tenant-contract]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_selection_storage_symlinked_root_refuses_custody_divergence",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
@@ -12516,8 +12596,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "831cbf23529d8b4e6f414a38621f64c581508ba6588250e4df5ec16d10a7c8a4",
-  "entryCount": 2503,
+  "entriesSha256": "52119176ea19d5e7d49911125f28f38835f77eff112acc2388df33d77468bbc6",
+  "entryCount": 2519,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
