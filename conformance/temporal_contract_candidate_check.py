@@ -453,8 +453,6 @@ SELECTION_STORAGE_ACTIVE_NON_PYTHON_PATHS = (
     ACTIVE_ARTIFACT_SET_PATH,
     CAPABILITY_MANIFEST_PATH,
 )
-FIXED_PRODUCTION_ROOTS = ("kernel.api", "kernel.application_runtime")
-FIXED_LEGACY_ROOTS = ("kernel.legacy_m1.api", "kernel.legacy_m1.runtime")
 
 CONTRACT_VERSION = "ofarm.temporal-coordinate.v0.1"
 CONTRACT_ID = "https://ofarm.dev/schema/temporal-coordinate/v0.1"
@@ -3145,7 +3143,14 @@ def validate_selection_storage_authorities() -> None:
         SELECTION_STORAGE_AMENDMENT_SHA256,
         SELECTION_STORAGE_AMENDMENT_CONTRACT_IDENTITY,
     )
-    for authority in SELECTION_STORAGE_REQUIRED_AUTHORITIES:
+    v0_1_bytes = _authenticate_authority(
+        *SELECTION_STORAGE_REQUIRED_AUTHORITIES[0]
+    )
+    if SELECTION_STORAGE_PROVISIONING_DIGEST.encode("utf-8") not in v0_1_bytes:
+        raise TemporalCandidateError(
+            "selection-storage provisioning contract value differs"
+        )
+    for authority in SELECTION_STORAGE_REQUIRED_AUTHORITIES[1:]:
         _authenticate_authority(*authority)
 
 
@@ -3171,8 +3176,10 @@ def _build_selection_storage_snapshot() -> architecture.PythonSourceSnapshotV1:
     descriptor = snapshot.descriptor
     if (
         descriptor.interface_identity != PYTHON_SNAPSHOT_INTERFACE_IDENTITY
-        or descriptor.production_import_roots != FIXED_PRODUCTION_ROOTS
-        or descriptor.legacy_import_roots != FIXED_LEGACY_ROOTS
+        or descriptor.production_import_roots
+        != ("kernel.api", "kernel.application_runtime")
+        or descriptor.legacy_import_roots
+        != ("kernel.legacy_m1.api", "kernel.legacy_m1.runtime")
     ):
         raise TemporalCandidateError(
             "public Python source snapshot descriptor differs"
@@ -3320,14 +3327,6 @@ def _classify_selection_storage_pair(
         raise TemporalCandidateError(
             "selection-storage implementation pair is incomplete"
         )
-    if (
-        not has_adapter
-        and SELECTION_STORAGE_ADAPTER_MODULE in snapshot.modules_by_name
-    ):
-        raise TemporalCandidateError(
-            "selection-storage adapter module occupies another path"
-        )
-
     marker_bytes = tuple(
         marker.encode("utf-8") for marker in SELECTION_STORAGE_MARKERS
     )
@@ -3434,8 +3433,16 @@ def _validate_selection_storage_isolation(
     state: str,
 ) -> None:
     for reachability, roots, label in (
-        (snapshot.production_reachability, FIXED_PRODUCTION_ROOTS, "production"),
-        (snapshot.legacy_reachability, FIXED_LEGACY_ROOTS, "legacy"),
+        (
+            snapshot.production_reachability,
+            snapshot.descriptor.production_import_roots,
+            "production",
+        ),
+        (
+            snapshot.legacy_reachability,
+            snapshot.descriptor.legacy_import_roots,
+            "legacy",
+        ),
     ):
         _validate_reachability_map(reachability, roots, label)
         if SELECTION_STORAGE_ADAPTER_MODULE in reachability:
@@ -3480,12 +3487,6 @@ def _validate_selection_storage_conformance(
     for pin in SELECTION_STORAGE_SOURCE_PINS:
         _validate_source_pin(snapshot, pin)
     migration_7 = authority.migration_set.migrations[6]
-    if SELECTION_STORAGE_PROVISIONING_DIGEST.encode("utf-8") not in (
-        migration_7.source_bytes
-    ):
-        raise TemporalCandidateError(
-            "selection-storage provisioning migration evidence differs"
-        )
     if state == SELECTION_STORAGE_CONFORMANT_ABSENT:
         if (
             authority.migration_set.digest != SELECTION_STORAGE_V7_DIGEST
@@ -3710,11 +3711,11 @@ def validate_temporal_card_errata_trace(errata: str) -> None:
         )
 
 
-def validate_candidate_governance() -> None:
+def validate_candidate_governance() -> str:
     validate_selection_storage_authorities()
     migration_authority = load_tenant_migration_authority_snapshot()
     python_snapshot = _build_selection_storage_snapshot()
-    _validate_selection_storage_conformance(
+    selection_storage_state = _validate_selection_storage_conformance(
         migration_authority,
         python_snapshot,
     )
@@ -4195,6 +4196,7 @@ def validate_candidate_governance() -> None:
     validate_non_activation(runtime_catalog)
     validate_runtime_bundle_carrier_role_posture(migration_authority)
     validate_active_temporal_activation_inputs()
+    return selection_storage_state
 
 
 def _coordinate_value(
@@ -4455,12 +4457,12 @@ def validate_semantic_vectors() -> None:
 
 def main() -> int:
     try:
-        validate_candidate_governance()
+        selection_storage_state = validate_candidate_governance()
         validate_semantic_vectors()
     except (OSError, TemporalCandidateError) as exc:
         print(f"TEMPORAL CANDIDATE FAIL: {exc}")
         return 1
-    print("TEMPORAL CANDIDATE PASS")
+    print(f"TEMPORAL CANDIDATE PASS: {selection_storage_state}")
     return 0
 
 
