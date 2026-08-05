@@ -80,8 +80,8 @@ the reviewed and versioned architecture authority carried by the returned
 snapshot. They are never accepted from caller data, configuration,
 environment, repository content outside that authority, or a lookalike object.
 
-Both temporal consumers derive the lexical package root without filesystem
-canonicalization:
+Both temporal consumers must derive the lexical package root without
+filesystem canonicalization in temporal B2:
 
 ```python
 # conformance/temporal_contract_candidate_check.py
@@ -96,6 +96,15 @@ Neither consumer calls `resolve()`, `absolute()`, realpath, or another
 normalizer before the public builder obtains descriptor-relative no-follow
 custody. A non-absolute root refuses through the architecture builder; the
 temporal consumer does not repair or replace it.
+
+That lexical `PACKAGE_ROOT` is the one checker-wide root used by every existing
+path composition in each consumer, not a builder-only alternate. Temporal B2
+does not retain a second resolved root. In an ordinary absolute non-symlink
+checkout, the lexical and previously resolved roots name the same children and
+all existing authority checks must remain behaviorally unchanged. If lexical
+and canonical custody differ, the architecture builder must refuse before any
+conformant result; B2 does not normalize the difference away. Focused tests
+must cover both the ordinary equivalence and fail-closed difference.
 
 Temporal B2 directly uses:
 
@@ -122,6 +131,10 @@ _reachable_paths
 PRODUCTION_IMPORT_ROOTS
 LEGACY_IMPORT_ROOTS
 ```
+
+It also never calls, aliases, or wraps private `_from_import_base`. Applying
+the exact public resolution formula in section 7.2 to one detached initializer
+tree is contract consumption, not private callable reuse.
 
 The marker vocabulary, exact allowed production paths, two-path state model,
 SQL migration inventory, three named active non-Python authorities, catalog
@@ -175,6 +188,10 @@ In the approved v0.1 contract, this amendment replaces only:
 
 - the Python-source trusted input in section 3;
 - the Python source inventory paragraph in section 5.2;
+- the future B2 evidence mechanism for v0.1 section 4.7's exact provisioning
+  contract value, only to separate temporal Python-source/service evidence from
+  the existing native-owner currentness gates in section 7.4 here; the exact
+  digest and both-state requirement do not change;
 - the graph, root, reachability, initializer-import, and static-only isolation
   mechanism in section 5.4;
 - invariant TCSS-004 only to the extent that it names the private inventory
@@ -184,7 +201,7 @@ In the approved v0.1 contract, this amendment replaces only:
   initializer-import evidence defined here;
 - the private-helper negative case in section 8;
 - the future Phase B file boundary and verification steps in sections 10 and
-  11 only as stated in sections 10 and 11 here; and
+  11 only as stated in sections 10 and 11 here;
 - the private-helper stop condition in section 12; and
 - implicit use of v0.1 section 13 for this amendment's own approval and
   publication. Section 14 here is the complete amendment-specific adaptation;
@@ -296,6 +313,9 @@ Within this narrow boundary, temporal B2 trusts:
   authenticate its authority and return the exact sealed
   `PythonSourceSnapshotV1` described by that authority;
 - the retained authenticated tenant migration authority used by v0.1;
+- the existing native-verifier release/evidence authorities and unchanged
+  hosted gates only as separate same-head B2 acceptance prerequisites, never as
+  temporal classifier inputs;
 - the temporal checker implementation and its fixed constants after review;
 - CPython 3.12.13, the operating system, descriptor semantics, SHA-256, and
   memory integrity under the architecture authority's stated trust model; and
@@ -357,9 +377,10 @@ contract requires.
 | Marker occurrence classification in retained Python sources | temporal checker under v0.1 as amended here | inspect `PythonSourceUnitV1.source_text` from `modules_by_relative_path` | filesystem rereads, module execution, reachability alone |
 | SQL production inventory | v0.1 retained authenticated tenant `MigrationSet` | preserve unchanged | Python snapshot, SQL glob, later path read |
 | Active non-Python inventory | the three exact v0.1 fixed paths | preserve unchanged | repository-wide discovery, caller list |
-| Static adapter isolation | one detached initializer AST from `snapshot.ast_for("deployment.postgresql")`, plus snapshot-owned import graph and production and legacy reachability maps | refuse an initializer import of the exact adapter in both lawful states and require the adapter key absent from both closures | temporal parsing, graph reconstruction, temporary root aliases, runtime observation |
+| Static adapter isolation | one detached initializer AST from `snapshot.ast_for("deployment.postgresql")`, plus the architecture v1 module-naming and `ImportFrom` resolution law, snapshot-owned import graph, and production and legacy reachability maps | refuse any statically resolved initializer import of the exact adapter in both lawful states and require the adapter key absent from both closures | a private resolver call, temporal parsing, graph reconstruction, temporary root aliases, runtime observation |
 | V7 external tenant catalog identity in `CONFORMANT_ABSENT` | exact reviewed source pin in section 7.4 plus the v0.1 digest | compare retained source bytes with the closed pin; do not evaluate the assignment | a partial AST assignment read, module import, module execution, caller data |
-| Tenant provisioning identity in both lawful states | exact reviewed determining-source pins, exact retained tenant migration-service semantics, and the v0.1 digest in section 7.4 | compare retained source bytes and the already-authenticated service fields with the closed pins; do not derive the digest at runtime | importlib, repository module execution, a partial assignment read, caller data |
+| Temporal Python-side provisioning evidence in both lawful states | exact reviewed Python-source pins and exact retained tenant migration-service semantics in section 7.4 | compare retained source bytes and already-authenticated service fields with the closed pins; preserve the v0.1 digest as the required contract value without claiming these inputs alone derive it | native-verifier JSON, importlib, repository module execution, a partial assignment read, caller data |
+| Native release identity and evidence used by the provisioning manifest | existing native-verifier release/evidence authorities, unchanged provisioning-owner digest test, and unchanged hosted conformance gates | mandatory same-head acceptance prerequisite outside the temporal classifier; no new temporal read or pin | temporal source pins, a temporal conformant result, caller data |
 | Dynamic-import prohibition | existing architecture checker and its accepted architecture law | require that checker to pass as a separate merge gate | temporal duplicate scanner or a claim derived only from static reachability |
 | Database migration 0008 semantics and adapter behavior | later approved database Phase B | no use or effect | classifier result, this amendment |
 | Tenant selection and governed command activation | later RuntimeBundle-selection and command authorities | no use or effect | marker presence, conformance state |
@@ -397,14 +418,15 @@ One supported invocation of
    retained `source_text`; it does not reopen or resolve `relative_path`.
 8. Apply the unchanged v0.1 SQL classifier to retained
    `Migration.source_bytes`.
-9. Verify the closed catalog and provisioning evidence under the exact
-   state-specific source pins and retained service semantics in section 7.4.
-   Do not import or execute checked repository modules or evaluate a partial
-   assignment.
+9. Verify the closed catalog and temporal Python-side provisioning evidence
+   under the exact state-specific source pins and retained service semantics in
+   section 7.4. Do not import or execute checked repository modules or evaluate
+   a partial assignment. Do not claim that this temporal subcheck authenticates
+   the separately owned native-verifier data.
 10. Inspect the three exact active non-Python authorities using the unchanged
     v0.1 rules.
 11. Call `snapshot.ast_for("deployment.postgresql")` exactly once. Inspect only
-    that detached tree for the four exact initializer-import forms in section
+    that detached tree under exact architecture-v1 import resolution in section
     7.2. Use the retained snapshot's `import_graph`,
     `production_reachability`, and `legacy_reachability` directly for the
     remaining static-isolation checks. Do not make another AST copy, reparse
@@ -433,6 +455,13 @@ Any failure transitions directly to `REFUSED`. No transition leaves either
 conformant state for storage, activation, command execution, current truth, or
 output. A later filesystem change requires a new checker invocation; it cannot
 mutate the sealed evidence or prior result.
+
+This state machine describes only the temporal checker's result. Complete B2
+merge acceptance is the conjunction of a temporal conformant result, every
+section 12 temporal gate, the unchanged provisioning-owner digest test, and
+the unchanged native-owner hosted gates at the same exact head. Failure of an
+external owner gate fails or stops merge acceptance but does not add a temporal
+state or transfer that owner's inputs into the temporal classifier.
 
 ## 7. Closed Python classification and isolation rules
 
@@ -553,30 +582,53 @@ verification. The checker uses `ast.walk(initializer_tree)` and inspects only
 `ast.Import` and `ast.ImportFrom` nodes. It does not parse source bytes or text,
 read a path, infer package state, or evaluate a condition.
 
-The closed refusal matcher recognizes exactly these four source forms by their
-AST names, whether or not `as` aliases are present:
+The refusal matcher applies the architecture v1 module-naming and
+`ImportFrom` base-resolution law to every `ast.Import` and `ast.ImportFrom`
+node in the detached initializer tree. It refuses whenever that law yields the
+exact adapter module. The following are illustrative, not exhaustive,
+spellings:
 
 ```python
 import deployment.postgresql.tenant_command_runtime_bundle_selection
 from deployment.postgresql import tenant_command_runtime_bundle_selection
 from . import tenant_command_runtime_bundle_selection
 from .tenant_command_runtime_bundle_selection import selected_binding
+from ..postgresql import tenant_command_runtime_bundle_selection
+from ..postgresql.tenant_command_runtime_bundle_selection import selected_binding
 ```
 
-Concretely, refusal occurs for an `ast.Import` alias whose `name` equals the
-exact adapter module, or for any of these `ast.ImportFrom` shapes:
+Resolution is exact and decision-complete. For `ast.Import`, each alias's
+`name` is one candidate. For `ast.ImportFrom`, B2 applies this public
+architecture-v1 calculation:
 
 ```text
-level 0; module deployment.postgresql.tenant_command_runtime_bundle_selection
-level 0; module deployment.postgresql; imported name tenant_command_runtime_bundle_selection
-level 1; module absent; imported name tenant_command_runtime_bundle_selection
-level 1; module tenant_command_runtime_bundle_selection
+source module = deployment.postgresql
+source path   = deployment/postgresql/__init__.py
+package parts = [deployment, postgresql]
+
+if level == 0:
+  base = node.module or ""
+else:
+  keep = len(package parts) - level + 1
+  base parts = [] when keep < 0, otherwise package parts[:keep]
+  append node.module parts when node.module is present
+  base = dot-join(base parts)
+
+candidates = non-empty base plus each non-empty dot-join(base, imported name)
 ```
 
+An exact adapter match in any candidate refuses at any relative `level`.
 `ast.walk` makes the rule location-independent: module scope, nested function
 or class scope, and `if TYPE_CHECKING` are treated identically. `asname` is
-never authority and does not change the match. Star or selected-name imports
-from the exact adapter module match the first or fourth `ImportFrom` shape.
+never authority and does not change the match. A star or named import from the
+exact adapter refuses because the resolved base itself is a candidate.
+
+Temporal B2 implements only this bounded resolution over the one detached
+initializer AST. It neither calls nor aliases the private architecture helper
+`_from_import_base`, guesses a known-module set, constructs an edge, nor
+rebuilds any part of the import graph. The formula is consumption of the
+reviewed public architecture-v1 law for one temporal refusal, not a second graph
+authority.
 
 The AST check runs in both `CONFORMANT_ABSENT` and
 `CONFORMANT_CLASSIFIED`. It therefore refuses an initializer reference even
@@ -587,11 +639,12 @@ edge check is also retained as a same-snapshot consistency check: any
 absent state, lack of a graph target is not treated as proof and is not a
 substitute for the AST check.
 
-No other spelling or computed load is newly classified here. The unchanged
-architecture checker still owns syntax and dynamic-import policy. The
-temporal check continues to refuse if either verification-exempt module family
-or the adapter becomes reachable from a fixed production or legacy root; the
-general reachability refusal is not delegated to the architecture checker.
+Every static spelling that resolves to the exact adapter under the law above is
+classified. Computed loading remains outside this AST rule. The unchanged
+architecture checker still owns syntax and dynamic-import policy. The temporal
+check continues to refuse if either verification-exempt module family or the
+adapter becomes reachable from a fixed production or legacy root; the general
+reachability refusal is not delegated to the architecture checker.
 
 This section replaces v0.1 section 5.4 and clarifies v0.1 TCSS-011 only for
 static AST evidence. It preserves the refusal for a static initializer import
@@ -653,8 +706,8 @@ predeclares a fabricated V8 pin nor accepts the old V7 pin as current V8
 authority. Any claimed classified-state catalog guarantee beyond this exact
 v0.1 rule stops for the database owner.
 
-The determining Python-source pins for the tenant provisioning-spec digest in
-both lawful states are:
+The closed Python-source and service evidence for the tenant provisioning
+manifest in both lawful states is:
 
 | Exact relative path | Exact module | UTF-8 bytes | SHA-256 |
 | --- | --- | ---: | --- |
@@ -674,31 +727,75 @@ qualified_ledger:   ofarm.schema_migration
 ```
 
 These three complete source identities and the already-authenticated service
-value are the complete reviewed determining inputs for the existing tenant
-provisioning manifest. The exact required output remains the unchanged v0.1
-digest:
+value are the complete Python-source and migration-service evidence admitted
+to this temporal classifier. They prevent temporal B2 from silently changing
+the Python implementation or service value associated with the existing
+provisioning contract. They are not claimed to be the complete determining
+inputs for constructing the provisioning manifest. The exact required v0.1
+contract value remains:
 
 ```text
 sha256:2ac8487b64d4fb09d7576ef1ee09ac1f2a3cc5b20558f0d2137620b897c7157c
 ```
 
-`native_release_identity.py` is pinned because it is an import-time dependency
-of the repository module, although its values do not enter
-`TENANT_PROVISIONING_SPEC.digest`. The migration entries and full migration-set
-digest are also not inputs to that provisioning digest; only the exact service
-value above is. This closed distinction is why migration 0008 may lawfully
-change `migration_sets.py` while the provisioning digest and these three
-source pins remain exact. Temporal B2 does not import any dependency,
-construct package stubs, execute any source unit, or recompute the provisioning
-digest. It verifies the reviewed source-to-digest binding by exact pins and
-refuses source drift.
+After authenticating the complete v0.1 RFC, temporal B2 verifies that its fixed
+provisioning contract constant equals that exact value. It does not present the
+constant comparison as a fresh observation of
+`TENANT_PROVISIONING_SPEC.digest`.
+
+`native_release_identity.py` is pinned as Python implementation source. The
+provisioning manifest also invokes that implementation against these two
+separately governed non-Python inputs:
+
+```text
+deployment/postgresql/ofarm_ed25519/native_release_identity.json
+deployment/postgresql/ofarm_ed25519/native_evidence_receipt.json
+```
+
+Those documents contribute native release and evidence content to the
+provisioning manifest. They are not Python snapshot units and are not among
+v0.1's three exact active non-Python paths. This amendment therefore does not
+pin, read, reclassify, or take custody of them. Their currentness and validity
+remain owned by the existing native-verifier release/evidence authority and
+the unchanged hosted conformance gates named
+`Cryptographically reverify retained native release evidence`,
+`native verifier (amd64)`, `native verifier (arm64)`, and
+`native verifier canonical index`.
+
+The unchanged provisioning-owner test
+`kernel/tests/test_postgresql_provisioning.py::test_provisioning_specs_freeze_distinct_service_and_role_boundaries`
+must also construct
+`TENANT_PROVISIONING_SPEC.digest` from the current separately owned inputs and
+assert the exact v0.1 value above at the same head. That existing owner test may
+execute provisioning code; the temporal checker and its focused tests may not.
+Requiring the external owner evidence does not transfer either native document
+into the temporal inventory.
+
+A temporal `CONFORMANT_ABSENT` or `CONFORMANT_CLASSIFIED` result alone does not
+attest either native document, prove that the current provisioning manifest can
+be constructed, or derive its digest. Complete B2 merge acceptance requires
+that unchanged provisioning-owner digest test and those existing native-owner
+gates to pass at the same exact head in addition to every temporal gate in
+section 12. The B2 changed-file allowlist forbids
+either native document from changing in that PR. If either document or its
+owning authority changes before B2 so that the v0.1 provisioning contract value
+would change, temporal B2 stops for a versioned provisioning-owner prerequisite
+rather than importing that custody.
+
+The migration entries and full migration-set digest are not inputs to the
+provisioning manifest; only the exact service value above is. This distinction
+is why migration 0008 may lawfully change `migration_sets.py` while the three
+Python pins and service value remain exact. Temporal B2 does not import any
+dependency, construct package stubs, execute any source unit, read native data,
+or recompute the provisioning digest.
 
 The four-module `importlib` execution design from the stopped PR #283 and the
 single-assignment catalog parser are expressly rejected. No caller or future
 implementation may substitute a different source set, a partial AST rule, a
-generated digest, or a runtime object. If one of the determining inputs must
-change, work stops for a versioned owner amendment; it does not silently
-refresh a checker constant.
+generated digest, or a runtime object. If a temporal guarantee over the native
+documents or current provisioning-manifest construction is required, work
+stops for the existing provisioning/native owner; the temporal checker does not
+silently widen its three-path non-Python class or refresh a constant.
 
 ## 8. Invariants
 
@@ -713,7 +810,8 @@ refresh a checker constant.
   and retains that exact result.
 - **TCSSS-004 — No private bridge.** Neither temporal consumer calls, aliases,
   wraps, reflects over, or reproduces `_module_sources`, `_import_graph`,
-  `_reachable_paths`, `PRODUCTION_IMPORT_ROOTS`, or `LEGACY_IMPORT_ROOTS`.
+  `_reachable_paths`, `PRODUCTION_IMPORT_ROOTS`, or `LEGACY_IMPORT_ROOTS`, and
+  neither calls, aliases, or wraps `_from_import_base`.
 - **TCSSS-005 — No second source observation.** Python marker classification
   and static isolation use only the one retained snapshot. No later path open,
   stat, resolve, glob, walk, import, parse, graph rebuild, or reachability
@@ -753,9 +851,9 @@ refresh a checker constant.
   temporal consumer.
 - **TCSSS-017 — Production-versus-legacy firewall remains closed.** The exact
   fixed production and legacy closure families are both checked by exact
-  adapter-key absence; the initializer AST carries none of the four exact
-  adapter import forms in either state; and the classified-state initializer
-  graph entry carries no exact adapter edge.
+  adapter-key absence; no initializer import resolves to the exact adapter
+  under the architecture v1 law in either state; and the classified-state
+  initializer graph entry carries no exact adapter edge.
 - **TCSSS-018 — Fail closed.** Missing, inexact, unsupported, ambiguous, or
   multiply classified evidence refuses. No fallback path produces a conformant
   state.
@@ -767,13 +865,17 @@ refresh a checker constant.
   exact status block and appends one complete approval record; temporal B2
   authenticates the complete merged amendment before applying it.
 - **TCSSS-021 — Initializer evidence is state-independent.** Exactly one
-  `snapshot.ast_for("deployment.postgresql")` copy is inspected for the closed
-  four-form adapter-import prohibition in both lawful states; absent adapter
-  inventory or graph target never substitutes for that check.
-- **TCSSS-022 — Catalog and provisioning evidence is non-executing.** The
-  absent-state catalog pin and both-state provisioning source/service pins in
-  section 7.4 are exact. Temporal B2 never imports or executes checked
-  repository modules, evaluates a catalog assignment, or derives a new digest.
+  `snapshot.ast_for("deployment.postgresql")` copy is inspected under exact
+  architecture-v1 resolution at every relative level in both lawful states;
+  absent adapter inventory or graph target never substitutes for that check.
+- **TCSSS-022 — Temporal catalog and provisioning evidence is bounded.** The
+  absent-state catalog pin and both-state Python-source/service pins in section
+  7.4 are exact and non-executing. Temporal B2 never imports or executes checked
+  repository modules, evaluates a catalog assignment, reads native-verifier
+  data, derives a new digest, or claims its result attests that separately
+  governed data. Complete B2 acceptance also requires the unchanged
+  provisioning-owner digest test and native-owner hosted gates at the same
+  head.
 - **TCSSS-023 — Exact interpreter evidence.** Every future B2 Python
   verification command uses the same authenticated absolute CPython 3.12.13
   executable required by the architecture authority. A generic `python3`,
@@ -796,8 +898,10 @@ Focused verification must prove these outcomes through supported entry points:
 | Marker classification and isolation use different snapshots | focused test fails |
 | The checker does not call `snapshot.ast_for("deployment.postgresql")` exactly once, calls it with another module, or receives no detached `ast.Module` | refuse or focused test fails |
 | Either temporal consumer refers to any of the five private architecture names | repository-search and focused tests fail |
+| Either temporal consumer calls, aliases, or wraps private `_from_import_base` | repository-search and focused tests fail; only the public formula in section 7.2 is admitted |
 | A temporal implementation declares its own production or legacy root tuple | review and focused contract test fail |
 | Either consumer uses `resolve()`, realpath, `absolute()`, or another pre-builder normalizer to derive `PACKAGE_ROOT` | source-structure test fails; no alternate root is admitted |
+| A lexical root differs from canonical custody | the builder refuses and no conformant result is returned; prior digest-only checks cannot legalize or normalize the difference |
 | A descriptor root tuple differs from the exact v1 family | defensive compatibility assertion refuses |
 | A fixed root is missing from its corresponding map or does not map to `(root,)` | defensive compatibility assertion refuses |
 | A retained reachability path is empty, begins outside its exact root family, or ends somewhere other than its mapping key | defensive compatibility assertion refuses |
@@ -807,12 +911,15 @@ Focused verification must prove these outcomes through supported entry points:
 | The exact adapter module is a key in the production reachability map | refuse |
 | The exact adapter module is a key in the legacy reachability map | refuse |
 | The initializer path or module is absent, maps to a module other than exact `deployment.postgresql`, or lacks its graph entry | defensive compatibility assertion refuses in both states |
-| The detached initializer AST contains any of the four exact adapter import forms, including an alias, nested scope, class scope, or `TYPE_CHECKING` | refuse in both states, even when the adapter source and graph target are absent |
+| Any initializer `ast.Import` or `ast.ImportFrom` resolves to the exact adapter under architecture v1, at any relative level and including an alias, nested scope, class scope, star import, or `TYPE_CHECKING` | refuse in both states, even when the adapter source and graph target are absent |
+| The absent-state initializer uses `from ..postgresql import tenant_command_runtime_bundle_selection` or `from ..postgresql.tenant_command_runtime_bundle_selection import selected_binding` | refuse by exact level-2 resolution; graph omission is not proof |
 | The classified-state initializer graph entry contains the exact adapter target | refuse as a same-snapshot consistency failure |
 | The absent-state graph has no adapter target but its initializer AST imports the unresolved exact adapter | refuse; graph omission is not proof |
 | The absent state has an inexact `catalog_identity.py` source pin or wrong V7 external catalog digest | refuse without parsing, importing, or executing the module |
-| The classified state differs only from the V7 `catalog_identity.py` source pin under the separately authorized database allowlist | do not apply the obsolete V7 pin; preserve the v0.1 classified-state deferral and marker scan |
-| Either provisioning source pin, retained tenant service field, or unchanged v0.1 provisioning digest is inexact in either lawful state | refuse without importing or executing repository modules |
+| The classifier evaluates the V7 `catalog_identity.py` source pin in `CONFORMANT_CLASSIFIED`, whether the source equals or differs from V7 | invalid implementation; the obsolete V7 pin is unconditionally not evaluated in that state, while the marker scan and v0.1 deferral remain |
+| Either temporal provisioning Python-source pin, retained tenant service field, or unchanged v0.1 provisioning contract value is inexact in either lawful state | refuse without importing or executing repository modules |
+| Either native-verifier identity/evidence document or its owning gate is invalid, stale, changed incompatibly, or unverified at the B2 head | temporal conformance does not cure or attest it; complete B2 acceptance fails or stops for the native/provisioning owner |
+| A temporal result is presented as proof that the current provisioning manifest constructs or that native-verifier data is current | invalid claim with no effect |
 | A checker uses `importlib`, package stubs, `exec`, a partial catalog assignment parser, or another derived repository execution to obtain catalog or provisioning evidence | focused source-structure test fails and conformance refuses |
 | A temporal change adds a duplicate dynamic-import detector or claims runtime loading is impossible from static reachability | stop; architecture authority remains separate |
 | Only one of migration 0008 and the adapter exists | refuse under unchanged v0.1 state law |
@@ -845,6 +952,8 @@ Neither this Phase A amendment nor temporal B2 will:
 - add a generic repository scanner, source service, cache, daemon, plugin,
   registry, configuration option, network protocol, or alternate snapshot;
 - execute checked repository modules as conformance evidence;
+- pin, read, reclassify, or take custody of the native-verifier release or
+  evidence documents in the temporal classifier;
 - claim repository-wide marker coverage outside the closed v0.1 inventories;
 - broaden the dynamic-import vocabulary or duplicate its architecture owner;
 - change the production-versus-legacy firewall; or
@@ -886,15 +995,20 @@ The smallest coherent implementation:
 3. calls the public architecture builder once;
 4. implements the closed v0.1 Python marker classifier on retained source
    units;
-5. verifies the exact absent-state catalog source pin and both-state
-   provisioning source/service pins without module execution;
-6. makes one detached initializer-AST copy and applies the exact four-form
-   prohibition in both states, then uses the same snapshot's owned import graph
-   and reachability maps for the remaining static adapter isolation;
+5. verifies the exact absent-state catalog source pin and both-state temporal
+   provisioning Python-source/service pins without module execution or a claim
+   over native-verifier data;
+6. makes one detached initializer-AST copy and applies architecture-v1 import
+   resolution at every relative level in both states, then uses the same
+   snapshot's owned import graph and reachability maps for the remaining static
+   adapter isolation;
 7. preserves the v0.1 SQL and active non-Python classifiers;
 8. removes all five private architecture references from both temporal
-   consumers; and
-9. verifies refusal and unchanged non-effects.
+   consumers;
+9. verifies refusal and unchanged non-effects; and
+10. requires the existing provisioning-owner digest test and native-owner
+    hosted gates to pass at the same head without adding their inputs to the
+    temporal classifier.
 
 It adds no new public temporal type, generic abstraction, compatibility layer,
 second walker, second graph, cache, service, configuration surface, or runtime
@@ -976,6 +1090,7 @@ test -x "$CPYTHON_3_12_13"
 "$CPYTHON_3_12_13" -m pytest -q kernel/tests/test_temporal_contract_governance.py
 "$CPYTHON_3_12_13" -m pytest -q kernel/tests/test_temporal_carriers.py
 "$CPYTHON_3_12_13" -m pytest -q kernel/tests/test_rewrite_architecture_check.py
+"$CPYTHON_3_12_13" -m pytest -q kernel/tests/test_postgresql_provisioning.py::test_provisioning_specs_freeze_distinct_service_and_role_boundaries
 "$CPYTHON_3_12_13" conformance/rewrite_architecture_check.py
 "$CPYTHON_3_12_13" conformance/temporal_contract_candidate_check.py
 "$CPYTHON_3_12_13" conformance/ofarm_pkg_contract_check.py
@@ -987,11 +1102,19 @@ After the version assertion, every Python command uses that same absolute
 executable. Substituting generic `python3` at any point is not conformance
 evidence even if it happens to resolve to the same patch version.
 
+At the same exact B2 head, the existing hosted conformance workflow must also
+pass the unchanged provisioning-owner digest test shown above and
+pass its unchanged `Cryptographically reverify retained native release
+evidence`, `native verifier (amd64)`, `native verifier (arm64)`, and
+`native verifier canonical index` gates. They remain native-owner evidence,
+not temporal classifier inputs. A temporal green result cannot replace any of
+them.
+
 Repository search must prove the two temporal consumers have no reference to
 the private names:
 
 ```bash
-rg -n '_module_sources|_import_graph|_reachable_paths|PRODUCTION_IMPORT_ROOTS|LEGACY_IMPORT_ROOTS' \
+rg -n '_module_sources|_import_graph|_reachable_paths|PRODUCTION_IMPORT_ROOTS|LEGACY_IMPORT_ROOTS|_from_import_base' \
   conformance/temporal_contract_candidate_check.py \
   kernel/tests/test_temporal_carriers.py
 ```
@@ -999,13 +1122,16 @@ rg -n '_module_sources|_import_graph|_reachable_paths|PRODUCTION_IMPORT_ROOTS|LE
 That search must return no match. Focused tests must also prove one public
 builder call; exactly one `ast_for("deployment.postgresql")` call;
 shared-snapshot evidence; exact v0.1 absent/classified states; exact descriptor-
-root and reachability-entry structure; exact adapter-key absence; all four
-initializer import forms in both states, including aliases, nested functions,
-classes, and `TYPE_CHECKING`; lexical root derivation without normalization;
-the absent-state catalog source pin; both-state provisioning source/service
-pins; rejection of importlib, package stubs, `exec`, and partial-assignment
-evidence; all other new refusal cases; and unchanged SQL and active-authority
-classification.
+root and reachability-entry structure; exact adapter-key absence; architecture-
+v1 import resolution at every relative level in both states, including the six
+illustrative forms, aliases, star imports, nested functions, classes, and
+`TYPE_CHECKING`; checker-wide lexical root derivation without normalization;
+ordinary non-symlink path equivalence and fail-closed lexical/canonical
+difference; the absent-state catalog source pin; both-state temporal
+provisioning Python-source/service pins; no temporal read or attestation of the
+native documents; rejection of importlib, package stubs, `exec`, and partial-
+assignment evidence; all other new refusal cases; and unchanged SQL and active-
+authority classification.
 
 If collected node IDs change, regenerate the canonical inventory mechanically
 and prove the change contains exactly the canonical node-ID difference. A
@@ -1023,11 +1149,11 @@ count-only comparison is insufficient.
 | TCSSS-010 | v0.1 classifier implementation | synthetic marker in checker/test inventory never satisfies implementation pair | temporal governance tests |
 | TCSSS-013 | temporal result API remains conformance-only | changed-file and import scans show no storage/runtime consumer; conformant vectors create no side effect | focused tests and diff review |
 | TCSSS-014/015 | PR boundary | any out-of-allowlist path fails changed-file gate | exact name-only diff |
-| TCSSS-017/021 | one detached initializer AST plus snapshot import-graph and reachability use in temporal checker and carrier test | wrong AST call count or argument, any of four initializer forms in either state, classified graph edge, or adapter key in either fixed family refuses | temporal carrier and governance tests |
+| TCSSS-017/021 | one detached initializer AST, exact architecture-v1 import resolution, and snapshot import-graph and reachability use in temporal checker and carrier test | wrong AST call count or argument, any exact adapter resolution at any level in either state, classified graph edge, or adapter key in either fixed family refuses | temporal carrier and governance tests |
 | TCSSS-018 | all supported checker entry points | each missing, altered, ambiguous, or unsupported evidence vector returns refusal and no conformant result | temporal tests and both conformance CLIs |
-| TCSSS-019 | package-root constants in both temporal consumers | source-structure test rejects `resolve`, realpath, `absolute`, or another pre-builder normalizer | temporal governance and carrier tests |
+| TCSSS-019 | checker-wide package-root constants in both temporal consumers | source-structure test rejects `resolve`, realpath, `absolute`, another pre-builder normalizer, or a second resolved root; focused cases prove ordinary equivalence and builder refusal on custody difference | temporal governance and carrier tests |
 | TCSSS-020 | this RFC's publication record and temporal checker authority constants | reconstructed design, card, approval, publication, or complete merged identity mismatch stops or refuses | publication re-review and package check |
-| TCSSS-022 | retained catalog/provisioning source units and authenticated tenant migration service | absent-state catalog drift, both-state provisioning source/service drift, partial AST extraction, importlib, package stubs, or module execution refuses | temporal governance tests and source-structure review |
+| TCSSS-022 | retained catalog/temporal-provisioning source units and authenticated tenant migration service, bounded by separate provisioning/native-owner evidence | absent-state catalog drift, both-state Python-source/service drift, partial AST extraction, importlib, package stubs, module execution, native-data read, or temporal attestation refuses or invalidates the claim | temporal governance tests, source-structure review, unchanged provisioning-owner digest test, and same-head native hosted gates |
 | TCSSS-023 | authenticated absolute `CPYTHON_3_12_13` | missing/non-executable path, wrong implementation or patch, generic `python3`, or mixed interpreter use is invalid evidence | explicit version assertion and every section 12.2 Python gate |
 
 ## 13. Stop conditions
@@ -1061,17 +1187,20 @@ true:
 12. a conformant result is asked to become current truth, activation,
     publication, materialization, or output;
 13. temporal B2 cannot remove all five private references from both named
-    consumers within its exact allowlist; or
+    consumers within its exact allowlist;
 14. architecture B3, database Phase B, or another later boundary is proposed in
     the same PR;
 15. temporal B2 needs the private architecture seal guard or another private
-    architecture API; or
+    architecture API;
 16. either temporal consumer needs path resolution or normalization before the
-    public builder takes lexical root custody; or
-17. a catalog or provisioning source/service pin must change, a new
-    determining input appears, or conformance would require importing or
-    executing checked repository code; or
-18. future B2 verification cannot use one authenticated absolute exact CPython
+    public builder takes lexical root custody;
+17. a catalog or temporal provisioning Python-source/service pin must change,
+    conformance would require importing or executing checked repository code,
+    or the temporal classifier is asked to pin, read, reclassify, or attest the
+    two separately governed native-verifier documents;
+18. the unchanged provisioning-owner digest test or native-owner hosted gates
+    cannot pass at the exact B2 head without changing their authority; or
+19. future B2 verification cannot use one authenticated absolute exact CPython
     3.12.13 executable for every Python command.
 
 When a stop condition occurs, report the authority expansion and propose a
@@ -1310,17 +1439,20 @@ The design is one closed temporal conformance boundary:
 - **authority:** approved v0.1 classifier law plus the governed public
   architecture snapshot;
 - **invariants:** one retained snapshot, one bounded detached initializer AST,
-  no private bridge or checked-module execution, unchanged closed classifier,
-  exact catalog/provisioning pins, exact public graph/reachability semantics,
-  exact interpreter evidence, static-only isolation, byte-closed approval, and
-  no operational transition;
+  exact architecture-v1 import resolution, no private bridge or checked-module
+  execution, unchanged closed classifier, exact catalog and temporal
+  provisioning Python-source/service pins, separate provisioning/native-owner
+  evidence,
+  exact public graph/reachability semantics, exact interpreter evidence,
+  static-only isolation, byte-closed approval, and no operational transition;
 - **non-goals:** every database, runtime, command, route, output, deployment,
   legacy, and #192 authority;
 - **smallest coherent change:** one Phase A RFC, then one separately requested
   temporal B2 PR over the exact four-path allowlist; and
 - **verification:** authenticated authorities, focused refusal tests, both
-  conformance checkers, package verification, private-name search, exact
-  changed-file checks, and publication-byte/provenance re-review.
+  conformance checkers, package verification, unchanged provisioning-owner
+  digest test and native-owner hosted gates, private-name search, exact changed-
+  file checks, and publication-byte/provenance re-review.
 
 **Open decisions:** none. Review must not delegate an authority, path class,
 dynamic-import guarantee, approval substitution, or operational effect to
@@ -1329,7 +1461,8 @@ authority, work stops and names that boundary separately.
 
 **Review disposition required before a live card:**
 
-- Blockers: none demonstrated at the final reviewed design head.
+- Blockers: the exact-head technical review must record that none remain
+  demonstrated; this document does not self-attest that result.
 - Follow-ups: architecture B3 and the separately governed database Phase B,
   each only after its own prerequisites and explicit request.
 - Preferences: do not delay approval or expand this boundary.
