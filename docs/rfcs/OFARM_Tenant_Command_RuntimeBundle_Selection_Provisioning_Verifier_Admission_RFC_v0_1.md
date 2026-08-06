@@ -49,10 +49,11 @@ NOT_APPLICABLE | STABLE_V7 | V8_POST_SOURCE_PRE_LEDGER_APPEND | STABLE_V8
 `AUTHENTICATED_V8_SOURCE_EXECUTING` is a runner event between observations, not
 a verifier state. `STABLE_V7` continues to require exactly the existing two
 binder-owned selection-control grants. `V8_POST_SOURCE_PRE_LEDGER_APPEND` is a
-transaction-local runner posture that permits exactly one additional
-owner-owned controller grant after the exact authoritative migration 0008
-source executes and before the runner appends its ledger row. `STABLE_V8`
-requires that same exact third grant and an exact authenticated V8 ledger row.
+transaction-local runner posture that permits exactly the activation-routine
+identity and its one additional owner-owned controller grant after the exact
+authoritative migration 0008 source executes and before the runner appends its
+ledger row. `STABLE_V8` requires that same exact routine identity and third
+grant plus an exact authenticated V8 ledger row.
 
 The transition posture is selected only by reviewed migration-runner code from
 the literal authoritative tenant migration-set binding. It is never selected
@@ -181,8 +182,16 @@ authority.
 
 ## 5. Exact ACL observation and permitted family
 
-The verifier performs one exhaustive target-database routine ACL observation.
-It includes:
+The repository's existing mechanical boundary defines a non-system routine as
+a `pg_catalog.pg_proc` row whose OID is greater than or equal to
+`_POSTGRESQL_FIRST_NORMAL_OBJECT_ID`, whose fixed value is `16384`. Prose such
+as “user routine” or namespace membership cannot replace that OID comparison.
+
+The verifier performs three closed target-database observations.
+
+### 5.1 Controller, login, and `PUBLIC` family
+
+The first observation includes:
 
 - every explicit routine ACL row across every schema and overload whose
   grantee is the controller, the control login, or `PUBLIC`; and
@@ -217,11 +226,45 @@ The V8 post-source posture and stable V8 add exactly:
 | --- | --- | --- | --- | --- | --- |
 | `activate_commit_operation_claim_draft_runtime_bundle_selection` | `text` | `ofarm_command_runtime_bundle_selection_controller` | `ofarm_owner` | `EXECUTE` | false |
 
-No row is granted to the login or `PUBLIC`. No grant option is accepted. No
-alternate overload, schema, owner, grantor, grantee, or privilege is accepted.
-The activation function's owner-default row is outside the named-grantee and
-`PUBLIC` comparison and remains the responsibility of the migration-0008
-structural verifier, together with the function's complete structure and ACL.
+No family row is granted to the login or `PUBLIC`. No grant option is accepted.
+No alternate overload, schema, grantor, grantee, or privilege is accepted.
+
+### 5.2 Exact activation-routine inventory
+
+The second observation inventories every routine with the exact name
+`activate_commit_operation_claim_draft_runtime_bundle_selection` across every
+schema and overload. It compares schema, routine name, and PostgreSQL identity
+arguments.
+
+| ACL substate | Complete permitted inventory for that routine name |
+| --- | --- |
+| `NOT_APPLICABLE` or `STABLE_V7` | Empty. No routine with that name may exist in any schema or overload. |
+| `V8_POST_SOURCE_PRE_LEDGER_APPEND` | Exactly `ofarm.activate_commit_operation_claim_draft_runtime_bundle_selection(text)`. |
+| `STABLE_V8` | Exactly `ofarm.activate_commit_operation_claim_draft_runtime_bundle_selection(text)`. |
+
+An owner-only activation routine at V7 therefore fails even when the family
+ACL scan observes no forbidden grantee. A same-named routine in another schema
+or another overload is an additional inventory row and fails.
+
+### 5.3 Every non-owner ACL row on the exact activation routine
+
+When the exact activation routine is present, the third observation explodes
+its effective ACL and retains every row whose grantee is not the routine owner,
+regardless of grantee identity. `PUBLIC` is represented explicitly rather than
+joined through `pg_catalog.pg_roles`.
+
+| ACL substate | Complete permitted non-owner ACL rows |
+| --- | --- |
+| `NOT_APPLICABLE` or `STABLE_V7` | Empty because the routine must be absent. |
+| `V8_POST_SOURCE_PRE_LEDGER_APPEND` | Exactly controller / `ofarm_owner` / `EXECUTE` / not grantable. |
+| `STABLE_V8` | Exactly controller / `ofarm_owner` / `EXECUTE` / not grantable. |
+
+This observation rejects an arbitrary managed or unmanaged grantee, the
+control login, `PUBLIC`, a wrong grantor, wrong privilege, grant option, or an
+additional fourth row. The routine owner's own ACL row is excluded here and
+remains under the migration-0008 structural verifier, together with the
+function body, owner identity, language, security, configuration, RLS, and
+complete structural contract.
 
 ## 6. Closed composition and state model
 
@@ -253,8 +296,9 @@ classification is one provisioning difference and fails the target.
 
 ### 6.2 Stable V7
 
-Stable V7 requires the existing exact V7 ledger phase and exactly the two ACL
-rows in section 5. The general provisioning verifier and the ordinary
+Stable V7 requires the existing exact V7 ledger phase, exactly the two family
+ACL rows in section 5.1, and an empty activation-routine inventory under
+section 5.2. The general provisioning verifier and the ordinary
 `migration_locked_differences` entry use only stable-state classification.
 
 The presence of the activation routine or the third ACL while the durable
@@ -287,7 +331,7 @@ filename, digest, role, routine, grantee, grantor, or allow/deny flag from a
 caller. It independently requires the fixed tenant specification, exact V7
 durable phase, and availability of the exact eighth authoritative binding
 entry. Its only semantic difference from ordinary locked verification is the
-one third ACL row in section 5.
+exact activation-routine inventory row and the one third ACL row in section 5.
 
 The existing public `migration_locked_differences(target, spec)` signature and
 meaning stay closed and unchanged. It always performs stable-state
@@ -311,8 +355,8 @@ stable V8 only when:
   applied-prefix digest, service identity, and provisioning-spec digest match
   the exact active eighth authoritative migration and fixed tenant
   provisioning specification; and
-- the complete controller/login ACL observation equals the three rows in
-  section 5.
+- all three section-5 observations equal the stable-V8 routine inventory and
+  ACL expectations.
 
 An exact V8 ledger row with only two grants is drift. Three grants with no
 exact V8 ledger row are drift. A V8 row cannot be authenticated by its
@@ -329,8 +373,11 @@ The smallest coherent implementation has four parts:
    ledger classification only to return the existing `A4` projection for exact
    stable V8, and derive the subordinate ACL substate in section 6 from the
    same authenticated evidence.
-2. Keep the ordinary verifier path strict, and add one private post-source V8
-   verifier seam whose sole delta is the third ACL row.
+2. Keep the ordinary verifier path strict. Implement the three exact section-5
+   observations, including same-name routine inventory across schemas and
+   overloads and every non-owner ACL row on the exact activation routine. Add
+   one private post-source V8 verifier seam whose sole permitted delta is the
+   exact activation identity and its one controller ACL row.
 3. In `migration_runner.py`, select that seam only for the exact authenticated
    tenant migration-0008 transition described in section 6.3. Immediately
    before the production-only branch, repeat complete
@@ -360,8 +407,9 @@ runner branch, work stops for review.
   position, filename, digest, length, and prefix identity come only from the
   literal reviewed `TENANT_AUTHORITATIVE_MIGRATION_SET`, never caller data or
   observed database shape.
-- **PSVA-003 — One transition delta.** The post-source verifier differs from
-  stable V7 only by the exact third ACL tuple in section 5.
+- **PSVA-003 — One closed transition delta.** The post-source verifier differs
+  from stable V7 only by the exact activation-routine inventory identity and
+  exact third ACL tuple in section 5.
 - **PSVA-003A — Existing phase law controls.** `A0`, `A1`, `A2`, and `A4`
   retain every accepted V5–V7 meaning; V8 is an `A4` projection plus a
   subordinate selection-controller ACL substate, never `A5` or a replacement
@@ -375,6 +423,13 @@ runner branch, work stops for review.
 - **PSVA-006 — Exact ACL closure.** Missing, additional, grantable, direct-login,
   PUBLIC, wrong-schema, wrong-overload, wrong-grantor, wrong-grantee, or
   wrong-privilege rows fail closed.
+- **PSVA-006A — Exact routine existence.** `NOT_APPLICABLE` and `STABLE_V7`
+  require the activation routine name to be absent across every schema and
+  overload. Transition and stable V8 require exactly the one identity in
+  section 5.2.
+- **PSVA-006B — Arbitrary grantees remain visible.** Every non-owner ACL row on
+  the exact activation routine is observed regardless of grantee and must equal
+  the one row in section 5.3.
 - **PSVA-007 — No mutation or repair.** Every verifier in this boundary is
   observational. It never grants, revokes, creates, drops, appends, repairs, or
   reconciles.
@@ -405,6 +460,10 @@ The implementation must refuse or stop when:
   length, or prefix digest;
 - stable V7 contains the third ACL during ordinary provisioning or ordinary
   locked verification;
+- stable V7 contains an owner-only activation routine or an activation routine
+  granted to `ofarm_app` or any other non-owner role;
+- the activation routine name exists in another schema or with another
+  overload in any substate;
 - any `A0`, `A1`, or `A2` target is reclassified as a new V8 phase, or exact
   durable head 8 is accepted without both the existing `A4` projection and
   `STABLE_V8` substate;
@@ -417,8 +476,12 @@ The implementation must refuse or stop when:
 - the activation grant is grantable, granted by a role other than
   `ofarm_owner`, granted to the login or PUBLIC, uses another schema or
   overload, or is accompanied by any fourth family row;
+- stable V8 or the transition contains an arbitrary fourth non-owner grantee on
+  the exact activation routine;
 - an explicit controller, control-login, or `PUBLIC` routine ACL row in another
   schema or overload escapes the exhaustive observation;
+- a same-named activation routine or a non-owner activation-routine ACL row
+  escapes the exact inventory or arbitrary-grantee observation;
 - an exception or simulated backend loss leaves a committed V8 row or third
   grant;
 - a caller, environment value, target observation, function-existence check,
@@ -445,7 +508,7 @@ paths:
 | `docs/rfcs/OFARM_Tenant_Command_RuntimeBundle_Selection_Provisioning_Verifier_Admission_RFC_v0_1.md` | This contract and compact approval evidence required by the active pre-deployment workflow. |
 | `deployment/postgresql/provisioning.py` | Exact stable-V8 phase recognition, exact third-row expectation, and the private post-source verifier seam. |
 | `deployment/postgresql/migration_runner.py` | Select the private seam only at the authenticated V8 post-source/pre-ledger point. |
-| `kernel/tests/test_postgresql_provisioning.py` | Focused phase composition, stable/controlled-transition/final classification, exhaustive ACL closure, and refusal verification on disposable PostgreSQL targets. |
+| `kernel/tests/test_postgresql_provisioning.py` | Focused phase composition, stable/controlled-transition/final classification, exact routine inventory, arbitrary non-owner ACL closure, and refusal verification on disposable PostgreSQL targets. |
 | `kernel/tests/test_postgresql_migration_runner.py` | Focused runner ordering, repeated authoritative authentication, production/test entry separation, source-structure, and refusal tests. |
 | `conformance/review_baseline_test_inventory.json` | Mechanical regeneration only when the canonical collected test-node inventory changes, including a count or node-ID change. |
 
@@ -501,6 +564,16 @@ After approval, the verifier PR must prove:
 - the exhaustive explicit controller/control-login/`PUBLIC` scan covers every
   schema and overload, and effective default `PUBLIC` execution on a
   non-system routine cannot escape it;
+- the non-system routine boundary is the exact existing OID threshold `16384`,
+  not a caller value, namespace heuristic, or prose-only classification;
+- stable V7 refuses an owner-only activation routine and the same routine
+  granted only to `ofarm_app`;
+- every substate refuses the activation routine name in another schema or with
+  another overload;
+- transition and stable V8 refuse an arbitrary fourth non-owner grantee on the
+  exact activation routine;
+- exact routine inventory and every non-owner ACL row are verified independently
+  of whether the controller/login/`PUBLIC` family scan observes a row;
 - exact stable V8 requires both the exact authoritative ledger evidence and
   exactly three rows;
 - incomplete or substituted V8 ledger evidence fails;
