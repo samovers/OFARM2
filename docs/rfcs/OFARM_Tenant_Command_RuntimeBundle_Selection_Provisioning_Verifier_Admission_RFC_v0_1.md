@@ -8,7 +8,13 @@ deployment, legacy, or #192 effect
 `ofarm.tenant-command-runtime-bundle-selection-provisioning-verifier-admission.issue176.v0.1`
 
 **Decision identity:**
-`ISSUE176-SELECTION-PROVISIONING-VERIFIER-001`, version `1`
+`ISSUE176-SELECTION-PROVISIONING-VERIFIER-001`, version `2`
+
+**Withdrawn card:** version `1` was displayed but not approved. Exact-head
+review `4873828149` found an incomplete composition with the accepted V5–V7
+phase authority and a premature V8 integration-proof requirement. Version `1`
+is withdrawn, creates no implementation or merge authority, and cannot be
+approved or reused.
 
 **Reviewed base:** `d86dede91088dd1ab4cbc5a9e5664a2fa321f199`
 
@@ -29,18 +35,20 @@ when migration 0008's required controller EXECUTE grant was rejected by the
 active provisioning verifier. The parent Phase B allowlist does not include
 that verifier and therefore cannot change its authority.
 
-This contract admits one separate, narrow verifier change. It permits the
-provisioning verifier and migration runner to recognize exactly these states:
+This contract admits one separate, narrow verifier change. It preserves the
+accepted durable V5–V7 admission phases `A0`, `A1`, `A2`, and `A4` and composes
+them with one subordinate selection-controller ACL substate:
 
 ```text
-STABLE_V7
-  -> AUTHENTICATED_V8_SOURCE_EXECUTING
-  -> V8_POST_SOURCE_PRE_LEDGER_APPEND
-  -> STABLE_V8
+existing admission phase: A0 | A1 | A2 | A4
+
+selection-controller ACL substate:
+NOT_APPLICABLE | STABLE_V7 | V8_POST_SOURCE_PRE_LEDGER_APPEND | STABLE_V8
 ```
 
-`STABLE_V7` continues to require exactly the existing two binder-owned
-selection-control grants. `V8_POST_SOURCE_PRE_LEDGER_APPEND` is a
+`AUTHENTICATED_V8_SOURCE_EXECUTING` is a runner event between observations, not
+a verifier state. `STABLE_V7` continues to require exactly the existing two
+binder-owned selection-control grants. `V8_POST_SOURCE_PRE_LEDGER_APPEND` is a
 transaction-local runner posture that permits exactly one additional
 owner-owned controller grant after the exact authoritative migration 0008
 source executes and before the runner appends its ledger row. `STABLE_V8`
@@ -82,7 +90,7 @@ under the parent's existing database allowlist and stop conditions. The
 verifier PR may not absorb any paused database draft. The later database PR may
 not edit the verifier or runner.
 
-## 3. Fixed governing authorities
+## 3. Fixed governing authorities and reviewed baselines
 
 | Authority | Exact reviewed identity |
 | --- | --- |
@@ -91,11 +99,14 @@ not edit the verifier or runner.
 | Temporal separation | `docs/adr/0002-valid-time-and-knowledge-time.md`; 61,427 bytes; `sha256:c23cb57616207f2f6d39103e429ea778d794ef85d2b198057806c8228d608796` |
 | TenantBinding authority | `docs/adr/0003-tenant-capability-trust-and-binder.md`; 93,419 bytes; `sha256:b188f4d60e46887fde4231e73bb00adb9bd70b75e807627e8a3906389a0fa5be` |
 | Parent selection-activation contract | Exact path, identity, byte length, and digest in section 2 |
+| V5 selection-control admission | `docs/rfcs/OFARM_Tenant_Binding_Selection_Control_Admission_RFC_v0_1.md`; `ofarm.tenant-binding-selection-control-admission.issue176.v0.1`; 32,169 bytes; `sha256:c1d02969811be0d5b02bdae158cb48e5d8148356ca9d4bac956c8861d529c37a` |
+| V6 current-context owner admission | `docs/rfcs/OFARM_Tenant_Current_Context_Selection_Owner_Admission_RFC_v0_1.md`; `ofarm.tenant-current-context-selection-owner-admission.issue176.v0.1`; 50,383 bytes; `sha256:af85e259230b69edeba80ddc2eea2f070a601fd3888fd463ce595f9cc446b13d` |
+| V7 write-lock owner admission | `docs/rfcs/OFARM_Tenant_Write_Lock_Selection_Owner_Admission_RFC_v0_1.md`; `ofarm.tenant-write-lock-selection-owner-admission.issue176.v0.1`; 45,758 bytes; `sha256:5745ad4b8b588be2b5a1b64b4b84aa757b23f8d2de00ca59e71de8ea304f51b0` |
 | Current tenant migration authority | `deployment/postgresql/migration_sets.py::TENANT_AUTHORITATIVE_MIGRATION_SET`; exact reviewed seven-migration digest `sha256:5616797d1362c55c78175126edab29cc3e88c021ba0709e3766d3196d2b0126b` |
-| Current provisioning verifier source | `deployment/postgresql/provisioning.py`; reviewed Git blob `efd78f52b2b152fe67ee7c454feba3edbaff0160` |
-| Current migration runner source | `deployment/postgresql/migration_runner.py`; reviewed Git blob `cbf5e956733e39b16e20652d6b89541dd5b58c57` |
-| Current migration-set source | `deployment/postgresql/migration_sets.py`; reviewed Git blob `c14919d8b94c0ad9ac9ca2b51f1692135d554cfb` |
-| Active pre-deployment workflow | `docs/rfcs/OFARM2_Predeployment_AI_Assisted_Development_Workflow_RFC_v0_1.md` and the merged prospective rules in `AGENTS.md` and `TASK_PROMPT.md` |
+| Provisioning verifier starting baseline | `deployment/postgresql/provisioning.py`; reviewed Git blob `efd78f52b2b152fe67ee7c454feba3edbaff0160`; authenticated before applying this contract, not a required post-implementation source identity |
+| Migration runner starting baseline | `deployment/postgresql/migration_runner.py`; reviewed Git blob `cbf5e956733e39b16e20652d6b89541dd5b58c57`; authenticated before applying this contract, not a required post-implementation source identity |
+| Migration-set starting baseline | `deployment/postgresql/migration_sets.py`; reviewed Git blob `c14919d8b94c0ad9ac9ca2b51f1692135d554cfb`; authenticated before applying this contract and unchanged by this PR |
+| Active pre-deployment workflow | `docs/rfcs/OFARM2_Predeployment_AI_Assisted_Development_Workflow_RFC_v0_1.md` and the active merged rules in `AGENTS.md` and `TASK_PROMPT.md` |
 
 The current authoritative set ends at V7. This contract does not add V8 to
 that set. The separate database Phase B remains the sole authority permitted
@@ -109,6 +120,13 @@ identity supplied by a caller. If the future authoritative entry is not
 exactly version `8` with filename
 `0008_tenant_command_runtime_bundle_selection.sql`, the V8 transition and
 stable-V8 postures are unavailable.
+
+The complete V5, V6, and V7 child-contract identities above remain controlling
+for their capsules, grants, transaction ordering, and `A0`–`A4` meanings.
+This contract does not add `A5`, replace `_TenantBindingAdmissionPhase`, or
+reinterpret an earlier phase. The V7 contract owns only the exact existing
+`ofarm_owner` lock-wrapper execution edge and expressly does not own migration
+0008, its activation function, or this additional verifier recognition.
 
 ## 4. Trust model and authority map
 
@@ -161,14 +179,29 @@ The provisioning verifier observes and refuses. It does not own migration
 source, issue privileges, repair state, or convert an observation into
 authority.
 
-## 5. Exact ACL family
+## 5. Exact ACL observation and permitted family
 
-The inspected grantee family remains closed to:
+The verifier performs one exhaustive target-database routine ACL observation.
+It includes:
+
+- every explicit routine ACL row across every schema and overload whose
+  grantee is the controller, the control login, or `PUBLIC`; and
+- every effective default-`PUBLIC` routine ACL row for a non-system routine
+  whose explicit ACL is null.
+
+The permitted named-grantee family remains closed to:
 
 ```text
 ofarm_command_runtime_bundle_selection_controller
 ofarm_command_runtime_bundle_selection_control_login
 ```
+
+The observation compares schema, routine name, identity arguments, grantee,
+grantor, privilege, and grantability. It does not infer identity from a
+function name alone. System-default `PUBLIC` execution inherited from the
+unchanged PostgreSQL catalog is outside this new user-routine family scan;
+explicit changes to system routine ACLs remain covered by the existing global
+provisioning checks.
 
 At stable V7 the complete expected non-owner ACL rows in schema `ofarm` for
 that family are exactly:
@@ -184,15 +217,41 @@ The V8 post-source posture and stable V8 add exactly:
 | --- | --- | --- | --- | --- | --- |
 | `activate_commit_operation_claim_draft_runtime_bundle_selection` | `text` | `ofarm_command_runtime_bundle_selection_controller` | `ofarm_owner` | `EXECUTE` | false |
 
-No row is granted to the login directly. No grant option is accepted. No
+No row is granted to the login or `PUBLIC`. No grant option is accepted. No
 alternate overload, schema, owner, grantor, grantee, or privilege is accepted.
-Owner-default ACL rows outside the existing query's grantee family are not
-reclassified by this contract; the migration-0008 structural verifier remains
-responsible for the activation function's complete structure and ACL.
+The activation function's owner-default row is outside the named-grantee and
+`PUBLIC` comparison and remains the responsibility of the migration-0008
+structural verifier, together with the function's complete structure and ACL.
 
-## 6. Closed state model
+## 6. Closed composition and state model
 
-### 6.1 Stable V7
+### 6.1 Composition with `A0`–`A4`
+
+The accepted `_TenantBindingAdmissionPhase` values remain exactly `A0`, `A1`,
+`A2`, and `A4`. They remain the sole authority for V5 selection grants, V6
+current-context grants, V7 write-lock grants, and all three capsule-presence
+rules. This contract adds no durable admission phase.
+
+The selection-controller ACL substate composes as follows:
+
+| Existing phase and ledger evidence | ACL substate | Selection-controller family expectation |
+| --- | --- | --- |
+| `A0` | `NOT_APPLICABLE` | Existing A0 behavior; no V5 selection-control grants; the activation grant is refused. |
+| `A1` or `A2` | `NOT_APPLICABLE` | Existing phase behavior; exactly the two V5 binder grants; the activation grant is refused. |
+| `A4` with exact durable head 7 | `STABLE_V7` | Exactly the two V5 binder grants. |
+| `A4` with exact head 7 plus the runner-authenticated post-source event in section 6.3 | `V8_POST_SOURCE_PRE_LEDGER_APPEND` | Exactly the two V5 binder grants plus the one activation grant. |
+| `A4` projection with exact authenticated durable head 8 | `STABLE_V8` | Exactly the two V5 binder grants plus the one activation grant. |
+
+For exact durable head 8, the existing phase classifier must authenticate the
+V8 ledger evidence and return the existing `A4` capsule-and-grant projection.
+The subordinate ACL classifier returns `STABLE_V8` from that same exact
+evidence. One private ledger-classification operation returns the composed
+`(existing phase, ACL substate)` result; two independently authoritative
+classifiers are forbidden. Existing capsule and grant checks consume only the
+phase projection from that result. Any incomplete or contradictory
+classification is one provisioning difference and fails the target.
+
+### 6.2 Stable V7
 
 Stable V7 requires the existing exact V7 ledger phase and exactly the two ACL
 rows in section 5. The general provisioning verifier and the ordinary
@@ -201,7 +260,7 @@ rows in section 5. The general provisioning verifier and the ordinary
 The presence of the activation routine or the third ACL while the durable
 ledger remains at V7 is drift and must fail every ordinary verification path.
 
-### 6.2 Authenticated V8 source transition
+### 6.3 Authenticated V8 source transition
 
 The special post-source posture is available only when all of these facts are
 true in reviewed runner control flow:
@@ -219,8 +278,11 @@ true in reviewed runner control flow:
 7. the connection remains in the expected transaction; and
 8. the check occurs before any V8 ledger append.
 
-The runner may then invoke one narrowly named private verifier seam for this
-post-source posture. The seam accepts no source identity, row identity,
+Execution of the source statement is a runner event. No verifier observation
+occurs while PostgreSQL is executing that statement. After it returns and the
+connection is still `INTRANS`, the runner may invoke one narrowly named private
+verifier seam for this post-source posture. The seam accepts no source
+identity, row identity,
 filename, digest, role, routine, grantee, grantor, or allow/deny flag from a
 caller. It independently requires the fixed tenant specification, exact V7
 durable phase, and availability of the exact eighth authoritative binding
@@ -232,11 +294,12 @@ meaning stay closed and unchanged. It always performs stable-state
 verification. The new private seam is not exported through
 `deployment.postgresql.__init__` and is not a generic transition registry.
 
-Any rollback removes the source effects and returns to stable V7. A backend
-loss, exception, or refusal before commit cannot leave the transition posture
-as a lawful durable state.
+Any rollback must remove the source effects and return to stable V7. A backend
+loss, exception, or refusal before commit cannot make the transition posture a
+lawful durable state. The real migration-0008 rollback and uncertain-outcome
+proof belongs to the later database Phase B under section 11.3.
 
-### 6.3 Stable V8
+### 6.4 Stable V8
 
 After the runner appends V8 and commits, ordinary verification may classify
 stable V8 only when:
@@ -262,23 +325,31 @@ contract rather than being inferred by this implementation.
 
 The smallest coherent implementation has four parts:
 
-1. Extend the private durable admission-phase classifier in
-   `provisioning.py` to recognize exact stable V8 from the literal
-   authoritative migration binding and exact ledger evidence.
+1. Preserve the exact `A0`/`A1`/`A2`/`A4` phase vocabulary. Extend its private
+   ledger classification only to return the existing `A4` projection for exact
+   stable V8, and derive the subordinate ACL substate in section 6 from the
+   same authenticated evidence.
 2. Keep the ordinary verifier path strict, and add one private post-source V8
    verifier seam whose sole delta is the third ACL row.
 3. In `migration_runner.py`, select that seam only for the exact authenticated
-   tenant migration-0008 transition described in section 6.2; every pre-source
-   check, every other migration, the next-loop stable check, and all ordinary
-   provisioning verification continue through the stable verifier.
-4. Add focused unit and disposable PostgreSQL tests proving stable, transition,
-   final, rollback, and refusal behavior.
+   tenant migration-0008 transition described in section 6.3. Immediately
+   before the production-only branch, repeat complete
+   `require_authoritative_migration_set(migration_set)` authentication. A
+   version, filename, source object, or earlier shared-executor argument cannot
+   substitute for that repeated authentication. Every pre-source check, every
+   other migration, the next-loop stable check, and all ordinary provisioning
+   verification continue through the stable verifier.
+4. Add focused unit, source-structure, and disposable PostgreSQL tests proving
+   the classifications, exact ACL observation, private-seam behavior,
+   authoritative-binding refusal, and production/test entry-point separation
+   available before migration 0008 exists.
 
-The implementation must not introduce a general transition enum exposed to
-callers, a caller-set boolean, a registry, a plugin, a database marker, a GUC,
-a temporary table, a new role, a new credential, or an alternate migration
-entry point. Code size is a warning signal: if this design cannot remain a
-small classifier and one runner branch, work stops for review.
+The implementation must not introduce a caller-controlled transition mode of
+any kind, including a Boolean, enum, callback, singleton token, capability bag,
+registry, plugin, database marker, GUC, or temporary table. It must not add a
+new role, credential, or alternate public migration entry point. Code size is
+a warning signal: if this design cannot remain a small composition and one
+runner branch, work stops for review.
 
 ## 8. Invariants
 
@@ -291,6 +362,10 @@ small classifier and one runner branch, work stops for review.
   observed database shape.
 - **PSVA-003 — One transition delta.** The post-source verifier differs from
   stable V7 only by the exact third ACL tuple in section 5.
+- **PSVA-003A — Existing phase law controls.** `A0`, `A1`, `A2`, and `A4`
+  retain every accepted V5–V7 meaning; V8 is an `A4` projection plus a
+  subordinate selection-controller ACL substate, never `A5` or a replacement
+  phase family.
 - **PSVA-004 — Runner-owned ordering.** Only reviewed migration-runner control
   flow may enter the post-source posture, after exact source execution and
   before ledger append in the same locked transaction.
@@ -303,8 +378,10 @@ small classifier and one runner branch, work stops for review.
 - **PSVA-007 — No mutation or repair.** Every verifier in this boundary is
   observational. It never grants, revokes, creates, drops, appends, repairs, or
   reconciles.
-- **PSVA-008 — Rollback closure.** A refused or interrupted V8 attempt retains
-  no lawful third grant and no V8 ledger row.
+- **PSVA-008 — Rollback closure.** In the completed database composition, a
+  refused or interrupted V8 attempt retains no lawful third grant and no V8
+  ledger row; the real source and transaction proof is deferred to section
+  11.3.
 - **PSVA-009 — Parent storage authority unchanged.** Migration 0008 remains the
   sole issuer of the third grant and owner of activation-function structure;
   this PR does not edit it or its adapter.
@@ -328,6 +405,9 @@ The implementation must refuse or stop when:
   length, or prefix digest;
 - stable V7 contains the third ACL during ordinary provisioning or ordinary
   locked verification;
+- any `A0`, `A1`, or `A2` target is reclassified as a new V8 phase, or exact
+  durable head 8 is accepted without both the existing `A4` projection and
+  `STABLE_V8` substate;
 - the special seam is attempted before source execution, after ledger append,
   outside the locked transaction, from another migration, or for another
   service;
@@ -337,10 +417,16 @@ The implementation must refuse or stop when:
 - the activation grant is grantable, granted by a role other than
   `ofarm_owner`, granted to the login or PUBLIC, uses another schema or
   overload, or is accompanied by any fourth family row;
+- an explicit controller, control-login, or `PUBLIC` routine ACL row in another
+  schema or overload escapes the exhaustive observation;
 - an exception or simulated backend loss leaves a committed V8 row or third
   grant;
 - a caller, environment value, target observation, function-existence check,
   or database marker can select the transition posture;
+- `_migrate_service_for_testing()` or a synthetic migration set can enter the
+  production-only branch;
+- the production-only branch does not repeat complete authoritative-set
+  authentication immediately before selecting the private seam;
 - the existing public verifier signature or package export surface changes;
 - a changed file is outside section 10; or
 - implementation requires editing the parent contract, migration 0008,
@@ -359,8 +445,8 @@ paths:
 | `docs/rfcs/OFARM_Tenant_Command_RuntimeBundle_Selection_Provisioning_Verifier_Admission_RFC_v0_1.md` | This contract and compact approval evidence required by the active pre-deployment workflow. |
 | `deployment/postgresql/provisioning.py` | Exact stable-V8 phase recognition, exact third-row expectation, and the private post-source verifier seam. |
 | `deployment/postgresql/migration_runner.py` | Select the private seam only at the authenticated V8 post-source/pre-ledger point. |
-| `kernel/tests/test_postgresql_provisioning.py` | Focused stable, transitional, final, ACL-closure, and rollback verification on disposable PostgreSQL targets. |
-| `kernel/tests/test_postgresql_migration_runner.py` | Focused runner-order, authoritative-identity, refusal, and transaction tests. |
+| `kernel/tests/test_postgresql_provisioning.py` | Focused phase composition, stable/controlled-transition/final classification, exhaustive ACL closure, and refusal verification on disposable PostgreSQL targets. |
+| `kernel/tests/test_postgresql_migration_runner.py` | Focused runner ordering, repeated authoritative authentication, production/test entry separation, source-structure, and refusal tests. |
 | `conformance/review_baseline_test_inventory.json` | Mechanical regeneration only when the canonical collected test-node inventory changes, including a count or node-ID change. |
 
 No path prefix, generated wildcard, or “related file” is implied. The
@@ -397,22 +483,37 @@ After approval, the verifier PR must prove:
 
 - the ordinary public verifier signature and package export surface are
   unchanged;
+- `A0`, `A1`, `A2`, and `A4` remain the complete existing phase vocabulary and
+  retain their accepted V5–V7 capsule and grant meanings;
+- exact stable V8 composes as the existing `A4` projection plus `STABLE_V8`,
+  with no `A5` and no contradictory classifier result;
 - no production call site can select the special seam except the one exact
   runner branch;
 - V7 with two rows passes ordinary verification;
 - V7 with the third row fails ordinary provisioning and ordinary locked
   verification;
-- the exact test-only representation of the authenticated V8 post-source state
-  passes the private seam with exactly three rows;
+- controlled protocol/database evidence proves the stable-V8 ledger
+  classification without claiming a real production migration-0008 run;
+- the private seam accepts exactly the V8 post-source ACL shape when exercised
+  directly under controlled test evidence;
 - missing, extra, wrong-grantor, wrong-grantee, direct-login, PUBLIC,
   grantable, wrong-overload, and wrong-privilege variants fail;
+- the exhaustive explicit controller/control-login/`PUBLIC` scan covers every
+  schema and overload, and effective default `PUBLIC` execution on a
+  non-system routine cannot escape it;
 - exact stable V8 requires both the exact authoritative ledger evidence and
   exactly three rows;
 - incomplete or substituted V8 ledger evidence fails;
 - another service, migration version, filename, set position, or unauthenticated
   set cannot select the transition;
-- exception, refusal, and backend-loss paths roll back without a durable V8 row
-  or third grant;
+- source-structure evidence proves the production branch is after
+  `connection.execute(source_text)`, after the `INTRANS` check, and before
+  `_insert_ledger_row(...)`;
+- source-structure and behavior tests prove the branch repeats
+  `require_authoritative_migration_set(migration_set)` and that
+  `_migrate_service_for_testing()` and synthetic histories cannot select it;
+- no second public migration entry point or caller-controlled transition mode
+  exists;
 - existing V5, V6, and V7 phase tests remain green;
 - focused provisioning and migration-runner tests pass against disposable
   PostgreSQL 17 targets;
@@ -431,14 +532,17 @@ database Phase B must additionally prove on a destroyed or rolled-back target:
 
 ```text
 exact stable V7
-  -> authenticated authoritative migration 0008 source
+  -> real literal eighth authoritative row and retained migration 0008 source
+  -> production migrate_service() enters the authenticated branch
   -> exact post-source verifier passage
   -> exact V8 ledger append and commit
   -> ordinary stable-V8 verifier passage
 ```
 
-That later proof belongs to the parent's existing database tests and paths. It
-does not authorize a verifier edit in the database PR.
+That later proof must also cover source refusal, transaction rollback, backend
+loss, commit-acknowledgement uncertainty, exact retry/no-op behavior, and final
+stable-V8 verification. It belongs to the parent's existing database tests and
+paths and does not authorize a verifier edit in the database PR.
 
 ## 12. Non-goals and stop conditions
 
@@ -477,7 +581,7 @@ the designated Codex task naming one already-created draft PR. A later
 user-authored message in that task must be exactly:
 
 ```text
-I approve OFARM2 decision ISSUE176-SELECTION-PROVISIONING-VERIFIER-001 version 1.
+I approve OFARM2 decision ISSUE176-SELECTION-PROVISIONING-VERIFIER-001 version 2.
 ```
 
 Before that message, the named PR may contain only this RFC and no behavior
