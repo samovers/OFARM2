@@ -8526,7 +8526,7 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
-      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_ast_copy_budget_and_adapters_do_not_reread_or_consume_it",
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_ast_copy_budget_refuses_at_fixed_limit",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -9197,6 +9197,31 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_static_graph_and_ordered_reachability_are_deterministic",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_temporary_snapshot_compatibility_names_are_removed[LEGACY_IMPORT_ROOTS]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_temporary_snapshot_compatibility_names_are_removed[PRODUCTION_IMPORT_ROOTS]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_temporary_snapshot_compatibility_names_are_removed[_import_graph]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_temporary_snapshot_compatibility_names_are_removed[_module_sources]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_temporary_snapshot_compatibility_names_are_removed[_reachable_paths]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -12596,8 +12621,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "52119176ea19d5e7d49911125f28f38835f77eff112acc2388df33d77468bbc6",
-  "entryCount": 2519,
+  "entriesSha256": "d4a212896da204c4016c9fd7da017387247af28f51495e2dfd5b1468eeb04d00",
+  "entryCount": 2524,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

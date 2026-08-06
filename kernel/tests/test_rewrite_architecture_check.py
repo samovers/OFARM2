@@ -201,9 +201,10 @@ def _write_module(root: Path, relative: str, source: str = "") -> None:
 
 
 def _required_snapshot_roots(root: Path) -> None:
+    descriptor = rewrite_architecture_check._FIXED_DESCRIPTOR_V1
     for module in (
-        *rewrite_architecture_check.PRODUCTION_IMPORT_ROOTS,
-        *rewrite_architecture_check.LEGACY_IMPORT_ROOTS,
+        *descriptor.production_import_roots,
+        *descriptor.legacy_import_roots,
     ):
         _write_module(root, f"{module.replace('.', '/')}.py")
 
@@ -230,7 +231,8 @@ def test_firewall_rejects_missing_required_profile_modules(tmp_path, module):
     _firewall_tree(tmp_path, "")
     (tmp_path / f"{module.replace('.', '/')}.py").unlink()
 
-    if module in rewrite_architecture_check.LEGACY_IMPORT_ROOTS:
+    descriptor = rewrite_architecture_check._FIXED_DESCRIPTOR_V1
+    if module in descriptor.legacy_import_roots:
         with pytest.raises(
             rewrite_architecture_check.PythonSourceSnapshotRefusal,
         ) as refused:
@@ -550,7 +552,7 @@ def test_only_builder_seals_snapshot_evidence(tmp_path):
     )
     object.__setattr__(shell, "_builder_seal", True)
     with pytest.raises(TypeError):
-        rewrite_architecture_check._import_graph(shell)
+        shell.ast_for("kernel.api")
 
     copied_seal_shell = object.__new__(
         rewrite_architecture_check.PythonSourceSnapshotV1
@@ -561,12 +563,12 @@ def test_only_builder_seals_snapshot_evidence(tmp_path):
         object.__getattribute__(snapshot, "_builder_seal"),
     )
     with pytest.raises(TypeError):
-        rewrite_architecture_check._import_graph(copied_seal_shell)
+        copied_seal_shell.ast_for("kernel.api")
 
     original_count = snapshot.source_file_count
     object.__setattr__(snapshot, "_source_file_count", original_count + 1)
     with pytest.raises(TypeError):
-        rewrite_architecture_check._import_graph(snapshot)
+        snapshot.ast_for("kernel.api")
     assert not any(
         name in {"_initialize", "initialize", "seal", "reinitialize"}
         for name, _member in inspect.getmembers(
@@ -1073,12 +1075,12 @@ def test_inventory_refuses_module_collisions_empty_names_and_missing_roots(
         .EMPTY_MODULE_NAME,
         lambda: rewrite_architecture_check.build_python_source_snapshot(empty),
     )
-    for index, module in enumerate(
-        (
-            *rewrite_architecture_check.PRODUCTION_IMPORT_ROOTS,
-            *rewrite_architecture_check.LEGACY_IMPORT_ROOTS,
-        )
-    ):
+    descriptor = rewrite_architecture_check._FIXED_DESCRIPTOR_V1
+    roots = (
+        *descriptor.production_import_roots,
+        *descriptor.legacy_import_roots,
+    )
+    for index, module in enumerate(roots):
         missing = _snapshot_tree(tmp_path / f"missing-{index}")
         (missing / f"{module.replace('.', '/')}.py").unlink()
         _assert_refusal(
@@ -1654,15 +1656,11 @@ def test_bounded_ast_copy_failures_refuse_without_authority_change(
     assert snapshot.content_sha256 == digest
 
 
-def test_ast_copy_budget_and_adapters_do_not_reread_or_consume_it(tmp_path):
-    snapshot = rewrite_architecture_check._module_sources(
+def test_ast_copy_budget_refuses_at_fixed_limit(tmp_path):
+    snapshot = rewrite_architecture_check.build_python_source_snapshot(
         _snapshot_tree(tmp_path)
     )
-    graph, trees = rewrite_architecture_check._import_graph(snapshot)
 
-    assert graph is snapshot.import_graph
-    assert type(trees) is types.MappingProxyType
-    assert not trees
     for _ in range(512):
         snapshot.ast_for("kernel.api")
     _assert_refusal(
@@ -1670,16 +1668,20 @@ def test_ast_copy_budget_and_adapters_do_not_reread_or_consume_it(tmp_path):
         .AST_COPY_LIMIT_EXCEEDED,
         lambda: snapshot.ast_for("kernel.api"),
     )
-    _assert_refusal(
-        rewrite_architecture_check.PythonSourceSnapshotRefusalCodeV1
-        .UNSUPPORTED_REACHABILITY_ROOTS,
-        lambda: rewrite_architecture_check._reachable_paths(
-            graph,
-            ("kernel.api",),
-        ),
-    )
-    with pytest.raises(TypeError):
-        rewrite_architecture_check._import_graph({})
+
+
+@pytest.mark.parametrize(
+    "name",
+    (
+        "_module_sources",
+        "_import_graph",
+        "_reachable_paths",
+        "PRODUCTION_IMPORT_ROOTS",
+        "LEGACY_IMPORT_ROOTS",
+    ),
+)
+def test_temporary_snapshot_compatibility_names_are_removed(name):
+    assert not hasattr(rewrite_architecture_check, name)
 
 
 def test_static_graph_and_ordered_reachability_are_deterministic(tmp_path):
