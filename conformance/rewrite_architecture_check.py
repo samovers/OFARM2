@@ -170,8 +170,6 @@ TEST_GLOBS = (
     "kernel/tests/*security_audit_runtime*.py",
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
-PRODUCTION_IMPORT_ROOTS = ("kernel.api", "kernel.application_runtime")
-LEGACY_IMPORT_ROOTS = ("kernel.legacy_m1.api", "kernel.legacy_m1.runtime")
 PROVIDER_IMPORT_POLICY_MODULES = (
     "kernel.profile_runtime_provider",
     "kernel.provider_import_policy",
@@ -1545,35 +1543,6 @@ del _snapshot_builder_and_guard
 
 def _line_count(unit: PythonSourceUnitV1) -> int:
     return len(unit.source_text.splitlines())
-
-
-def _module_sources(root: pathlib.Path) -> PythonSourceSnapshotV1:
-    return build_python_source_snapshot(root)
-
-
-def _import_graph(
-    snapshot: PythonSourceSnapshotV1,
-) -> tuple[
-    collections.abc.Mapping[str, tuple[PythonImportEdgeV1, ...]],
-    collections.abc.Mapping[str, ast.Module],
-]:
-    if not _is_builder_snapshot(snapshot):
-        raise TypeError("snapshot must be PythonSourceSnapshotV1")
-    return snapshot.import_graph, types.MappingProxyType({})
-
-
-def _reachable_paths(
-    graph: collections.abc.Mapping[str, tuple[PythonImportEdgeV1, ...]],
-    roots: tuple[str, ...],
-) -> dict[str, tuple[str, ...]]:
-    if type(roots) is not tuple or (
-        roots != _FIXED_DESCRIPTOR_V1.production_import_roots
-        and roots != _FIXED_DESCRIPTOR_V1.legacy_import_roots
-    ):
-        _refuse(
-            PythonSourceSnapshotRefusalCodeV1.UNSUPPORTED_REACHABILITY_ROOTS,
-        )
-    return _derive_reachability(graph, roots)
 
 
 def _is_legacy_module(module: str) -> bool:
