@@ -22,6 +22,7 @@ from deployment.postgresql.catalog_classifier import (
     SCHEMA_LOCAL_CATALOG_CLASSES,
     SCHEMA_LOCAL_OBJECT_SELECTS_SQL,
 )
+from deployment.postgresql.migration_sets import AuthoritativeMigration
 from deployment.postgresql.provisioning import (
     ProvisioningDriftError,
     ProvisioningInfrastructureReport,
@@ -809,6 +810,439 @@ class _IdentityConnection:
 
     def execute(self, _statement: str) -> _IdentityCursor:
         return _IdentityCursor(self._row)
+
+
+class _AdmissionCursor:
+    def __init__(
+        self,
+        *,
+        row: tuple[object, ...] | None = None,
+        rows: list[tuple[object, ...]] | None = None,
+    ) -> None:
+        self._row = row
+        self._rows = rows
+
+    def fetchone(self) -> tuple[object, ...] | None:
+        return self._row
+
+    def fetchall(self) -> list[tuple[object, ...]]:
+        return list(self._rows or [])
+
+
+class _AdmissionConnection:
+    def __init__(self, responses: list[_AdmissionCursor]) -> None:
+        self._responses = iter(responses)
+
+    def execute(self, *_args, **_kwargs) -> _AdmissionCursor:
+        return next(self._responses)
+
+
+def _stable_v8_protocol_evidence(
+    authority: AuthoritativeMigration,
+    *,
+    replacement_index: int | None = None,
+    replacement_value: object = None,
+) -> _AdmissionConnection:
+    ledger_columns = [
+        ("r", "applied_prefix_digest", "text"),
+        ("r", "filename", "text"),
+        ("r", "provisioning_spec_digest", "text"),
+        ("r", "service_identity", "text"),
+        ("r", "source_byte_length", "bigint"),
+        ("r", "source_sha256", "text"),
+        ("r", "version", "integer"),
+    ]
+    ledger_summary = [
+        8,
+        1,
+        8,
+        "0005_tenant_binding_selection_control_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+        "0006_tenant_current_context_selection_owner_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+        "0007_tenant_write_lock_selection_owner_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+        authority.filename,
+        authority.source_sha256,
+        authority.byte_length,
+        authority.applied_prefix_digest,
+        TENANT_PROVISIONING_SPEC.migration_service.identity,
+        TENANT_PROVISIONING_SPEC.digest,
+    ]
+    if replacement_index is not None:
+        ledger_summary[replacement_index] = replacement_value
+    return _AdmissionConnection(
+        [
+            _AdmissionCursor(row=(True,)),
+            _AdmissionCursor(rows=ledger_columns),
+            _AdmissionCursor(row=tuple(ledger_summary)),
+        ]
+    )
+
+
+def _controlled_v8_authority() -> AuthoritativeMigration:
+    return AuthoritativeMigration(
+        version=8,
+        filename="0008_tenant_command_runtime_bundle_selection.sql",
+        source_sha256="sha256:" + "8" * 64,
+        byte_length=808,
+        applied_prefix_digest="sha256:" + "9" * 64,
+    )
+
+
+def test_tenant_binding_stable_v8_is_an_a4_projection_with_exact_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority = _controlled_v8_authority()
+    monkeypatch.setattr(
+        provisioning_module,
+        "_authoritative_tenant_selection_activation_migration",
+        lambda: authority,
+    )
+
+    classification, differences = (
+        provisioning_module._tenant_binding_admission_classification(
+            _stable_v8_protocol_evidence(authority),  # type: ignore[arg-type]
+            TENANT_PROVISIONING_SPEC,
+        )
+    )
+
+    assert differences == []
+    assert classification is not None
+    assert classification.phase.name == "A4"
+    assert classification.selection_acl_substate.value == "STABLE_V8"
+    assert {
+        provisioning_module._TENANT_BINDING_ADMISSION_A0.name,
+        provisioning_module._TENANT_BINDING_ADMISSION_A1.name,
+        provisioning_module._TENANT_BINDING_ADMISSION_A2.name,
+        provisioning_module._TENANT_BINDING_ADMISSION_A4.name,
+    } == {"A0", "A1", "A2", "A4"}
+
+
+@pytest.mark.parametrize(
+    "replacement_index",
+    (0, 1, 2, 9, 10, 11, 12, 13, 14),
+    ids=(
+        "count",
+        "minimum",
+        "maximum",
+        "filename",
+        "source-digest",
+        "source-length",
+        "prefix-digest",
+        "service",
+        "spec-digest",
+    ),
+)
+def test_tenant_binding_stable_v8_refuses_incomplete_or_substituted_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    replacement_index: int,
+) -> None:
+    authority = _controlled_v8_authority()
+    monkeypatch.setattr(
+        provisioning_module,
+        "_authoritative_tenant_selection_activation_migration",
+        lambda: authority,
+    )
+
+    classification, differences = (
+        provisioning_module._tenant_binding_admission_classification(
+            _stable_v8_protocol_evidence(
+                authority,
+                replacement_index=replacement_index,
+                replacement_value=None,
+            ),  # type: ignore[arg-type]
+            TENANT_PROVISIONING_SPEC,
+        )
+    )
+
+    assert classification is None
+    assert differences == ["tenant binding admission phase differs"]
+
+
+def test_tenant_binding_stable_v8_refuses_without_literal_eighth_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority = _controlled_v8_authority()
+    monkeypatch.setattr(
+        provisioning_module,
+        "_authoritative_tenant_selection_activation_migration",
+        lambda: None,
+    )
+
+    classification, differences = (
+        provisioning_module._tenant_binding_admission_classification(
+            _stable_v8_protocol_evidence(authority),  # type: ignore[arg-type]
+            TENANT_PROVISIONING_SPEC,
+        )
+    )
+
+    assert classification is None
+    assert differences == ["tenant binding admission phase differs"]
+
+
+def _transition_acl_classification():
+    return provisioning_module._TenantBindingAdmissionClassification(
+        provisioning_module._TENANT_BINDING_ADMISSION_A4,
+        provisioning_module._SelectionControllerAclSubstate
+        .V8_POST_SOURCE_PRE_LEDGER_APPEND,
+    )
+
+
+def _transition_acl_observation(
+    *,
+    include_activation_family: bool = True,
+    extra_family: tuple[object, ...] | None = None,
+    extra_inventory: tuple[object, ...] | None = None,
+    activation_acl: list[tuple[object, ...]] | None = None,
+) -> _AdmissionConnection:
+    controller = "ofarm_command_runtime_bundle_selection_controller"
+    family_rows = [
+        (
+            "ofarm",
+            "bind_tenant_capability",
+            "text",
+            controller,
+            "ofarm_binder",
+            "EXECUTE",
+            False,
+        ),
+        (
+            "ofarm",
+            "create_tenant_challenge",
+            "",
+            controller,
+            "ofarm_binder",
+            "EXECUTE",
+            False,
+        ),
+    ]
+    activation_family = (
+        "ofarm",
+        "activate_commit_operation_claim_draft_runtime_bundle_selection",
+        "text",
+        controller,
+        "ofarm_owner",
+        "EXECUTE",
+        False,
+    )
+    if include_activation_family:
+        family_rows.append(activation_family)
+    if extra_family is not None:
+        family_rows.append(extra_family)
+    inventory_rows = [
+        (
+            "ofarm",
+            "activate_commit_operation_claim_draft_runtime_bundle_selection",
+            "text",
+        )
+    ]
+    if extra_inventory is not None:
+        inventory_rows.append(extra_inventory)
+    return _AdmissionConnection(
+        [
+            _AdmissionCursor(rows=family_rows),
+            _AdmissionCursor(rows=inventory_rows),
+            _AdmissionCursor(
+                rows=activation_acl
+                if activation_acl is not None
+                else [(controller, "ofarm_owner", "EXECUTE", False)]
+            ),
+        ]
+    )
+
+
+def test_transition_acl_observations_accept_only_the_exact_closed_shape() -> None:
+    differences = (
+        provisioning_module._tenant_binding_selection_admission_acl_differences(
+            _transition_acl_observation(),  # type: ignore[arg-type]
+            TENANT_PROVISIONING_SPEC,
+            classification=_transition_acl_classification(),
+        )
+    )
+
+    assert differences == []
+
+
+@pytest.mark.parametrize(
+    ("observation", "expected_difference"),
+    (
+        (
+            _transition_acl_observation(
+                extra_family=(
+                    "public",
+                    "unrelated_default_public",
+                    "",
+                    "PUBLIC",
+                    "ofarm_owner",
+                    "EXECUTE",
+                    False,
+                )
+            ),
+            "tenant binding selection-control admission ACL differs",
+        ),
+        (
+            _transition_acl_observation(
+                extra_inventory=(
+                    "public",
+                    "activate_commit_operation_claim_draft_runtime_bundle_selection",
+                    "integer",
+                )
+            ),
+            "tenant selection activation routine inventory differs",
+        ),
+        (
+            _transition_acl_observation(
+                include_activation_family=False,
+                activation_acl=[],
+            ),
+            "tenant binding selection-control admission ACL differs",
+        ),
+        (
+            _transition_acl_observation(
+                extra_family=(
+                    "public",
+                    "other_selection_controller_surface",
+                    "text",
+                    "ofarm_command_runtime_bundle_selection_controller",
+                    "ofarm_owner",
+                    "EXECUTE",
+                    False,
+                )
+            ),
+            "tenant binding selection-control admission ACL differs",
+        ),
+        (
+            _transition_acl_observation(
+                activation_acl=[
+                    (
+                        "ofarm_command_runtime_bundle_selection_controller",
+                        "ofarm_owner",
+                        "EXECUTE",
+                        False,
+                    ),
+                    ("ofarm_app", "ofarm_owner", "EXECUTE", False),
+                ]
+            ),
+            "tenant selection activation routine ACL differs",
+        ),
+        (
+            _transition_acl_observation(
+                extra_family=(
+                    "ofarm",
+                    "activate_commit_operation_claim_draft_runtime_bundle_selection",
+                    "text",
+                    "ofarm_command_runtime_bundle_selection_control_login",
+                    "ofarm_owner",
+                    "EXECUTE",
+                    False,
+                ),
+                activation_acl=[
+                    (
+                        "ofarm_command_runtime_bundle_selection_controller",
+                        "ofarm_owner",
+                        "EXECUTE",
+                        False,
+                    ),
+                    (
+                        "ofarm_command_runtime_bundle_selection_control_login",
+                        "ofarm_owner",
+                        "EXECUTE",
+                        False,
+                    ),
+                ],
+            ),
+            "tenant binding selection-control admission ACL differs",
+        ),
+        (
+            _transition_acl_observation(
+                extra_family=(
+                    "ofarm",
+                    "activate_commit_operation_claim_draft_runtime_bundle_selection",
+                    "text",
+                    "PUBLIC",
+                    "ofarm_owner",
+                    "EXECUTE",
+                    False,
+                ),
+                activation_acl=[
+                    (
+                        "ofarm_command_runtime_bundle_selection_controller",
+                        "ofarm_owner",
+                        "EXECUTE",
+                        False,
+                    ),
+                    ("PUBLIC", "ofarm_owner", "EXECUTE", False),
+                ],
+            ),
+            "tenant binding selection-control admission ACL differs",
+        ),
+        (
+            _transition_acl_observation(
+                activation_acl=[
+                    (
+                        "ofarm_command_runtime_bundle_selection_controller",
+                        "ofarm_binder",
+                        "EXECUTE",
+                        False,
+                    )
+                ]
+            ),
+            "tenant selection activation routine ACL differs",
+        ),
+        (
+            _transition_acl_observation(
+                activation_acl=[
+                    (
+                        "ofarm_command_runtime_bundle_selection_controller",
+                        "ofarm_owner",
+                        "EXECUTE",
+                        True,
+                    )
+                ]
+            ),
+            "tenant selection activation routine ACL differs",
+        ),
+        (
+            _transition_acl_observation(
+                activation_acl=[
+                    (
+                        "ofarm_command_runtime_bundle_selection_controller",
+                        "ofarm_owner",
+                        "USAGE",
+                        False,
+                    )
+                ]
+            ),
+            "tenant selection activation routine ACL differs",
+        ),
+    ),
+    ids=(
+        "default-public",
+        "wrong-schema-overload",
+        "missing-third-row",
+        "explicit-controller-other-schema",
+        "arbitrary-grantee",
+        "direct-login",
+        "public-on-activation",
+        "wrong-grantor",
+        "grant-option",
+        "wrong-privilege",
+    ),
+)
+def test_transition_acl_observations_refuse_every_escape(
+    observation: _AdmissionConnection,
+    expected_difference: str,
+) -> None:
+    differences = (
+        provisioning_module._tenant_binding_selection_admission_acl_differences(
+            observation,  # type: ignore[arg-type]
+            TENANT_PROVISIONING_SPEC,
+            classification=_transition_acl_classification(),
+        )
+    )
+
+    assert expected_difference in differences
 
 
 def _dba_identity_row(

@@ -7,6 +7,7 @@ migration directory.
 
 from __future__ import annotations
 
+import inspect
 import os
 import secrets
 import socket
@@ -24,6 +25,7 @@ import pytest
 from psycopg import sql
 
 import deployment.postgresql.migration_runner as migration_runner_module
+import deployment.postgresql.provisioning as provisioning_module
 from deployment.postgresql.migration_runner import (
     MigrationDirtyError,
     MigrationExecutionError,
@@ -43,6 +45,7 @@ from deployment.postgresql.migration_runner import (
 from deployment.postgresql.migration_sets import (
     SECURITY_AUDIT_SERVICE,
     TENANT_SERVICE,
+    AuthoritativeMigration,
     MigrationService,
     MigrationSet,
     load_authoritative_migration_set,
@@ -996,6 +999,74 @@ def test_public_runner_refuses_synthetic_history_before_target_observation(
             release_identity=RELEASE_IDENTITY,
             execution_id=uuid4(),
         )
+
+
+def test_test_executor_refuses_tenant_migration_0008_before_target_observation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    filenames = ["0001_initial.sql"] + [
+        f"{version:04d}_synthetic.sql" for version in range(2, 8)
+    ] + ["0008_tenant_command_runtime_bundle_selection.sql"]
+    migration_set = _load_synthetic_set(
+        tmp_path,
+        {
+            filename: f"SELECT {version};\n".encode("ascii")
+            for version, filename in enumerate(filenames, start=1)
+        },
+    )
+
+    def target_must_not_be_observed(*_args, **_kwargs):
+        raise AssertionError("test executor observed a target for migration 0008")
+
+    monkeypatch.setattr(
+        migration_runner_module,
+        "verify_service_infrastructure",
+        target_must_not_be_observed,
+    )
+    with pytest.raises(
+        MigrationInputError,
+        match="test migration executor cannot execute tenant migration 0008",
+    ):
+        migrate_service(
+            admin_dsn="must-not-connect",
+            migrator_dsn="must-not-connect",
+            spec=TENANT_PROVISIONING_SPEC,
+            migration_set=migration_set,
+            release_identity=RELEASE_IDENTITY,
+            execution_id=uuid4(),
+        )
+
+
+def test_tenant_v8_branch_is_ordered_and_reauthenticates_literal_set() -> None:
+    source = inspect.getsource(migration_runner_module._migrate_service)
+    execute_at = source.index("connection.execute(source_text)")
+    intrans_at = source.index("TransactionStatus.INTRANS", execute_at)
+    branch_at = source.index("observed_version == 7", intrans_at)
+    reauthenticate_at = source.index(
+        "require_authoritative_migration_set(migration_set)",
+        branch_at,
+    )
+    private_verifier_at = source.index(
+        "_locked_tenant_v8_post_source_boundary_differences",
+        reauthenticate_at,
+    )
+    ledger_append_at = source.index("_insert_ledger_row(", private_verifier_at)
+
+    assert execute_at < intrans_at < branch_at
+    assert branch_at < reauthenticate_at < private_verifier_at < ledger_append_at
+    assert "verify_final_structure" not in source[branch_at:private_verifier_at]
+    assert "_TENANT_SELECTION_ACTIVATION_MIGRATION_FILENAME" in source[
+        branch_at:reauthenticate_at
+    ]
+    testing_source = inspect.getsource(
+        migration_runner_module._migrate_service_for_testing
+    )
+    assert "cannot execute tenant migration 0008" in testing_source
+    assert (
+        "_locked_tenant_v8_post_source_boundary_differences"
+        not in testing_source
+    )
 
 
 def test_applies_exact_0001_then_verifies_a_noop_without_creating_the_ledger(
@@ -2275,6 +2346,201 @@ def _advance_tenant_target_to_v6(
         execution_id=uuid4(),
     )
     return full_set
+
+
+def _advance_tenant_target_to_v7(
+    tenant_target: _TenantTarget,
+) -> MigrationSet:
+    full_set = _advance_tenant_target_to_v6(tenant_target)
+    migrate_authoritative_service(
+        admin_dsn=tenant_target.admin_dsn,
+        migrator_dsn=tenant_target.migrator_dsn,
+        spec=TENANT_PROVISIONING_SPEC,
+        migration_set=full_set,
+        release_identity=RELEASE_IDENTITY + "-v7",
+        execution_id=uuid4(),
+    )
+    return full_set
+
+
+def _create_selection_activation_routine(
+    target_admin_dsn: str,
+    *,
+    schema_name: str = "ofarm",
+    argument_type: str = "text",
+    grantees: tuple[str, ...] = (),
+) -> None:
+    routine_name = (
+        "activate_commit_operation_claim_draft_runtime_bundle_selection"
+    )
+    qualified_routine = sql.Identifier(schema_name, routine_name)
+    qualified_argument = sql.Identifier("pg_catalog", argument_type)
+    with psycopg.connect(target_admin_dsn, autocommit=True) as admin:
+        admin.execute(
+            sql.SQL(
+                "CREATE FUNCTION {}({}) RETURNS pg_catalog.void "
+                "LANGUAGE sql VOLATILE PARALLEL UNSAFE SECURITY INVOKER "
+                "SET search_path = pg_catalog, pg_temp "
+                "AS 'SELECT pg_catalog.pg_sleep(0)'"
+            ).format(qualified_routine, qualified_argument)
+        )
+        admin.execute(
+            sql.SQL("ALTER FUNCTION {}({}) OWNER TO ofarm_owner").format(
+                qualified_routine,
+                qualified_argument,
+            )
+        )
+        admin.execute("SET ROLE ofarm_owner")
+        admin.execute(
+            sql.SQL(
+                "REVOKE ALL PRIVILEGES ON FUNCTION {}({}) FROM PUBLIC"
+            ).format(qualified_routine, qualified_argument)
+        )
+        for grantee in grantees:
+            admin.execute(
+                sql.SQL("GRANT EXECUTE ON FUNCTION {}({}) TO {}").format(
+                    qualified_routine,
+                    qualified_argument,
+                    sql.Identifier(grantee),
+                )
+            )
+        admin.execute("RESET ROLE")
+
+
+@pytest.mark.parametrize(
+    ("schema_name", "argument_type", "grantees", "acl_must_fail"),
+    (
+        ("ofarm", "text", (), False),
+        ("ofarm", "text", ("ofarm_app",), True),
+        (
+            "ofarm",
+            "text",
+            ("ofarm_command_runtime_bundle_selection_controller",),
+            True,
+        ),
+        ("public", "text", (), False),
+        ("ofarm", "int4", (), False),
+    ),
+    ids=(
+        "owner-only",
+        "unrelated-grantee",
+        "premature-controller",
+        "wrong-schema",
+        "wrong-overload",
+    ),
+)
+def test_stable_v7_refuses_every_selection_activation_routine_shape(
+    tenant_target: _TenantTarget,
+    schema_name: str,
+    argument_type: str,
+    grantees: tuple[str, ...],
+    acl_must_fail: bool,
+) -> None:
+    full_set = _advance_tenant_target_to_v7(tenant_target)
+    _create_selection_activation_routine(
+        tenant_target.target_admin_dsn,
+        schema_name=schema_name,
+        argument_type=argument_type,
+        grantees=grantees,
+    )
+
+    with pytest.raises(
+        MigrationTargetError,
+        match="tenant selection activation routine inventory differs",
+    ) as refused:
+        migrate_authoritative_service(
+            admin_dsn=tenant_target.admin_dsn,
+            migrator_dsn=tenant_target.migrator_dsn,
+            spec=TENANT_PROVISIONING_SPEC,
+            migration_set=full_set,
+            release_identity=RELEASE_IDENTITY + "-v7-activation-drift",
+            execution_id=uuid4(),
+        )
+
+    if acl_must_fail:
+        assert "tenant selection activation routine ACL differs" in str(
+            refused.value
+        )
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            "SELECT pg_catalog.count(*), pg_catalog.max(version) "
+            "FROM ofarm.schema_migration"
+        ).fetchone() == (7, 7)
+
+
+def _controlled_selection_activation_authority() -> AuthoritativeMigration:
+    return AuthoritativeMigration(
+        version=8,
+        filename="0008_tenant_command_runtime_bundle_selection.sql",
+        source_sha256="sha256:" + "8" * 64,
+        byte_length=808,
+        applied_prefix_digest="sha256:" + "9" * 64,
+    )
+
+
+def _v8_post_source_differences(
+    tenant_target: _TenantTarget,
+) -> list[str]:
+    with psycopg.connect(tenant_target.migrator_dsn, autocommit=True) as connection:
+        migration_runner_module._begin_and_lock(
+            connection,
+            TENANT_PROVISIONING_SPEC,
+        )
+        try:
+            migration_runner_module._set_owner_role(
+                connection,
+                TENANT_PROVISIONING_SPEC,
+            )
+            return (
+                provisioning_module
+                ._tenant_selection_v8_post_source_locked_differences(
+                    connection,
+                    TENANT_PROVISIONING_SPEC,
+                )
+            )
+        finally:
+            connection.rollback()
+
+
+def test_v8_post_source_seam_accepts_exact_shape_and_observes_all_escape_rows(
+    tenant_target: _TenantTarget,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _advance_tenant_target_to_v7(tenant_target)
+    authority = _controlled_selection_activation_authority()
+    monkeypatch.setattr(
+        provisioning_module,
+        "_authoritative_tenant_selection_activation_migration",
+        lambda: authority,
+    )
+    controller = "ofarm_command_runtime_bundle_selection_controller"
+    _create_selection_activation_routine(
+        tenant_target.target_admin_dsn,
+        grantees=(controller,),
+    )
+
+    assert _v8_post_source_differences(tenant_target) == []
+
+    with psycopg.connect(
+        tenant_target.target_admin_dsn,
+        autocommit=True,
+    ) as admin:
+        admin.execute("SET ROLE ofarm_owner")
+        admin.execute(
+            "GRANT EXECUTE ON FUNCTION "
+            "ofarm.activate_commit_operation_claim_draft_runtime_bundle_selection("
+            "pg_catalog.text) TO ofarm_app"
+        )
+        admin.execute("RESET ROLE")
+        admin.execute(
+            "CREATE FUNCTION public.issue176_default_public() "
+            "RETURNS pg_catalog.void LANGUAGE sql AS "
+            "'SELECT pg_catalog.pg_sleep(0)'"
+        )
+
+    differences = _v8_post_source_differences(tenant_target)
+    assert "tenant selection activation routine ACL differs" in differences
+    assert "tenant binding selection-control admission ACL differs" in differences
 
 
 _EXPECTED_WRITE_LOCK_ACL_A2 = [

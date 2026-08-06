@@ -3631,6 +3631,31 @@
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_stable_v7_refuses_every_selection_activation_routine_shape[owner-only]",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_stable_v7_refuses_every_selection_activation_routine_shape[premature-controller]",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_stable_v7_refuses_every_selection_activation_routine_shape[unrelated-grantee]",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_stable_v7_refuses_every_selection_activation_routine_shape[wrong-overload]",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_stable_v7_refuses_every_selection_activation_routine_shape[wrong-schema]",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_tampered_history_refuses_without_repair[applied_prefix_digest-sha256:1111111111111111111111111111111111111111111111111111111111111111-False]",
       "sourceModule": "kernel.tests.test_postgresql_migration_runner",
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
@@ -3647,6 +3672,16 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_tampered_history_refuses_without_repair[source_sha256-sha256:0000000000000000000000000000000000000000000000000000000000000000-False]",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_tenant_v8_branch_is_ordered_and_reauthenticates_literal_set",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_test_executor_refuses_tenant_migration_0008_before_target_observation",
       "sourceModule": "kernel.tests.test_postgresql_migration_runner",
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
@@ -3837,6 +3872,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_v7_row_is_authenticated_before_and_after_capsule_consumption",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_v8_post_source_seam_accepts_exact_shape_and_observes_all_escape_rows",
       "sourceModule": "kernel.tests.test_postgresql_migration_runner",
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
@@ -4941,12 +4981,122 @@
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_v8_is_an_a4_projection_with_exact_evidence",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_v8_refuses_incomplete_or_substituted_evidence[count]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_v8_refuses_incomplete_or_substituted_evidence[filename]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_v8_refuses_incomplete_or_substituted_evidence[maximum]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_v8_refuses_incomplete_or_substituted_evidence[minimum]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_v8_refuses_incomplete_or_substituted_evidence[prefix-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_v8_refuses_incomplete_or_substituted_evidence[service]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_v8_refuses_incomplete_or_substituted_evidence[source-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_v8_refuses_incomplete_or_substituted_evidence[source-length]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_v8_refuses_incomplete_or_substituted_evidence[spec-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_v8_refuses_without_literal_eighth_authority",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_owner_sealer_and_bigint_lock_grant_are_exactly_isolated",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
     {
       "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_write_lock_owner_and_one_time_owner_sealer_are_closed",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_transition_acl_observations_accept_only_the_exact_closed_shape",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_transition_acl_observations_refuse_every_escape[arbitrary-grantee]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_transition_acl_observations_refuse_every_escape[default-public]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_transition_acl_observations_refuse_every_escape[direct-login]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_transition_acl_observations_refuse_every_escape[explicit-controller-other-schema]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_transition_acl_observations_refuse_every_escape[grant-option]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_transition_acl_observations_refuse_every_escape[missing-third-row]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_transition_acl_observations_refuse_every_escape[public-on-activation]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_transition_acl_observations_refuse_every_escape[wrong-grantor]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_transition_acl_observations_refuse_every_escape[wrong-privilege]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_transition_acl_observations_refuse_every_escape[wrong-schema-overload]",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
@@ -12621,8 +12771,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "d4a212896da204c4016c9fd7da017387247af28f51495e2dfd5b1468eeb04d00",
-  "entryCount": 2524,
+  "entriesSha256": "3346510b41c5535154699d312c62d80acb7858357f5afe0dbc477a2ac74be77c",
+  "entryCount": 2554,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

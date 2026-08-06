@@ -1,8 +1,8 @@
 # OFARM2 Tenant Command RuntimeBundle Selection Provisioning-Verifier Admission — Phase A Contract v0.1
 
-**Status:** proposed Phase A contract; inactive and unapproved; documentation
-only; no provisioning, migration, grant, database, runtime, route, output,
-deployment, legacy, or #192 effect
+**Status:** architect-approved for Phase B implementation only in PR #290;
+no provisioning, migration, grant, database, runtime, route, output,
+deployment, legacy, or #192 effect follows from this record alone
 
 **Contract identity:**
 `ofarm.tenant-command-runtime-bundle-selection-provisioning-verifier-admission.issue176.v0.1`
@@ -680,3 +680,25 @@ PHASE_A_RFC_IN_DRAFT_PR
 
 The verifier PR stops after merge. It does not itself resume or merge the
 paused database work.
+
+## Appendix A — Compact approval evidence
+
+This appendix is provisional, AI-attested evidence of the task user's
+decision. The user message is the authority; this appendix, repository
+credentials, reviews, checks, and merge metadata are not substitutes for it.
+
+- decision: `ISSUE176-SELECTION-PROVISIONING-VERIFIER-001`, version `2`;
+- Codex task: `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`;
+- complete live card: assistant-authored `item-2829`;
+- approval: later user-authored `item-2831`;
+- exact approval sentence:
+  `I approve OFARM2 decision ISSUE176-SELECTION-PROVISIONING-VERIFIER-001 version 2.`;
+- observed ordering: `item-2829` preceded `item-2831` in the same task;
+- implementation PR: `https://github.com/samovers/OFARM2/pull/290`; and
+- limitation: pre-deployment repository-development authority only, to be
+  replaced by independently human-controlled and independently verifiable
+  approval or signing before deployment.
+
+The earlier fenced message `item-2830` was not the exact visible approval
+sentence and supplied no authority. No later cancellation or stop instruction
+was present when Phase B began.

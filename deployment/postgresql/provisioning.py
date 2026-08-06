@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import secrets
 from dataclasses import dataclass
+from enum import Enum
 from typing import Mapping
 
 import psycopg
@@ -25,6 +26,10 @@ from deployment.postgresql.catalog_identity import (
 )
 from deployment.postgresql.catalog_classifier import (
     SCHEMA_LOCAL_OBJECT_SELECTS_SQL,
+)
+from deployment.postgresql.migration_sets import (
+    TENANT_AUTHORITATIVE_MIGRATION_SET,
+    AuthoritativeMigration,
 )
 from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
@@ -42,6 +47,11 @@ from deployment.postgresql.version_policy import (
 
 
 _POSTGRESQL_FIRST_NORMAL_OBJECT_ID = 16384
+_TENANT_SELECTION_ACTIVATION_SCHEMA = "ofarm"
+_TENANT_SELECTION_ACTIVATION_ROUTINE = (
+    "activate_commit_operation_claim_draft_runtime_bundle_selection"
+)
+_TENANT_SELECTION_ACTIVATION_ARGUMENTS = "text"
 _CONTROL_DATABASE = "postgres"
 _BASE_DATABASE_INVENTORY = frozenset({"postgres", "template0", "template1"})
 _ROUTINE_ARGUMENT_SQL = {
@@ -2679,6 +2689,21 @@ class _TenantBindingAdmissionPhase:
     write_lock_grant_required: bool
 
 
+class _SelectionControllerAclSubstate(Enum):
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    STABLE_V7 = "STABLE_V7"
+    V8_POST_SOURCE_PRE_LEDGER_APPEND = "V8_POST_SOURCE_PRE_LEDGER_APPEND"
+    STABLE_V8 = "STABLE_V8"
+
+
+@dataclass(frozen=True, slots=True)
+class _TenantBindingAdmissionClassification:
+    """One composed durable phase and subordinate selection ACL state."""
+
+    phase: _TenantBindingAdmissionPhase
+    selection_acl_substate: _SelectionControllerAclSubstate
+
+
 _TENANT_BINDING_ADMISSION_A0 = _TenantBindingAdmissionPhase(
     name="A0",
     selection_capsule_required=True,
@@ -2717,11 +2742,32 @@ _TENANT_BINDING_ADMISSION_A4 = _TenantBindingAdmissionPhase(
 )
 
 
-def _tenant_binding_admission_phase(
+def _authoritative_tenant_selection_activation_migration(
+) -> AuthoritativeMigration | None:
+    """Return the literal eighth tenant binding only when it is exact."""
+
+    authority = TENANT_AUTHORITATIVE_MIGRATION_SET
+    if (
+        authority.service.identity
+        != TENANT_PROVISIONING_SPEC.migration_service.identity
+        or len(authority.migrations) != 8
+    ):
+        return None
+    migration = authority.migrations[7]
+    if (
+        migration.version != 8
+        or migration.filename
+        != "0008_tenant_command_runtime_bundle_selection.sql"
+    ):
+        return None
+    return migration
+
+
+def _tenant_binding_admission_classification(
     target: psycopg.Connection,
     spec: ProvisioningSpec,
-) -> tuple[_TenantBindingAdmissionPhase | None, list[str]]:
-    """Classify the sole durable V5/V6/V7 capsule-and-grant phase matrix."""
+) -> tuple[_TenantBindingAdmissionClassification | None, list[str]]:
+    """Classify one durable V5-V8 phase and subordinate selection ACL state."""
 
     selection_sealer = spec.tenant_binding_selection_control_admission_sealer
     context_sealer = (
@@ -2747,7 +2793,10 @@ def _tenant_binding_admission_phase(
         (spec.migration_service.qualified_ledger,),
     ).fetchone()[0]
     if not ledger_present:
-        return _TENANT_BINDING_ADMISSION_A0, []
+        return _TenantBindingAdmissionClassification(
+            _TENANT_BINDING_ADMISSION_A0,
+            _SelectionControllerAclSubstate.NOT_APPLICABLE,
+        ), []
     ledger_columns = target.execute(
         """
         SELECT relation.relkind,
@@ -2770,12 +2819,24 @@ def _tenant_binding_admission_phase(
         (
             spec.migration_service.schema_name,
             spec.migration_service.ledger_name,
-            ["filename", "service_identity", "version"],
+            [
+                "applied_prefix_digest",
+                "filename",
+                "provisioning_spec_digest",
+                "service_identity",
+                "source_byte_length",
+                "source_sha256",
+                "version",
+            ],
         ),
     ).fetchall()
     if {tuple(row) for row in ledger_columns} != {
+        ("r", "applied_prefix_digest", "text"),
         ("r", "filename", "text"),
+        ("r", "provisioning_spec_digest", "text"),
         ("r", "service_identity", "text"),
+        ("r", "source_byte_length", "bigint"),
+        ("r", "source_sha256", "text"),
         ("r", "version", "integer"),
     }:
         return None, ["tenant binding admission phase differs"]
@@ -2788,7 +2849,15 @@ def _tenant_binding_admission_phase(
             "pg_catalog.max(filename) FILTER (WHERE version = 6), "
             "pg_catalog.max(service_identity) FILTER (WHERE version = 6), "
             "pg_catalog.max(filename) FILTER (WHERE version = 7), "
-            "pg_catalog.max(service_identity) FILTER (WHERE version = 7) "
+            "pg_catalog.max(service_identity) FILTER (WHERE version = 7), "
+            "pg_catalog.max(filename) FILTER (WHERE version = 8), "
+            "pg_catalog.max(source_sha256) FILTER (WHERE version = 8), "
+            "pg_catalog.max(source_byte_length) FILTER (WHERE version = 8), "
+            "pg_catalog.max(applied_prefix_digest) "
+            "FILTER (WHERE version = 8), "
+            "pg_catalog.max(service_identity) FILTER (WHERE version = 8), "
+            "pg_catalog.max(provisioning_spec_digest) "
+            "FILTER (WHERE version = 8) "
             "FROM {}"
         ).format(
             sql.Identifier(
@@ -2807,9 +2876,18 @@ def _tenant_binding_admission_phase(
         v6_service,
         v7_filename,
         v7_service,
+        v8_filename,
+        v8_source_sha256,
+        v8_source_byte_length,
+        v8_applied_prefix_digest,
+        v8_service,
+        v8_provisioning_spec_digest,
     ) = tuple(row or ())
     if count == 0 and minimum is None and maximum is None:
-        return _TENANT_BINDING_ADMISSION_A0, []
+        return _TenantBindingAdmissionClassification(
+            _TENANT_BINDING_ADMISSION_A0,
+            _SelectionControllerAclSubstate.NOT_APPLICABLE,
+        ), []
     if (
         isinstance(count, int)
         and 1 <= count <= 4
@@ -2822,7 +2900,10 @@ def _tenant_binding_admission_phase(
         and v7_filename is None
         and v7_service is None
     ):
-        return _TENANT_BINDING_ADMISSION_A0, []
+        return _TenantBindingAdmissionClassification(
+            _TENANT_BINDING_ADMISSION_A0,
+            _SelectionControllerAclSubstate.NOT_APPLICABLE,
+        ), []
     if (
         count,
         minimum,
@@ -2844,7 +2925,10 @@ def _tenant_binding_admission_phase(
         None,
         None,
     ):
-        return _TENANT_BINDING_ADMISSION_A1, []
+        return _TenantBindingAdmissionClassification(
+            _TENANT_BINDING_ADMISSION_A1,
+            _SelectionControllerAclSubstate.NOT_APPLICABLE,
+        ), []
     if (
         count,
         minimum,
@@ -2866,7 +2950,10 @@ def _tenant_binding_admission_phase(
         None,
         None,
     ):
-        return _TENANT_BINDING_ADMISSION_A2, []
+        return _TenantBindingAdmissionClassification(
+            _TENANT_BINDING_ADMISSION_A2,
+            _SelectionControllerAclSubstate.NOT_APPLICABLE,
+        ), []
     if (
         count,
         minimum,
@@ -2888,26 +2975,97 @@ def _tenant_binding_admission_phase(
         "0007_tenant_write_lock_selection_owner_admission.sql",
         "ofarm.tenant-postgresql.v1",
     ):
-        return _TENANT_BINDING_ADMISSION_A4, []
+        return _TenantBindingAdmissionClassification(
+            _TENANT_BINDING_ADMISSION_A4,
+            _SelectionControllerAclSubstate.STABLE_V7,
+        ), []
+    authoritative_v8 = _authoritative_tenant_selection_activation_migration()
+    if authoritative_v8 is not None and (
+        count,
+        minimum,
+        maximum,
+        v5_filename,
+        v5_service,
+        v6_filename,
+        v6_service,
+        v7_filename,
+        v7_service,
+        v8_filename,
+        v8_source_sha256,
+        v8_source_byte_length,
+        v8_applied_prefix_digest,
+        v8_service,
+        v8_provisioning_spec_digest,
+    ) == (
+        8,
+        1,
+        8,
+        "0005_tenant_binding_selection_control_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+        "0006_tenant_current_context_selection_owner_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+        "0007_tenant_write_lock_selection_owner_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+        authoritative_v8.filename,
+        authoritative_v8.source_sha256,
+        authoritative_v8.byte_length,
+        authoritative_v8.applied_prefix_digest,
+        spec.migration_service.identity,
+        spec.digest,
+    ):
+        return _TenantBindingAdmissionClassification(
+            _TENANT_BINDING_ADMISSION_A4,
+            _SelectionControllerAclSubstate.STABLE_V8,
+        ), []
     return None, ["tenant binding admission phase differs"]
+
+
+def _tenant_binding_v8_post_source_classification(
+    target: psycopg.Connection,
+    spec: ProvisioningSpec,
+) -> tuple[_TenantBindingAdmissionClassification | None, list[str]]:
+    """Admit only the exact V7 ledger immediately after bound V8 source."""
+
+    if (
+        spec != TENANT_PROVISIONING_SPEC
+        or _authoritative_tenant_selection_activation_migration() is None
+    ):
+        return None, ["tenant selection activation transition differs"]
+    classification, differences = _tenant_binding_admission_classification(
+        target,
+        spec,
+    )
+    if (
+        differences
+        or classification is None
+        or classification.phase != _TENANT_BINDING_ADMISSION_A4
+        or classification.selection_acl_substate
+        is not _SelectionControllerAclSubstate.STABLE_V7
+    ):
+        return None, ["tenant selection activation transition differs"]
+    return _TenantBindingAdmissionClassification(
+        _TENANT_BINDING_ADMISSION_A4,
+        _SelectionControllerAclSubstate.V8_POST_SOURCE_PRE_LEDGER_APPEND,
+    ), []
 
 
 def _tenant_binding_selection_admission_acl_differences(
     target: psycopg.Connection,
     spec: ProvisioningSpec,
     *,
-    phase: _TenantBindingAdmissionPhase | None,
+    classification: _TenantBindingAdmissionClassification | None,
 ) -> list[str]:
     sealer = spec.tenant_binding_selection_control_admission_sealer
     if sealer is None:
         return []
     login_role = "ofarm_command_runtime_bundle_selection_control_login"
-    rows = target.execute(
+    family_rows = target.execute(
         """
         SELECT namespace.nspname::text,
                routine.proname::text,
                pg_catalog.oidvectortypes(routine.proargtypes),
-               grantee.rolname::text,
+               CASE WHEN acl.grantee = 0 THEN 'PUBLIC'
+                    ELSE pg_catalog.pg_get_userbyid(acl.grantee) END,
                pg_catalog.pg_get_userbyid(acl.grantor),
                acl.privilege_type,
                acl.is_grantable
@@ -2920,19 +3078,26 @@ def _tenant_binding_selection_admission_acl_differences(
                 pg_catalog.acldefault('f', routine.proowner)
             )
         ) AS acl
-        JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
-        WHERE namespace.nspname = %s
-          AND grantee.rolname = ANY (%s::text[])
+        WHERE (
+                  routine.proacl IS NOT NULL
+                  OR routine.oid >= %s
+              )
+          AND CASE WHEN acl.grantee = 0 THEN 'PUBLIC'
+                   ELSE pg_catalog.pg_get_userbyid(acl.grantee) END
+              = ANY (%s::text[])
         ORDER BY 1, 2, 3, 4, 5, 6, 7
         """,
         (
-            sealer.target_schema_name,
-            [sealer.controller_role, login_role],
+            _POSTGRESQL_FIRST_NORMAL_OBJECT_ID,
+            [sealer.controller_role, login_role, "PUBLIC"],
         ),
     ).fetchall()
-    expected: set[tuple[object, ...]] = set()
-    if phase is not None and phase.selection_grants_required:
-        expected = {
+    expected_family: set[tuple[object, ...]] = set()
+    if (
+        classification is not None
+        and classification.phase.selection_grants_required
+    ):
+        expected_family = {
             (
                 sealer.target_schema_name,
                 "create_tenant_challenge",
@@ -2952,9 +3117,94 @@ def _tenant_binding_selection_admission_acl_differences(
                 False,
             ),
         }
-    if {tuple(row) for row in rows} != expected:
-        return ["tenant binding selection-control admission ACL differs"]
-    return []
+    activation_required = (
+        classification is not None
+        and classification.selection_acl_substate
+        in {
+            _SelectionControllerAclSubstate.V8_POST_SOURCE_PRE_LEDGER_APPEND,
+            _SelectionControllerAclSubstate.STABLE_V8,
+        }
+    )
+    if activation_required:
+        expected_family.add(
+            (
+                _TENANT_SELECTION_ACTIVATION_SCHEMA,
+                _TENANT_SELECTION_ACTIVATION_ROUTINE,
+                _TENANT_SELECTION_ACTIVATION_ARGUMENTS,
+                sealer.controller_role,
+                "ofarm_owner",
+                "EXECUTE",
+                False,
+            )
+        )
+
+    activation_inventory = target.execute(
+        """
+        SELECT namespace.nspname::text,
+               routine.proname::text,
+               pg_catalog.oidvectortypes(routine.proargtypes)
+        FROM pg_catalog.pg_proc AS routine
+        JOIN pg_catalog.pg_namespace AS namespace
+             ON namespace.oid = routine.pronamespace
+        WHERE routine.proname = %s
+        ORDER BY 1, 2, 3
+        """,
+        (_TENANT_SELECTION_ACTIVATION_ROUTINE,),
+    ).fetchall()
+    expected_inventory: set[tuple[object, ...]] = set()
+    if activation_required:
+        expected_inventory.add(
+            (
+                _TENANT_SELECTION_ACTIVATION_SCHEMA,
+                _TENANT_SELECTION_ACTIVATION_ROUTINE,
+                _TENANT_SELECTION_ACTIVATION_ARGUMENTS,
+            )
+        )
+
+    activation_acl_rows = target.execute(
+        """
+        SELECT CASE WHEN acl.grantee = 0 THEN 'PUBLIC'
+                    ELSE pg_catalog.pg_get_userbyid(acl.grantee) END,
+               pg_catalog.pg_get_userbyid(acl.grantor),
+               acl.privilege_type,
+               acl.is_grantable
+        FROM pg_catalog.pg_proc AS routine
+        JOIN pg_catalog.pg_namespace AS namespace
+             ON namespace.oid = routine.pronamespace
+        CROSS JOIN LATERAL pg_catalog.aclexplode(
+            COALESCE(
+                routine.proacl,
+                pg_catalog.acldefault('f', routine.proowner)
+            )
+        ) AS acl
+        WHERE namespace.nspname = %s
+          AND routine.proname = %s
+          AND pg_catalog.oidvectortypes(routine.proargtypes) = %s
+          AND acl.grantee <> routine.proowner
+        ORDER BY 1, 2, 3, 4
+        """,
+        (
+            _TENANT_SELECTION_ACTIVATION_SCHEMA,
+            _TENANT_SELECTION_ACTIVATION_ROUTINE,
+            _TENANT_SELECTION_ACTIVATION_ARGUMENTS,
+        ),
+    ).fetchall()
+    expected_activation_acl: set[tuple[object, ...]] = set()
+    if activation_required:
+        expected_activation_acl.add(
+            (sealer.controller_role, "ofarm_owner", "EXECUTE", False)
+        )
+
+    differences: list[str] = []
+    if {tuple(row) for row in family_rows} != expected_family:
+        differences.append(
+            "tenant binding selection-control admission ACL differs"
+        )
+    if {tuple(row) for row in activation_inventory} != expected_inventory:
+        differences.append("tenant selection activation routine inventory differs")
+    if {tuple(row) for row in activation_acl_rows} != expected_activation_acl:
+        differences.append("tenant selection activation routine ACL differs")
+    return differences
 
 
 def _tenant_current_context_owner_admission_acl_differences(
@@ -3090,16 +3340,17 @@ def _tenant_write_lock_owner_admission_acl_differences(
 
 
 def _migration_lock_capsule_differences(
-    target: psycopg.Connection, spec: ProvisioningSpec
+    target: psycopg.Connection,
+    spec: ProvisioningSpec,
+    *,
+    admission: _TenantBindingAdmissionClassification | None,
 ) -> list[str]:
     lock = spec.migration_lock
     ledger_present = target.execute(
         "SELECT pg_catalog.to_regclass(%s) IS NOT NULL",
         (spec.migration_service.qualified_ledger,),
     ).fetchone()[0]
-    admission_phase, admission_phase_differences = (
-        _tenant_binding_admission_phase(target, spec)
-    )
+    admission_phase = admission.phase if admission is not None else None
     selection_capsule_required = (
         admission_phase is not None
         and admission_phase.selection_capsule_required
@@ -3169,7 +3420,7 @@ def _migration_lock_capsule_differences(
         True,
         True,
     )
-    differences: list[str] = list(admission_phase_differences)
+    differences: list[str] = []
     row_map = {(row[0], row[1]): row for row in rows}
     expected_identities = {(lock.function_name, "")}
     access_lock = spec.access_clock_lock
@@ -3608,7 +3859,7 @@ def _migration_lock_capsule_differences(
         _tenant_binding_selection_admission_acl_differences(
             target,
             spec,
-            phase=admission_phase,
+            classification=admission,
         )
     )
     differences.extend(
@@ -3633,6 +3884,7 @@ def _unmigrated_object_differences(
     spec: ProvisioningSpec,
     *,
     allow_migration_objects: bool,
+    admission: _TenantBindingAdmissionClassification | None,
 ) -> tuple[list[str], bool]:
     ledger = target.execute(
         "SELECT pg_catalog.to_regclass(%s)::text",
@@ -3732,9 +3984,7 @@ def _unmigrated_object_differences(
             unexpected_rows.remove(expected_sealer_routine)
         except ValueError:
             pass
-    admission_phase, _admission_phase_differences = (
-        _tenant_binding_admission_phase(target, spec)
-    )
+    admission_phase = admission.phase if admission is not None else None
     selection_capsule_required = (
         admission_phase is not None
         and admission_phase.selection_capsule_required
@@ -3816,20 +4066,13 @@ def _unmigrated_object_differences(
     return differences, ledger_present
 
 
-def migration_locked_differences(
+def _migration_locked_differences_for_admission(
     target: psycopg.Connection,
     spec: ProvisioningSpec,
+    *,
+    admission: _TenantBindingAdmissionClassification | None,
+    admission_differences: list[str],
 ) -> list[str]:
-    """Repeat migration-relevant provisioning checks on the locked route.
-
-    The caller must already hold the permanent transaction lock and have
-    assumed the fixed schema owner.  Password verifier bytes remain an
-    administrator-only preflight check because PostgreSQL deliberately hides
-    ``pg_authid`` from this non-superuser route; every authorization-relevant
-    role attribute and membership is repeated here.
-    """
-
-    _require_fixed_spec(spec)
     posture = target.execute(
         """
         SELECT SESSION_USER::text,
@@ -3849,7 +4092,7 @@ def migration_locked_differences(
                pg_catalog.current_setting('row_security')
         """
     ).fetchone()
-    differences: list[str] = []
+    differences: list[str] = list(admission_differences)
     if tuple(posture or ()) != (
         "ofarm_migrator",
         spec.schema_owner,
@@ -3881,14 +4124,64 @@ def migration_locked_differences(
     differences.extend(_large_object_routine_differences(target, spec))
     differences.extend(_large_object_storage_differences(target))
     differences.extend(_backend_statistics_acl_differences(target, spec))
-    differences.extend(_migration_lock_capsule_differences(target, spec))
+    differences.extend(
+        _migration_lock_capsule_differences(
+            target,
+            spec,
+            admission=admission,
+        )
+    )
     object_differences, _ledger_present = _unmigrated_object_differences(
         target,
         spec,
         allow_migration_objects=True,
+        admission=admission,
     )
     differences.extend(object_differences)
     return differences
+
+
+def migration_locked_differences(
+    target: psycopg.Connection,
+    spec: ProvisioningSpec,
+) -> list[str]:
+    """Repeat stable migration-relevant checks on the locked route.
+
+    The caller must already hold the permanent transaction lock and have
+    assumed the fixed schema owner.  Password verifier bytes remain an
+    administrator-only preflight check because PostgreSQL deliberately hides
+    ``pg_authid`` from this non-superuser route; every authorization-relevant
+    role attribute and membership is repeated here.
+    """
+
+    _require_fixed_spec(spec)
+    admission, admission_differences = (
+        _tenant_binding_admission_classification(target, spec)
+    )
+    return _migration_locked_differences_for_admission(
+        target,
+        spec,
+        admission=admission,
+        admission_differences=admission_differences,
+    )
+
+
+def _tenant_selection_v8_post_source_locked_differences(
+    target: psycopg.Connection,
+    spec: ProvisioningSpec,
+) -> list[str]:
+    """Verify the exact authenticated V8 post-source, pre-ledger posture."""
+
+    _require_fixed_spec(spec)
+    admission, admission_differences = (
+        _tenant_binding_v8_post_source_classification(target, spec)
+    )
+    return _migration_locked_differences_for_admission(
+        target,
+        spec,
+        admission=admission,
+        admission_differences=admission_differences,
+    )
 
 
 def _verify_locked(
@@ -3909,7 +4202,11 @@ def _verify_locked(
             for assignment in CATALOG_OUTPUT_SETTING_ASSIGNMENTS:
                 target.execute(f"SET LOCAL {assignment}")
             identity = _target_identity(target, spec, expected_identity)
-            differences = _database_inventory_differences(target, spec)
+            admission, admission_differences = (
+                _tenant_binding_admission_classification(target, spec)
+            )
+            differences = list(admission_differences)
+            differences.extend(_database_inventory_differences(target, spec))
             differences.extend(_role_differences(target, spec))
             differences.extend(_membership_differences(target, spec))
             differences.extend(
@@ -3930,11 +4227,18 @@ def _verify_locked(
             differences.extend(
                 _backend_statistics_acl_differences(target, spec)
             )
-            differences.extend(_migration_lock_capsule_differences(target, spec))
+            differences.extend(
+                _migration_lock_capsule_differences(
+                    target,
+                    spec,
+                    admission=admission,
+                )
+            )
             object_differences, ledger_present = _unmigrated_object_differences(
                 target,
                 spec,
                 allow_migration_objects=allow_migration_objects,
+                admission=admission,
             )
             differences.extend(object_differences)
     if differences:
