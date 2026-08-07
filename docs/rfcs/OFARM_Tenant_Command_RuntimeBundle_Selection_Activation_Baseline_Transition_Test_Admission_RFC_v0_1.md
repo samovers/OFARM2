@@ -6,7 +6,8 @@
 **Decision identity:**
 `ISSUE176-SELECTION-ACTIVATION-BASELINE-TRANSITION-TESTS-001`, proposed version `1`
 
-**Status:** proposed and inactive; Phase A documentation only; not approved
+**Status:** approved for the bounded pre-deployment implementation in PR #293;
+not merged; no production or PR #292 authority
 
 **Issue:** #176
 
@@ -466,3 +467,27 @@ Once this contract's acceptance criteria pass and no demonstrated Blocker
 remains, the prerequisite pull request may merge under its live approved
 decision. New ideas and optional hardening are Follow-ups and do not expand
 this boundary.
+
+## 17. Pre-deployment approval evidence
+
+This evidence records the designated task user's decision. It does not replace
+that decision and creates no authority outside the live card's envelope.
+
+- **Codex task:** `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`
+- **Complete live decision card:** turn
+  `019fddee-ea80-7071-886d-54db4e02fd80`, stable item `item-3122`
+- **Designated task-user approval:** turn
+  `019fddf5-2836-7033-89cd-d360dd51d6f4`, stable item `item-3125`
+- **Exact approval sentence:**
+  `I approve OFARM2 decision ISSUE176-SELECTION-ACTIVATION-BASELINE-TRANSITION-TESTS-001 version 1.`
+- **Observed role and order:** `item-3122` is the complete AI-presented card;
+  `item-3125` is a later user-authored message in the same task containing only
+  the exact approval sentence. The intervening fenced copy at `item-3123` was
+  explicitly rejected and supplied no authority. No replacement card,
+  cancellation, or stop-like user message intervened before `item-3125`.
+- **Named pull request:** `samovers/OFARM2#293`
+- **Permitted effect:** implement, verify, review, and merge only the three-path
+  boundary in section 11 under BTT-001 through BTT-012.
+- **Provisional limitation:** repository-development evidence only. It does
+  not authorize deployment, release, production access, promotion, a retained
+  database or selection, PR #292, or any runtime effect.

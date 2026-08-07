@@ -2326,17 +2326,65 @@ def test_v6_postcommit_acknowledgement_loss_recovers_as_verified_noop(
         ).fetchone() == (6, 6, uncertain_execution_id)
 
 
-def _advance_tenant_target_to_v6(
-    tenant_target: _TenantTarget,
-) -> MigrationSet:
+def _tenant_v7_migration_set() -> MigrationSet:
     full_set = load_migration_set(
         Path(__file__).resolve().parents[2],
         TENANT_SERVICE,
     )
+    assert len(full_set.migrations) in (7, 8)
+    return MigrationSet(
+        service=TENANT_SERVICE,
+        migrations=full_set.migrations[:7],
+        digest=full_set.prefix_digest(7),
+    )
+
+
+def _migrate_v7_for_testing(
+    *,
+    admin_dsn: str,
+    migrator_dsn: str,
+    spec: ProvisioningSpec,
+    migration_set: MigrationSet,
+    release_identity: str,
+    execution_id: UUID,
+) -> MigrationRunReport:
+    if migration_set != _tenant_v7_migration_set():
+        raise AssertionError("V7 test executor requires the exact seven-row set")
+    v7_catalog_digest = (
+        "sha256:026bb61026a9f752fc8dde84bca0e3cbbab374d0ac8f0ba942a72654e44f5f1a"
+    )
+    verify_catalog_identity = migration_runner_module.verify_catalog_identity
+
+    def verify_v7_catalog_identity(connection, service):
+        return verify_catalog_identity(
+            connection,
+            service,
+            expected_digest=v7_catalog_digest,
+        )
+
+    migration_runner_module.verify_catalog_identity = verify_v7_catalog_identity
+    try:
+        return migration_runner_module._migrate_service(
+            admin_dsn=admin_dsn,
+            migrator_dsn=migrator_dsn,
+            spec=spec,
+            migration_set=migration_set,
+            release_identity=release_identity,
+            execution_id=execution_id,
+            verify_final_structure=True,
+        )
+    finally:
+        migration_runner_module.verify_catalog_identity = verify_catalog_identity
+
+
+def _advance_tenant_target_to_v6(
+    tenant_target: _TenantTarget,
+) -> MigrationSet:
+    v7_set = _tenant_v7_migration_set()
     v6_set = MigrationSet(
         service=TENANT_SERVICE,
-        migrations=full_set.migrations[:6],
-        digest=full_set.prefix_digest(6),
+        migrations=v7_set.migrations[:6],
+        digest=v7_set.prefix_digest(6),
     )
     migrate_service(
         admin_dsn=tenant_target.admin_dsn,
@@ -2346,22 +2394,22 @@ def _advance_tenant_target_to_v6(
         release_identity=RELEASE_IDENTITY + "-v6-prefix",
         execution_id=uuid4(),
     )
-    return full_set
+    return v7_set
 
 
 def _advance_tenant_target_to_v7(
     tenant_target: _TenantTarget,
 ) -> MigrationSet:
-    full_set = _advance_tenant_target_to_v6(tenant_target)
-    migrate_authoritative_service(
+    v7_set = _advance_tenant_target_to_v6(tenant_target)
+    _migrate_v7_for_testing(
         admin_dsn=tenant_target.admin_dsn,
         migrator_dsn=tenant_target.migrator_dsn,
         spec=TENANT_PROVISIONING_SPEC,
-        migration_set=full_set,
+        migration_set=v7_set,
         release_identity=RELEASE_IDENTITY + "-v7",
         execution_id=uuid4(),
     )
-    return full_set
+    return v7_set
 
 
 def _create_selection_activation_routine(
@@ -2449,7 +2497,7 @@ def test_stable_v7_refuses_every_selection_activation_routine_shape(
         MigrationTargetError,
         match="tenant selection activation routine inventory differs",
     ) as refused:
-        migrate_authoritative_service(
+        _migrate_v7_for_testing(
             admin_dsn=tenant_target.admin_dsn,
             migrator_dsn=tenant_target.migrator_dsn,
             spec=TENANT_PROVISIONING_SPEC,
@@ -2835,7 +2883,7 @@ def test_v7_hostile_capsule_drift_refuses_without_repair(
             MigrationTargetError,
             match=expected_error,
         ) as refused:
-            migrate_authoritative_service(
+            _migrate_v7_for_testing(
                 admin_dsn=tenant_target.admin_dsn,
                 migrator_dsn=tenant_target.migrator_dsn,
                 spec=TENANT_PROVISIONING_SPEC,
@@ -2998,7 +3046,7 @@ def test_v7_live_ledger_substitution_refuses_before_capsule_use(
                 match="migration history is not the exact local prefix",
             )
         with expected_error:
-            migrate_authoritative_service(
+            _migrate_v7_for_testing(
                 admin_dsn=tenant_target.admin_dsn,
                 migrator_dsn=proxy.dsn,
                 spec=TENANT_PROVISIONING_SPEC,
@@ -3082,7 +3130,7 @@ def test_v7_row_is_authenticated_before_and_after_capsule_consumption(
         trace_final,
     )
 
-    migrated = migrate_authoritative_service(
+    migrated = _migrate_v7_for_testing(
         admin_dsn=tenant_target.admin_dsn,
         migrator_dsn=tenant_target.migrator_dsn,
         spec=TENANT_PROVISIONING_SPEC,
@@ -3126,7 +3174,7 @@ def test_v7_precommit_failure_restores_exact_a2_and_mixed_states_refuse(
         MigrationDirtyError,
         match="injected V7 final verification refusal",
     ):
-        migrate_authoritative_service(
+        _migrate_v7_for_testing(
             admin_dsn=tenant_target.admin_dsn,
             migrator_dsn=tenant_target.migrator_dsn,
             spec=TENANT_PROVISIONING_SPEC,
@@ -3153,7 +3201,7 @@ def test_v7_precommit_failure_restores_exact_a2_and_mixed_states_refuse(
         )
     try:
         with pytest.raises(MigrationTargetError, match="admission ACL differs"):
-            migrate_authoritative_service(
+            _migrate_v7_for_testing(
                 admin_dsn=tenant_target.admin_dsn,
                 migrator_dsn=tenant_target.migrator_dsn,
                 spec=TENANT_PROVISIONING_SPEC,
@@ -3186,7 +3234,7 @@ def test_v7_precommit_failure_restores_exact_a2_and_mixed_states_refuse(
             )
         )
     with pytest.raises(MigrationTargetError, match="sealer differs"):
-        migrate_authoritative_service(
+        _migrate_v7_for_testing(
             admin_dsn=tenant_target.admin_dsn,
             migrator_dsn=tenant_target.migrator_dsn,
             spec=TENANT_PROVISIONING_SPEC,
@@ -3205,7 +3253,7 @@ def test_v7_postcommit_acknowledgement_loss_recovers_as_verified_noop(
     uncertain_execution_id = uuid4()
     try:
         with pytest.raises(MigrationOutcomeUnknown) as uncertain:
-            migrate_authoritative_service(
+            _migrate_v7_for_testing(
                 admin_dsn=tenant_target.admin_dsn,
                 migrator_dsn=proxy.dsn,
                 spec=TENANT_PROVISIONING_SPEC,
@@ -3223,7 +3271,7 @@ def test_v7_postcommit_acknowledgement_loss_recovers_as_verified_noop(
     ) == ((7, 7), False, _EXPECTED_WRITE_LOCK_ACL_A4)
 
     retry_execution_id = uuid4()
-    recovered = migrate_authoritative_service(
+    recovered = _migrate_v7_for_testing(
         admin_dsn=tenant_target.admin_dsn,
         migrator_dsn=tenant_target.migrator_dsn,
         spec=TENANT_PROVISIONING_SPEC,
@@ -3265,7 +3313,7 @@ def test_v7_precommit_backend_loss_reconnects_from_exact_a2(
     )
     uncertain_execution_id = uuid4()
     with pytest.raises(MigrationOutcomeUnknown) as uncertain:
-        migrate_authoritative_service(
+        _migrate_v7_for_testing(
             admin_dsn=tenant_target.admin_dsn,
             migrator_dsn=tenant_target.migrator_dsn,
             spec=TENANT_PROVISIONING_SPEC,
@@ -3280,7 +3328,7 @@ def test_v7_precommit_backend_loss_reconnects_from_exact_a2(
     ) == ((6, 6), True, _EXPECTED_WRITE_LOCK_ACL_A2)
 
     monkeypatch.setattr(migration_runner_module, "_commit", original_commit)
-    recovered = migrate_authoritative_service(
+    recovered = _migrate_v7_for_testing(
         admin_dsn=tenant_target.admin_dsn,
         migrator_dsn=tenant_target.migrator_dsn,
         spec=TENANT_PROVISIONING_SPEC,
