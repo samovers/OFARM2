@@ -211,7 +211,12 @@ state is an effect of this contract.
   real repository accepts only the two closed pairs V7/no-adapter and
   V8/adapter, independently derives the expected state from that pair, and
   requires the production checker to return the same state. A partial pair,
-  another migration count, or another checker result fails.
+  another migration count, or another checker result fails. The same existing
+  collected test node exercises a controlled partial pair and requires
+  refusal; this adds no test function or parameter ID. Its historical name,
+  `test_selection_storage_current_state_is_exact_absent`, is retained solely
+  to preserve the canonical node ID and is not semantic authority for the
+  expected current state.
 - **BTT-007 — Named negative path is reached.** Existing negative tests still
   reach and assert their named refusal. They may not pass because an earlier
   incomplete-pair, invalid-state, catalog-pin, or duplicate-function error
@@ -222,7 +227,8 @@ state is an effect of this contract.
   controlled V8-transition test starts.
 - **BTT-009 — No test inventory churn.** Existing test function names,
   parameter IDs, and collected node IDs remain unchanged. The canonical
-  inventory is not regenerated in this boundary.
+  inventory is not regenerated in this boundary. No new test function or
+  parametrized case is permitted; new helper logic must remain uncollected.
 - **BTT-010 — Dual-baseline proof.** The admitted test modules and the complete
   applicable baseline pass once against current V7/ABSENT `main` and once in a
   disposable overlay of the same test change onto PR #292's exact
@@ -243,7 +249,7 @@ state is an effect of this contract.
 | BTT-003 | A test failure is addressed by changing migration loading, catalog observation, or the production classifier. |
 | BTT-004 | An ABSENT fixture calls the current authority loader after V8 and receives eight migrations, or reads the V8 catalog source unchanged. |
 | BTT-005 | A CLASSIFIED fixture appends a synthetic row 8 to the current eight-row set and produces nine rows. |
-| BTT-006 | The real repository contains row 8 without the adapter and the smoke test reports ABSENT or CLASSIFIED instead of failing. |
+| BTT-006 | A controlled row-8/no-adapter pair exercised inside the existing current-state test node reports ABSENT or CLASSIFIED instead of refusing. |
 | BTT-007 | An initializer-import test expects `initializer imports` but receives `implementation pair is incomplete`; changing the regex alone is forbidden. |
 | BTT-008 | A helper named `advance_to_v7` passes a full eight-row set to the migration runner and creates the real activation function. |
 | BTT-009 | Renaming a test or adding a parameter changes a canonical node ID and would require inventory regeneration. |
@@ -273,9 +279,16 @@ must prove the resulting bytes match the already-pinned V7 source identity.
 They may not invent a second production catalog authority or relax the
 production source pin.
 
-Synthetic negative cases will choose a state explicitly. The current-state
-smoke case remains separate and compares an independently observed closed pair
-with the real classifier result.
+The zero-node-ID rule is a structural implementation constraint: this boundary
+may change existing test bodies and add only uncollected helper logic. It may
+not add or rename a test function or add a parametrized case.
+
+Synthetic negative cases will choose a state explicitly. The existing
+`test_selection_storage_current_state_is_exact_absent` node keeps that
+historical name only for inventory stability. Its body compares an
+independently observed closed pair with the real classifier result and also
+exercises one controlled partial pair that must refuse. Keeping the name does
+not assert that the post-transition repository remains absent.
 
 ### 9.2 Literal stable-V7 PostgreSQL fixture
 
@@ -367,7 +380,7 @@ state.
 | BTT-003, BTT-011 | No production file in diff | Production or conformance source changed to satisfy tests | Diff inspection and package conformance |
 | BTT-004 | Conformance-test V7 authority and ABSENT snapshot builders | Current V8 set/catalog leaks into ABSENT fixture | Existing ABSENT negative cases reach their named refusals |
 | BTT-005 | Conformance-test synthetic V8 builder | Nine-row set or duplicate adapter | Existing CLASSIFIED cases use exactly eight rows and one adapter |
-| BTT-006 | Current-state smoke test | Partial pair or classifier disagreement | Test the current V7 base and disposable V8 overlay |
+| BTT-006 | Existing current-state test body and uncollected pair helper | Controlled partial pair or classifier disagreement | The same collected node refuses the partial pair and passes on the current V7 base and disposable V8 overlay |
 | BTT-007 | Existing negative tests | Earlier error masks named assertion | Run the complete conformance-governance test module |
 | BTT-008 | Migration-runner stable-V7 helper | Real row 8/function appears before controlled transition | Disposable PostgreSQL migration-runner tests and exact `(7, 7)` ledger assertion |
 | BTT-009 | Existing test names and parameters | Canonical collected node IDs change | Compare collected node IDs before and after; inventory file remains untouched |
@@ -393,9 +406,13 @@ No test may leave a retained tenant selection or retained database target.
 
 ## 14. Open decisions and review disposition
 
-Open decisions: none. The demonstrated failures identify exactly two stale
-test-fixture owners, and the accepted stop condition forbids changing
-production or conformance authority instead.
+Open decisions: none. BTT-009 selects node-ID preservation, so the historical
+`is_exact_absent` test name is knowingly retained while its state-independent
+body becomes authoritative test evidence. BTT-006 assigns the partial-pair
+refusal to that same existing node. No new test or parameter may be collected.
+The demonstrated failures identify exactly two stale test-fixture owners, and
+the accepted stop condition forbids changing production or conformance
+authority instead.
 
 Review disposition at the proposed Phase A head:
 
