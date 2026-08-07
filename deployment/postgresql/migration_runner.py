@@ -38,6 +38,7 @@ from deployment.postgresql.migration_sets import (
 from deployment.postgresql.provisioning import (
     ProvisioningError,
     ProvisioningInfrastructureReport,
+    _tenant_selection_v8_post_source_locked_differences,
     migration_locked_differences,
     verify_service_infrastructure,
 )
@@ -60,6 +61,9 @@ _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 _LEDGER_GUARD_FUNCTION = "reject_schema_migration_mutation"
 _UPDATE_DELETE_TRIGGER = "schema_migration_reject_update_delete"
 _TRUNCATE_TRIGGER = "schema_migration_reject_truncate"
+_TENANT_SELECTION_ACTIVATION_MIGRATION_FILENAME = (
+    "0008_tenant_command_runtime_bundle_selection.sql"
+)
 _LEDGER_GUARD_SOURCE = (
     "BEGIN RAISE EXCEPTION USING ERRCODE = '55000', "
     "MESSAGE = 'schema_migration is append-only'; END"
@@ -578,6 +582,19 @@ def _locked_boundary_differences(
 ) -> list[str]:
     try:
         return migration_locked_differences(connection, spec)
+    except ProvisioningError as exc:
+        raise MigrationTargetError(str(exc)) from exc
+
+
+def _locked_tenant_v8_post_source_boundary_differences(
+    connection: psycopg.Connection,
+    spec: ProvisioningSpec,
+) -> list[str]:
+    try:
+        return _tenant_selection_v8_post_source_locked_differences(
+            connection,
+            spec,
+        )
     except ProvisioningError as exc:
         raise MigrationTargetError(str(exc)) from exc
 
@@ -2235,7 +2252,28 @@ def _migrate_service(
                             spec,
                             migration,
                         )
-                    post_boundary = _locked_boundary_differences(connection, spec)
+                    if (
+                        spec == TENANT_PROVISIONING_SPEC
+                        and observed_version == 7
+                        and migration.version == 8
+                        and migration.filename
+                        == _TENANT_SELECTION_ACTIVATION_MIGRATION_FILENAME
+                    ):
+                        try:
+                            require_authoritative_migration_set(migration_set)
+                        except MigrationSetError as exc:
+                            raise MigrationInputError(str(exc)) from exc
+                        post_boundary = (
+                            _locked_tenant_v8_post_source_boundary_differences(
+                                connection,
+                                spec,
+                            )
+                        )
+                    else:
+                        post_boundary = _locked_boundary_differences(
+                            connection,
+                            spec,
+                        )
                     if post_boundary:
                         raise MigrationDirtyError(
                             "migration widened the provisioning boundary"
@@ -2461,6 +2499,17 @@ def _migrate_service_for_testing(
 ) -> MigrationRunReport:
     """Exercise runner mechanics with synthetic migration sets in tests only."""
 
+    _require_fixed_pair(spec, migration_set)
+    if (
+        spec == TENANT_PROVISIONING_SPEC
+        and len(migration_set.migrations) >= 8
+        and migration_set.migrations[7].version == 8
+        and migration_set.migrations[7].filename
+        == _TENANT_SELECTION_ACTIVATION_MIGRATION_FILENAME
+    ):
+        raise MigrationInputError(
+            "test migration executor cannot execute tenant migration 0008"
+        )
     return _migrate_service(
         admin_dsn=admin_dsn,
         migrator_dsn=migrator_dsn,
