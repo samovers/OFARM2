@@ -4,9 +4,9 @@
 `ofarm.tenant-command-runtime-bundle-selection-activation-test-allowlist-amendment.issue176.v0.2`
 
 **Decision identity:**
-`ISSUE176-SELECTION-ACTIVATION-TEST-ALLOWLIST-001`, proposed version `1`
+`ISSUE176-SELECTION-ACTIVATION-TEST-ALLOWLIST-001`, version `1`
 
-**Status:** proposed Phase A contract; documentation-only; unapproved
+**Status:** architect-approved Phase A contract; documentation-only
 
 **Primary trust boundary:** governance of the exact repository file envelope
 for the already-approved tenant RuntimeBundle-selection database Phase B
@@ -332,3 +332,29 @@ authority for the later database PR. It changes only the reviewed file
 envelope. The separate database implementation decision must preserve every
 parent effect, non-effect, invariant, and stop condition while naming the two
 added mechanical test paths explicitly.
+
+## Appendix A — Compact approval evidence
+
+This appendix is provisional, AI-attested evidence of the task user's
+decision. The user message is the authority; this appendix, repository
+credentials, reviews, checks, and merge metadata are not substitutes for it.
+
+- decision: `ISSUE176-SELECTION-ACTIVATION-TEST-ALLOWLIST-001`, version `1`;
+- Codex task: `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`;
+- complete live card: assistant-authored `item-3010`;
+- approval: later user-authored `item-3011`;
+- exact approval sentence:
+  `I approve OFARM2 decision ISSUE176-SELECTION-ACTIVATION-TEST-ALLOWLIST-001 version 1.`;
+- observed ordering: `item-3010` preceded `item-3011` in the same task;
+- amendment PR: `https://github.com/samovers/OFARM2/pull/291`;
+- permitted effect: approve and merge only this documentation amendment so
+  the later database Phase B may use the complete eleven-path envelope after
+  a separate implementation decision and approval; and
+- limitation: no database implementation, migration, test change, runtime
+  activation, route, command, output, retained selection, deployment, legacy,
+  or #192 effect; this provisional workflow must be replaced by independently
+  human-controlled and independently verifiable approval or signing before
+  deployment.
+
+No later cancellation, replacement card, or stop instruction was present when
+this approval evidence was recorded.
