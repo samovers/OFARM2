@@ -93,6 +93,7 @@ The only accepted migrations are:
 - `kernel/migrations/0005_tenant_binding_selection_control_admission.sql`;
 - `kernel/migrations/0006_tenant_current_context_selection_owner_admission.sql`;
 - `kernel/migrations/0007_tenant_write_lock_selection_owner_admission.sql`;
+- `kernel/migrations/0008_tenant_command_runtime_bundle_selection.sql`;
 - `security_audit/migrations/0001_initial.sql`;
 - `security_audit/migrations/0002_hmac_v2_operations.sql`; and
 - `security_audit/migrations/0003_outcome_reason_vocabulary.sql`.
@@ -142,6 +143,25 @@ consumes only that capsule, verifies the exact lock-owner-attributed wrapper
 ACL, removes the capsule, restores the fixed migration execution role,
 re-authenticates the row, and runs the final structural verifier before commit.
 Migration `0007` itself is verifier-only and issues no privilege statement.
+
+Tenant migration `0008` adds one immutable, forced-RLS selection relation for
+the reviewed `COMMIT_OPERATION_CLAIM_DRAFT` binding. Only the dedicated
+selection-control login may execute the security-definer activation function,
+and only after that transaction has an exact protected tenant and Party
+context. The function accepts only a sealed same-tenant RuntimeBundle digest,
+uses the registered tenant advisory lock, allocates the knowledge position in
+PostgreSQL, and writes one governed activation batch and one selection row in
+the same transaction. An exact retry returns that row without advancing the
+tenant head; a different digest or authority state refuses without a write.
+
+The accompanying `tenant_command_runtime_bundle_selection.py` adapter loads
+the reviewed binding and its sixteen required components from fixed repository
+paths, accepts no tenant or principal argument, and passes only the validated
+RuntimeBundle digest to PostgreSQL. It is a closed control adapter, not an
+application or worker runtime service. Migration, repository state, and bundle
+publication create no selection. This boundary adds no command integration,
+route, runtime read, output, deployment activation, legacy behavior, or #192
+behavior.
 
 The A0/A1/A2/A4 matrix is the sole durable phase authority. A0 through head 4
 has all three capsules and no admission grants. A1 at exact head 5 has the V5

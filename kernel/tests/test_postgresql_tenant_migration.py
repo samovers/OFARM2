@@ -18,6 +18,7 @@ import pytest
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
+import deployment.postgresql.tenant_command_runtime_bundle_selection as selection
 from deployment.postgresql.catalog_classifier import (
     SCHEMA_LOCAL_CATALOG_CLASSES,
 )
@@ -87,6 +88,11 @@ TEMPORAL_CARRIER_MATRIX_SCHEMA_PATH = (
     / "contracts/candidates/temporal_coordinate/"
     "OFARM_TemporalCarrierMatrix_schema_v0_1.json"
 )
+RUNTIME_BUNDLE_SELECTION_PATH = (
+    PACKAGE_ROOT
+    / "contracts/candidates/temporal_runtime_bundle_selection/"
+    "OFARM_TenantCommandRuntimeBundleSelection_candidate_v0_1.json"
+)
 RELEASE_IDENTITY = "ofarm-tests/issue-174-tenant-baseline"
 ISSUER = "https://issuer.example.test/tenant"
 SUBJECT = "subject-tenant-01"
@@ -116,6 +122,7 @@ class TenantTarget:
     v5_admission_evidence: tuple[str, ...]
     v6_report: object
     v6_admission_evidence: tuple[str, ...]
+    v7_report: object
     first_report: object
     noop_report: object
 
@@ -720,6 +727,19 @@ def tenant_target() -> TenantTarget:
             target_admin_dsn=target_admin_dsn,
             migrator_dsn=migrator_dsn,
         )
+        v7_set = MigrationSet(
+            service=TENANT_SERVICE,
+            migrations=migration_set.migrations[:7],
+            digest=migration_set.prefix_digest(7),
+        )
+        v7_report = _migrate_service_for_testing(
+            admin_dsn=admin_dsn,
+            migrator_dsn=migrator_dsn,
+            spec=spec,
+            migration_set=v7_set,
+            release_identity=f"{RELEASE_IDENTITY}-v7-prefix",
+            execution_id=uuid4(),
+        )
         first_report = migrate_service(
             admin_dsn=admin_dsn,
             migrator_dsn=migrator_dsn,
@@ -750,6 +770,7 @@ def tenant_target() -> TenantTarget:
             v5_admission_evidence=v5_admission_evidence,
             v6_report=v6_report,
             v6_admission_evidence=v6_admission_evidence,
+            v7_report=v7_report,
             first_report=first_report,
             noop_report=noop_report,
         )
@@ -833,6 +854,65 @@ def _model_valid_temporal_carrier_bundle() -> RuntimeBundle:
         selected_bytes=TEMPORAL_CARRIER_MATRIX_SCHEMA_PATH.read_bytes(),
     )
     return RuntimeBundle.create((component, schema))
+
+
+def _model_valid_command_selection_bundle() -> RuntimeBundle:
+    binding = json.loads(RUNTIME_BUNDLE_SELECTION_PATH.read_bytes())
+    components = []
+    for row in binding["requiredComponentClosure"]["components"]:
+        components.append(
+            RuntimeComponent.from_selected_bytes(
+                role=RuntimeComponentRole(row["role"]),
+                logical_ref=row["identity"],
+                canonicalization=Canonicalization(row["canonicalization"]),
+                placement=ContentPlacement(row["placement"]),
+                selected_bytes=(PACKAGE_ROOT / row["sourcePath"]).read_bytes(),
+            )
+        )
+    return RuntimeBundle.create(components)
+
+
+def _extended_command_selection_bundle(
+    base: RuntimeBundle,
+    *,
+    logical_ref: str,
+) -> RuntimeBundle:
+    unrelated = RuntimeComponent.from_selected_bytes(
+        role=RuntimeComponentRole.REFERENCE_SOURCE,
+        logical_ref=logical_ref,
+        canonicalization=Canonicalization.EXACT_BYTES,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=(logical_ref + "-bytes").encode("ascii"),
+    )
+    return RuntimeBundle.create((*base.components, unrelated))
+
+
+def _publish_model_runtime_bundle(
+    connection: psycopg.Connection,
+    tenant_id: UUID,
+    bundle: RuntimeBundle,
+) -> str:
+    for component in bundle.components:
+        connection.execute(
+            """
+            INSERT INTO ofarm.runtime_content_blob (
+                content_digest, canonical_bytes, byte_length
+            ) VALUES (%s, %s, %s)
+            ON CONFLICT (content_digest) DO NOTHING
+            """,
+            (
+                component.content_digest,
+                component.canonical_bytes,
+                component.byte_length,
+            ),
+        )
+    published = _publish_runtime_bundle(
+        connection,
+        tenant_id,
+        [component.identity_document() for component in bundle.components],
+    )
+    assert published == bundle.digest
+    return published
 
 
 def _compute_binding_digest(
@@ -1701,9 +1781,10 @@ def test_authoritative_source_ledger_contract_and_apply_noop(
         "write-lock-owner-grant-absent",
         "write-lock-early-call-refused",
     )
-    assert tenant_target.first_report.applied_versions == (7,)
+    assert tenant_target.v7_report.applied_versions == (7,)
+    assert tenant_target.first_report.applied_versions == (8,)
     assert tenant_target.noop_report.applied_versions == ()
-    assert tenant_target.noop_report.final_version == 7
+    assert tenant_target.noop_report.final_version == 8
 
 
 def test_tenant_knowledge_position_catalog_is_structurally_compatible(
@@ -1758,6 +1839,14 @@ def test_selection_control_admission_is_exact_and_stays_binder_only(
             ([controller, login],),
         ).fetchall()
         assert rows == [
+            (
+                "activate_commit_operation_claim_draft_runtime_bundle_selection",
+                "text",
+                controller,
+                "ofarm_owner",
+                "EXECUTE",
+                False,
+            ),
             (
                 "bind_tenant_capability",
                 "text",
@@ -7214,7 +7303,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:fcc0e96b4520ffe51ddb5537df24040e4d5948a22b3c387351346cc588e87ee5"
+                "sha256:480149ae78390cc5b041898be4b9a50e0c691279bbc0a0d6d5b05ecc169915e7"
             )
         finally:
             migrator.rollback()
@@ -7903,10 +7992,496 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:fcc0e96b4520ffe51ddb5537df24040e4d5948a22b3c387351346cc588e87ee5"
+        "sha256:480149ae78390cc5b041898be4b9a50e0c691279bbc0a0d6d5b05ecc169915e7"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
-    assert row[7] == 7
-    assert row[9] == 7
+    assert row[7] == 8
+    assert row[9] == 8
     assert row[10] is False
+
+
+@pytest.fixture(scope="module")
+def command_selection_bundle(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    other_authority: TenantAuthority,
+) -> RuntimeBundle:
+    bundle = _model_valid_command_selection_bundle()
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        _publish_model_runtime_bundle(admin, authority.tenant_id, bundle)
+        _publish_model_runtime_bundle(admin, other_authority.tenant_id, bundle)
+    return bundle
+
+
+def test_selection_storage_is_empty_closed_and_function_only(
+    tenant_target: TenantTarget,
+) -> None:
+    function = (
+        "ofarm.activate_commit_operation_claim_draft_"
+        "runtime_bundle_selection(text)"
+    )
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            "SELECT count(*) FROM "
+            "ofarm.tenant_command_runtime_bundle_selection"
+        ).fetchone() == (0,)
+        assert admin.execute(
+            """
+            SELECT relation.relrowsecurity, relation.relforcerowsecurity
+            FROM pg_catalog.pg_class AS relation
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = relation.relnamespace
+            WHERE namespace.nspname = 'ofarm'
+              AND relation.relname =
+                    'tenant_command_runtime_bundle_selection'
+            """
+        ).fetchone() == (True, True)
+        assert admin.execute(
+            """
+            SELECT role.rolcanlogin, role.rolconnlimit
+            FROM pg_catalog.pg_roles AS role
+            WHERE role.rolname =
+                  'ofarm_command_runtime_bundle_selection_control_login'
+            """
+        ).fetchone() == (True, 1)
+        assert admin.execute(
+            """
+            SELECT policy.polname::pg_catalog.text,
+                   role.rolname::pg_catalog.text,
+                   policy.polcmd,
+                   policy.polpermissive
+            FROM pg_catalog.pg_policy AS policy
+            JOIN pg_catalog.pg_class AS relation
+              ON relation.oid = policy.polrelid
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = relation.relnamespace
+            CROSS JOIN LATERAL pg_catalog.unnest(policy.polroles) AS member(oid)
+            JOIN pg_catalog.pg_roles AS role ON role.oid = member.oid
+            WHERE namespace.nspname = 'ofarm'
+              AND relation.relname =
+                    'tenant_command_runtime_bundle_selection'
+            """
+        ).fetchall() == [
+            (
+                "tenant_command_runtime_bundle_selection_owner",
+                "ofarm_owner",
+                "*",
+                True,
+            )
+        ]
+        assert admin.execute(
+            """
+            SELECT pg_catalog.pg_get_function_identity_arguments(routine.oid),
+                   owner.rolname::pg_catalog.text,
+                   routine.prosecdef,
+                   routine.provolatile,
+                   routine.proparallel
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = routine.pronamespace
+            JOIN pg_catalog.pg_roles AS owner ON owner.oid = routine.proowner
+            WHERE namespace.nspname = 'ofarm'
+              AND routine.proname =
+                    'activate_commit_operation_claim_draft_runtime_bundle_selection'
+            """
+        ).fetchone() == (
+            "requested_runtime_bundle_digest text",
+            "ofarm_owner",
+            True,
+            "v",
+            "u",
+        )
+
+    role_expectations = {
+        "ofarm_app": False,
+        "ofarm_worker": False,
+        "ofarm_runtime_bundle_control_login": False,
+        "ofarm_command_runtime_bundle_selection_control_login": True,
+    }
+    for role_name, may_execute in role_expectations.items():
+        with psycopg.connect(tenant_target.role_dsn(role_name)) as connection:
+            assert connection.execute(
+                "SELECT pg_catalog.has_function_privilege("
+                "CURRENT_USER, %s, 'EXECUTE')",
+                (function,),
+            ).fetchone() == (may_execute,)
+            assert connection.execute(
+                "SELECT pg_catalog.has_table_privilege("
+                "CURRENT_USER, "
+                "'ofarm.tenant_command_runtime_bundle_selection', "
+                "'SELECT,INSERT,UPDATE,DELETE')"
+            ).fetchone() == (False,)
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                connection.execute(
+                    "SELECT * FROM "
+                    "ofarm.tenant_command_runtime_bundle_selection"
+                )
+
+
+def test_unbound_and_caller_allocated_selection_attempts_are_no_write(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    command_selection_bundle: RuntimeBundle,
+) -> None:
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        before = admin.execute(
+            """
+            SELECT
+              (SELECT count(*) FROM
+                 ofarm.tenant_command_runtime_bundle_selection),
+              (SELECT count(*) FROM ofarm.governed_write_batch)
+            """
+        ).fetchone()
+    with psycopg.connect(
+        tenant_target.role_dsn(
+            "ofarm_command_runtime_bundle_selection_control_login"
+        )
+    ) as control:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            control.execute(
+                "SELECT * FROM "
+                "ofarm.activate_commit_operation_claim_draft_"
+                "runtime_bundle_selection(%s)",
+                (command_selection_bundle.digest,),
+            )
+    with pytest.raises(psycopg.errors.InvalidParameterValue):
+        with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+            _install_test_bound_context(application, authority)
+            application.execute(
+                """
+                INSERT INTO ofarm.governed_write_batch (
+                    tenant_id, batch_id, authenticated_principal_ref,
+                    governed_operation, request_id, runtime_bundle_digest,
+                    knowledge_position
+                ) VALUES (%s, %s, %s, %s, %s, %s, 99)
+                """,
+                (
+                    authority.tenant_id,
+                    "batch-explicit-selection-position",
+                    authority.party_ref,
+                    "TENANT_TEST_WRITE",
+                    "request-explicit-selection-position",
+                    authority.runtime_bundle_digest,
+                ),
+            )
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            """
+            SELECT
+              (SELECT count(*) FROM
+                 ofarm.tenant_command_runtime_bundle_selection),
+              (SELECT count(*) FROM ofarm.governed_write_batch)
+            """
+        ).fetchone() == before
+
+
+def test_selection_activation_rollback_leaves_no_row_batch_or_position(
+    tenant_target: TenantTarget,
+    other_authority: TenantAuthority,
+    command_selection_bundle: RuntimeBundle,
+) -> None:
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        before_head = admin.execute(
+            "SELECT max(knowledge_position) FROM ofarm.governed_write_batch "
+            "WHERE tenant_id = %s",
+            (other_authority.tenant_id,),
+        ).fetchone()[0]
+    with psycopg.connect(
+        tenant_target.role_dsn(
+            "ofarm_command_runtime_bundle_selection_control_login"
+        )
+    ) as control:
+        _install_test_bound_context(control, other_authority)
+        batch_id, position, digest = control.execute(
+            "SELECT * FROM "
+            "ofarm.activate_commit_operation_claim_draft_"
+            "runtime_bundle_selection(%s)",
+            (command_selection_bundle.digest,),
+        ).fetchone()
+        assert position == before_head + 1
+        assert digest == command_selection_bundle.digest
+        control.rollback()
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            "SELECT count(*) FROM "
+            "ofarm.tenant_command_runtime_bundle_selection "
+            "WHERE tenant_id = %s",
+            (other_authority.tenant_id,),
+        ).fetchone() == (0,)
+        assert admin.execute(
+            "SELECT count(*), max(knowledge_position) "
+            "FROM ofarm.governed_write_batch WHERE tenant_id = %s",
+            (other_authority.tenant_id,),
+        ).fetchone() == (1, before_head)
+        assert admin.execute(
+            "SELECT count(*) FROM ofarm.governed_write_batch "
+            "WHERE tenant_id = %s AND batch_id = %s",
+            (other_authority.tenant_id, batch_id),
+        ).fetchone() == (0,)
+
+
+def test_partial_selection_without_its_governed_batch_refuses(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    command_selection_bundle: RuntimeBundle,
+) -> None:
+    with pytest.raises(psycopg.errors.ForeignKeyViolation) as raised:
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            admin.execute(
+                """
+                INSERT INTO ofarm.tenant_command_runtime_bundle_selection (
+                    tenant_id, selection_binding_id,
+                    selection_binding_canonical_digest,
+                    command_id, command_binding_id,
+                    command_binding_canonical_digest,
+                    runtime_bundle_digest, selection_batch_id,
+                    selection_knowledge_position
+                ) VALUES (
+                    %s,
+                    'ofarm.tenant-command-runtime-bundle-selection.' ||
+                        'commit-operation-claim-draft.v0.1',
+                    'sha256:56fb0f14a2514b34428841cb7bfc8681bb577ea3ecf57598be480683fb68524f',
+                    'COMMIT_OPERATION_CLAIM_DRAFT',
+                    'ofarm.temporal-governed-command.' ||
+                        'commit-operation-claim-draft.v0.1',
+                    'sha256:6dad47b836b737c8d58b38f566ed0a7d6caeba9023a734357320326630309da1',
+                    %s, 'selection-batch:00000000-0000-4000-8000-000000000001',
+                    2
+                )
+                """,
+                (authority.tenant_id, command_selection_bundle.digest),
+            )
+    assert raised.value.diag.constraint_name == (
+        "tenant_command_runtime_bundle_selection_batch_fkey"
+    )
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            "SELECT count(*) FROM "
+            "ofarm.tenant_command_runtime_bundle_selection "
+            "WHERE tenant_id = %s",
+            (authority.tenant_id,),
+        ).fetchone() == (0,)
+
+
+def test_app_worker_and_selection_activation_share_one_monotonic_tenant_lock(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    command_selection_bundle: RuntimeBundle,
+) -> None:
+    barrier = threading.Barrier(3)
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        before_head = admin.execute(
+            "SELECT max(knowledge_position) FROM ofarm.governed_write_batch "
+            "WHERE tenant_id = %s",
+            (authority.tenant_id,),
+        ).fetchone()[0]
+
+    def ordinary(role_name: str) -> tuple[str, str, int]:
+        batch_id = "batch-selection-concurrency-" + role_name
+        with psycopg.connect(tenant_target.role_dsn(role_name)) as connection:
+            _install_test_bound_context(connection, authority)
+            barrier.wait()
+            _insert_batch(connection, authority, batch_id)
+            position = connection.execute(
+                "SELECT knowledge_position FROM ofarm.governed_write_batch "
+                "WHERE tenant_id = %s AND batch_id = %s",
+                (authority.tenant_id, batch_id),
+            ).fetchone()[0]
+            connection.commit()
+        return role_name, batch_id, position
+
+    def activate() -> tuple[str, str, int]:
+        with psycopg.connect(
+            tenant_target.role_dsn(
+                "ofarm_command_runtime_bundle_selection_control_login"
+            )
+        ) as control:
+            _install_test_bound_context(control, authority)
+            barrier.wait()
+            result = (
+                selection.activate_commit_operation_claim_draft_runtime_bundle_selection(
+                    control, command_selection_bundle
+                )
+            )
+        return "selection", result.selection_batch_id, result.selection_knowledge_position
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = (
+            executor.submit(ordinary, "ofarm_app"),
+            executor.submit(ordinary, "ofarm_worker"),
+            executor.submit(activate),
+        )
+        results = [future.result(timeout=10) for future in futures]
+
+    positions = sorted(result[2] for result in results)
+    assert positions == [before_head + 1, before_head + 2, before_head + 3]
+    assert len({result[1] for result in results}) == 3
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        selection_row = admin.execute(
+            """
+            SELECT selection_batch_id, selection_knowledge_position,
+                   runtime_bundle_digest
+            FROM ofarm.tenant_command_runtime_bundle_selection
+            WHERE tenant_id = %s
+            """,
+            (authority.tenant_id,),
+        ).fetchone()
+    selected_result = next(result for result in results if result[0] == "selection")
+    assert selection_row == (
+        selected_result[1],
+        selected_result[2],
+        command_selection_bundle.digest,
+    )
+
+
+def test_exact_retry_is_inert_and_unequal_unsealed_or_cross_tenant_reuse_refuses(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    other_authority: TenantAuthority,
+    command_selection_bundle: RuntimeBundle,
+) -> None:
+    main_changed = _extended_command_selection_bundle(
+        command_selection_bundle,
+        logical_ref="test:main-unequal-selection-bundle",
+    )
+    other_changed = _extended_command_selection_bundle(
+        command_selection_bundle,
+        logical_ref="test:other-cross-tenant-selection-bundle",
+    )
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        _publish_model_runtime_bundle(admin, authority.tenant_id, main_changed)
+        _publish_model_runtime_bundle(
+            admin, other_authority.tenant_id, other_changed
+        )
+        before = admin.execute(
+            "SELECT selection_batch_id, selection_knowledge_position, "
+            "runtime_bundle_digest FROM "
+            "ofarm.tenant_command_runtime_bundle_selection "
+            "WHERE tenant_id = %s",
+            (authority.tenant_id,),
+        ).fetchone()
+        before_head = admin.execute(
+            "SELECT max(knowledge_position) FROM ofarm.governed_write_batch "
+            "WHERE tenant_id = %s",
+            (authority.tenant_id,),
+        ).fetchone()[0]
+
+    with psycopg.connect(
+        tenant_target.role_dsn(
+            "ofarm_command_runtime_bundle_selection_control_login"
+        )
+    ) as control:
+        _install_test_bound_context(control, authority)
+        retry = selection.activate_commit_operation_claim_draft_runtime_bundle_selection(
+            control, command_selection_bundle
+        )
+    assert (
+        retry.selection_batch_id,
+        retry.selection_knowledge_position,
+        retry.runtime_bundle_digest,
+    ) == before
+
+    for refused_bundle in (main_changed, other_changed):
+        with psycopg.connect(
+            tenant_target.role_dsn(
+                "ofarm_command_runtime_bundle_selection_control_login"
+            )
+        ) as control:
+            _install_test_bound_context(control, authority)
+            with pytest.raises(psycopg.errors.ObjectNotInPrerequisiteState):
+                selection.activate_commit_operation_claim_draft_runtime_bundle_selection(
+                    control, refused_bundle
+                )
+
+    for refused_digest, error in (
+        ("not-a-digest", psycopg.errors.InvalidParameterValue),
+        ("sha256:" + "f" * 64, psycopg.errors.ObjectNotInPrerequisiteState),
+    ):
+        with psycopg.connect(
+            tenant_target.role_dsn(
+                "ofarm_command_runtime_bundle_selection_control_login"
+            )
+        ) as control:
+            _install_test_bound_context(control, authority)
+            with pytest.raises(error):
+                control.execute(
+                    "SELECT * FROM "
+                    "ofarm.activate_commit_operation_claim_draft_"
+                    "runtime_bundle_selection(%s)",
+                    (refused_digest,),
+                )
+
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            "SELECT selection_batch_id, selection_knowledge_position, "
+            "runtime_bundle_digest FROM "
+            "ofarm.tenant_command_runtime_bundle_selection "
+            "WHERE tenant_id = %s",
+            (authority.tenant_id,),
+        ).fetchone() == before
+        assert admin.execute(
+            "SELECT max(knowledge_position) FROM ofarm.governed_write_batch "
+            "WHERE tenant_id = %s",
+            (authority.tenant_id,),
+        ).fetchone() == (before_head,)
+
+
+def test_tenant_a_lock_does_not_block_tenant_b_selection(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    other_authority: TenantAuthority,
+    command_selection_bundle: RuntimeBundle,
+) -> None:
+    def activate_other() -> selection.TenantCommandRuntimeBundleSelection:
+        with psycopg.connect(
+            tenant_target.role_dsn(
+                "ofarm_command_runtime_bundle_selection_control_login"
+            )
+        ) as control:
+            _install_test_bound_context(control, other_authority)
+            return selection.activate_commit_operation_claim_draft_runtime_bundle_selection(
+                control, command_selection_bundle
+            )
+
+    with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+        _install_test_bound_context(application, authority)
+        application.execute("SELECT ofarm.take_tenant_write_lock()")
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(activate_other)
+            try:
+                result = future.result(timeout=5)
+            finally:
+                application.rollback()
+    assert result.runtime_bundle_digest == command_selection_bundle.digest
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "UPDATE ofarm.tenant_command_runtime_bundle_selection "
+        "SET command_id = command_id",
+        "DELETE FROM ofarm.tenant_command_runtime_bundle_selection",
+        "TRUNCATE ofarm.tenant_command_runtime_bundle_selection",
+    ),
+)
+def test_selection_relation_refuses_every_mutation(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    statement: str,
+) -> None:
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        before = admin.execute(
+            "SELECT * FROM ofarm.tenant_command_runtime_bundle_selection "
+            "WHERE tenant_id = %s",
+            (authority.tenant_id,),
+        ).fetchone()
+    with pytest.raises(psycopg.errors.ObjectNotInPrerequisiteState):
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            admin.execute(statement)
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            "SELECT * FROM ofarm.tenant_command_runtime_bundle_selection "
+            "WHERE tenant_id = %s",
+            (authority.tenant_id,),
+        ).fetchone() == before
