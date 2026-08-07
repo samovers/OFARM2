@@ -15,6 +15,15 @@ from conformance import temporal_contract_candidate_check as temporal
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+_SELECTION_STORAGE_V7_CATALOG_DIGEST = (
+    "sha256:026bb61026a9f752fc8dde84bca0e3cbbab374d0ac8f0ba942a72654e44f5f1a"
+)
+_SELECTION_STORAGE_V8_CATALOG_DIGEST = (
+    "sha256:28aaa41651c1338fec9f8ca6aa7f252b7bef4ef2f3b1760d399306aba69c8719"
+)
+_SELECTION_STORAGE_V8_CATALOG_SOURCE_SHA256 = (
+    "sha256:130a96edc2b9f4ad92a640c1c34150fe6126bd3945a48704a96896bb88a0f1a7"
+)
 
 
 def _coordinate_schema() -> dict:
@@ -241,10 +250,44 @@ def _synthetic_tenant_authority(
     return package_root, authority_path
 
 
+def _selection_storage_catalog_source(*, classified: bool) -> bytes:
+    relative_path, _module, byte_length, v7_sha256 = (
+        temporal.SELECTION_STORAGE_ABSENT_CATALOG_PIN
+    )
+    current = (PACKAGE_ROOT / relative_path).read_bytes()
+    v7_digest = _SELECTION_STORAGE_V7_CATALOG_DIGEST.encode("utf-8")
+    v8_digest = _SELECTION_STORAGE_V8_CATALOG_DIGEST.encode("utf-8")
+
+    if current.count(v7_digest) == 1 and current.count(v8_digest) == 0:
+        v7_source = current
+    elif current.count(v7_digest) == 0 and current.count(v8_digest) == 1:
+        v7_source = current.replace(v8_digest, v7_digest)
+    else:
+        raise AssertionError("current tenant catalog source is neither exact V7 nor V8")
+
+    if (
+        len(v7_source) != byte_length
+        or "sha256:" + hashlib.sha256(v7_source).hexdigest() != v7_sha256
+    ):
+        raise AssertionError("derived V7 tenant catalog source differs")
+    if not classified:
+        return v7_source
+
+    v8_source = v7_source.replace(v7_digest, v8_digest)
+    if (
+        len(v8_source) != byte_length
+        or "sha256:" + hashlib.sha256(v8_source).hexdigest()
+        != _SELECTION_STORAGE_V8_CATALOG_SOURCE_SHA256
+    ):
+        raise AssertionError("derived V8 tenant catalog source differs")
+    return v8_source
+
+
 def _selection_storage_source_snapshot(
     tmp_path: Path,
     overrides: dict[str, bytes] | None = None,
 ):
+    selected_overrides = dict(overrides or {})
     package_root = tmp_path / "python-snapshot"
     sources: dict[str, bytes] = {
         "kernel/api.py": b"",
@@ -253,12 +296,22 @@ def _selection_storage_source_snapshot(
         "kernel/legacy_m1/runtime.py": b"",
         temporal.POSTGRESQL_INITIALIZER_RELATIVE_PATH: b"",
     }
-    for relative_path, _module, _length, _digest in (
-        *temporal.SELECTION_STORAGE_SOURCE_PINS,
-        temporal.SELECTION_STORAGE_ABSENT_CATALOG_PIN,
-    ):
+    for (
+        relative_path,
+        _module,
+        _length,
+        _digest,
+    ) in temporal.SELECTION_STORAGE_SOURCE_PINS:
         sources[relative_path] = (PACKAGE_ROOT / relative_path).read_bytes()
-    sources.update(overrides or {})
+    sources[temporal.SELECTION_STORAGE_ABSENT_CATALOG_PIN[0]] = (
+        _selection_storage_catalog_source(
+            classified=(
+                temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH
+                in selected_overrides
+            )
+        )
+    )
+    sources.update(selected_overrides)
     for relative_path, source_bytes in sources.items():
         path = package_root / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -266,10 +319,39 @@ def _selection_storage_source_snapshot(
     return temporal.architecture.build_python_source_snapshot(package_root)
 
 
+def _selection_storage_v7_authority(
+) -> temporal.TenantMigrationAuthoritySnapshot:
+    current = temporal.load_tenant_migration_authority_snapshot()
+    migrations = current.migration_set.migrations
+    if (
+        len(migrations) not in (7, 8)
+        or tuple(migration.version for migration in migrations[:7])
+        != tuple(range(1, 8))
+        or current.migration_set.prefix_digest(7)
+        != temporal.SELECTION_STORAGE_V7_DIGEST
+    ):
+        raise AssertionError("current tenant authority lacks the exact V7 prefix")
+
+    class V7MigrationSet:
+        service = current.migration_set.service
+        migrations = current.migration_set.migrations[:7]
+        digest = temporal.SELECTION_STORAGE_V7_DIGEST
+
+        def prefix_digest(self, version: int) -> str:
+            if version == 7:
+                return self.digest
+            return current.migration_set.prefix_digest(version)
+
+    return temporal.TenantMigrationAuthoritySnapshot(
+        migration_set=V7MigrationSet(),
+        version_3_prefix=current.version_3_prefix,
+    )
+
+
 def _selection_storage_v8_authority(
     source_bytes: bytes,
 ) -> temporal.TenantMigrationAuthoritySnapshot:
-    current = temporal.load_tenant_migration_authority_snapshot()
+    v7 = _selection_storage_v7_authority()
     migration_8 = SimpleNamespace(
         version=8,
         filename=temporal.SELECTION_STORAGE_MIGRATION_FILENAME,
@@ -282,18 +364,18 @@ def _selection_storage_v8_authority(
     v8_digest = "sha256:" + "8" * 64
 
     class V8MigrationSet:
-        service = current.migration_set.service
-        migrations = (*current.migration_set.migrations, migration_8)
+        service = v7.migration_set.service
+        migrations = (*v7.migration_set.migrations, migration_8)
         digest = v8_digest
 
         def prefix_digest(self, version: int) -> str:
             if version == 8:
                 return self.digest
-            return current.migration_set.prefix_digest(version)
+            return v7.migration_set.prefix_digest(version)
 
     return temporal.TenantMigrationAuthoritySnapshot(
         migration_set=V8MigrationSet(),
-        version_3_prefix=current.version_3_prefix,
+        version_3_prefix=v7.version_3_prefix,
     )
 
 
@@ -325,7 +407,7 @@ def _changed_selection_storage_authority(
     service: object | None = None,
     prefix_overrides: dict[int, object] | None = None,
 ) -> temporal.TenantMigrationAuthoritySnapshot:
-    current = temporal.load_tenant_migration_authority_snapshot()
+    current = _selection_storage_v7_authority()
     selected_migrations = migrations or current.migration_set.migrations
     selected_digest = digest if digest is not None else current.migration_set.digest
     selected_service = service or current.migration_set.service
@@ -350,6 +432,25 @@ def _changed_selection_storage_authority(
         migration_set=ChangedMigrationSet(),
         version_3_prefix=current.version_3_prefix,
     )
+
+
+def _selection_storage_expected_current_state() -> str:
+    authority = temporal.load_tenant_migration_authority_snapshot()
+    migrations = authority.migration_set.migrations
+    adapter_present = (
+        PACKAGE_ROOT / temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH
+    ).is_file()
+    if len(migrations) == 7 and not adapter_present:
+        return temporal.SELECTION_STORAGE_CONFORMANT_ABSENT
+    if (
+        len(migrations) == 8
+        and migrations[7].version == 8
+        and migrations[7].filename
+        == temporal.SELECTION_STORAGE_MIGRATION_FILENAME
+        and adapter_present
+    ):
+        return temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+    raise AssertionError("current selection-storage pair is neither V7 nor V8")
 
 
 def _selection_storage_snapshot_view(
@@ -1940,8 +2041,9 @@ def test_complete_check_uses_one_public_snapshot_and_one_initializer_ast(
         counted_ast_for,
     )
 
-    assert temporal.validate_candidate_governance() == (
-        temporal.SELECTION_STORAGE_CONFORMANT_ABSENT
+    assert (
+        temporal.validate_candidate_governance()
+        == _selection_storage_expected_current_state()
     )
 
     assert builder_calls == [temporal.PACKAGE_ROOT]
@@ -2017,13 +2119,23 @@ def test_supported_entrypoint_refusal_emits_no_conformant_state(
 
 
 def test_selection_storage_current_state_is_exact_absent(tmp_path: Path):
-    snapshot = _selection_storage_source_snapshot(tmp_path)
+    snapshot = temporal._build_selection_storage_snapshot()
     authority = temporal.load_tenant_migration_authority_snapshot()
 
     assert temporal._validate_selection_storage_conformance(
         authority,
         snapshot,
-    ) == temporal.SELECTION_STORAGE_CONFORMANT_ABSENT
+    ) == _selection_storage_expected_current_state()
+
+    source_bytes = _selection_storage_python_markers()
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="implementation pair is incomplete",
+    ):
+        temporal._validate_selection_storage_conformance(
+            _selection_storage_v8_authority(source_bytes),
+            _selection_storage_source_snapshot(tmp_path),
+        )
 
 
 def test_selection_storage_propagates_public_builder_refusal(
@@ -2210,7 +2322,7 @@ def test_selection_storage_refuses_verification_source_in_fixed_reachability(
         match=f"verification source entered the {label} import closure",
     ):
         temporal._validate_selection_storage_conformance(
-            temporal.load_tenant_migration_authority_snapshot(),
+            _selection_storage_v7_authority(),
             snapshot,
         )
 
@@ -2261,7 +2373,7 @@ def test_selection_storage_refuses_partial_implementation_pair(
         else None,
     )
     authority = (
-        temporal.load_tenant_migration_authority_snapshot()
+        _selection_storage_v7_authority()
         if present_half == "adapter"
         else _selection_storage_v8_authority(source_bytes)
     )
@@ -2326,7 +2438,7 @@ def test_selection_storage_refuses_incomplete_marker_pair(
 
 
 def test_selection_storage_refuses_marker_in_other_migration(tmp_path: Path):
-    current = temporal.load_tenant_migration_authority_snapshot()
+    current = _selection_storage_v7_authority()
     source_bytes = (
         current.migration_set.migrations[0].source_bytes
         + b"\n-- "
@@ -2357,7 +2469,7 @@ def test_selection_storage_refuses_invalid_migration_state(
     tmp_path: Path,
     state: str,
 ):
-    current = temporal.load_tenant_migration_authority_snapshot()
+    current = _selection_storage_v7_authority()
     migrations = current.migration_set.migrations
     if state == "too-short":
         changed = migrations[:6]
@@ -2384,7 +2496,7 @@ def test_selection_storage_refuses_migration_byte_identity_drift(
     tmp_path: Path,
     field: str,
 ):
-    current = temporal.load_tenant_migration_authority_snapshot()
+    current = _selection_storage_v7_authority()
     migration = current.migration_set.migrations[0]
     change = {
         "byte_length": migration.byte_length + 1,
@@ -2479,7 +2591,7 @@ def test_selection_storage_refuses_absent_structural_digest_drift(
         match="exact V7 absent authority differs",
     ):
         temporal._validate_selection_storage_conformance(
-            temporal.load_tenant_migration_authority_snapshot(),
+            _selection_storage_v7_authority(),
             _selection_storage_source_snapshot(tmp_path),
         )
 
@@ -2503,7 +2615,7 @@ def test_selection_storage_refuses_marker_in_other_production_source(
         match="another production Python source",
     ):
         temporal._validate_selection_storage_conformance(
-            temporal.load_tenant_migration_authority_snapshot(),
+            _selection_storage_v7_authority(),
             snapshot,
         )
 
@@ -2521,7 +2633,7 @@ def test_selection_storage_verification_marker_never_satisfies_pair(
     )
 
     assert temporal._validate_selection_storage_conformance(
-        temporal.load_tenant_migration_authority_snapshot(),
+        _selection_storage_v7_authority(),
         snapshot,
     ) == temporal.SELECTION_STORAGE_CONFORMANT_ABSENT
 
@@ -2596,7 +2708,7 @@ def test_selection_storage_refuses_every_initializer_import_form(
     authority = (
         _selection_storage_v8_authority(source_bytes)
         if state == temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
-        else temporal.load_tenant_migration_authority_snapshot()
+        else _selection_storage_v7_authority()
     )
 
     with pytest.raises(
@@ -2747,7 +2859,7 @@ def test_selection_storage_source_pin_refuses_drift(
         match="Python source pin differs",
     ):
         temporal._validate_selection_storage_conformance(
-            temporal.load_tenant_migration_authority_snapshot(),
+            _selection_storage_v7_authority(),
             snapshot,
         )
 
@@ -2763,7 +2875,7 @@ def test_selection_storage_absent_catalog_pin_refuses_drift(tmp_path: Path):
         match="Python source pin differs",
     ):
         temporal._validate_selection_storage_conformance(
-            temporal.load_tenant_migration_authority_snapshot(),
+            _selection_storage_v7_authority(),
             snapshot,
         )
 
@@ -2783,7 +2895,7 @@ def test_selection_storage_absent_catalog_digest_refuses_drift(
         match="V7 catalog authority differs",
     ):
         temporal._validate_selection_storage_conformance(
-            temporal.load_tenant_migration_authority_snapshot(),
+            _selection_storage_v7_authority(),
             _selection_storage_source_snapshot(tmp_path),
         )
 
@@ -2793,7 +2905,7 @@ def test_selection_storage_v7_source_pin_refuses_drift(
     tmp_path: Path,
     version: int,
 ):
-    current = temporal.load_tenant_migration_authority_snapshot()
+    current = _selection_storage_v7_authority()
     migrations = list(current.migration_set.migrations)
     migrations[version - 1] = _changed_migration(
         migrations[version - 1],
