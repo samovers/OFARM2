@@ -207,7 +207,9 @@ ofarm_command_runtime_bundle_selection_control_login
 
 The observation compares schema, routine name, identity arguments, grantee,
 grantor, privilege, and grantability. It does not infer identity from a
-function name alone. System-default `PUBLIC` execution inherited from the
+function name alone. `PUBLIC` is represented explicitly as grantee OID `0`,
+not by joining through `pg_catalog.pg_roles`; a roles join cannot define or
+filter this observation. System-default `PUBLIC` execution inherited from the
 unchanged PostgreSQL catalog is outside this new user-routine family scan;
 explicit changes to system routine ACLs remain covered by the existing global
 provisioning checks.
@@ -277,13 +279,13 @@ rules. This contract adds no durable admission phase.
 
 The selection-controller ACL substate composes as follows:
 
-| Existing phase and ledger evidence | ACL substate | Selection-controller family expectation |
+| Existing phase and ledger evidence | ACL substate | Complete section-5 expectation |
 | --- | --- | --- |
-| `A0` | `NOT_APPLICABLE` | Existing A0 behavior; no V5 selection-control grants; the activation grant is refused. |
-| `A1` or `A2` | `NOT_APPLICABLE` | Existing phase behavior; exactly the two V5 binder grants; the activation grant is refused. |
-| `A4` with exact durable head 7 | `STABLE_V7` | Exactly the two V5 binder grants. |
-| `A4` with exact head 7 plus the runner-authenticated post-source event in section 6.3 | `V8_POST_SOURCE_PRE_LEDGER_APPEND` | Exactly the two V5 binder grants plus the one activation grant. |
-| `A4` projection with exact authenticated durable head 8 | `STABLE_V8` | Exactly the two V5 binder grants plus the one activation grant. |
+| `A0` | `NOT_APPLICABLE` | Existing A0 behavior; no V5 selection-control grants; empty activation-routine inventory; no activation-routine non-owner ACL row. |
+| `A1` or `A2` | `NOT_APPLICABLE` | Existing phase behavior; exactly the two V5 binder grants; empty activation-routine inventory; no activation-routine non-owner ACL row. |
+| `A4` with exact durable head 7 | `STABLE_V7` | Exactly the two V5 binder grants; empty activation-routine inventory; no activation-routine non-owner ACL row. |
+| `A4` with exact head 7 plus the runner-authenticated post-source event in section 6.3 | `V8_POST_SOURCE_PRE_LEDGER_APPEND` | Exactly the two V5 binder grants; exactly the activation-routine identity in section 5.2; exactly the controller non-owner ACL row in section 5.3. |
+| `A4` projection with exact authenticated durable head 8 | `STABLE_V8` | Exactly the two V5 binder grants; exactly the activation-routine identity in section 5.2; exactly the controller non-owner ACL row in section 5.3. |
 
 For exact durable head 8, the existing phase classifier must authenticate the
 V8 ledger evidence and return the existing `A4` capsule-and-grant projection.
@@ -337,6 +339,12 @@ The existing public `migration_locked_differences(target, spec)` signature and
 meaning stay closed and unchanged. It always performs stable-state
 verification. The new private seam is not exported through
 `deployment.postgresql.__init__` and is not a generic transition registry.
+
+If the private seam reports any difference, the runner must raise a governed
+migration refusal. A returned difference or governed verifier refusal must
+make the existing outer runner boundary roll back the same transaction before
+any V8 ledger append. The runner must never continue to ledger append, commit,
+or stable-V8 recognition from a refused seam result.
 
 Any rollback must remove the source effects and return to stable V7. A backend
 loss, exception, or refusal before commit cannot make the transition posture a
@@ -506,7 +514,7 @@ paths:
 | Exact path | Permitted reason |
 | --- | --- |
 | `docs/rfcs/OFARM_Tenant_Command_RuntimeBundle_Selection_Provisioning_Verifier_Admission_RFC_v0_1.md` | This contract and compact approval evidence required by the active pre-deployment workflow. |
-| `deployment/postgresql/provisioning.py` | Exact stable-V8 phase recognition, exact third-row expectation, and the private post-source verifier seam. |
+| `deployment/postgresql/provisioning.py` | Composed stable-V7/stable-V8 ledger and ACL-substate classification; all three exact section-5 observations; exact third-row expectation; and the private post-source verifier seam. |
 | `deployment/postgresql/migration_runner.py` | Select the private seam only at the authenticated V8 post-source/pre-ledger point. |
 | `kernel/tests/test_postgresql_provisioning.py` | Focused phase composition, stable/controlled-transition/final classification, exact routine inventory, arbitrary non-owner ACL closure, and refusal verification on disposable PostgreSQL targets. |
 | `kernel/tests/test_postgresql_migration_runner.py` | Focused runner ordering, repeated authoritative authentication, production/test entry separation, source-structure, and refusal tests. |
