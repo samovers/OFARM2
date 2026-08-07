@@ -3331,6 +3331,11 @@
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_branch_local_reauthentication_refusal_rolls_back_v8_source",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_commit_phase_interrupt_has_an_explicit_unknown_outcome",
       "sourceModule": "kernel.tests.test_postgresql_migration_runner",
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
@@ -3442,6 +3447,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_resumes_at_0002_and_preserves_the_stable_0001_prefix",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_same_locked_v7_shape_is_refused_stable_and_accepted_transition",
       "sourceModule": "kernel.tests.test_postgresql_migration_runner",
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
@@ -12771,8 +12781,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "3346510b41c5535154699d312c62d80acb7858357f5afe0dbc477a2ac74be77c",
-  "entryCount": 2554,
+  "entriesSha256": "a7c6199fd0a1f1130147f08d8e90692331f949df3da721820917aed211db340b",
+  "entryCount": 2556,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -48,6 +48,7 @@ from deployment.postgresql.migration_sets import (
     AuthoritativeMigration,
     MigrationService,
     MigrationSet,
+    MigrationSetError,
     load_authoritative_migration_set,
     load_migration_set,
 )
@@ -2541,6 +2542,166 @@ def test_v8_post_source_seam_accepts_exact_shape_and_observes_all_escape_rows(
     differences = _v8_post_source_differences(tenant_target)
     assert "tenant selection activation routine ACL differs" in differences
     assert "tenant binding selection-control admission ACL differs" in differences
+
+
+def test_same_locked_v7_shape_is_refused_stable_and_accepted_transition(
+    tenant_target: _TenantTarget,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _advance_tenant_target_to_v7(tenant_target)
+    authority = _controlled_selection_activation_authority()
+    monkeypatch.setattr(
+        provisioning_module,
+        "_authoritative_tenant_selection_activation_migration",
+        lambda: authority,
+    )
+    _create_selection_activation_routine(
+        tenant_target.target_admin_dsn,
+        grantees=("ofarm_command_runtime_bundle_selection_controller",),
+    )
+
+    with psycopg.connect(
+        tenant_target.migrator_dsn,
+        autocommit=True,
+    ) as connection:
+        migration_runner_module._begin_and_lock(
+            connection,
+            TENANT_PROVISIONING_SPEC,
+        )
+        try:
+            migration_runner_module._set_owner_role(
+                connection,
+                TENANT_PROVISIONING_SPEC,
+            )
+            stable_differences = provisioning_module.migration_locked_differences(
+                connection,
+                TENANT_PROVISIONING_SPEC,
+            )
+            transition_differences = (
+                migration_runner_module
+                ._locked_tenant_v8_post_source_boundary_differences(
+                    connection,
+                    TENANT_PROVISIONING_SPEC,
+                )
+            )
+        finally:
+            connection.rollback()
+
+    assert len(stable_differences) == 3
+    assert set(stable_differences) == {
+        "tenant binding selection-control admission ACL differs",
+        "tenant selection activation routine inventory differs",
+        "tenant selection activation routine ACL differs",
+    }
+    assert transition_differences == []
+
+
+def test_branch_local_reauthentication_refusal_rolls_back_v8_source(
+    tenant_target: _TenantTarget,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    full_set = _advance_tenant_target_to_v7(tenant_target)
+    marker = "issue176-v8-source-reached"
+    probe = "ofarm.issue176_v8_reauthentication_probe"
+    v8_source = (
+        b"CREATE TABLE ofarm.issue176_v8_reauthentication_probe "
+        b"(marker pg_catalog.text);\n"
+        b"SELECT pg_catalog.set_config('application_name', "
+        + repr(marker).encode("ascii")
+        + b", true);\n"
+    )
+    controlled_set = _load_synthetic_set(
+        tmp_path,
+        {
+            **{
+                migration.filename: migration.source_bytes
+                for migration in full_set.migrations
+            },
+            "0008_tenant_command_runtime_bundle_selection.sql": v8_source,
+        },
+    )
+    authority_calls: list[bool] = []
+    source_observations: list[bool] = []
+    private_verifier_called = False
+
+    def staged_authority(migration_set: MigrationSet) -> MigrationSet:
+        authority_calls.append(migration_set is controlled_set)
+        if len(authority_calls) == 1:
+            return migration_set
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            source_observations.append(
+                admin.execute(
+                    "SELECT pg_catalog.count(*) = 1 "
+                    "FROM pg_catalog.pg_stat_activity "
+                    "WHERE datname = %s "
+                    "AND usename = 'ofarm_migrator' "
+                    "AND application_name = %s",
+                    (TENANT_PROVISIONING_SPEC.database_name, marker),
+                ).fetchone()[0]
+            )
+        raise MigrationSetError("branch-local reauthentication refused")
+
+    def private_verifier_must_not_run(*_args, **_kwargs) -> list[str]:
+        nonlocal private_verifier_called
+        private_verifier_called = True
+        return []
+
+    monkeypatch.setattr(
+        migration_runner_module,
+        "require_authoritative_migration_set",
+        staged_authority,
+    )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_locked_tenant_v8_post_source_boundary_differences",
+        private_verifier_must_not_run,
+    )
+
+    with pytest.raises(
+        MigrationInputError,
+        match="branch-local reauthentication refused",
+    ):
+        migrate_authoritative_service(
+            admin_dsn=tenant_target.admin_dsn,
+            migrator_dsn=tenant_target.migrator_dsn,
+            spec=TENANT_PROVISIONING_SPEC,
+            migration_set=controlled_set,
+            release_identity=RELEASE_IDENTITY + "-v8-reauthentication-refusal",
+            execution_id=uuid4(),
+        )
+
+    assert authority_calls == [True, True]
+    assert source_observations == [True]
+    assert private_verifier_called is False
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            "SELECT pg_catalog.count(*), pg_catalog.max(version) "
+            "FROM ofarm.schema_migration"
+        ).fetchone() == (7, 7)
+        assert admin.execute(
+            "SELECT pg_catalog.to_regclass(%s) IS NULL",
+            (probe,),
+        ).fetchone() == (True,)
+    with psycopg.connect(
+        tenant_target.migrator_dsn,
+        autocommit=True,
+    ) as connection:
+        migration_runner_module._begin_and_lock(
+            connection,
+            TENANT_PROVISIONING_SPEC,
+        )
+        try:
+            migration_runner_module._set_owner_role(
+                connection,
+                TENANT_PROVISIONING_SPEC,
+            )
+            assert provisioning_module.migration_locked_differences(
+                connection,
+                TENANT_PROVISIONING_SPEC,
+            ) == []
+        finally:
+            connection.rollback()
 
 
 _EXPECTED_WRITE_LOCK_ACL_A2 = [
