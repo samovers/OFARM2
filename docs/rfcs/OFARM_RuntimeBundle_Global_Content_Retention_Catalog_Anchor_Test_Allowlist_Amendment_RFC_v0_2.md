@@ -69,9 +69,9 @@ The temporal-governance test may change only to:
    exact V7 prefix from a current authoritative release of length 7, 8, or 9;
 2. add the mechanically observed exact V9 catalog digest and exact V9
    `catalog_identity.py` source SHA-256 as test-only evidence;
-3. allow `_selection_storage_catalog_source(...)` to recognize only that exact
-   current V9 production source before deriving the already fixed historical
-   V7 and V8 sources;
+3. allow `_selection_storage_catalog_source(...)` to recognize the exact
+   current V9 production source in addition to the exact current V7 and V8
+   sources, before deriving the already fixed historical V7 and V8 sources;
 4. update `_selection_storage_expected_current_state()` to apply only the
    following closed current-repository state rule:
 
@@ -178,12 +178,14 @@ and the three changes must never be split.
   two test paths above.
 - **GCAA-003 — Exact test purposes.** In the catalog unit test, only the tenant
   V8-to-V9 test name and expected literal may change. In the temporal-governance
-  test, only exact V9 current-source evidence and the authenticated 7/8/9
-  release-length fixture admission may change; its independent current-state
-  helper must return `CONFORMANT_CLASSIFIED` only for the exact V8 or V9 cases
-  in section 1 and must retain exact V7/ABSENT and all refusal behavior.
-  Existing V7/V8 identities, production-checker behavior, and all fail-closed
-  and GCRC tests remain intact.
+  test, only the addition of exact V9 current-source evidence alongside
+  preserved exact V7/V8 current-source recognition, the authenticated 7/8/9
+  release-length fixture admission, and the closed current-state-helper
+  extension in section 1 may change. That helper must return
+  `CONFORMANT_CLASSIFIED` only for the exact V8 or V9 cases in section 1 and
+  must retain exact V7/ABSENT and all refusal behavior. Existing V7/V8
+  identities, production-checker behavior, and all fail-closed and GCRC tests
+  remain intact.
 - **GCAA-004 — Mechanical digest custody.** The V9 catalog digest comes only
   from the existing algorithm over a clean disposable V9 target; its source
   identity comes only from SHA-256 over the exact future production source.
