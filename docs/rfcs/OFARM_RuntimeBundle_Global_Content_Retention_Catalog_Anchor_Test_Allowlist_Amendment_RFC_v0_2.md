@@ -72,10 +72,26 @@ The temporal-governance test may change only to:
 3. allow `_selection_storage_catalog_source(...)` to recognize only that exact
    current V9 production source before deriving the already fixed historical
    V7 and V8 sources;
-4. preserve the existing exact V7 and V8 fixture identities rather than
+4. update `_selection_storage_expected_current_state()` to apply only the
+   following closed current-repository state rule:
+
+   | Exact authenticated repository state | Independently expected public state |
+   | --- | --- |
+   | V7 authority and selection adapter absent | `CONFORMANT_ABSENT` |
+   | V8 authority with exact migration 0008 selection pair and exact adapter | `CONFORMANT_CLASSIFIED` |
+   | V9 authority with the exact preserved migration 0008 selection pair, exact adapter, and exact governed final migration 0009 | `CONFORMANT_CLASSIFIED` |
+
+   A partial pair, migration count other than 7, 8, or 9, wrong migration-0008
+   identity, wrong migration-0009 identity, or any other unrecognized state
+   must refuse. A generic `len(migrations) >= 8`, newest-release,
+   dynamic-current, future-version, or fallback rule is forbidden;
+5. preserve the historical name and parameter identity of
+   `test_selection_storage_current_state_is_exact_absent`, and preserve its
+   controlled partial-pair refusal inside that same collected node;
+6. preserve the existing exact V7 and V8 fixture identities rather than
    replacing them with a caller-selected, environment-selected, dynamic, or
    generic "current" identity; and
-5. preserve all existing GCRC V7/V8/V9 state, marker, isolation, output, and
+7. preserve all existing GCRC V7/V8/V9 state, marker, isolation, output, and
    refusal tests without changing the production checker, migration loader,
    runtime, database, or semantic behavior.
 
@@ -93,6 +109,7 @@ eleventh path.
 | Production anchor | 12,016-byte `deployment/postgresql/catalog_identity.py`; `sha256:130a96edc2b9f4ad92a640c1c34150fe6126bd3945a48704a96896bb88a0f1a7` | sole external tenant verifier/observer trust anchor |
 | Existing unit test | 7,060-byte `kernel/tests/test_postgresql_catalog_identity_unit.py`; `sha256:1ba7d07a838f41722dc29f21907534d7e07366d542c4cfc686143a6daa2c1675` | exact literal and fail-closed anchor verification |
 | Existing temporal-governance test | 127,404-byte `kernel/tests/test_temporal_contract_governance.py`; `sha256:fc7587b73fb490f4ac07b93b25af4931fdc00d00b919ab6f5940cd25d8eb0ee3` | exact historical V7/V8 fixture identity and V9 conformance evidence |
+| Baseline-transition test admission | 26,314-byte `docs/rfcs/OFARM_Tenant_Command_RuntimeBundle_Selection_Activation_Baseline_Transition_Test_Admission_RFC_v0_1.md`; `sha256:136318ac6dd49987b4652710ab55e68364ea5aa2f23f58d274a40f809fcb4168` | BTT-004/BTT-005 historical fixture law, BTT-006 current-state smoke rule, and BTT-009 node-ID preservation |
 | Merged prerequisite | PR #296, merge `95bf5919b6bd3894b4208ab7760e94b328c4173b` | conformance completion only |
 
 The parent remains sole authority for function semantics, migration behavior,
@@ -102,6 +119,13 @@ shapes. The merged conformance contract retains ownership of the temporal
 test's historical identities, state model, marker law, isolation, output, and
 refusal semantics; this amendment permits only their mechanical V9 fixture
 continuation.
+As later versioned test-boundary law, this amendment supersedes only the
+BTT-006 rule that another migration count must fail, and only for the exact
+governed V9 current-repository state defined in section 1. BTT-004 and BTT-005
+retain the exact historical V7/V8 fixtures. BTT-006 retains its independent
+expected-state comparison and controlled partial-pair refusal. BTT-009 retains
+the historical current-state test node and parameter identities. No other BTT
+rule is amended or reinterpreted, and the frozen BTT contract is not edited.
 The existing catalog identity algorithm over a clean disposable target owns
 the future V9 catalog digest. SHA-256 over the exact future production source
 owns its source identity. The user, AI, environment, and this RFC choose
@@ -155,16 +179,21 @@ and the three changes must never be split.
 - **GCAA-003 — Exact test purposes.** In the catalog unit test, only the tenant
   V8-to-V9 test name and expected literal may change. In the temporal-governance
   test, only exact V9 current-source evidence and the authenticated 7/8/9
-  release-length fixture admission may change. Existing V7/V8 identities,
-  production-checker behavior, and all fail-closed and GCRC tests remain intact.
+  release-length fixture admission may change; its independent current-state
+  helper must return `CONFORMANT_CLASSIFIED` only for the exact V8 or V9 cases
+  in section 1 and must retain exact V7/ABSENT and all refusal behavior.
+  Existing V7/V8 identities, production-checker behavior, and all fail-closed
+  and GCRC tests remain intact.
 - **GCAA-004 — Mechanical digest custody.** The V9 catalog digest comes only
   from the existing algorithm over a clean disposable V9 target; its source
   identity comes only from SHA-256 over the exact future production source.
 - **GCAA-005 — Atomic verification.** Production anchor, catalog-unit-test
   literal, and temporal-governance V9 fixture evidence change in the same
   future implementation PR.
-- **GCAA-006 — Mechanical inventory.** Inventory changes only for an actual
-  canonical node-ID change.
+- **GCAA-006 — Mechanical inventory and historical smoke node.** The temporal
+  current-state test name and parameter identity do not change. Inventory
+  changes only for an actual canonical node-ID change caused by the separately
+  permitted catalog-unit-test V8-to-V9 rename.
 - **GCAA-007 — Phase A has no implementation.** This PR changes only this RFC.
 - **GCAA-008 — Renewed request required.** Approval and merge do not widen the
   earlier implementation request.
@@ -177,8 +206,11 @@ and the three changes must never be split.
 | Another code, test, workflow, SQL, or documentation path is added | Refuse under GCAA-002/GCAA-007 |
 | Anchor test is deleted, generalized, or loses a mutation/refusal case | Refuse under GCAA-003 |
 | Temporal fixture uses dynamic/current identity or changes conformance semantics | Refuse under GCAA-003 |
+| Exact V9 current state refuses or returns anything other than `CONFORMANT_CLASSIFIED` | Refuse under GCAA-003 |
+| A partial pair, unknown migration count, wrong row identity, or future version is accepted | Refuse under GCAA-003 |
 | Digest is guessed, copied, or selected through an input | Refuse under GCAA-004 |
 | Production anchor and either test fixture are split | Stop merge under GCAA-005 |
+| Temporal smoke node is renamed, parametrized, or loses its partial-pair refusal | Refuse under GCAA-006 |
 | Inventory changes while collected node IDs do not | Refuse under GCAA-006 |
 | Database work resumes without a renewed request | Stop under GCAA-008 |
 | Another omitted path or unresolved semantic decision appears | Stop under GCAA-009 |
@@ -217,7 +249,9 @@ content, publishes no bundle, chooses no tenant, creates no selection, and
 adds no runtime, route, command, read, historical/WINDOW, materialization,
 output, deployment, legacy, or #192 behavior. It does not change the production
 temporal checker, migration loader, frozen V7/V8 evidence, or conformance law.
-Unrelated parent wording preferences remain outside this correction.
+It does not edit the frozen baseline-transition contract; it lawfully replaces
+only the exact BTT-006 restriction stated above. Unrelated parent wording
+preferences remain outside this correction.
 
 ## 6. Smallest coherent change and provisional posture
 
@@ -243,9 +277,9 @@ verifiable approval or signing before deployment.
 | --- | --- | --- | --- |
 | GCAA-001 | exact parent identity | parent drift | byte length and SHA-256 |
 | GCAA-002, 007 | changed-file boundary | any extra path | name-only diff |
-| GCAA-003 | catalog-anchor and temporal-governance tests | weakened, dynamic, or semantic edit | focused diffs and both tests |
+| GCAA-003 | catalog-anchor and temporal-governance tests | weakened, dynamic, semantic, or non-closed current-state edit | focused diffs; exact V7/V8/V9 smoke cases; both test modules |
 | GCAA-004, 005 | production anchor plus both exact tests | guessed or split value | disposable V9 observation, source hash, and equality |
-| GCAA-006 | canonical inventory generator | changed inventory without changed nodes | canonical comparison |
+| GCAA-006 | historical temporal smoke node and canonical inventory generator | renamed/parametrized smoke or changed inventory without changed nodes | collected-node comparison and controlled partial-pair refusal |
 | GCAA-008 | task request record | absent renewed request | task evidence check |
 | GCAA-009 | stop-condition review | another path or authority | implementation diff audit |
 
@@ -274,7 +308,8 @@ Open decisions: none. The V9 digest is mechanical; parent SQL semantics are
 closed and are not reopened here.
 
 - **Blockers addressed:** the mandatory production-anchor and migration-release
-  changes had two existing exact-evidence tests outside the allowlist.
+  changes had two existing exact-evidence tests outside the allowlist, and the
+  admitted temporal test's current-state helper required an exact V9 case.
 - **Follow-up:** after approval and merge, obtain one renewed explicit Phase B
   request naming this amendment and the eleven-path envelope.
 - **Preferences:** none.
