@@ -192,7 +192,7 @@ def test_tenant_v7_is_verifier_only_and_pins_write_lock_owner_admission():
     assert migration.source_sha256 == \
         "sha256:cf8594b6c456953004912722b168d6bdda7c6dbfc903ba8099b018e2f270dff7"
     assert migration.byte_length == 7936
-    assert migration_set.digest == \
+    assert migration_set.prefix_digest(7) == \
         "sha256:5616797d1362c55c78175126edab29cc3e88c021ba0709e3766d3196d2b0126b"
     assert b"observed_migration_count <> 7" in migration.source_bytes
     assert b"tenant write-lock selection-owner admission ACL differs" in (
@@ -217,6 +217,29 @@ def test_tenant_v7_is_verifier_only_and_pins_write_lock_owner_admission():
     assert b"old_prefix_expression" in migration.source_bytes
     assert b"old_catalog_digest" in migration.source_bytes
     assert b"old_provisioning_digest" in migration.source_bytes
+
+
+def test_tenant_v8_pins_selection_storage_and_complete_release_identity():
+    migration_set = load_authoritative_migration_set(
+        PACKAGE_ROOT,
+        TENANT_SERVICE,
+    )
+    migration = migration_set.migrations[7]
+
+    assert migration.filename == \
+        "0008_tenant_command_runtime_bundle_selection.sql"
+    assert migration.source_sha256 == \
+        "sha256:635e476fb4eb93073ed353397a977ea887c42e1be11b42f9a4782a76f88ab765"
+    assert migration.byte_length == 37933
+    assert migration_set.prefix_digest(8) == \
+        "sha256:7231c869066c56f7c642460d33391bab00456daecdb04530b34da7210e8e8a54"
+    assert migration_set.digest == \
+        "sha256:7231c869066c56f7c642460d33391bab00456daecdb04530b34da7210e8e8a54"
+    assert b"observed_migration_count <> 8" in migration.source_bytes
+    assert b"version-8 selection policy inventory differs" in migration.source_bytes
+    assert b"activate_commit_operation_claim_draft_runtime_bundle_selection" in (
+        migration.source_bytes
+    )
 
 
 @pytest.mark.parametrize("mutation", ("edited", "renamed", "future", "missing"))

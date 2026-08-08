@@ -2251,6 +2251,11 @@
       "sourcePath": "kernel/tests/test_migration_sets.py"
     },
     {
+      "nodeid": "kernel/tests/test_migration_sets.py::test_tenant_v8_pins_selection_storage_and_complete_release_identity",
+      "sourceModule": "kernel.tests.test_migration_sets",
+      "sourcePath": "kernel/tests/test_migration_sets.py"
+    },
+    {
       "nodeid": "kernel/tests/test_migration_sets.py::test_ungoverned_migration_filename_refuses[0001-initial.sql]",
       "sourceModule": "kernel.tests.test_migration_sets",
       "sourcePath": "kernel/tests/test_migration_sets.py"
@@ -3166,7 +3171,7 @@
       "sourcePath": "kernel/tests/test_postgresql_catalog_identity_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_catalog_identity_unit.py::test_tenant_v7_external_catalog_anchor_is_literal",
+      "nodeid": "kernel/tests/test_postgresql_catalog_identity_unit.py::test_tenant_v8_external_catalog_anchor_is_literal",
       "sourceModule": "kernel.tests.test_postgresql_catalog_identity_unit",
       "sourcePath": "kernel/tests/test_postgresql_catalog_identity_unit.py"
     },
@@ -6226,6 +6231,11 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_app_worker_and_selection_activation_share_one_monotonic_tenant_lock",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_authoritative_source_ledger_contract_and_apply_noop",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -6297,6 +6307,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_derived_key_identity_and_typed_source_lanes_are_database_enforced",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_exact_retry_is_inert_and_unequal_unsealed_or_cross_tenant_reuse_refuses",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
@@ -6511,6 +6526,11 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_partial_selection_without_its_governed_batch_refuses",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_post_migration_crypto_schema_tamper_refuses_every_gate[crypto-acl]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -6646,12 +6666,37 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_selection_activation_rollback_leaves_no_row_batch_or_position",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_selection_control_admission_is_exact_and_stays_binder_only",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_selection_control_mixed_v5_states_refuse_reconciliation",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_selection_relation_refuses_every_mutation[DELETE FROM ofarm.tenant_command_runtime_bundle_selection]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_selection_relation_refuses_every_mutation[TRUNCATE ofarm.tenant_command_runtime_bundle_selection]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_selection_relation_refuses_every_mutation[UPDATE ofarm.tenant_command_runtime_bundle_selection SET command_id = command_id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_selection_storage_is_empty_closed_and_function_only",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
@@ -6667,6 +6712,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_superuser_advisory_acl_tamper_is_name_portable_and_refused",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_tenant_a_lock_does_not_block_tenant_b_selection",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
@@ -6727,6 +6777,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_transition_refuses_ineligible_party_state_and_payload_id[mismatched-party-id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_unbound_and_caller_allocated_selection_attempts_are_no_write",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
@@ -12706,6 +12761,61 @@
       "sourcePath": "kernel/tests/test_temporal_decision_log.py"
     },
     {
+      "nodeid": "kernel/tests/test_tenant_command_runtime_bundle_selection.py::test_activation_passes_only_digest_and_commits_one_exact_result",
+      "sourceModule": "kernel.tests.test_tenant_command_runtime_bundle_selection",
+      "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_command_runtime_bundle_selection.py::test_adapter_is_absent_from_production_and_legacy_import_closures",
+      "sourceModule": "kernel.tests.test_tenant_command_runtime_bundle_selection",
+      "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_command_runtime_bundle_selection.py::test_database_refusal_rolls_back_without_translation",
+      "sourceModule": "kernel.tests.test_tenant_command_runtime_bundle_selection",
+      "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_command_runtime_bundle_selection.py::test_exact_fixed_closure_is_valid_and_caller_cannot_select_authority",
+      "sourceModule": "kernel.tests.test_tenant_command_runtime_bundle_selection",
+      "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_command_runtime_bundle_selection.py::test_invalid_database_result_rolls_back[rows0]",
+      "sourceModule": "kernel.tests.test_tenant_command_runtime_bundle_selection",
+      "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_command_runtime_bundle_selection.py::test_invalid_database_result_rolls_back[rows1]",
+      "sourceModule": "kernel.tests.test_tenant_command_runtime_bundle_selection",
+      "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_command_runtime_bundle_selection.py::test_invalid_database_result_rolls_back[rows2]",
+      "sourceModule": "kernel.tests.test_tenant_command_runtime_bundle_selection",
+      "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_command_runtime_bundle_selection.py::test_invalid_database_result_rolls_back[rows3]",
+      "sourceModule": "kernel.tests.test_tenant_command_runtime_bundle_selection",
+      "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_command_runtime_bundle_selection.py::test_missing_command_required_component_refuses_before_sql",
+      "sourceModule": "kernel.tests.test_tenant_command_runtime_bundle_selection",
+      "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_command_runtime_bundle_selection.py::test_pinned_binding_byte_change_refuses_before_sql",
+      "sourceModule": "kernel.tests.test_tenant_command_runtime_bundle_selection",
+      "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_command_runtime_bundle_selection.py::test_unbound_connection_refuses_without_sql_or_transaction_end",
+      "sourceModule": "kernel.tests.test_tenant_command_runtime_bundle_selection",
+      "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selection.py"
+    },
+    {
       "nodeid": "kernel/tests/test_tenant_uow.py::test_ambiguous_commit_discards_connection",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
@@ -12781,8 +12891,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "a7c6199fd0a1f1130147f08d8e90692331f949df3da721820917aed211db340b",
-  "entryCount": 2556,
+  "entriesSha256": "759bb794618a1f6ee3fc654cb6b23d7e1536655bbd50ff202ac4243ba43ea75f",
+  "entryCount": 2578,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
