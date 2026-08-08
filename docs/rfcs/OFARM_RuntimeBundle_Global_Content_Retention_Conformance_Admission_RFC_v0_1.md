@@ -37,11 +37,14 @@ may begin.
 
 Current `main` is an exact version-8 tenant migration release. The checker
 authenticates the selection-storage transition through version 8 and returns
-`CONFORMANT_CLASSIFIED`. Its selection-storage implementation currently treats
-the complete migration count as part of deciding whether the version-8
-migration exists. Appending an unrelated version 9 would therefore make the
-already complete version-8 selection pair look incomplete, even when version
-8 and its adapter remain exact.
+`CONFORMANT_CLASSIFIED`. Its selection-storage implementation currently binds
+the complete migration count to three decisions: the outer V7/V8 count gate,
+presence of the version-8 migration, and equality between the complete
+migration-set digest and `prefix_digest(8)`. Appending an unrelated version 9
+therefore first refuses at the outer count gate and, if only that gate were
+relaxed, would later make the already complete version-8 pair look incomplete
+and then fail the complete-digest comparison even though version 8 and its
+adapter remain exact.
 
 The required change is not a new database authority and not temporal
 activation. It is this closed conformance rule:
@@ -66,11 +69,14 @@ conformance Phase B may amend the existing checker so that one invocation:
    snapshot authorities;
 3. loads one authoritative tenant migration snapshot and one public Python
    source snapshot;
-4. proves the selection-storage pair remains exact and classified at the
-   immutable version-8 prefix;
-5. classifies one of exactly two internal global-content-retention states;
-6. preserves all existing active-surface and import-closure checks; and
-7. returns the unchanged public selection-storage result.
+4. applies the inherited selection-storage classifier first;
+5. preserves exact V7 `CONFORMANT_ABSENT` without selecting the retention
+   classifier;
+6. only after selection storage is exact and `CONFORMANT_CLASSIFIED`, proves
+   the immutable version-8 prefix and classifies one of exactly two internal
+   global-content-retention states;
+7. preserves all existing active-surface and import-closure checks; and
+8. returns the unchanged inherited public selection-storage result.
 
 The two internal states are:
 
@@ -83,7 +89,22 @@ These names are checker-internal evidence. They are not schema values,
 RuntimeBundle components, database states, API results, lifecycle states, or
 output fields.
 
-### 2.1 Lawful repository states
+### 2.1 Lawful repository states and classifier domain
+
+The inherited selection-storage classifier remains the first state decision.
+The new retention classifier is subordinate to it and has no domain when the
+selection result is `CONFORMANT_ABSENT`:
+
+```text
+AUTHENTICATED AUTHORITIES
+  + EXACT V7 COMPLETE RELEASE
+  + EXACT V7 SELECTION PATHS ABSENT
+    -> DO NOT INVOKE THE RETENTION CLASSIFIER
+    -> PUBLIC RESULT REMAINS CONFORMANT_ABSENT
+```
+
+Within the subordinate retention-classifier domain, the parent contract's
+exact two absent/present states are:
 
 ```text
 AUTHENTICATED AUTHORITIES
@@ -105,9 +126,10 @@ ANY OTHER STATE
     -> REFUSED
 ```
 
-Version 7, version 10 or later, a gap, a reorder, a second version-9 file, an
-untracked migration, or a self-consistent but non-exact version-8 prefix is
-not a third lawful state.
+Exact V7 is an inherited complete-checker state, not a third retention state.
+Version 10 or later, a gap, a reorder, a second version-9 file, an untracked
+migration, or a self-consistent but non-exact version-8 prefix is neither an
+inherited state nor a third lawful retention state.
 
 ### 2.2 Exact version-8 cut
 
@@ -160,17 +182,30 @@ review, and database tests own SQL correctness.
 The existing selection-storage law remains controlling for version 8 and its
 adapter. The smallest lawful compatibility amendment is:
 
+- preserve exact V7 `CONFORMANT_ABSENT` and do not invoke the retention
+  classifier in that inherited state;
+- relax the outer migration-count gate only enough to preserve exact V7 and
+  admit exact V8 or exact contiguous V9 evidence;
 - determine presence of the selection migration from exact version 8, not
   from equality between the total migration count and `8`;
 - allow one later version 9 only after the first-eight prefix remains exact;
+- in exact V8, continue requiring the complete migration-set digest to equal
+  the fixed `prefix_digest(8)`;
+- in exact V9, stop comparing the complete migration-set digest to
+  `prefix_digest(8)`; keep the selection validator bound to the fixed
+  version-8 prefix, then require the subordinate retention classifier to prove
+  that the complete digest equals `prefix_digest(9)`, equals
+  `prefix_digest(len(migrations))`, and differs from the version-8 digest;
 - keep scanning every migration, including version 9, for misplaced
   selection-storage markers;
 - keep the exact adapter identity, source snapshot, initializer prohibition,
   and production/legacy import-closure rules;
-- keep the selection-storage internal state
+- keep both inherited selection-storage internal states,
+  `SELECTION_STORAGE_CONFORMANT_ABSENT` and
   `SELECTION_STORAGE_CONFORMANT_CLASSIFIED`; and
-- keep the command-line pass line exactly
-  `TEMPORAL CANDIDATE PASS: CONFORMANT_CLASSIFIED`.
+- keep the command-line pass lines exactly
+  `TEMPORAL CANDIDATE PASS: CONFORMANT_ABSENT` for exact V7 and
+  `TEMPORAL CANDIDATE PASS: CONFORMANT_CLASSIFIED` for exact V8 or V9.
 
 No version-8 marker, binding, adapter, selection invariant, or output meaning
 may be relaxed. Version 9 is a suffix outside the selection pair, not a new
@@ -197,10 +232,23 @@ Neither required marker may occur in authenticated migrations 0001 through
 ### 3.2 Forbidden migration-0009 markers
 
 The checker must refuse migration 0009 if its exact bytes contain any member
-of this closed, case-sensitive set:
+of the closed, case-sensitive values enumerated below. These values are the
+contract vocabulary; live implementation collections are not the authority.
 
-1. any exact package path already held in the checker's
-   `CANDIDATE_RELATIVE_PATHS` tuple;
+1. Any of these exact package paths:
+   - `contracts/candidates/temporal_coordinate/OFARM_TemporalCoordinate_schema_v0_1.json`;
+   - `contracts/candidates/temporal_coordinate/OFARM_TemporalCarrierMatrix_schema_v0_1.json`;
+   - `contracts/candidates/temporal_coordinate/OFARM_TemporalCarrierMatrix_ADR0002_candidate_v0_1.json`;
+   - `contracts/candidates/temporal_carrier_selection/OFARM_TemporalCarrierSelectionBinding_schema_v0_1.json`;
+   - `contracts/candidates/temporal_carrier_selection/OFARM_InterventionValidTimeCarrierSelection_candidate_v0_1.json`;
+   - `contracts/candidates/temporal_governed_command/OFARM_TemporalGovernedCommandBinding_schema_v0_1.json`;
+   - `contracts/candidates/temporal_governed_command/OFARM_OperationClaimDraftTemporalCommand_candidate_v0_1.json`;
+   - `contracts/candidates/temporal_runtime_bundle_carrier/OFARM_TemporalGovernanceRuntimeBundleCarrierBinding_schema_v0_1.json`;
+   - `contracts/candidates/temporal_runtime_bundle_carrier/OFARM_TemporalGovernanceRuntimeBundleCarrier_candidate_v0_1.json`;
+   - `contracts/candidates/temporal_runtime_bundle_selection/OFARM_TenantCommandRuntimeBundleSelectionBinding_schema_v0_1.json`;
+   - `contracts/candidates/temporal_runtime_bundle_selection/OFARM_TenantCommandRuntimeBundleSelection_candidate_v0_1.json`;
+   - `contracts/candidates/temporal_governance_promotion/OFARM_TemporalGovernancePromotionBinding_schema_v0_1.json`; and
+   - `contracts/candidates/temporal_governance_promotion/OFARM_TemporalGovernancePromotion_candidate_v0_1.json`.
 2. any of these temporal identities or role values:
    - `ofarm.temporal-coordinate.v0.1`;
    - `ofarm.temporal-carrier-matrix.adr0002.v0.1`;
@@ -210,9 +258,23 @@ of this closed, case-sensitive set:
    - `TEMPORAL_GOVERNANCE_ARTIFACT`;
    - `ofarm.tenant-command-runtime-bundle-selection.commit-operation-claim-draft.v0.1`;
    - `ofarm.temporal-governance-promotion.issue176-foundation.v0.1`;
-3. any exact carrier-row identity already held in the checker's closed
-   `CARRIER_ROW_IDS` tuple, plus the exact discriminator
-   `OPERATION_CLAIM`;
+3. Any of these exact carrier-row identities or discriminators:
+   - `STRUCTURE_EVENT`;
+   - `OBSERVATION_EVENT`;
+   - `OCCURRENCE_EVENT`;
+   - `INTERVENTION_EVENT`;
+   - `MATERIAL_EVENT`;
+   - `EVIDENCE_EVENT`;
+   - `GOVERNANCE_EVENT`;
+   - `ASSERTION_RECORD`;
+   - `ACCEPTED_EVENT_CONSEQUENCE`;
+   - `REVIEW_AND_GOVERNANCE_RECORDS`;
+   - `POINT_OBSERVATION_PAYLOADS`;
+   - `PARTIAL_EXTENT_TEMPORAL_APPLICABILITY`;
+   - `INTERVAL_STATE_OR_OBSERVATION`;
+   - `PENDING_OR_DISPUTED_ANNEX_ENTRY`;
+   - `EVIDENCE_SUFFICIENCY_CASE`; and
+   - `OPERATION_CLAIM`.
 4. the existing selection-storage binding digest
    `sha256:56fb0f14a2514b34428841cb7bfc8681bb577ea3ecf57598be480683fb68524f`;
 5. any of these selection, command, route, output, legacy, or #192 markers:
@@ -234,9 +296,14 @@ The checker must use these exact strings, not broad words such as `route`,
 `output`, `audit`, `current`, `window`, or `temporal`. Broad word matching
 would create accidental policy and false authority.
 
-Changing this closed set is a contract change. Caller data, environment
-variables, newest files, documentation searches, or runtime discovery may not
-add or remove a marker.
+Conformance Phase B must copy these exact ordered values into one private,
+immutable GCRC marker constant and test exact equality with this frozen
+v0.1 vocabulary. It must not permanently iterate whichever values happen to
+exist in `CANDIDATE_RELATIVE_PATHS`, `CARRIER_ROW_IDS`, or successor
+collections. Changing, adding, removing, or substituting a value is a contract
+change. Caller data, environment variables, newest files, documentation
+searches, runtime discovery, or unrelated checker edits may not change the
+set.
 
 ### 3.3 Python-source isolation
 
@@ -301,12 +368,16 @@ FIXED PACKAGE ROOT
   -> AUTHENTICATE EXISTING SELECTION/SNAPSHOT AUTHORITIES
   -> LOAD ONE AUTHORITATIVE TENANT MIGRATION SNAPSHOT
   -> BUILD ONE PUBLIC PYTHON SOURCE SNAPSHOT
-  -> PROVE EXACT V8 SELECTION PAIR AND PREFIX
-  -> CLASSIFY GLOBAL CONTENT RETENTION MIGRATION ABSENT OR CLASSIFIED
-  -> PROVE REQUIRED/FORBIDDEN MARKER OWNERSHIP
+  -> APPLY INHERITED SELECTION-STORAGE CLASSIFIER
+       -> EXACT V7 / CONFORMANT_ABSENT
+            -> DO NOT SELECT RETENTION CLASSIFIER
+       -> EXACT V8 PAIR / CONFORMANT_CLASSIFIED
+            -> PROVE FIXED V8 PREFIX
+            -> CLASSIFY RETENTION MIGRATION ABSENT OR CLASSIFIED
+            -> PROVE REQUIRED/FORBIDDEN MARKER OWNERSHIP
   -> PRESERVE ACTIVE-SURFACE AND IMPORT-CLOSURE CHECKS
   -> RUN EXISTING CANDIDATE AND SEMANTIC VALIDATION
-  -> RETURN EXISTING CONFORMANT_CLASSIFIED RESULT
+  -> RETURN INHERITED CONFORMANT_ABSENT OR CONFORMANT_CLASSIFIED RESULT
 ```
 
 Authority authentication occurs before applying the migration-0009 exception.
@@ -324,7 +395,8 @@ caller-supplied snapshot would create competing evidence and is forbidden.
 
 - The exact merged parent design authority.
 - The immutable version-3 and version-8 migration prefixes.
-- The exact version-8 selection pair and its classified result.
+- The inherited exact-V7 absent result and the exact version-8 selection pair
+  and classified result.
 - One closed migration-0009 filename and marker exception.
 - The unchanged public checker output.
 - The absence of temporal activation, Python publication code, runtime imports,
@@ -361,8 +433,10 @@ cross-boundary edits remain in scope and fail closed.
 
 - **GCRC-001 — Parent first.** The exact merged parent RFC is authenticated
   before the migration-0009 exception is considered.
-- **GCRC-002 — Exactly two states.** Only exact V8/0009-absent and exact
-  V9/0009-classified repository states pass this new classifier.
+- **GCRC-002 — Subordinate two-state domain.** Exact V7 remains the inherited
+  `CONFORMANT_ABSENT` complete-checker state and does not select this
+  classifier. Only exact V8/0009-absent and exact V9/0009-classified pass the
+  subordinate retention classifier.
 - **GCRC-003 — Stable prefixes.** Version-3 and version-8 prefix digests remain
   exact in both states.
 - **GCRC-004 — Exact suffix identity.** The classified state contains exactly
@@ -372,12 +446,16 @@ cross-boundary edits remain in scope and fail closed.
 - **GCRC-006 — Closed trace ownership.** Both required markers occur in exact
   migration 0009 and in no earlier or alternative migration.
 - **GCRC-007 — Closed forbidden vocabulary.** Exact migration 0009 contains no
-  marker from section 3.2.
+  marker from the frozen, enumerated section-3.2 vocabulary; live checker
+  collections cannot change that vocabulary.
 - **GCRC-008 — Selection meaning preserved.** Version-8 selection storage and
   its adapter remain the exact classified pair; version 9 is not a selection
   component.
-- **GCRC-009 — Public output preserved.** Successful supported invocation still
-  prints only `TEMPORAL CANDIDATE PASS: CONFORMANT_CLASSIFIED`.
+- **GCRC-009 — Public output preserved.** Successful supported invocation
+  still prints only the inherited result: exact V7 prints
+  `TEMPORAL CANDIDATE PASS: CONFORMANT_ABSENT`; exact V8 or V9 prints
+  `TEMPORAL CANDIDATE PASS: CONFORMANT_CLASSIFIED`. No retention state is
+  public.
 - **GCRC-010 — Shared evidence.** Selection and retention validation share one
   authenticated migration snapshot and one public Python-source snapshot.
 - **GCRC-011 — No Python publisher.** Required retention markers enter no
@@ -404,14 +482,15 @@ cross-boundary edits remain in scope and fail closed.
 | Invariant | Counterexample | Required result |
 | --- | --- | --- |
 | GCRC-001 | Parent RFC is absent, symlinked, unreadable, wrong length, wrong digest, or lacks the exact contract identity | refuse before migration classification |
-| GCRC-002 | Migration count is 7, 10, or another value | refuse; no third state |
+| GCRC-002 | Exact V7 complete invocation | pass inherited `CONFORMANT_ABSENT`; retention classifier is not selected |
+| GCRC-002 | Migration count is not 7, 8, or 9, or V7 is not the exact inherited absent state | refuse; no third retention state |
 | GCRC-003 | Any first-eight migration, filename, byte, length, order, or prefix differs while literals are updated self-consistently | fixed version-8 prefix comparison refuses |
 | GCRC-004 | Version 9 has another filename, is not final, is duplicated, or is accompanied by an untracked migration file | authoritative loader or exact suffix check refuses |
 | GCRC-005 | Caller supplies a migration set, path, digest, or state | no supported input accepts it |
 | GCRC-006 | One required marker is missing from 0009, or either marker occurs in 0001–0008 | refuse |
-| GCRC-007 | Exact 0009 contains any closed forbidden marker | refuse |
-| GCRC-008 | Appended 0009 makes version-8 selection appear absent, or changes its binding/adapter law | focused compatibility tests refuse |
-| GCRC-009 | Checker prints the internal retention state or a new compound public state | exact stdout test refuses |
+| GCRC-007 | Exact 0009 contains any frozen forbidden marker, or implementation derives the vocabulary from a live mutable collection | refuse or source/equality test refuses |
+| GCRC-008 | Appended 0009 makes version-8 selection appear absent, compares the complete V9 digest to `prefix_digest(8)`, or changes binding/adapter law | focused compatibility tests refuse |
+| GCRC-009 | Exact V7 does not retain its absent result, or the checker prints an internal retention state or a new compound public state | exact V7/V8/V9 stdout tests refuse |
 | GCRC-010 | Implementation builds a second snapshot, privately rescans source, imports migration authority normally, or uses environment-selected evidence | source/evidence tests refuse |
 | GCRC-011 | A Python publisher, startup hook, service, initializer export, production source, or legacy source contains a required retention marker | source snapshot and closure checks refuse |
 | GCRC-012 | Candidate path or identity enters an active registry, profile, route, or import closure | existing candidate and architecture checks refuse |
@@ -422,10 +501,11 @@ cross-boundary edits remain in scope and fail closed.
 | GCRC-017 | A fourth implementation path changes, or inventory changes without a canonical node-ID change | path-envelope verification refuses |
 | GCRC-018 | Marker decoding, source read, AST evidence, prefix computation, or state composition is ambiguous or crashes | one fail-closed conformance error; no pass |
 
-Tests must cover both lawful states and every refusal family above. Mutation
-tests may use in-memory migration and source snapshots or disposable temporary
-files only. They must not create migration 0009 in the checked-in tree or run
-SQL against PostgreSQL.
+Tests must cover the inherited exact-V7 state, both lawful retention states,
+and every refusal family above. Exact-V7 evidence must prove the retention
+helper is not selected. Mutation tests may use in-memory migration and source
+snapshots or disposable temporary files only. They must not create migration
+0009 in the checked-in tree or run SQL against PostgreSQL.
 
 ## 9. Non-goals
 
@@ -485,9 +565,10 @@ Phase A must prove:
 
 - only this RFC changed;
 - every exact authority pin matches reviewed `main`;
-- the two lawful states, validation order, marker sets, selection compatibility,
-  authority map, invariants, negative cases, non-goals, allowlist, and stop
-  conditions are decision complete;
+- the inherited V7 state, the two subordinate retention states, validation
+  order, frozen marker sets, selection compatibility, authority map,
+  invariants, negative cases, non-goals, allowlist, and stop conditions are
+  decision complete;
 - no implementation, migration, database, runtime, route, output, legacy, or
   #192 path changed;
 - `git diff --check` passes; and
@@ -499,9 +580,9 @@ Phase A must prove:
 | Invariants | Future owning seam | Minimum evidence |
 | --- | --- | --- |
 | GCRC-001 | exact parent-RFC constants and authenticator | missing, symlink, unreadable, length, digest, and identity mutation tests |
-| GCRC-002–005 | internal retention classifier over authenticated migration snapshot | exact V8 and synthetic exact V9 passes; count, filename, order, prefix, full-digest, and caller-input refusals |
-| GCRC-006–007 | closed required/forbidden marker tuples | missing, moved, duplicated-location, and every forbidden-marker mutation test |
-| GCRC-008–009 | selection-storage compatibility and unchanged entrypoint | V9 still yields classified selection state and exact existing stdout |
+| GCRC-002–005 | subordinate internal retention classifier over authenticated migration snapshot | exact V7 passes absent without selecting the helper; exact V8 and synthetic exact V9 pass; count, filename, order, prefix, full-digest, and caller-input refusals |
+| GCRC-006–007 | closed required markers and one private immutable forbidden-marker tuple | exact equality with the frozen RFC vocabulary; missing, moved, duplicated-location, and every forbidden-marker mutation test |
+| GCRC-008–009 | selection-storage compatibility and unchanged entrypoint | exact V7 preserves absent output; V8 and V9 yield classified output; V9 authenticates fixed prefix 8 and complete prefix 9 separately |
 | GCRC-010–012 | public source snapshot, import closures, and existing active-surface checks | one-builder evidence, private-source prohibitions, production/legacy marker injection, and active-authority mutation tests |
 | GCRC-013–016 | boundary review and existing package/architecture composition | source inspection, no database imports, no runtime paths, package and architecture gates |
 | GCRC-017–018 | exact path checks and fail-closed errors | name-only diff, inventory comparison, malformed-evidence and crash-to-refusal tests |
@@ -527,8 +608,10 @@ review remain required. Passing evidence is classification only.
 - New source snapshots or migration loaders: zero.
 - New production Python modules: zero.
 - New runtime or legacy imports: zero.
-- Lawful migration states added to the checker: one suffix state, paired with
-  the exact existing state.
+- Inherited exact-V7 behavior changed: no; the retention classifier is not
+  selected in `CONFORMANT_ABSENT`.
+- Lawful retention states: exactly V8/absent and V9/classified inside the
+  subordinate classifier domain.
 - Existing selection state changed: no.
 - Exact implementation files: two, plus conditional mechanical inventory.
 
@@ -555,8 +638,10 @@ conformance with database authority.
 
 ### Review disposition
 
-- **Blockers:** none identified in the author draft; independent exact-head
-  review is required before a decision card.
+- **Blockers addressed in this revision:** preserve inherited V7 composition;
+  freeze the exact forbidden-marker vocabulary; and authorize separate fixed
+  V8-prefix versus complete-V9-digest authentication. Independent exact-head
+  re-review remains required before a replacement decision card.
 - **Follow-ups:** after this Phase A merges, separately request the closed
   conformance Phase B; only after that implementation merges may database
   Phase B for migration 0009 be requested.
@@ -588,8 +673,9 @@ Stop before conformance Phase B if:
 14. #192 behavior or authority must change.
 
 If the checker cannot preserve the exact existing public
-`CONFORMANT_CLASSIFIED` result while admitting only the fixed version-9 suffix,
-stop. A public state-model redesign is a separate trust boundary.
+`CONFORMANT_ABSENT` result for V7 and `CONFORMANT_CLASSIFIED` result for V8 or
+V9 while admitting only the fixed version-9 suffix, stop. A public state-model
+redesign is a separate trust boundary.
 
 Conformance Phase B stops after its exact implementation merges. It does not
 create migration 0009 or resume database work automatically.
