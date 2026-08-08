@@ -1,8 +1,8 @@
 # OFARM2 RuntimeBundle Global Content Retention Conformance Admission — Phase A Contract v0.1
 
-**Status:** proposed Phase A contract; documentation-only, unapproved, and
-without checker, migration, database, content-retention, bundle-publication,
-selection, runtime, deployment, route, output, legacy, or #192 effect
+**Status:** architect-approved Phase A contract; documentation-only and without
+checker, migration, database, content-retention, bundle-publication, selection,
+runtime, deployment, route, output, legacy, or #192 effect
 
 **Contract identity:**
 `ofarm.runtime-bundle-global-content-retention-conformance-admission.issue176.v0.1`
@@ -703,3 +703,34 @@ redesign is a separate trust boundary.
 
 Conformance Phase B stops after its exact implementation merges. It does not
 create migration 0009 or resume database work automatically.
+
+## Appendix A — Compact approval evidence
+
+This appendix is provisional, AI-attested evidence of the task user's
+decision. The user message is the authority; this appendix, repository
+credentials, reviews, checks, and merge metadata are not substitutes for it.
+
+- decision:
+  `ISSUE176-RUNTIME-BUNDLE-GLOBAL-CONTENT-RETENTION-CONFORMANCE-001`,
+  version `1`;
+- Codex task: `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`;
+- complete live card: assistant-authored `item-4396` in turn
+  `019fe1a4-faa9-71c1-8a3c-605924f3a975`;
+- approval: later user-authored `item-4397` in turn
+  `019fe1a6-91ca-7ed1-8082-fceb23cef56e`;
+- exact approval sentence:
+  `I approve OFARM2 decision ISSUE176-RUNTIME-BUNDLE-GLOBAL-CONTENT-RETENTION-CONFORMANCE-001 version 1.`;
+- observed ordering: `item-4396` preceded `item-4397` in the same task;
+- named Phase A PR: `https://github.com/samovers/OFARM2/pull/295`;
+- permitted effect: record approval and merge only this documentation Phase A
+  contract so its final merged self-authority may be established and a
+  separate conformance Phase B may later be requested; and
+- limitation: no checker implementation, migration 0009, SQL function,
+  database storage, retained content, RuntimeBundle composition or
+  publication, tenant selection, runtime activation, route, command, read,
+  historical or window behavior, output, deployment, legacy, or #192 effect.
+  This provisional workflow must be replaced by independently human-controlled
+  and independently verifiable approval or signing before deployment.
+
+No later cancellation, replacement card, or stop instruction was present when
+this approval evidence was recorded.
