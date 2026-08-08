@@ -54,29 +54,33 @@ activation. It is this closed conformance rule:
 > exact contiguous version 9 whose final filename and trace markers identify
 > the governed global-content-retention migration.
 
-The checker must continue returning the existing selection-storage result
-`CONFORMANT_CLASSIFIED`. The global-content-retention migration state is an
-internal guard only. It creates no new public conformance vocabulary,
-registry, runtime input, or lifecycle state.
+Within the subordinate retention-classifier domain, the checker must continue
+returning the existing selection-storage result `CONFORMANT_CLASSIFIED`. The
+global-content-retention migration state is an internal guard only. It creates
+no new public conformance vocabulary, registry, runtime input, or lifecycle
+state. Exact V7 remains outside that domain and retains its inherited
+`CONFORMANT_ABSENT` result.
 
 ## 2. Decision
 
 After this exact RFC is approved and merged, a separately requested
 conformance Phase B may amend the existing checker so that one invocation:
 
-1. authenticates the complete merged global-content-retention Phase A RFC;
-2. authenticates the already accepted selection-storage and Python-source
+1. authenticates this complete merged conformance RFC as its self-authority;
+2. authenticates the complete merged parent global-content-retention Phase A
+   RFC;
+3. authenticates the already accepted selection-storage and Python-source
    snapshot authorities;
-3. loads one authoritative tenant migration snapshot and one public Python
+4. loads one authoritative tenant migration snapshot and one public Python
    source snapshot;
-4. applies the inherited selection-storage classifier first;
-5. preserves exact V7 `CONFORMANT_ABSENT` without selecting the retention
+5. applies the inherited selection-storage classifier first;
+6. preserves exact V7 `CONFORMANT_ABSENT` without selecting the retention
    classifier;
-6. only after selection storage is exact and `CONFORMANT_CLASSIFIED`, proves
+7. only after selection storage is exact and `CONFORMANT_CLASSIFIED`, proves
    the immutable version-8 prefix and classifies one of exactly two internal
    global-content-retention states;
-7. preserves all existing active-surface and import-closure checks; and
-8. returns the unchanged inherited public selection-storage result.
+8. preserves all existing active-surface and import-closure checks; and
+9. returns the unchanged inherited public selection-storage result.
 
 The two internal states are:
 
@@ -325,6 +329,7 @@ initializer export, or runtime call site is admitted by this exception.
 
 | Authority | Exact reviewed identity | Authority retained |
 | --- | --- | --- |
+| Complete merged self-authority | `docs/rfcs/OFARM_RuntimeBundle_Global_Content_Retention_Conformance_Admission_RFC_v0_1.md`; `ofarm.runtime-bundle-global-content-retention-conformance-admission.issue176.v0.1`; complete merged byte length and SHA-256 established only after the approval record is published and the RFC merges | exact subordinate classifier composition, internal states, frozen marker vocabulary, shared-evidence rule, prefix/full-digest split, implementation envelope, and stop conditions defined here |
 | Parent global-content-retention contract | `ofarm.runtime-bundle-global-content-retention-admission.issue176.v0.1`, 38,116 bytes, `sha256:aa5de04c08390e1439d59f39c4b6f5608e8b43b320fec531721d9c53b936873a` | function contract, publisher custody, future database allowlist, inertness, and stop conditions |
 | Selection-storage conformance authority | `ofarm.temporal-candidate-conformance-selection-storage-admission.issue176.v0.1`, 62,540 bytes, `sha256:716a45927846d068f595f81288b8d29ecc07891bcaf848e0284eb91ece4abc8d` | version-8 selection pair, marker law, and conformance states |
 | Selection-storage source-snapshot amendment | `ofarm.temporal-candidate-conformance-selection-storage-source-snapshot-amendment.issue176.v0.2`, 93,049 bytes, `sha256:820516d40956b6ea2a158413aea32a305aa078f20816ae35b257eb28491e5867` | public Python-source evidence and closed conformance implementation posture |
@@ -333,8 +338,11 @@ initializer export, or runtime call site is admitted by this exception.
 | Current tenant migration-set source at reviewed base | `deployment/postgresql/migration_sets.py`, 25,888 bytes, `sha256:20e69aa394b76e2a7b3479c8d31a1fc6062a6865186b2eaae0cff95d0415f8dd` | authoritative directory, bytes, lengths, prefixes, and complete-set identity |
 | Exact version-8 migration | `kernel/migrations/0008_tenant_command_runtime_bundle_selection.sql`, 37,933 bytes, `sha256:635e476fb4eb93073ed353397a977ea887c42e1be11b42f9a4782a76f88ab765` | final member of the immutable version-8 prefix |
 
-The first four rows are versioned authorities that future conformance Phase B
-must authenticate. The current checker and migration-set source identities are
+The first five rows are versioned authorities that future conformance Phase B
+must authenticate. The self-authority row is not permission to guess its final
+bytes: after the truthful approval record is published and this RFC merges,
+Phase B must pin its complete merged path, contract identity, byte length, and
+SHA-256. The current checker and migration-set source identities are
 reviewed-base evidence, not permanent pins: those two files are expected to
 change in their separately approved implementation boundaries. The fixed
 version-8 prefix, parent RFC identity, and inherited conformance authorities
@@ -364,6 +372,7 @@ The supported checker path must execute in this order:
 
 ```text
 FIXED PACKAGE ROOT
+  -> AUTHENTICATE COMPLETE MERGED SELF-AUTHORITY
   -> AUTHENTICATE COMPLETE MERGED PARENT RFC
   -> AUTHENTICATE EXISTING SELECTION/SNAPSHOT AUTHORITIES
   -> LOAD ONE AUTHORITATIVE TENANT MIGRATION SNAPSHOT
@@ -380,9 +389,11 @@ FIXED PACKAGE ROOT
   -> RETURN INHERITED CONFORMANT_ABSENT OR CONFORMANT_CLASSIFIED RESULT
 ```
 
-Authority authentication occurs before applying the migration-0009 exception.
-A missing, symlinked, unreadable, length-mismatched, digest-mismatched, or
-identity-mismatched parent RFC refuses before state classification.
+Self-authority authentication occurs before the parent or any inherited
+authority is trusted. A missing, symlinked, unreadable, length-mismatched,
+digest-mismatched, or identity-mismatched complete merged self-authority
+refuses before parent authentication or state classification. The same
+failure classes for the parent RFC refuse before state classification.
 
 The same migration snapshot and Python snapshot must be shared with the
 selection-storage and new retention validators. A second loader, private
@@ -393,6 +404,7 @@ caller-supplied snapshot would create competing evidence and is forbidden.
 
 ### Protected assets
 
+- This complete merged RFC as the exact authority for its new exception.
 - The exact merged parent design authority.
 - The immutable version-3 and version-8 migration prefixes.
 - The inherited exact-V7 absent result and the exact version-8 selection pair
@@ -431,8 +443,10 @@ cross-boundary edits remain in scope and fail closed.
 
 ## 7. Invariants and acceptance criteria
 
-- **GCRC-001 — Parent first.** The exact merged parent RFC is authenticated
-  before the migration-0009 exception is considered.
+- **GCRC-001 — Self and parent first.** This complete merged RFC is
+  authenticated by exact path, contract identity, byte length, and SHA-256
+  before the parent or the migration-0009 exception is considered. The exact
+  merged parent RFC is then authenticated before state classification.
 - **GCRC-002 — Subordinate two-state domain.** Exact V7 remains the inherited
   `CONFORMANT_ABSENT` complete-checker state and does not select this
   classifier. Only exact V8/0009-absent and exact V9/0009-classified pass the
@@ -481,7 +495,8 @@ cross-boundary edits remain in scope and fail closed.
 
 | Invariant | Counterexample | Required result |
 | --- | --- | --- |
-| GCRC-001 | Parent RFC is absent, symlinked, unreadable, wrong length, wrong digest, or lacks the exact contract identity | refuse before migration classification |
+| GCRC-001 | Complete merged self-authority is absent, symlinked, unreadable, wrong length, wrong digest, or lacks the exact contract identity | refuse before parent authentication or migration classification |
+| GCRC-001 | Parent RFC is absent, symlinked, unreadable, wrong length, wrong digest, or lacks the exact contract identity | refuse after self-authentication and before migration classification |
 | GCRC-002 | Exact V7 complete invocation | pass inherited `CONFORMANT_ABSENT`; retention classifier is not selected |
 | GCRC-002 | Migration count is not 7, 8, or 9, or V7 is not the exact inherited absent state | refuse; no third retention state |
 | GCRC-003 | Any first-eight migration, filename, byte, length, order, or prefix differs while literals are updated self-consistently | fixed version-8 prefix comparison refuses |
@@ -579,7 +594,7 @@ Phase A must prove:
 
 | Invariants | Future owning seam | Minimum evidence |
 | --- | --- | --- |
-| GCRC-001 | exact parent-RFC constants and authenticator | missing, symlink, unreadable, length, digest, and identity mutation tests |
+| GCRC-001 | complete merged self-authority and exact parent-RFC constants and authenticators | self and parent missing, symlink, unreadable, length, digest, and identity mutation tests; self must refuse before parent |
 | GCRC-002–005 | subordinate internal retention classifier over authenticated migration snapshot | exact V7 passes absent without selecting the helper; exact V8 and synthetic exact V9 pass; count, filename, order, prefix, full-digest, and caller-input refusals |
 | GCRC-006–007 | closed required markers and one private immutable forbidden-marker tuple | exact equality with the frozen RFC vocabulary; missing, moved, duplicated-location, and every forbidden-marker mutation test |
 | GCRC-008–009 | selection-storage compatibility and unchanged entrypoint | exact V7 preserves absent output; V8 and V9 yield classified output; V9 authenticates fixed prefix 8 and complete prefix 9 separately |
@@ -636,12 +651,19 @@ fingerprint, and verifier digest are deliberately mechanical database Phase B
 outputs. Choosing them in this contract would be speculative and would combine
 conformance with database authority.
 
+This RFC's complete merged byte length and SHA-256 are likewise mechanical
+publication outputs, not an open semantic decision. They are established only
+after the truthful approval record is published and the RFC merges, and then
+become mandatory self-authority inputs to conformance Phase B.
+
 ### Review disposition
 
 - **Blockers addressed in this revision:** preserve inherited V7 composition;
-  freeze the exact forbidden-marker vocabulary; and authorize separate fixed
-  V8-prefix versus complete-V9-digest authentication. Independent exact-head
-  re-review remains required before a replacement decision card.
+  freeze the exact forbidden-marker vocabulary; authorize separate fixed
+  V8-prefix versus complete-V9-digest authentication; and require complete
+  merged self-authority before the parent or exception, with the opening
+  output statement confined to the subordinate classifier domain. Independent
+  exact-head re-review remains required before a replacement decision card.
 - **Follow-ups:** after this Phase A merges, separately request the closed
   conformance Phase B; only after that implementation merges may database
   Phase B for migration 0009 be requested.
@@ -651,7 +673,9 @@ conformance with database authority.
 
 Stop before conformance Phase B if:
 
-1. this exact RFC has not received explicit architect approval and merged;
+1. this exact RFC has not received explicit architect approval and merged, or
+   its complete merged path, contract identity, byte length, and SHA-256
+   cannot be established and authenticated;
 2. current `main` is not the exact lawful version-8/0009-absent state;
 3. the merged parent RFC cannot be authenticated at its exact identity;
 4. the existing selection-storage or Python-source snapshot authority differs;
