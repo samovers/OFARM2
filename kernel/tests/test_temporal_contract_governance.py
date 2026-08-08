@@ -24,6 +24,75 @@ _SELECTION_STORAGE_V8_CATALOG_DIGEST = (
 _SELECTION_STORAGE_V8_CATALOG_SOURCE_SHA256 = (
     "sha256:130a96edc2b9f4ad92a640c1c34150fe6126bd3945a48704a96896bb88a0f1a7"
 )
+_GCRC_FORBIDDEN_V0_1 = (
+    "contracts/candidates/temporal_coordinate/"
+    "OFARM_TemporalCoordinate_schema_v0_1.json",
+    "contracts/candidates/temporal_coordinate/"
+    "OFARM_TemporalCarrierMatrix_schema_v0_1.json",
+    "contracts/candidates/temporal_coordinate/"
+    "OFARM_TemporalCarrierMatrix_ADR0002_candidate_v0_1.json",
+    "contracts/candidates/temporal_carrier_selection/"
+    "OFARM_TemporalCarrierSelectionBinding_schema_v0_1.json",
+    "contracts/candidates/temporal_carrier_selection/"
+    "OFARM_InterventionValidTimeCarrierSelection_candidate_v0_1.json",
+    "contracts/candidates/temporal_governed_command/"
+    "OFARM_TemporalGovernedCommandBinding_schema_v0_1.json",
+    "contracts/candidates/temporal_governed_command/"
+    "OFARM_OperationClaimDraftTemporalCommand_candidate_v0_1.json",
+    "contracts/candidates/temporal_runtime_bundle_carrier/"
+    "OFARM_TemporalGovernanceRuntimeBundleCarrierBinding_schema_v0_1.json",
+    "contracts/candidates/temporal_runtime_bundle_carrier/"
+    "OFARM_TemporalGovernanceRuntimeBundleCarrier_candidate_v0_1.json",
+    "contracts/candidates/temporal_runtime_bundle_selection/"
+    "OFARM_TenantCommandRuntimeBundleSelectionBinding_schema_v0_1.json",
+    "contracts/candidates/temporal_runtime_bundle_selection/"
+    "OFARM_TenantCommandRuntimeBundleSelection_candidate_v0_1.json",
+    "contracts/candidates/temporal_governance_promotion/"
+    "OFARM_TemporalGovernancePromotionBinding_schema_v0_1.json",
+    "contracts/candidates/temporal_governance_promotion/"
+    "OFARM_TemporalGovernancePromotion_candidate_v0_1.json",
+    "ofarm.temporal-coordinate.v0.1",
+    "ofarm.temporal-carrier-matrix.adr0002.v0.1",
+    "ofarm.temporal-carrier-selection.intervention.v0.1",
+    "ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1",
+    "ofarm.temporal-governance-runtime-bundle-carrier.v0.1",
+    "TEMPORAL_GOVERNANCE_ARTIFACT",
+    (
+        "ofarm.tenant-command-runtime-bundle-selection."
+        "commit-operation-claim-draft.v0.1"
+    ),
+    "ofarm.temporal-governance-promotion.issue176-foundation.v0.1",
+    "STRUCTURE_EVENT",
+    "OBSERVATION_EVENT",
+    "OCCURRENCE_EVENT",
+    "INTERVENTION_EVENT",
+    "MATERIAL_EVENT",
+    "EVIDENCE_EVENT",
+    "GOVERNANCE_EVENT",
+    "ASSERTION_RECORD",
+    "ACCEPTED_EVENT_CONSEQUENCE",
+    "REVIEW_AND_GOVERNANCE_RECORDS",
+    "POINT_OBSERVATION_PAYLOADS",
+    "PARTIAL_EXTENT_TEMPORAL_APPLICABILITY",
+    "INTERVAL_STATE_OR_OBSERVATION",
+    "PENDING_OR_DISPUTED_ANNEX_ENTRY",
+    "EVIDENCE_SUFFICIENCY_CASE",
+    "OPERATION_CLAIM",
+    "sha256:56fb0f14a2514b34428841cb7bfc8681bb577ea3ecf57598be480683fb68524f",
+    "0008_tenant_command_runtime_bundle_selection.sql",
+    "deployment/postgresql/tenant_command_runtime_bundle_selection.py",
+    "tenant_command_runtime_bundle_selection",
+    "activate_tenant_command_runtime_bundle_selection",
+    "COMMIT_OPERATION_CLAIM_DRAFT",
+    "kernel.api",
+    "kernel.application_runtime",
+    "kernel.profiles.si_ffs.outputs",
+    "contracts/kernel/OFARM_RuntimeProblem_schema_v0_1.json",
+    "kernel.legacy_m1.api",
+    "#192",
+    "ofarm.security-audit-postgresql.v1",
+    "security_audit/",
+)
 
 
 def _coordinate_schema() -> dict:
@@ -361,7 +430,7 @@ def _selection_storage_v8_authority(
         ),
         byte_length=len(source_bytes),
     )
-    v8_digest = "sha256:" + "8" * 64
+    v8_digest = temporal.GLOBAL_CONTENT_RETENTION_V8_PREFIX_DIGEST
 
     class V8MigrationSet:
         service = v7.migration_set.service
@@ -376,6 +445,81 @@ def _selection_storage_v8_authority(
     return temporal.TenantMigrationAuthoritySnapshot(
         migration_set=V8MigrationSet(),
         version_3_prefix=v7.version_3_prefix,
+    )
+
+
+def _global_content_retention_migration_source(
+    *,
+    extra: bytes = b"",
+) -> bytes:
+    return (
+        "\n".join(
+            f"-- {marker}" for marker in temporal._GCRC_REQUIRED_MARKERS
+        ).encode("utf-8")
+        + b"\n"
+        + extra
+    )
+
+
+def _global_content_retention_v9_authority(
+    selection_source: bytes,
+    retention_source: bytes,
+) -> temporal.TenantMigrationAuthoritySnapshot:
+    v8 = _selection_storage_v8_authority(selection_source)
+    migration_9 = SimpleNamespace(
+        version=9,
+        filename=temporal.GLOBAL_CONTENT_RETENTION_MIGRATION_FILENAME,
+        source_bytes=retention_source,
+        source_sha256=(
+            "sha256:" + hashlib.sha256(retention_source).hexdigest()
+        ),
+        byte_length=len(retention_source),
+    )
+    v9_digest = "sha256:" + "9" * 64
+
+    class V9MigrationSet:
+        service = v8.migration_set.service
+        migrations = (*v8.migration_set.migrations, migration_9)
+        digest = v9_digest
+
+        def prefix_digest(self, version: int) -> str:
+            if version == 9:
+                return self.digest
+            return v8.migration_set.prefix_digest(version)
+
+    return temporal.TenantMigrationAuthoritySnapshot(
+        migration_set=V9MigrationSet(),
+        version_3_prefix=v8.version_3_prefix,
+    )
+
+
+def _changed_global_content_retention_authority(
+    authority: temporal.TenantMigrationAuthoritySnapshot,
+    *,
+    migrations: tuple[object, ...] | None = None,
+    digest: object | None = None,
+    prefix_overrides: dict[int, object] | None = None,
+) -> temporal.TenantMigrationAuthoritySnapshot:
+    selected_migrations = migrations or authority.migration_set.migrations
+    selected_digest = digest if digest is not None else authority.migration_set.digest
+    overrides = prefix_overrides or {}
+
+    class ChangedMigrationSet:
+        service = authority.migration_set.service
+        migrations = selected_migrations
+        digest = selected_digest
+
+        def prefix_digest(self, version: int) -> str:
+            override = overrides.get(version)
+            if isinstance(override, Exception):
+                raise override
+            if override is not None:
+                return override
+            return authority.migration_set.prefix_digest(version)
+
+    return temporal.TenantMigrationAuthoritySnapshot(
+        migration_set=ChangedMigrationSet(),
+        version_3_prefix=authority.version_3_prefix,
     )
 
 
@@ -1880,6 +2024,145 @@ def test_candidate_paths_are_not_frozen_or_active_contract_directories():
         )
 
 
+def test_global_content_retention_authenticates_self_then_parent(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    observed: list[tuple[str, str]] = []
+
+    def record(
+        relative_path: str,
+        _byte_length: int,
+        _sha256: str,
+        _contract_identity: str | None,
+        *,
+        authority_label: str = "selection-storage",
+    ) -> bytes:
+        observed.append((relative_path, authority_label))
+        return b""
+
+    monkeypatch.setattr(temporal, "_authenticate_authority", record)
+    temporal.validate_global_content_retention_authorities()
+
+    assert observed == [
+        (
+            temporal.GLOBAL_CONTENT_RETENTION_SELF_RELATIVE_PATH,
+            "global-content-retention",
+        ),
+        (
+            temporal.GLOBAL_CONTENT_RETENTION_PARENT_RELATIVE_PATH,
+            "global-content-retention",
+        ),
+    ]
+
+
+@pytest.mark.parametrize("authority_name", ("self", "parent"))
+@pytest.mark.parametrize(
+    ("failure", "message"),
+    (
+        ("missing", "authority is missing"),
+        ("symlink", "authority is missing"),
+        ("unreadable", "authority is unreadable"),
+        ("length", "byte length differs"),
+        ("digest", "digest differs"),
+        ("identity", "contract identity differs"),
+    ),
+    ids=("missing", "symlink", "unreadable", "length", "digest", "identity"),
+)
+def test_global_content_retention_authority_refuses_inexact_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    authority_name: str,
+    failure: str,
+    message: str,
+):
+    authorities = {
+        "self": (
+            temporal.GLOBAL_CONTENT_RETENTION_SELF_RELATIVE_PATH,
+            temporal.GLOBAL_CONTENT_RETENTION_SELF_CONTRACT_IDENTITY,
+            "GLOBAL_CONTENT_RETENTION_SELF_SHA256",
+        ),
+        "parent": (
+            temporal.GLOBAL_CONTENT_RETENTION_PARENT_RELATIVE_PATH,
+            temporal.GLOBAL_CONTENT_RETENTION_PARENT_CONTRACT_IDENTITY,
+            "GLOBAL_CONTENT_RETENTION_PARENT_SHA256",
+        ),
+    }
+    for relative_path, _identity, _sha_name in authorities.values():
+        destination = tmp_path / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes((PACKAGE_ROOT / relative_path).read_bytes())
+
+    relative_path, identity, sha_name = authorities[authority_name]
+    authority_path = tmp_path / relative_path
+    if failure == "missing":
+        authority_path.unlink()
+    elif failure == "symlink":
+        target = authority_path.with_suffix(".target")
+        authority_path.replace(target)
+        authority_path.symlink_to(target)
+    elif failure == "length":
+        authority_path.write_bytes(authority_path.read_bytes() + b"\n")
+    elif failure == "digest":
+        source = authority_path.read_bytes()
+        authority_path.write_bytes(bytes((source[0] ^ 1,)) + source[1:])
+    elif failure == "identity":
+        source = authority_path.read_bytes().replace(
+            identity.encode("utf-8"),
+            b"x" * len(identity),
+        )
+        authority_path.write_bytes(source)
+        monkeypatch.setattr(
+            temporal,
+            sha_name,
+            "sha256:" + hashlib.sha256(source).hexdigest(),
+        )
+
+    if failure == "unreadable":
+        original_read_bytes = Path.read_bytes
+
+        def read_bytes(path: Path) -> bytes:
+            if path == authority_path:
+                raise OSError("unavailable")
+            return original_read_bytes(path)
+
+        monkeypatch.setattr(Path, "read_bytes", read_bytes)
+
+    monkeypatch.setattr(temporal, "PACKAGE_ROOT", tmp_path)
+    with pytest.raises(temporal.TemporalCandidateError, match=message):
+        temporal.validate_global_content_retention_authorities()
+
+
+def test_complete_check_authenticates_retention_before_selection(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    observed: list[str] = []
+
+    class StopAfterSelectionAuthority(Exception):
+        pass
+
+    def retention_authority() -> None:
+        observed.append("retention")
+
+    def selection_authority() -> None:
+        observed.append("selection")
+        raise StopAfterSelectionAuthority
+
+    monkeypatch.setattr(
+        temporal,
+        "validate_global_content_retention_authorities",
+        retention_authority,
+    )
+    monkeypatch.setattr(
+        temporal,
+        "validate_selection_storage_authorities",
+        selection_authority,
+    )
+
+    with pytest.raises(StopAfterSelectionAuthority):
+        temporal.validate_candidate_governance()
+    assert observed == ["retention", "selection"]
+
+
 def test_selection_storage_authenticates_amendment_first(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -2076,6 +2359,35 @@ def test_complete_check_propagates_classified_state(
     )
 
 
+def test_complete_check_preserves_classified_output_for_exact_v9(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    selection_source = _selection_storage_python_markers()
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: selection_source},
+    )
+    authority = _global_content_retention_v9_authority(
+        selection_source,
+        _global_content_retention_migration_source(),
+    )
+    monkeypatch.setattr(
+        temporal,
+        "load_tenant_migration_authority_snapshot",
+        lambda: authority,
+    )
+    monkeypatch.setattr(
+        temporal.architecture,
+        "build_python_source_snapshot",
+        lambda _root: snapshot,
+    )
+
+    assert temporal.validate_candidate_governance() == (
+        temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+    )
+
+
 @pytest.mark.parametrize(
     ("state", "expected"),
     (
@@ -2230,6 +2542,331 @@ def test_selection_storage_exact_synthetic_pair_is_classified(tmp_path: Path):
         authority,
         snapshot,
     ) == temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+
+
+def test_global_content_retention_forbidden_vocabulary_is_exact():
+    assert temporal._GCRC_FORBIDDEN_MIGRATION_MARKERS == _GCRC_FORBIDDEN_V0_1
+
+
+def test_global_content_retention_exact_v7_does_not_select_classifier(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def unexpected_classifier(*_args: object) -> str:
+        raise AssertionError("retention classifier was selected for exact V7")
+
+    monkeypatch.setattr(
+        temporal,
+        "_classify_global_content_retention_migration",
+        unexpected_classifier,
+    )
+
+    assert temporal._validate_selection_storage_conformance(
+        _selection_storage_v7_authority(),
+        _selection_storage_source_snapshot(tmp_path),
+    ) == temporal.SELECTION_STORAGE_CONFORMANT_ABSENT
+
+
+def test_global_content_retention_exact_v8_is_internally_absent():
+    selection_source = _selection_storage_python_markers()
+    authority = _selection_storage_v8_authority(selection_source)
+
+    assert temporal._classify_global_content_retention_migration(
+        authority,
+        authority.migration_set.prefix_digest(8),
+    ) == temporal.GLOBAL_CONTENT_RETENTION_MIGRATION_ABSENT
+
+
+def test_global_content_retention_exact_v9_preserves_public_state(
+    tmp_path: Path,
+):
+    selection_source = _selection_storage_python_markers()
+    retention_source = _global_content_retention_migration_source()
+    authority = _global_content_retention_v9_authority(
+        selection_source,
+        retention_source,
+    )
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: selection_source},
+    )
+
+    assert temporal._classify_global_content_retention_migration(
+        authority,
+        authority.migration_set.prefix_digest(8),
+    ) == temporal.GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED
+    assert temporal._validate_selection_storage_conformance(
+        authority,
+        snapshot,
+    ) == temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+
+
+@pytest.mark.parametrize("missing_marker", temporal._GCRC_REQUIRED_MARKERS)
+def test_global_content_retention_refuses_incomplete_required_markers(
+    tmp_path: Path,
+    missing_marker: str,
+):
+    selection_source = _selection_storage_python_markers()
+    retention_source = (
+        "\n".join(
+            f"-- {marker}"
+            for marker in temporal._GCRC_REQUIRED_MARKERS
+            if marker != missing_marker
+        )
+        + "\n"
+    ).encode("utf-8")
+    authority = _global_content_retention_v9_authority(
+        selection_source,
+        retention_source,
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="required marker pair differs",
+    ):
+        temporal._validate_selection_storage_conformance(
+            authority,
+            _selection_storage_source_snapshot(
+                tmp_path,
+                {
+                    temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: (
+                        selection_source
+                    )
+                },
+            ),
+        )
+
+
+def test_global_content_retention_refuses_marker_in_earlier_migration(
+    tmp_path: Path,
+):
+    selection_source = _selection_storage_python_markers()
+    authority = _global_content_retention_v9_authority(
+        selection_source,
+        _global_content_retention_migration_source(),
+    )
+    migrations = authority.migration_set.migrations
+    source = (
+        migrations[0].source_bytes
+        + b"\n-- "
+        + temporal._GCRC_REQUIRED_MARKERS[0].encode("utf-8")
+        + b"\n"
+    )
+    changed = _changed_migration(
+        migrations[0],
+        source_bytes=source,
+        source_sha256="sha256:" + hashlib.sha256(source).hexdigest(),
+        byte_length=len(source),
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="marker entered an earlier migration",
+    ):
+        temporal._validate_selection_storage_conformance(
+            _changed_global_content_retention_authority(
+                authority,
+                migrations=(changed, *migrations[1:]),
+            ),
+            _selection_storage_source_snapshot(
+                tmp_path,
+                {temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: selection_source},
+            ),
+        )
+
+
+@pytest.mark.parametrize("forbidden_marker", _GCRC_FORBIDDEN_V0_1)
+def test_global_content_retention_refuses_every_forbidden_marker(
+    tmp_path: Path,
+    forbidden_marker: str,
+):
+    selection_source = _selection_storage_python_markers()
+    authority = _global_content_retention_v9_authority(
+        selection_source,
+        _global_content_retention_migration_source(
+            extra=f"-- {forbidden_marker}\n".encode("utf-8")
+        ),
+    )
+    message = (
+        "selection-storage marker entered another authenticated migration"
+        if forbidden_marker in temporal.SELECTION_STORAGE_MARKERS
+        else "contains a forbidden marker"
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match=message,
+    ):
+        temporal._validate_selection_storage_conformance(
+            authority,
+            _selection_storage_source_snapshot(
+                tmp_path,
+                {temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: selection_source},
+            ),
+        )
+
+
+def test_global_content_retention_refuses_wrong_v9_filename(tmp_path: Path):
+    selection_source = _selection_storage_python_markers()
+    authority = _global_content_retention_v9_authority(
+        selection_source,
+        _global_content_retention_migration_source(),
+    )
+    migrations = authority.migration_set.migrations
+    changed = _changed_migration(
+        migrations[8],
+        filename="0009_other.sql",
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="version 0009 identity differs",
+    ):
+        temporal._validate_selection_storage_conformance(
+            _changed_global_content_retention_authority(
+                authority,
+                migrations=(*migrations[:8], changed),
+            ),
+            _selection_storage_source_snapshot(
+                tmp_path,
+                {temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: selection_source},
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    ("failure", "digest", "prefix_overrides", "message"),
+    (
+        (
+            "v8-drift",
+            None,
+            {8: "sha256:" + "0" * 64},
+            "fixed V8 prefix differs",
+        ),
+        (
+            "v9-error",
+            None,
+            {9: ValueError("unavailable")},
+            "version-9 prefix authentication failed",
+        ),
+        (
+            "v9-non-string",
+            None,
+            {9: 9},
+            "version-9 migration-set identity differs",
+        ),
+        (
+            "digest-mismatch",
+            "sha256:" + "7" * 64,
+            {},
+            "version-9 migration-set identity differs",
+        ),
+        (
+            "digest-equals-v8",
+            temporal.GLOBAL_CONTENT_RETENTION_V8_PREFIX_DIGEST,
+            {9: temporal.GLOBAL_CONTENT_RETENTION_V8_PREFIX_DIGEST},
+            "version-9 migration-set identity differs",
+        ),
+    ),
+    ids=(
+        "v8-drift",
+        "v9-prefix-error",
+        "v9-prefix-non-string",
+        "v9-digest-mismatch",
+        "v9-digest-equals-v8",
+    ),
+)
+def test_global_content_retention_refuses_prefix_or_digest_drift(
+    tmp_path: Path,
+    failure: str,
+    digest: object | None,
+    prefix_overrides: dict[int, object],
+    message: str,
+):
+    del failure
+    selection_source = _selection_storage_python_markers()
+    authority = _global_content_retention_v9_authority(
+        selection_source,
+        _global_content_retention_migration_source(),
+    )
+
+    with pytest.raises(temporal.TemporalCandidateError, match=message):
+        temporal._validate_selection_storage_conformance(
+            _changed_global_content_retention_authority(
+                authority,
+                digest=digest,
+                prefix_overrides=prefix_overrides,
+            ),
+            _selection_storage_source_snapshot(
+                tmp_path,
+                {temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: selection_source},
+            ),
+        )
+
+
+def test_global_content_retention_refuses_nondeterministic_v9_prefix(
+    tmp_path: Path,
+):
+    selection_source = _selection_storage_python_markers()
+    authority = _global_content_retention_v9_authority(
+        selection_source,
+        _global_content_retention_migration_source(),
+    )
+    calls = 0
+
+    class DivergentMigrationSet:
+        service = authority.migration_set.service
+        migrations = authority.migration_set.migrations
+        digest = authority.migration_set.digest
+
+        def prefix_digest(self, version: int) -> str:
+            nonlocal calls
+            if version == 9:
+                calls += 1
+                if calls == 2:
+                    return "sha256:" + "0" * 64
+            return authority.migration_set.prefix_digest(version)
+
+    changed = temporal.TenantMigrationAuthoritySnapshot(
+        migration_set=DivergentMigrationSet(),
+        version_3_prefix=authority.version_3_prefix,
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="version-9 migration-set identity differs",
+    ):
+        temporal._validate_selection_storage_conformance(
+            changed,
+            _selection_storage_source_snapshot(
+                tmp_path,
+                {temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: selection_source},
+            ),
+        )
+
+
+def test_global_content_retention_refuses_production_python_marker(
+    tmp_path: Path,
+):
+    selection_source = _selection_storage_python_markers()
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: selection_source,
+            "profile_si_ffs/retention_publisher.py": (
+                f"# {temporal._GCRC_REQUIRED_MARKERS[0]}\n".encode("utf-8")
+            ),
+        },
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="marker entered production Python source",
+    ):
+        temporal._validate_selection_storage_conformance(
+            _selection_storage_v8_authority(selection_source),
+            snapshot,
+        )
 
 
 def test_selection_storage_classified_state_still_checks_initializer_ast(
@@ -2473,10 +3110,15 @@ def test_selection_storage_refuses_invalid_migration_state(
     migrations = current.migration_set.migrations
     if state == "too-short":
         changed = migrations[:6]
-        message = "neither exact V7 nor V8"
+        message = "not exact V7, V8, or V9"
     elif state == "too-long":
-        changed = (*migrations, migrations[-1], migrations[-1])
-        message = "neither exact V7 nor V8"
+        changed = (
+            *migrations,
+            migrations[-1],
+            migrations[-1],
+            migrations[-1],
+        )
+        message = "not exact V7, V8, or V9"
     else:
         changed = (
             _changed_migration(migrations[0], version=2),
@@ -2936,6 +3578,9 @@ def test_selection_storage_classified_migration_set_identity_refuses_drift(
             _changed_selection_storage_authority(
                 migrations=v8.migration_set.migrations,
                 digest=temporal.SELECTION_STORAGE_V7_DIGEST,
+                prefix_overrides={
+                    8: temporal.GLOBAL_CONTENT_RETENTION_V8_PREFIX_DIGEST
+                },
             ),
             _selection_storage_source_snapshot(
                 tmp_path,
@@ -2965,9 +3610,10 @@ def test_selection_storage_refuses_classified_v8_identity_failure(
         prefix_overrides[8] = ValueError("unavailable")
     elif failure == "non-string-digest":
         digest = 8
+        prefix_overrides[8] = temporal.GLOBAL_CONTENT_RETENTION_V8_PREFIX_DIGEST
     else:
         digest = "sha256:" + "9" * 64
-        prefix_overrides[8] = "sha256:" + "8" * 64
+        prefix_overrides[8] = temporal.GLOBAL_CONTENT_RETENTION_V8_PREFIX_DIGEST
 
     with pytest.raises(temporal.TemporalCandidateError, match=message):
         temporal._validate_selection_storage_conformance(
@@ -3114,17 +3760,24 @@ def test_classified_state_does_not_evaluate_obsolete_v7_catalog_pin(
     range(3),
     ids=("runtime-catalog", "active-set", "capability-manifest"),
 )
+@pytest.mark.parametrize(
+    "marker",
+    (
+        temporal.SELECTION_STORAGE_MARKERS[1],
+        temporal._GCRC_REQUIRED_MARKERS[0],
+    ),
+    ids=("selection", "global-content-retention"),
+)
 def test_selection_storage_active_authority_refuses_marker(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     changed_index: int,
+    marker: str,
 ):
     active_paths = tuple(tmp_path / f"active-{index}.json" for index in range(3))
     for index, active_path in enumerate(active_paths):
         active_path.write_text(
-            temporal.SELECTION_STORAGE_MARKERS[1]
-            if index == changed_index
-            else "{}",
+            marker if index == changed_index else "{}",
             encoding="utf-8",
         )
     monkeypatch.setattr(
@@ -3195,6 +3848,8 @@ def test_selection_storage_evidence_uses_retained_sources_only():
         for function in (
             temporal._validate_source_pin,
             temporal._classify_selection_storage_pair,
+            temporal._classify_global_content_retention_migration,
+            temporal._validate_global_content_retention_python_isolation,
             temporal._validate_selection_storage_isolation,
             temporal._validate_selection_storage_conformance,
         )
@@ -3250,6 +3905,8 @@ def test_selection_storage_evidence_uses_retained_sources_only():
         for function in (
             temporal._validate_source_pin,
             temporal._classify_selection_storage_pair,
+            temporal._classify_global_content_retention_migration,
+            temporal._validate_global_content_retention_python_isolation,
             temporal._validate_initializer_import_prohibition,
             temporal._validate_selection_storage_isolation,
         )

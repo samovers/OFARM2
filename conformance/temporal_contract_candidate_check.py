@@ -227,6 +227,116 @@ CAPABILITY_MANIFEST_PATH = (
     / "profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
 )
 
+GLOBAL_CONTENT_RETENTION_SELF_RELATIVE_PATH = (
+    "docs/rfcs/"
+    "OFARM_RuntimeBundle_Global_Content_Retention_Conformance_"
+    "Admission_RFC_v0_1.md"
+)
+GLOBAL_CONTENT_RETENTION_SELF_CONTRACT_IDENTITY = (
+    "ofarm.runtime-bundle-global-content-retention-conformance-"
+    "admission.issue176.v0.1"
+)
+GLOBAL_CONTENT_RETENTION_SELF_BYTE_LENGTH = 40_726
+GLOBAL_CONTENT_RETENTION_SELF_SHA256 = (
+    "sha256:7df5ebcb89e2a758c7906e9c4053228e5e151d049ff40e07f83d23a706d7a016"
+)
+GLOBAL_CONTENT_RETENTION_PARENT_RELATIVE_PATH = (
+    "docs/rfcs/"
+    "OFARM_RuntimeBundle_Global_Content_Retention_Admission_RFC_v0_1.md"
+)
+GLOBAL_CONTENT_RETENTION_PARENT_CONTRACT_IDENTITY = (
+    "ofarm.runtime-bundle-global-content-retention-admission.issue176.v0.1"
+)
+GLOBAL_CONTENT_RETENTION_PARENT_BYTE_LENGTH = 38_116
+GLOBAL_CONTENT_RETENTION_PARENT_SHA256 = (
+    "sha256:aa5de04c08390e1439d59f39c4b6f5608e8b43b320fec531721d9c53b936873a"
+)
+GLOBAL_CONTENT_RETENTION_MIGRATION_FILENAME = (
+    "0009_runtime_bundle_global_content_retention.sql"
+)
+GLOBAL_CONTENT_RETENTION_V8_PREFIX_DIGEST = (
+    "sha256:7231c869066c56f7c642460d33391bab00456daecdb04530b34da7210e8e8a54"
+)
+GLOBAL_CONTENT_RETENTION_MIGRATION_ABSENT = (
+    "GLOBAL_CONTENT_RETENTION_MIGRATION_ABSENT"
+)
+GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED = (
+    "GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED"
+)
+_GCRC_REQUIRED_MARKERS = (
+    "ofarm.runtime-bundle-global-content-retention-admission.issue176.v0.1",
+    "ofarm.retain_runtime_content",
+)
+_GCRC_FORBIDDEN_MIGRATION_MARKERS = (
+    "contracts/candidates/temporal_coordinate/"
+    "OFARM_TemporalCoordinate_schema_v0_1.json",
+    "contracts/candidates/temporal_coordinate/"
+    "OFARM_TemporalCarrierMatrix_schema_v0_1.json",
+    "contracts/candidates/temporal_coordinate/"
+    "OFARM_TemporalCarrierMatrix_ADR0002_candidate_v0_1.json",
+    "contracts/candidates/temporal_carrier_selection/"
+    "OFARM_TemporalCarrierSelectionBinding_schema_v0_1.json",
+    "contracts/candidates/temporal_carrier_selection/"
+    "OFARM_InterventionValidTimeCarrierSelection_candidate_v0_1.json",
+    "contracts/candidates/temporal_governed_command/"
+    "OFARM_TemporalGovernedCommandBinding_schema_v0_1.json",
+    "contracts/candidates/temporal_governed_command/"
+    "OFARM_OperationClaimDraftTemporalCommand_candidate_v0_1.json",
+    "contracts/candidates/temporal_runtime_bundle_carrier/"
+    "OFARM_TemporalGovernanceRuntimeBundleCarrierBinding_schema_v0_1.json",
+    "contracts/candidates/temporal_runtime_bundle_carrier/"
+    "OFARM_TemporalGovernanceRuntimeBundleCarrier_candidate_v0_1.json",
+    "contracts/candidates/temporal_runtime_bundle_selection/"
+    "OFARM_TenantCommandRuntimeBundleSelectionBinding_schema_v0_1.json",
+    "contracts/candidates/temporal_runtime_bundle_selection/"
+    "OFARM_TenantCommandRuntimeBundleSelection_candidate_v0_1.json",
+    "contracts/candidates/temporal_governance_promotion/"
+    "OFARM_TemporalGovernancePromotionBinding_schema_v0_1.json",
+    "contracts/candidates/temporal_governance_promotion/"
+    "OFARM_TemporalGovernancePromotion_candidate_v0_1.json",
+    "ofarm.temporal-coordinate.v0.1",
+    "ofarm.temporal-carrier-matrix.adr0002.v0.1",
+    "ofarm.temporal-carrier-selection.intervention.v0.1",
+    "ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1",
+    "ofarm.temporal-governance-runtime-bundle-carrier.v0.1",
+    "TEMPORAL_GOVERNANCE_ARTIFACT",
+    (
+        "ofarm.tenant-command-runtime-bundle-selection."
+        "commit-operation-claim-draft.v0.1"
+    ),
+    "ofarm.temporal-governance-promotion.issue176-foundation.v0.1",
+    "STRUCTURE_EVENT",
+    "OBSERVATION_EVENT",
+    "OCCURRENCE_EVENT",
+    "INTERVENTION_EVENT",
+    "MATERIAL_EVENT",
+    "EVIDENCE_EVENT",
+    "GOVERNANCE_EVENT",
+    "ASSERTION_RECORD",
+    "ACCEPTED_EVENT_CONSEQUENCE",
+    "REVIEW_AND_GOVERNANCE_RECORDS",
+    "POINT_OBSERVATION_PAYLOADS",
+    "PARTIAL_EXTENT_TEMPORAL_APPLICABILITY",
+    "INTERVAL_STATE_OR_OBSERVATION",
+    "PENDING_OR_DISPUTED_ANNEX_ENTRY",
+    "EVIDENCE_SUFFICIENCY_CASE",
+    "OPERATION_CLAIM",
+    "sha256:56fb0f14a2514b34428841cb7bfc8681bb577ea3ecf57598be480683fb68524f",
+    "0008_tenant_command_runtime_bundle_selection.sql",
+    "deployment/postgresql/tenant_command_runtime_bundle_selection.py",
+    "tenant_command_runtime_bundle_selection",
+    "activate_tenant_command_runtime_bundle_selection",
+    "COMMIT_OPERATION_CLAIM_DRAFT",
+    "kernel.api",
+    "kernel.application_runtime",
+    "kernel.profiles.si_ffs.outputs",
+    "contracts/kernel/OFARM_RuntimeProblem_schema_v0_1.json",
+    "kernel.legacy_m1.api",
+    "#192",
+    "ofarm.security-audit-postgresql.v1",
+    "security_audit/",
+)
+
 SELECTION_STORAGE_AMENDMENT_RELATIVE_PATH = (
     "docs/rfcs/"
     "OFARM_Temporal_Candidate_Conformance_Selection_Storage_"
@@ -3106,34 +3216,57 @@ def _authenticate_authority(
     byte_length: int,
     sha256: str,
     contract_identity: str | None,
+    *,
+    authority_label: str = "selection-storage",
 ) -> bytes:
     path = PACKAGE_ROOT / relative_path
     if path.is_symlink() or not path.is_file():
         raise TemporalCandidateError(
-            f"selection-storage authority is missing: {relative_path}"
+            f"{authority_label} authority is missing: {relative_path}"
         )
     try:
         authority_bytes = path.read_bytes()
     except OSError as exc:
         raise TemporalCandidateError(
-            f"selection-storage authority is unreadable: {relative_path}"
+            f"{authority_label} authority is unreadable: {relative_path}"
         ) from exc
     if len(authority_bytes) != byte_length:
         raise TemporalCandidateError(
-            f"selection-storage authority byte length differs: {relative_path}"
+            f"{authority_label} authority byte length differs: {relative_path}"
         )
     if "sha256:" + hashlib.sha256(authority_bytes).hexdigest() != sha256:
         raise TemporalCandidateError(
-            f"selection-storage authority digest differs: {relative_path}"
+            f"{authority_label} authority digest differs: {relative_path}"
         )
     if (
         contract_identity is not None
         and contract_identity.encode("utf-8") not in authority_bytes
     ):
         raise TemporalCandidateError(
-            f"selection-storage contract identity differs: {relative_path}"
+            f"{authority_label} contract identity differs: {relative_path}"
         )
     return authority_bytes
+
+
+def validate_global_content_retention_authorities() -> None:
+    for authority in (
+        (
+            GLOBAL_CONTENT_RETENTION_SELF_RELATIVE_PATH,
+            GLOBAL_CONTENT_RETENTION_SELF_BYTE_LENGTH,
+            GLOBAL_CONTENT_RETENTION_SELF_SHA256,
+            GLOBAL_CONTENT_RETENTION_SELF_CONTRACT_IDENTITY,
+        ),
+        (
+            GLOBAL_CONTENT_RETENTION_PARENT_RELATIVE_PATH,
+            GLOBAL_CONTENT_RETENTION_PARENT_BYTE_LENGTH,
+            GLOBAL_CONTENT_RETENTION_PARENT_SHA256,
+            GLOBAL_CONTENT_RETENTION_PARENT_CONTRACT_IDENTITY,
+        ),
+    ):
+        _authenticate_authority(
+            *authority,
+            authority_label="global-content-retention",
+        )
 
 
 def validate_selection_storage_authorities() -> None:
@@ -3247,14 +3380,14 @@ def _validate_tenant_service(migration_set: _AuthenticatedMigrationSet) -> None:
         )
 
 
-def _validate_v7_migration_prefix(
+def _validate_selection_storage_migration_prefix(
     authority: TenantMigrationAuthoritySnapshot,
 ) -> None:
     migration_set = authority.migration_set
     migrations = migration_set.migrations
-    if len(migrations) not in (7, 8):
+    if len(migrations) not in (7, 8, 9):
         raise TemporalCandidateError(
-            "selection-storage migration state is neither exact V7 nor V8"
+            "selection-storage migration state is not exact V7, V8, or V9"
         )
     if tuple(migration.version for migration in migrations) != tuple(
         range(1, len(migrations) + 1)
@@ -3315,7 +3448,7 @@ def _classify_selection_storage_pair(
     adapter_unit = snapshot.modules_by_relative_path.get(
         SELECTION_STORAGE_ADAPTER_RELATIVE_PATH
     )
-    has_migration = len(migrations) == 8
+    has_migration = len(migrations) >= 8
     has_adapter = adapter_unit is not None
     if has_migration:
         migration_8 = migrations[7]
@@ -3368,6 +3501,89 @@ def _classify_selection_storage_pair(
             )
         return SELECTION_STORAGE_CONFORMANT_CLASSIFIED
     return SELECTION_STORAGE_CONFORMANT_ABSENT
+
+
+def _classify_global_content_retention_migration(
+    authority: TenantMigrationAuthoritySnapshot,
+    version_8_prefix: str,
+) -> str:
+    migrations = authority.migration_set.migrations
+    if len(migrations) not in (8, 9):
+        raise TemporalCandidateError(
+            "global-content-retention migration state is not exact V8 or V9"
+        )
+    if version_8_prefix != GLOBAL_CONTENT_RETENTION_V8_PREFIX_DIGEST:
+        raise TemporalCandidateError(
+            "global-content-retention version-8 prefix differs"
+        )
+
+    required_markers = tuple(
+        marker.encode("utf-8") for marker in _GCRC_REQUIRED_MARKERS
+    )
+    if any(
+        marker in migration.source_bytes
+        for migration in migrations[:8]
+        for marker in required_markers
+    ):
+        raise TemporalCandidateError(
+            "global-content-retention marker entered an earlier migration"
+        )
+    if len(migrations) == 8:
+        return GLOBAL_CONTENT_RETENTION_MIGRATION_ABSENT
+
+    migration_9 = migrations[8]
+    if (
+        migration_9.version != 9
+        or migration_9.filename != GLOBAL_CONTENT_RETENTION_MIGRATION_FILENAME
+    ):
+        raise TemporalCandidateError(
+            "global-content-retention version 0009 identity differs"
+        )
+    if not all(marker in migration_9.source_bytes for marker in required_markers):
+        raise TemporalCandidateError(
+            "global-content-retention required marker pair differs"
+        )
+    if any(
+        marker.encode("utf-8") in migration_9.source_bytes
+        for marker in _GCRC_FORBIDDEN_MIGRATION_MARKERS
+    ):
+        raise TemporalCandidateError(
+            "global-content-retention migration contains a forbidden marker"
+        )
+
+    try:
+        prefix_9 = authority.migration_set.prefix_digest(9)
+        complete_prefix = authority.migration_set.prefix_digest(len(migrations))
+    except Exception as exc:
+        raise TemporalCandidateError(
+            "global-content-retention version-9 prefix authentication failed"
+        ) from exc
+    complete_digest = authority.migration_set.digest
+    if (
+        type(prefix_9) is not str
+        or type(complete_prefix) is not str
+        or type(complete_digest) is not str
+        or prefix_9 != complete_prefix
+        or complete_digest != prefix_9
+        or complete_digest == version_8_prefix
+    ):
+        raise TemporalCandidateError(
+            "global-content-retention version-9 migration-set identity differs"
+        )
+    return GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED
+
+
+def _validate_global_content_retention_python_isolation(
+    snapshot: architecture.PythonSourceSnapshotV1,
+) -> None:
+    for relative_path, unit in snapshot.modules_by_relative_path.items():
+        if (
+            any(marker in unit.source_text for marker in _GCRC_REQUIRED_MARKERS)
+            and not _is_python_marker_exemption(relative_path)
+        ):
+            raise TemporalCandidateError(
+                "global-content-retention marker entered production Python source"
+            )
 
 
 def _validate_initializer_import_prohibition(
@@ -3466,6 +3682,7 @@ def _validate_selection_storage_active_authorities() -> None:
     markers = (
         *SELECTION_STORAGE_MARKERS,
         *SELECTION_STORAGE_ALLOWED_PRODUCTION_PATHS,
+        *_GCRC_REQUIRED_MARKERS,
     )
     for path in SELECTION_STORAGE_ACTIVE_NON_PYTHON_PATHS:
         try:
@@ -3484,7 +3701,7 @@ def _validate_selection_storage_conformance(
     authority: TenantMigrationAuthoritySnapshot,
     snapshot: architecture.PythonSourceSnapshotV1,
 ) -> str:
-    _validate_v7_migration_prefix(authority)
+    _validate_selection_storage_migration_prefix(authority)
     state = _classify_selection_storage_pair(authority, snapshot)
     for pin in SELECTION_STORAGE_SOURCE_PINS:
         _validate_source_pin(snapshot, pin)
@@ -3510,19 +3727,34 @@ def _validate_selection_storage_conformance(
             )
     else:
         try:
-            complete_digest = authority.migration_set.prefix_digest(8)
+            version_8_prefix = authority.migration_set.prefix_digest(8)
         except Exception as exc:
             raise TemporalCandidateError(
                 "selection-storage V8 migration authentication failed"
             ) from exc
         if (
-            type(authority.migration_set.digest) is not str
-            or authority.migration_set.digest == SELECTION_STORAGE_V7_DIGEST
-            or authority.migration_set.digest != complete_digest
+            type(version_8_prefix) is not str
+            or version_8_prefix != GLOBAL_CONTENT_RETENTION_V8_PREFIX_DIGEST
+        ):
+            raise TemporalCandidateError(
+                "selection-storage fixed V8 prefix differs"
+            )
+        retention_state = _classify_global_content_retention_migration(
+            authority,
+            version_8_prefix,
+        )
+        if (
+            retention_state == GLOBAL_CONTENT_RETENTION_MIGRATION_ABSENT
+            and (
+                type(authority.migration_set.digest) is not str
+                or authority.migration_set.digest == SELECTION_STORAGE_V7_DIGEST
+                or authority.migration_set.digest != version_8_prefix
+            )
         ):
             raise TemporalCandidateError(
                 "selection-storage V8 migration-set identity differs"
             )
+    _validate_global_content_retention_python_isolation(snapshot)
     _validate_selection_storage_active_authorities()
     _validate_selection_storage_isolation(snapshot, state)
     return state
@@ -3714,6 +3946,7 @@ def validate_temporal_card_errata_trace(errata: str) -> None:
 
 
 def validate_candidate_governance() -> str:
+    validate_global_content_retention_authorities()
     validate_selection_storage_authorities()
     migration_authority = load_tenant_migration_authority_snapshot()
     python_snapshot = _build_selection_storage_snapshot()
