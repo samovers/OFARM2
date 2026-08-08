@@ -1,0 +1,595 @@
+# OFARM2 RuntimeBundle Global Content Retention Conformance Admission — Phase A Contract v0.1
+
+**Status:** proposed Phase A contract; documentation-only, unapproved, and
+without checker, migration, database, content-retention, bundle-publication,
+selection, runtime, deployment, route, output, legacy, or #192 effect
+
+**Contract identity:**
+`ofarm.runtime-bundle-global-content-retention-conformance-admission.issue176.v0.1`
+
+**Decision identity:**
+`ISSUE176-RUNTIME-BUNDLE-GLOBAL-CONTENT-RETENTION-CONFORMANCE-001`, version `1`
+
+**Reviewed base:** `93d01c60420a055fae6a632acb7f4e5fe7f549b5`
+
+**Phase A RFC path:**
+`docs/rfcs/OFARM_RuntimeBundle_Global_Content_Retention_Conformance_Admission_RFC_v0_1.md`
+
+**Primary ticket:** #176
+
+**Primary trust boundary:** repository conformance authority for admitting
+exactly the future migration-0009 absent/present transition without changing
+the active temporal semantic surface
+
+**Phase A pull-request boundary:** this RFC only
+
+**Intended later conformance Phase B boundary:** one additive internal
+classifier in the existing temporal candidate checker, focused tests in its
+existing governance test module, and mechanical canonical test-node inventory
+regeneration only when required
+
+## 1. Problem and goal
+
+The merged global-content-retention contract establishes a narrow future
+database boundary for one publisher-custody function. It also requires the
+temporal candidate checker to admit migration 0009 before that database work
+may begin.
+
+Current `main` is an exact version-8 tenant migration release. The checker
+authenticates the selection-storage transition through version 8 and returns
+`CONFORMANT_CLASSIFIED`. Its selection-storage implementation currently treats
+the complete migration count as part of deciding whether the version-8
+migration exists. Appending an unrelated version 9 would therefore make the
+already complete version-8 selection pair look incomplete, even when version
+8 and its adapter remain exact.
+
+The required change is not a new database authority and not temporal
+activation. It is this closed conformance rule:
+
+> preserve the exact version-8 selection-storage cut as an authenticated
+> prefix, then accept either exact version 8 with migration 0009 absent or one
+> exact contiguous version 9 whose final filename and trace markers identify
+> the governed global-content-retention migration.
+
+The checker must continue returning the existing selection-storage result
+`CONFORMANT_CLASSIFIED`. The global-content-retention migration state is an
+internal guard only. It creates no new public conformance vocabulary,
+registry, runtime input, or lifecycle state.
+
+## 2. Decision
+
+After this exact RFC is approved and merged, a separately requested
+conformance Phase B may amend the existing checker so that one invocation:
+
+1. authenticates the complete merged global-content-retention Phase A RFC;
+2. authenticates the already accepted selection-storage and Python-source
+   snapshot authorities;
+3. loads one authoritative tenant migration snapshot and one public Python
+   source snapshot;
+4. proves the selection-storage pair remains exact and classified at the
+   immutable version-8 prefix;
+5. classifies one of exactly two internal global-content-retention states;
+6. preserves all existing active-surface and import-closure checks; and
+7. returns the unchanged public selection-storage result.
+
+The two internal states are:
+
+```text
+GLOBAL_CONTENT_RETENTION_MIGRATION_ABSENT
+GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED
+```
+
+These names are checker-internal evidence. They are not schema values,
+RuntimeBundle components, database states, API results, lifecycle states, or
+output fields.
+
+### 2.1 Lawful repository states
+
+```text
+AUTHENTICATED AUTHORITIES
+  + EXACT V8 PREFIX AND COMPLETE V8 RELEASE
+  + EXACT V8 SELECTION PAIR CLASSIFIED
+  + MIGRATION 0009 ABSENT
+    -> GLOBAL_CONTENT_RETENTION_MIGRATION_ABSENT
+    -> PUBLIC RESULT REMAINS CONFORMANT_CLASSIFIED
+
+AUTHENTICATED AUTHORITIES
+  + EXACT V8 PREFIX
+  + EXACT CONTIGUOUS COMPLETE V9 RELEASE
+  + EXACT V8 SELECTION PAIR CLASSIFIED
+  + EXACT MIGRATION 0009 PRESENT AND CLASSIFIED
+    -> GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED
+    -> PUBLIC RESULT REMAINS CONFORMANT_CLASSIFIED
+
+ANY OTHER STATE
+    -> REFUSED
+```
+
+Version 7, version 10 or later, a gap, a reorder, a second version-9 file, an
+untracked migration, or a self-consistent but non-exact version-8 prefix is
+not a third lawful state.
+
+### 2.2 Exact version-8 cut
+
+The stable cut is:
+
+- service: `ofarm.tenant-postgresql.v1`;
+- versions: `0001` through `0008`, contiguous;
+- version-8 filename:
+  `0008_tenant_command_runtime_bundle_selection.sql`;
+- version-8 source: 37,933 bytes,
+  `sha256:635e476fb4eb93073ed353397a977ea887c42e1be11b42f9a4782a76f88ab765`;
+- version-3 prefix:
+  `sha256:ba7a193e96ca78d01edf529ed2e20bbd1810c0a3a0c13bc717969e8c5c739bf0`;
+- version-8 prefix and complete version-8 digest:
+  `sha256:7231c869066c56f7c642460d33391bab00456daecdb04530b34da7210e8e8a54`.
+
+The fixed version-8 prefix authenticates all first-eight filenames, source
+bytes, lengths, ordering, and prefix framing through the authoritative
+migration-set loader. The new classifier must recompute and compare the prefix;
+it must not trust a copied digest literal alone.
+
+### 2.3 Exact version-9 migration identity
+
+In the classified state, version 9 must be the final and only additional
+migration, with exact filename:
+
+```text
+0009_runtime_bundle_global_content_retention.sql
+```
+
+The authoritative migration-set loader must authenticate the checked-in
+version-9 bytes, byte length, source SHA-256, applied prefix digest, complete
+set digest, exact directory contents, and contiguous ordering. The classifier
+then requires:
+
+- `prefix_digest(8)` equals the fixed version-8 digest;
+- `prefix_digest(9)` equals the complete migration-set digest;
+- the complete digest differs from the version-8 digest; and
+- the exact final migration carries the required trace markers in section 3.
+
+This contract intentionally does not hard-code a future version-9 source
+digest, byte length, prefix digest, catalog fingerprint, or verifier digest.
+Those are mechanical outputs of the separately reviewed database Phase B.
+The conformance classifier authenticates their internally consistent,
+authoritative repository representation; the database contract, migration
+review, and database tests own SQL correctness.
+
+### 2.4 Selection-storage compatibility
+
+The existing selection-storage law remains controlling for version 8 and its
+adapter. The smallest lawful compatibility amendment is:
+
+- determine presence of the selection migration from exact version 8, not
+  from equality between the total migration count and `8`;
+- allow one later version 9 only after the first-eight prefix remains exact;
+- keep scanning every migration, including version 9, for misplaced
+  selection-storage markers;
+- keep the exact adapter identity, source snapshot, initializer prohibition,
+  and production/legacy import-closure rules;
+- keep the selection-storage internal state
+  `SELECTION_STORAGE_CONFORMANT_CLASSIFIED`; and
+- keep the command-line pass line exactly
+  `TEMPORAL CANDIDATE PASS: CONFORMANT_CLASSIFIED`.
+
+No version-8 marker, binding, adapter, selection invariant, or output meaning
+may be relaxed. Version 9 is a suffix outside the selection pair, not a new
+selection component.
+
+## 3. Closed marker law
+
+### 3.1 Required version-9 trace markers
+
+The exact migration 0009 must contain both case-sensitive byte strings:
+
+```text
+ofarm.runtime-bundle-global-content-retention-admission.issue176.v0.1
+ofarm.retain_runtime_content
+```
+
+The first marker binds the migration to the merged design authority. The
+second identifies the governed database seam. Their presence classifies the
+file; it does not validate the function body or authorize execution.
+
+Neither required marker may occur in authenticated migrations 0001 through
+0008. No other authenticated migration may carry either marker.
+
+### 3.2 Forbidden migration-0009 markers
+
+The checker must refuse migration 0009 if its exact bytes contain any member
+of this closed, case-sensitive set:
+
+1. any exact package path already held in the checker's
+   `CANDIDATE_RELATIVE_PATHS` tuple;
+2. any of these temporal identities or role values:
+   - `ofarm.temporal-coordinate.v0.1`;
+   - `ofarm.temporal-carrier-matrix.adr0002.v0.1`;
+   - `ofarm.temporal-carrier-selection.intervention.v0.1`;
+   - `ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1`;
+   - `ofarm.temporal-governance-runtime-bundle-carrier.v0.1`;
+   - `TEMPORAL_GOVERNANCE_ARTIFACT`;
+   - `ofarm.tenant-command-runtime-bundle-selection.commit-operation-claim-draft.v0.1`;
+   - `ofarm.temporal-governance-promotion.issue176-foundation.v0.1`;
+3. any exact carrier-row identity already held in the checker's closed
+   `CARRIER_ROW_IDS` tuple, plus the exact discriminator
+   `OPERATION_CLAIM`;
+4. the existing selection-storage binding digest
+   `sha256:56fb0f14a2514b34428841cb7bfc8681bb577ea3ecf57598be480683fb68524f`;
+5. any of these selection, command, route, output, legacy, or #192 markers:
+   - `0008_tenant_command_runtime_bundle_selection.sql`;
+   - `deployment/postgresql/tenant_command_runtime_bundle_selection.py`;
+   - `tenant_command_runtime_bundle_selection`;
+   - `activate_tenant_command_runtime_bundle_selection`;
+   - `COMMIT_OPERATION_CLAIM_DRAFT`;
+   - `kernel.api`;
+   - `kernel.application_runtime`;
+   - `kernel.profiles.si_ffs.outputs`;
+   - `contracts/kernel/OFARM_RuntimeProblem_schema_v0_1.json`;
+   - `kernel.legacy_m1.api`;
+   - `#192`;
+   - `ofarm.security-audit-postgresql.v1`; and
+   - `security_audit/`.
+
+The checker must use these exact strings, not broad words such as `route`,
+`output`, `audit`, `current`, `window`, or `temporal`. Broad word matching
+would create accidental policy and false authority.
+
+Changing this closed set is a contract change. Caller data, environment
+variables, newest files, documentation searches, or runtime discovery may not
+add or remove a marker.
+
+### 3.3 Python-source isolation
+
+The two required trace markers must be absent from every retained Python
+source unit except:
+
+- `conformance/temporal_contract_candidate_check.py`; and
+- paths below `kernel/tests/`.
+
+The existing authenticated Python-source snapshot supplies the source bytes,
+module identities, import graph, and production/legacy reachability. The
+checker must not rescan the filesystem through a private alternative.
+
+The checker and tests must remain outside both production and legacy import
+closures. No Python publisher, startup hook, service adapter, package
+initializer export, or runtime call site is admitted by this exception.
+
+## 4. Exact authority map
+
+| Authority | Exact reviewed identity | Authority retained |
+| --- | --- | --- |
+| Parent global-content-retention contract | `ofarm.runtime-bundle-global-content-retention-admission.issue176.v0.1`, 38,116 bytes, `sha256:aa5de04c08390e1439d59f39c4b6f5608e8b43b320fec531721d9c53b936873a` | function contract, publisher custody, future database allowlist, inertness, and stop conditions |
+| Selection-storage conformance authority | `ofarm.temporal-candidate-conformance-selection-storage-admission.issue176.v0.1`, 62,540 bytes, `sha256:716a45927846d068f595f81288b8d29ecc07891bcaf848e0284eb91ece4abc8d` | version-8 selection pair, marker law, and conformance states |
+| Selection-storage source-snapshot amendment | `ofarm.temporal-candidate-conformance-selection-storage-source-snapshot-amendment.issue176.v0.2`, 93,049 bytes, `sha256:820516d40956b6ea2a158413aea32a305aa078f20816ae35b257eb28491e5867` | public Python-source evidence and closed conformance implementation posture |
+| Python-source architecture | `ofarm.architecture-python-source-snapshot-admission.issue176.v0.1`, 82,758 bytes, `sha256:6e4307077525f2bbb48992fa4c652ab75d279875063bd715cf21dc1f1d3216d5` | production/legacy source and reachability evidence |
+| Current temporal checker at reviewed base | `conformance/temporal_contract_candidate_check.py`, 164,601 bytes, `sha256:2cb91219b59f6313b54ea9e33e506e2bf05987c778f8acefb50d92631d5714a8` | current classifier composition and public pass output |
+| Current tenant migration-set source at reviewed base | `deployment/postgresql/migration_sets.py`, 25,888 bytes, `sha256:20e69aa394b76e2a7b3479c8d31a1fc6062a6865186b2eaae0cff95d0415f8dd` | authoritative directory, bytes, lengths, prefixes, and complete-set identity |
+| Exact version-8 migration | `kernel/migrations/0008_tenant_command_runtime_bundle_selection.sql`, 37,933 bytes, `sha256:635e476fb4eb93073ed353397a977ea887c42e1be11b42f9a4782a76f88ab765` | final member of the immutable version-8 prefix |
+
+The first four rows are versioned authorities that future conformance Phase B
+must authenticate. The current checker and migration-set source identities are
+reviewed-base evidence, not permanent pins: those two files are expected to
+change in their separately approved implementation boundaries. The fixed
+version-8 prefix, parent RFC identity, and inherited conformance authorities
+remain permanent inputs to this classifier version.
+
+Authority ownership is:
+
+- this RFC owns only the new absent/classified conformance rule;
+- the temporal candidate checker owns enforcement after Phase B;
+- the authoritative migration-set loader owns exact repository migration
+  bytes, directory membership, order, lengths, source digests, and prefixes;
+- the existing selection-storage contracts own version-8 selection meaning;
+- the public Python-source snapshot owns source and import-closure evidence;
+- the parent retention contract owns future SQL behavior and database custody;
+- migration 0009 and database tests will own the actual SQL implementation;
+- the active RuntimeBundle catalog, ActiveArtifactSet, Capability Manifest,
+  profiles, application runtime, worker runtime, routes, and outputs retain
+  their current closed authorities; and
+- #192 retains sole authority over audit-runtime behavior.
+
+No caller, profile, environment registry, untracked file, legacy repository,
+or database target may substitute for these authorities.
+
+## 5. Validation order and evidence flow
+
+The supported checker path must execute in this order:
+
+```text
+FIXED PACKAGE ROOT
+  -> AUTHENTICATE COMPLETE MERGED PARENT RFC
+  -> AUTHENTICATE EXISTING SELECTION/SNAPSHOT AUTHORITIES
+  -> LOAD ONE AUTHORITATIVE TENANT MIGRATION SNAPSHOT
+  -> BUILD ONE PUBLIC PYTHON SOURCE SNAPSHOT
+  -> PROVE EXACT V8 SELECTION PAIR AND PREFIX
+  -> CLASSIFY GLOBAL CONTENT RETENTION MIGRATION ABSENT OR CLASSIFIED
+  -> PROVE REQUIRED/FORBIDDEN MARKER OWNERSHIP
+  -> PRESERVE ACTIVE-SURFACE AND IMPORT-CLOSURE CHECKS
+  -> RUN EXISTING CANDIDATE AND SEMANTIC VALIDATION
+  -> RETURN EXISTING CONFORMANT_CLASSIFIED RESULT
+```
+
+Authority authentication occurs before applying the migration-0009 exception.
+A missing, symlinked, unreadable, length-mismatched, digest-mismatched, or
+identity-mismatched parent RFC refuses before state classification.
+
+The same migration snapshot and Python snapshot must be shared with the
+selection-storage and new retention validators. A second loader, private
+filesystem scan, imported production module, environment-selected root, or
+caller-supplied snapshot would create competing evidence and is forbidden.
+
+## 6. Trust model
+
+### Protected assets
+
+- The exact merged parent design authority.
+- The immutable version-3 and version-8 migration prefixes.
+- The exact version-8 selection pair and its classified result.
+- One closed migration-0009 filename and marker exception.
+- The unchanged public checker output.
+- The absence of temporal activation, Python publication code, runtime imports,
+  route/output behavior, legacy coupling, and #192 behavior.
+
+### Trusted components
+
+- Checked-in exact RFC bytes after explicit approval.
+- The authoritative migration-set loader and its fixed package root.
+- The existing public Python-source snapshot interface.
+- The temporal checker after exact-head review and tests.
+- SHA-256 and the migration-set framing already governed by the database
+  architecture.
+
+### Untrusted inputs and claims
+
+- Filenames or bytes outside the authoritative migration set.
+- Caller-provided paths, state names, digests, markers, roots, or snapshots.
+- Environment variables, current working directory, import side effects,
+  newest-file discovery, profiles, runtime registries, and documentation
+  searches.
+- A passing internal state presented as database correctness, publication,
+  selection, activation, deployment, or current truth.
+
+### Excluded compromise capabilities
+
+Compromise of the repository host, operating system, Python interpreter,
+cryptographic hash, accepted migration-set loader, accepted source-snapshot
+builder, or reviewer environment is outside this boundary. Ordinary source
+drift, path substitution, incomplete implementation, marker smuggling, and
+cross-boundary edits remain in scope and fail closed.
+
+## 7. Invariants and acceptance criteria
+
+- **GCRC-001 — Parent first.** The exact merged parent RFC is authenticated
+  before the migration-0009 exception is considered.
+- **GCRC-002 — Exactly two states.** Only exact V8/0009-absent and exact
+  V9/0009-classified repository states pass this new classifier.
+- **GCRC-003 — Stable prefixes.** Version-3 and version-8 prefix digests remain
+  exact in both states.
+- **GCRC-004 — Exact suffix identity.** The classified state contains exactly
+  one final version 9 with the exact governed filename.
+- **GCRC-005 — Authoritative bytes.** Migration state comes only from the
+  authoritative migration-set loader over the fixed package root.
+- **GCRC-006 — Closed trace ownership.** Both required markers occur in exact
+  migration 0009 and in no earlier or alternative migration.
+- **GCRC-007 — Closed forbidden vocabulary.** Exact migration 0009 contains no
+  marker from section 3.2.
+- **GCRC-008 — Selection meaning preserved.** Version-8 selection storage and
+  its adapter remain the exact classified pair; version 9 is not a selection
+  component.
+- **GCRC-009 — Public output preserved.** Successful supported invocation still
+  prints only `TEMPORAL CANDIDATE PASS: CONFORMANT_CLASSIFIED`.
+- **GCRC-010 — Shared evidence.** Selection and retention validation share one
+  authenticated migration snapshot and one public Python-source snapshot.
+- **GCRC-011 — No Python publisher.** Required retention markers enter no
+  production or legacy Python source or import closure.
+- **GCRC-012 — Active surface closed.** Candidate artifacts remain absent from
+  the active catalog, ActiveArtifactSet, Capability Manifest, profiles,
+  routes, and production/legacy runtime closures.
+- **GCRC-013 — No SQL semantic duplication.** The checker does not parse or
+  judge function body, ACL, transaction, replay, or structural SQL correctness.
+- **GCRC-014 — Classification only.** A pass creates no migration, function,
+  content row, bundle, selection, command authority, route, output, or truth.
+- **GCRC-015 — Production/legacy firewall.** No production source imports or
+  consults legacy-M1 persistence or semantics.
+- **GCRC-016 — Audit separation.** No #192 marker, dependency, receipt, event,
+  delivery, or failure behavior is admitted.
+- **GCRC-017 — Closed implementation envelope.** Conformance Phase B changes
+  only the paths in section 10.2.
+- **GCRC-018 — Fail closed.** Ambiguity, malformed evidence, unrecognized state,
+  or incomplete classification raises one conformance refusal and never falls
+  through to a pass.
+
+## 8. Required negative cases
+
+| Invariant | Counterexample | Required result |
+| --- | --- | --- |
+| GCRC-001 | Parent RFC is absent, symlinked, unreadable, wrong length, wrong digest, or lacks the exact contract identity | refuse before migration classification |
+| GCRC-002 | Migration count is 7, 10, or another value | refuse; no third state |
+| GCRC-003 | Any first-eight migration, filename, byte, length, order, or prefix differs while literals are updated self-consistently | fixed version-8 prefix comparison refuses |
+| GCRC-004 | Version 9 has another filename, is not final, is duplicated, or is accompanied by an untracked migration file | authoritative loader or exact suffix check refuses |
+| GCRC-005 | Caller supplies a migration set, path, digest, or state | no supported input accepts it |
+| GCRC-006 | One required marker is missing from 0009, or either marker occurs in 0001–0008 | refuse |
+| GCRC-007 | Exact 0009 contains any closed forbidden marker | refuse |
+| GCRC-008 | Appended 0009 makes version-8 selection appear absent, or changes its binding/adapter law | focused compatibility tests refuse |
+| GCRC-009 | Checker prints the internal retention state or a new compound public state | exact stdout test refuses |
+| GCRC-010 | Implementation builds a second snapshot, privately rescans source, imports migration authority normally, or uses environment-selected evidence | source/evidence tests refuse |
+| GCRC-011 | A Python publisher, startup hook, service, initializer export, production source, or legacy source contains a required retention marker | source snapshot and closure checks refuse |
+| GCRC-012 | Candidate path or identity enters an active registry, profile, route, or import closure | existing candidate and architecture checks refuse |
+| GCRC-013 | Checker attempts to validate SQL body, grants, function properties, or runtime behavior | boundary and source review refuse |
+| GCRC-014 | A pass is treated as authority to implement or execute migration 0009, retain bytes, publish a bundle, select a tenant bundle, or run a command | invalid claim with no effect |
+| GCRC-015 | Checker or new code imports legacy persistence | architecture conformance refuses |
+| GCRC-016 | Implementation changes or depends on #192 | changed-path boundary refuses |
+| GCRC-017 | A fourth implementation path changes, or inventory changes without a canonical node-ID change | path-envelope verification refuses |
+| GCRC-018 | Marker decoding, source read, AST evidence, prefix computation, or state composition is ambiguous or crashes | one fail-closed conformance error; no pass |
+
+Tests must cover both lawful states and every refusal family above. Mutation
+tests may use in-memory migration and source snapshots or disposable temporary
+files only. They must not create migration 0009 in the checked-in tree or run
+SQL against PostgreSQL.
+
+## 9. Non-goals
+
+Neither this Phase A contract nor its later conformance Phase B will:
+
+- create, edit, or execute migration 0009;
+- implement `ofarm.retain_runtime_content` or validate its SQL body;
+- change `deployment/postgresql/migration_sets.py`, catalog identity,
+  provisioning, readiness, migration runner, or any database test;
+- hard-code speculative version-9 source, prefix, catalog, or verifier digests;
+- retain content, publish a RuntimeBundle, choose source bytes, choose a tenant,
+  or create a tenant selection;
+- change the selection-storage binding, adapter, function, database state, or
+  command-required component closure;
+- add a Python publisher, startup integration, service, package export,
+  registry, profile, or environment switch;
+- change the public checker result or add a conformance schema;
+- activate a temporal candidate, active catalog row, RuntimeBundle component,
+  profile, route, command, read, historical view, WINDOW behavior,
+  materialization, output, or current/default claim;
+- deploy, upgrade, reconcile, or inspect an existing database;
+- import or amend legacy-M1 behavior; or
+- implement or change #192.
+
+## 10. Smallest coherent change
+
+### 10.1 Phase A
+
+The current Phase A draft changes only this RFC. It adds no implementation
+authority and changes no checker or repository classification.
+
+### 10.2 Later conformance Phase B
+
+The exact implementation allowlist is:
+
+| Exact path | Permitted reason |
+| --- | --- |
+| `conformance/temporal_contract_candidate_check.py` | Authenticate this merged RFC, preserve the exact V8 selection cut, and enforce the internal V8-absent/V9-classified retention state and marker law. |
+| `kernel/tests/test_temporal_contract_governance.py` | Add focused lawful-state, refusal, compatibility, output-preservation, evidence-source, and isolation tests. |
+| `conformance/review_baseline_test_inventory.json` | Mechanical regeneration only when required by a change to the canonical collected test-node inventory, including a count or node-ID change. |
+
+No other path is permitted. In particular, Phase B may not change this RFC,
+the parent RFC, an earlier conformance authority, a migration, migration-set
+authority, catalog identity, database code or test, RuntimeBundle model,
+candidate artifact, active registry, application or worker runtime, route,
+output, legacy file, or #192 file.
+
+The implementation should add one small internal classifier and reuse the
+already loaded authorities. A second checker, plugin, schema, manifest,
+service, registry, or generalized migration-policy engine is not justified.
+
+## 11. Verification and traceability
+
+### 11.1 Phase A verification
+
+Phase A must prove:
+
+- only this RFC changed;
+- every exact authority pin matches reviewed `main`;
+- the two lawful states, validation order, marker sets, selection compatibility,
+  authority map, invariants, negative cases, non-goals, allowlist, and stop
+  conditions are decision complete;
+- no implementation, migration, database, runtime, route, output, legacy, or
+  #192 path changed;
+- `git diff --check` passes; and
+- `python3 conformance/ofarm_pkg_contract_check.py` passes under the
+  repository-supported CPython profile.
+
+### 11.2 Future Phase B traceability
+
+| Invariants | Future owning seam | Minimum evidence |
+| --- | --- | --- |
+| GCRC-001 | exact parent-RFC constants and authenticator | missing, symlink, unreadable, length, digest, and identity mutation tests |
+| GCRC-002–005 | internal retention classifier over authenticated migration snapshot | exact V8 and synthetic exact V9 passes; count, filename, order, prefix, full-digest, and caller-input refusals |
+| GCRC-006–007 | closed required/forbidden marker tuples | missing, moved, duplicated-location, and every forbidden-marker mutation test |
+| GCRC-008–009 | selection-storage compatibility and unchanged entrypoint | V9 still yields classified selection state and exact existing stdout |
+| GCRC-010–012 | public source snapshot, import closures, and existing active-surface checks | one-builder evidence, private-source prohibitions, production/legacy marker injection, and active-authority mutation tests |
+| GCRC-013–016 | boundary review and existing package/architecture composition | source inspection, no database imports, no runtime paths, package and architecture gates |
+| GCRC-017–018 | exact path checks and fail-closed errors | name-only diff, inventory comparison, malformed-evidence and crash-to-refusal tests |
+
+Minimum future conformance Phase B commands are:
+
+```text
+python3 -m pytest -q kernel/tests/test_temporal_contract_governance.py
+python3 conformance/temporal_contract_candidate_check.py
+python3 conformance/rewrite_architecture_check.py
+python3 conformance/ofarm_pkg_contract_check.py
+git diff --check
+```
+
+The repository-supported interpreter, complete hosted conformance baseline,
+amd64 and arm64 native verification, canonical native index, and exact-head
+review remain required. Passing evidence is classification only.
+
+## 12. Elegance audit
+
+- New public state values: zero.
+- New schemas, manifests, services, registries, roles, or credentials: zero.
+- New source snapshots or migration loaders: zero.
+- New production Python modules: zero.
+- New runtime or legacy imports: zero.
+- Lawful migration states added to the checker: one suffix state, paired with
+  the exact existing state.
+- Existing selection state changed: no.
+- Exact implementation files: two, plus conditional mechanical inventory.
+
+The design keeps migration semantics with the database contract and uses
+conformance only to authenticate the narrow repository exception it owns.
+
+## 13. Provisional posture
+
+The design is not a temporary semantic compromise. The AI-assisted approval
+evidence used before deployment is provisional under the repository workflow.
+Before deployment, independently human-controlled and independently
+verifiable approval or signing must replace that workflow.
+
+## 14. Open decisions and review disposition
+
+### Open decisions
+
+None inside this trust boundary.
+
+Future version-9 byte length, source digest, prefix/full-set digest, catalog
+fingerprint, and verifier digest are deliberately mechanical database Phase B
+outputs. Choosing them in this contract would be speculative and would combine
+conformance with database authority.
+
+### Review disposition
+
+- **Blockers:** none identified in the author draft; independent exact-head
+  review is required before a decision card.
+- **Follow-ups:** after this Phase A merges, separately request the closed
+  conformance Phase B; only after that implementation merges may database
+  Phase B for migration 0009 be requested.
+- **Preferences:** none recorded.
+
+## 15. Stop conditions
+
+Stop before conformance Phase B if:
+
+1. this exact RFC has not received explicit architect approval and merged;
+2. current `main` is not the exact lawful version-8/0009-absent state;
+3. the merged parent RFC cannot be authenticated at its exact identity;
+4. the existing selection-storage or Python-source snapshot authority differs;
+5. implementation needs a path outside section 10.2;
+6. selection-storage meaning, binding, adapter authority, or public result must
+   change rather than merely tolerate one authenticated suffix migration;
+7. a second migration loader, source snapshot, filesystem scan, schema,
+   manifest, service, registry, or plugin is required;
+8. a future version-9 digest must be guessed or pinned before database Phase B;
+9. SQL body, function, ACL, transaction, replay, structural verifier, or
+   database behavior must be implemented or interpreted;
+10. migration 0009, migration-set authority, catalog identity, provisioning,
+    readiness, migration runner, or database tests must change;
+11. a Python publisher, startup hook, package export, application/worker path,
+    route, read, output, profile, or environment switch is required;
+12. an active temporal artifact, RuntimeBundle component, selection,
+    current/default state, historical view, or WINDOW behavior must change;
+13. production code must import legacy-M1 authority; or
+14. #192 behavior or authority must change.
+
+If the checker cannot preserve the exact existing public
+`CONFORMANT_CLASSIFIED` result while admitting only the fixed version-9 suffix,
+stop. A public state-model redesign is a separate trust boundary.
+
+Conformance Phase B stops after its exact implementation merges. It does not
+create migration 0009 or resume database work automatically.
