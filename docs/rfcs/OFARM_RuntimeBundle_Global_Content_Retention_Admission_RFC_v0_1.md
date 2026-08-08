@@ -1,7 +1,7 @@
 # OFARM2 RuntimeBundle Global Content Retention Admission — Phase A Contract v0.1
 
-**Status:** proposed Phase A contract; documentation-only, unapproved, and
-without database, content-retention, bundle-publication, selection, runtime,
+**Status:** architect-approved Phase A contract; documentation-only and without
+database, content-retention, bundle-publication, selection, runtime,
 deployment, route, output, legacy, or #192 effect
 
 **Contract identity:**
@@ -680,3 +680,32 @@ separate contract rather than an expansion of this database boundary.
 
 The production semantic surface remains closed throughout Phase A,
 conformance, and database Phase B.
+
+## Appendix A — Compact approval evidence
+
+This appendix is provisional, AI-attested evidence of the task user's
+decision. The user message is the authority; this appendix, repository
+credentials, reviews, checks, and merge metadata are not substitutes for it.
+
+- decision:
+  `ISSUE176-RUNTIME-BUNDLE-GLOBAL-CONTENT-RETENTION-001`, version `1`;
+- Codex task: `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`;
+- complete live card: assistant-authored `item-3312` in turn
+  `019fdfff-c6a1-7ae1-8181-7cc1fb169e9e`;
+- approval: later user-authored `item-4278` in turn
+  `019fe09c-b05b-71d1-ba57-5dcc912c7eb1`;
+- exact approval sentence:
+  `I approve OFARM2 decision ISSUE176-RUNTIME-BUNDLE-GLOBAL-CONTENT-RETENTION-001 version 1.`;
+- observed ordering: `item-3312` preceded `item-4278` in the same task;
+- implementation PR: `https://github.com/samovers/OFARM2/pull/294`;
+- permitted effect: record approval and merge only this documentation Phase A
+  contract so a separate conformance prerequisite may later be proposed; and
+- limitation: no conformance implementation, SQL function, migration 0009,
+  retained content, RuntimeBundle composition or publication, tenant
+  selection, runtime activation, route, command, read, output, deployment,
+  legacy, or #192 effect. This provisional workflow must be replaced by
+  independently human-controlled and independently verifiable approval or
+  signing before deployment.
+
+No later cancellation, replacement card, or stop instruction was present when
+this approval evidence was recorded.
