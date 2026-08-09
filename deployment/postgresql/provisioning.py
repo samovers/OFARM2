@@ -2744,30 +2744,54 @@ _TENANT_BINDING_ADMISSION_A4 = _TenantBindingAdmissionPhase(
 
 def _authoritative_tenant_selection_activation_migration(
 ) -> AuthoritativeMigration | None:
-    """Return the literal eighth tenant binding only when it is exact."""
+    """Return the literal eighth tenant binding from exact R8 or R9."""
 
     authority = TENANT_AUTHORITATIVE_MIGRATION_SET
+    migrations = authority.migrations
     if (
         authority.service.identity
         != TENANT_PROVISIONING_SPEC.migration_service.identity
-        or len(authority.migrations) != 8
+        or len(migrations) not in (8, 9)
+        or tuple(migration.version for migration in migrations)
+        != tuple(range(1, len(migrations) + 1))
     ):
         return None
-    migration = authority.migrations[7]
+    migration_v8 = migrations[7]
     if (
-        migration.version != 8
-        or migration.filename
+        migration_v8.version != 8
+        or migration_v8.filename
         != "0008_tenant_command_runtime_bundle_selection.sql"
     ):
         return None
-    return migration
+    if len(migrations) == 9:
+        migration_v9 = migrations[8]
+        if (
+            migration_v9.version != 9
+            or migration_v9.filename
+            != "0009_runtime_bundle_global_content_retention.sql"
+        ):
+            return None
+    return migration_v8
+
+
+def _authoritative_tenant_global_content_retention_migration(
+) -> AuthoritativeMigration | None:
+    """Return the literal ninth tenant binding only for exact R9."""
+
+    migrations = TENANT_AUTHORITATIVE_MIGRATION_SET.migrations
+    if (
+        len(migrations) != 9
+        or _authoritative_tenant_selection_activation_migration() is None
+    ):
+        return None
+    return migrations[8]
 
 
 def _tenant_binding_admission_classification(
     target: psycopg.Connection,
     spec: ProvisioningSpec,
 ) -> tuple[_TenantBindingAdmissionClassification | None, list[str]]:
-    """Classify one durable V5-V8 phase and subordinate selection ACL state."""
+    """Classify one durable V5-V9 phase and subordinate selection ACL state."""
 
     selection_sealer = spec.tenant_binding_selection_control_admission_sealer
     context_sealer = (
@@ -2788,6 +2812,12 @@ def _tenant_binding_admission_classification(
         or write_lock_sealer is None
     ):
         return None, ["tenant binding admission capsule family differs"]
+    authoritative_v8 = _authoritative_tenant_selection_activation_migration()
+    if authoritative_v8 is None:
+        return None, ["tenant binding admission phase differs"]
+    authoritative_v9 = (
+        _authoritative_tenant_global_content_retention_migration()
+    )
     ledger_present = target.execute(
         "SELECT pg_catalog.to_regclass(%s) IS NOT NULL",
         (spec.migration_service.qualified_ledger,),
@@ -2857,7 +2887,15 @@ def _tenant_binding_admission_classification(
             "FILTER (WHERE version = 8), "
             "pg_catalog.max(service_identity) FILTER (WHERE version = 8), "
             "pg_catalog.max(provisioning_spec_digest) "
-            "FILTER (WHERE version = 8) "
+            "FILTER (WHERE version = 8), "
+            "pg_catalog.max(filename) FILTER (WHERE version = 9), "
+            "pg_catalog.max(source_sha256) FILTER (WHERE version = 9), "
+            "pg_catalog.max(source_byte_length) FILTER (WHERE version = 9), "
+            "pg_catalog.max(applied_prefix_digest) "
+            "FILTER (WHERE version = 9), "
+            "pg_catalog.max(service_identity) FILTER (WHERE version = 9), "
+            "pg_catalog.max(provisioning_spec_digest) "
+            "FILTER (WHERE version = 9) "
             "FROM {}"
         ).format(
             sql.Identifier(
@@ -2882,6 +2920,12 @@ def _tenant_binding_admission_classification(
         v8_applied_prefix_digest,
         v8_service,
         v8_provisioning_spec_digest,
+        v9_filename,
+        v9_source_sha256,
+        v9_source_byte_length,
+        v9_applied_prefix_digest,
+        v9_service,
+        v9_provisioning_spec_digest,
     ) = tuple(row or ())
     if count == 0 and minimum is None and maximum is None:
         return _TenantBindingAdmissionClassification(
@@ -2979,8 +3023,7 @@ def _tenant_binding_admission_classification(
             _TENANT_BINDING_ADMISSION_A4,
             _SelectionControllerAclSubstate.STABLE_V7,
         ), []
-    authoritative_v8 = _authoritative_tenant_selection_activation_migration()
-    if authoritative_v8 is not None and (
+    if (
         count,
         minimum,
         maximum,
@@ -3010,6 +3053,55 @@ def _tenant_binding_admission_classification(
         authoritative_v8.source_sha256,
         authoritative_v8.byte_length,
         authoritative_v8.applied_prefix_digest,
+        spec.migration_service.identity,
+        spec.digest,
+    ):
+        return _TenantBindingAdmissionClassification(
+            _TENANT_BINDING_ADMISSION_A4,
+            _SelectionControllerAclSubstate.STABLE_V8,
+        ), []
+    if authoritative_v9 is not None and (
+        count,
+        minimum,
+        maximum,
+        v5_filename,
+        v5_service,
+        v6_filename,
+        v6_service,
+        v7_filename,
+        v7_service,
+        v8_filename,
+        v8_source_sha256,
+        v8_source_byte_length,
+        v8_applied_prefix_digest,
+        v8_service,
+        v8_provisioning_spec_digest,
+        v9_filename,
+        v9_source_sha256,
+        v9_source_byte_length,
+        v9_applied_prefix_digest,
+        v9_service,
+        v9_provisioning_spec_digest,
+    ) == (
+        9,
+        1,
+        9,
+        "0005_tenant_binding_selection_control_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+        "0006_tenant_current_context_selection_owner_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+        "0007_tenant_write_lock_selection_owner_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+        authoritative_v8.filename,
+        authoritative_v8.source_sha256,
+        authoritative_v8.byte_length,
+        authoritative_v8.applied_prefix_digest,
+        spec.migration_service.identity,
+        spec.digest,
+        authoritative_v9.filename,
+        authoritative_v9.source_sha256,
+        authoritative_v9.byte_length,
+        authoritative_v9.applied_prefix_digest,
         spec.migration_service.identity,
         spec.digest,
     ):

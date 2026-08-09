@@ -22,7 +22,10 @@ from deployment.postgresql.catalog_classifier import (
     SCHEMA_LOCAL_CATALOG_CLASSES,
     SCHEMA_LOCAL_OBJECT_SELECTS_SQL,
 )
-from deployment.postgresql.migration_sets import AuthoritativeMigration
+from deployment.postgresql.migration_sets import (
+    AuthoritativeMigration,
+    AuthoritativeMigrationSet,
+)
 from deployment.postgresql.provisioning import (
     ProvisioningDriftError,
     ProvisioningInfrastructureReport,
@@ -837,9 +840,10 @@ class _AdmissionConnection:
         return next(self._responses)
 
 
-def _stable_v8_protocol_evidence(
-    authority: AuthoritativeMigration,
+def _stable_release_protocol_evidence(
+    v8_authority: AuthoritativeMigration,
     *,
+    v9_authority: AuthoritativeMigration | None = None,
     replacement_index: int | None = None,
     replacement_value: object = None,
 ) -> _AdmissionConnection:
@@ -852,22 +856,39 @@ def _stable_v8_protocol_evidence(
         ("r", "source_sha256", "text"),
         ("r", "version", "integer"),
     ]
-    ledger_summary = [
-        8,
+    ledger_head = 9 if v9_authority is not None else 8
+    ledger_summary: list[object] = [
+        ledger_head,
         1,
-        8,
+        ledger_head,
         "0005_tenant_binding_selection_control_admission.sql",
         "ofarm.tenant-postgresql.v1",
         "0006_tenant_current_context_selection_owner_admission.sql",
         "ofarm.tenant-postgresql.v1",
         "0007_tenant_write_lock_selection_owner_admission.sql",
         "ofarm.tenant-postgresql.v1",
-        authority.filename,
-        authority.source_sha256,
-        authority.byte_length,
-        authority.applied_prefix_digest,
+        v8_authority.filename,
+        v8_authority.source_sha256,
+        v8_authority.byte_length,
+        v8_authority.applied_prefix_digest,
         TENANT_PROVISIONING_SPEC.migration_service.identity,
         TENANT_PROVISIONING_SPEC.digest,
+        v9_authority.filename if v9_authority is not None else None,
+        v9_authority.source_sha256 if v9_authority is not None else None,
+        v9_authority.byte_length if v9_authority is not None else None,
+        (
+            v9_authority.applied_prefix_digest
+            if v9_authority is not None
+            else None
+        ),
+        (
+            TENANT_PROVISIONING_SPEC.migration_service.identity
+            if v9_authority is not None
+            else None
+        ),
+        TENANT_PROVISIONING_SPEC.digest
+        if v9_authority is not None
+        else None,
     ]
     if replacement_index is not None:
         ledger_summary[replacement_index] = replacement_value
@@ -890,6 +911,27 @@ def _controlled_v8_authority() -> AuthoritativeMigration:
     )
 
 
+def _controlled_r9_release(
+) -> tuple[AuthoritativeMigrationSet, AuthoritativeMigration]:
+    authority = provisioning_module.TENANT_AUTHORITATIVE_MIGRATION_SET
+    assert len(authority.migrations) == 8
+    v9_authority = AuthoritativeMigration(
+        version=9,
+        filename="0009_runtime_bundle_global_content_retention.sql",
+        source_sha256="sha256:" + "a" * 64,
+        byte_length=909,
+        applied_prefix_digest="sha256:" + "b" * 64,
+    )
+    return (
+        replace(
+            authority,
+            migrations=authority.migrations + (v9_authority,),
+            digest=v9_authority.applied_prefix_digest,
+        ),
+        v9_authority,
+    )
+
+
 def test_tenant_binding_stable_v8_is_an_a4_projection_with_exact_evidence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -902,7 +944,9 @@ def test_tenant_binding_stable_v8_is_an_a4_projection_with_exact_evidence(
 
     classification, differences = (
         provisioning_module._tenant_binding_admission_classification(
-            _stable_v8_protocol_evidence(authority),  # type: ignore[arg-type]
+            _stable_release_protocol_evidence(
+                authority
+            ),  # type: ignore[arg-type]
             TENANT_PROVISIONING_SPEC,
         )
     )
@@ -947,7 +991,7 @@ def test_tenant_binding_stable_v8_refuses_incomplete_or_substituted_evidence(
 
     classification, differences = (
         provisioning_module._tenant_binding_admission_classification(
-            _stable_v8_protocol_evidence(
+            _stable_release_protocol_evidence(
                 authority,
                 replacement_index=replacement_index,
                 replacement_value=None,
@@ -972,7 +1016,223 @@ def test_tenant_binding_stable_v8_refuses_without_literal_eighth_authority(
 
     classification, differences = (
         provisioning_module._tenant_binding_admission_classification(
-            _stable_v8_protocol_evidence(authority),  # type: ignore[arg-type]
+            _stable_release_protocol_evidence(
+                authority
+            ),  # type: ignore[arg-type]
+            TENANT_PROVISIONING_SPEC,
+        )
+    )
+
+    assert classification is None
+    assert differences == ["tenant binding admission phase differs"]
+
+
+def test_closed_tenant_release_family_recognizes_exact_r8_and_r9(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    r8_authority = provisioning_module.TENANT_AUTHORITATIVE_MIGRATION_SET
+    assert (
+        provisioning_module
+        ._authoritative_tenant_selection_activation_migration()
+        == r8_authority.migrations[7]
+    )
+    assert (
+        provisioning_module
+        ._authoritative_tenant_global_content_retention_migration()
+        is None
+    )
+
+    r9_authority, v9_authority = _controlled_r9_release()
+    monkeypatch.setattr(
+        provisioning_module,
+        "TENANT_AUTHORITATIVE_MIGRATION_SET",
+        r9_authority,
+    )
+    assert (
+        provisioning_module
+        ._authoritative_tenant_selection_activation_migration()
+        == r9_authority.migrations[7]
+    )
+    assert (
+        provisioning_module
+        ._authoritative_tenant_global_content_retention_migration()
+        == v9_authority
+    )
+
+
+@pytest.mark.parametrize(
+    "malformation",
+    (
+        "length-7",
+        "length-10",
+        "wrong-service",
+        "reordered",
+        "wrong-v8-version",
+        "wrong-v8-filename",
+        "wrong-v9-version",
+        "wrong-v9-filename",
+    ),
+)
+def test_closed_tenant_release_family_refuses_malformed_authority(
+    monkeypatch: pytest.MonkeyPatch,
+    malformation: str,
+) -> None:
+    authority, _v9_authority = _controlled_r9_release()
+    migrations = list(authority.migrations)
+    if malformation == "length-7":
+        authority = replace(authority, migrations=tuple(migrations[:7]))
+    elif malformation == "length-10":
+        authority = replace(
+            authority,
+            migrations=tuple(migrations)
+            + (
+                AuthoritativeMigration(
+                    version=10,
+                    filename="0010_unsupported.sql",
+                    source_sha256="sha256:" + "c" * 64,
+                    byte_length=1010,
+                    applied_prefix_digest="sha256:" + "d" * 64,
+                ),
+            ),
+        )
+    elif malformation == "wrong-service":
+        authority = replace(
+            authority,
+            service=replace(
+                authority.service,
+                identity="ofarm.untrusted-postgresql.v1",
+            ),
+        )
+    elif malformation == "reordered":
+        migrations[7], migrations[8] = migrations[8], migrations[7]
+        authority = replace(authority, migrations=tuple(migrations))
+    else:
+        index = 7 if malformation.startswith("wrong-v8") else 8
+        field = "version" if malformation.endswith("version") else "filename"
+        value: object = 80 + index if field == "version" else "substitute.sql"
+        migrations[index] = replace(migrations[index], **{field: value})
+        authority = replace(authority, migrations=tuple(migrations))
+    monkeypatch.setattr(
+        provisioning_module,
+        "TENANT_AUTHORITATIVE_MIGRATION_SET",
+        authority,
+    )
+
+    assert (
+        provisioning_module
+        ._authoritative_tenant_selection_activation_migration()
+        is None
+    )
+    assert (
+        provisioning_module
+        ._authoritative_tenant_global_content_retention_migration()
+        is None
+    )
+
+
+class _TargetThatMustNotBeObserved:
+    def execute(self, *_args, **_kwargs):
+        raise AssertionError("target was observed before authority refusal")
+
+
+def test_malformed_tenant_release_refuses_before_target_observation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority, _v9_authority = _controlled_r9_release()
+    monkeypatch.setattr(
+        provisioning_module,
+        "TENANT_AUTHORITATIVE_MIGRATION_SET",
+        replace(authority, migrations=authority.migrations[:7]),
+    )
+
+    classification, differences = (
+        provisioning_module._tenant_binding_admission_classification(
+            _TargetThatMustNotBeObserved(),  # type: ignore[arg-type]
+            TENANT_PROVISIONING_SPEC,
+        )
+    )
+
+    assert classification is None
+    assert differences == ["tenant binding admission phase differs"]
+
+
+@pytest.mark.parametrize(
+    ("release", "ledger_has_v9", "accepted"),
+    (
+        ("r8", False, True),
+        ("r8", True, False),
+        ("r9", False, True),
+        ("r9", True, True),
+    ),
+    ids=("r8-l8", "r8-l9", "r9-l8", "r9-l9"),
+)
+def test_tenant_release_and_ledger_projection_is_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    release: str,
+    ledger_has_v9: bool,
+    accepted: bool,
+) -> None:
+    r9_authority, v9_authority = _controlled_r9_release()
+    if release == "r9":
+        monkeypatch.setattr(
+            provisioning_module,
+            "TENANT_AUTHORITATIVE_MIGRATION_SET",
+            r9_authority,
+        )
+    classification, differences = (
+        provisioning_module._tenant_binding_admission_classification(
+            _stable_release_protocol_evidence(
+                r9_authority.migrations[7],
+                v9_authority=v9_authority if ledger_has_v9 else None,
+            ),  # type: ignore[arg-type]
+            TENANT_PROVISIONING_SPEC,
+        )
+    )
+
+    if not accepted:
+        assert classification is None
+        assert differences == ["tenant binding admission phase differs"]
+        return
+    assert differences == []
+    assert classification is not None
+    assert classification.phase.name == "A4"
+    assert classification.selection_acl_substate.value == "STABLE_V8"
+
+
+@pytest.mark.parametrize(
+    "replacement_index",
+    (0, 1, 2, 15, 16, 17, 18, 19, 20),
+    ids=(
+        "count",
+        "minimum",
+        "maximum",
+        "filename",
+        "source-digest",
+        "source-length",
+        "prefix-digest",
+        "service",
+        "spec-digest",
+    ),
+)
+def test_tenant_binding_stable_v9_refuses_substituted_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    replacement_index: int,
+) -> None:
+    r9_authority, v9_authority = _controlled_r9_release()
+    monkeypatch.setattr(
+        provisioning_module,
+        "TENANT_AUTHORITATIVE_MIGRATION_SET",
+        r9_authority,
+    )
+
+    classification, differences = (
+        provisioning_module._tenant_binding_admission_classification(
+            _stable_release_protocol_evidence(
+                r9_authority.migrations[7],
+                v9_authority=v9_authority,
+                replacement_index=replacement_index,
+                replacement_value=None,
+            ),  # type: ignore[arg-type]
             TENANT_PROVISIONING_SPEC,
         )
     )
