@@ -1,7 +1,7 @@
 # OFARM2 RuntimeBundle Global Content Retention Catalog-Anchor Verification-Test Allowlist Amendment — Phase A Contract v0.2
 
-**Status:** proposed Phase A contract; documentation-only, inactive, and
-unapproved
+**Status:** approved for documentation-only adoption in PR #297; inactive for
+database Phase B and every production effect
 
 **Contract identity:**
 `ofarm.runtime-bundle-global-content-retention-catalog-anchor-test-allowlist-amendment.issue176.v0.2`
@@ -325,3 +325,21 @@ demonstrated unresolved blocker.
 After merge, stop again until the architect sends a renewed explicit request
 naming the parent contract, this amendment, the eleven-path envelope,
 disposable targets, and the no-retained-state rule.
+
+## Appendix A — Compact architect-approval evidence
+
+- **Decision:**
+  `ISSUE176-RUNTIME-CONTENT-RETENTION-CATALOG-ANCHOR-TEST-ALLOWLIST-001`,
+  version `1`.
+- **Codex task:** `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`.
+- **Complete live card:** stable reference `item-4552` in that task.
+- **Architect approval:** stable reference `item-4553`, observed as a later
+  task-user message in the same task.
+- **Exact approval sentence:**
+  `I approve OFARM2 decision ISSUE176-RUNTIME-CONTENT-RETENTION-CATALOG-ANCHOR-TEST-ALLOWLIST-001 version 1.`
+- **Named pull request:** `https://github.com/samovers/OFARM2/pull/297`.
+- **Evidence posture:** these task references and role/order observations are
+  provisional AI-attested evidence of the architect's decision. The original
+  task-user message remains decision authority. This appendix is not database
+  Phase B, deployment, production, current/default, or independently
+  verifiable identity authority.
