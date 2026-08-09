@@ -17,9 +17,10 @@ unapproved; no implementation or database effect
 classification of the exact tenant migration release before and after future
 migration 0009
 
-**Intended PR boundary:** this RFC only before approval; after approval, the
-same named pre-deployment PR may implement only section 10's five-path
-allowlist
+**Named pre-deployment PR:** `https://github.com/samovers/OFARM2/pull/298`
+
+**Intended PR boundary:** this RFC only before approval; after approval, PR
+#298 may implement only section 10's five-path allowlist
 
 ## 1. Problem, goal, and learning value
 
@@ -343,9 +344,10 @@ review fix.
 
 ## 10. Pull-request boundary and exact allowlist
 
-Before approval, the PR may contain only the RFC path below. After valid
-approval under section 15, the same named PR remains limited to these five
-paths:
+The one bound implementation PR is
+`https://github.com/samovers/OFARM2/pull/298`. Before approval, that PR may
+contain only the RFC path below. After valid approval under section 15, the
+same PR remains limited to these five paths:
 
 | Exact path | Permitted reason |
 | --- | --- |
@@ -466,8 +468,9 @@ It never widens this PR merely to clear review.
 
 This proposal is not approved by authorship, commit, PR, review, CI,
 mergeability, repository credentials, or the earlier database Phase B request.
-It must first exist as the only change in one named draft PR and pass exact-head
-technical review.
+It exists as the only change in draft PR
+`https://github.com/samovers/OFARM2/pull/298` and must pass exact-head technical
+review before a live decision card is shown.
 
 The later complete live decision card must name that PR and use this exact
 approval sentence:
