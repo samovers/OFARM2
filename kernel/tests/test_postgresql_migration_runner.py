@@ -1070,6 +1070,25 @@ def test_tenant_v8_branch_is_ordered_and_reauthenticates_literal_set() -> None:
     )
 
 
+def test_tenant_v9_has_no_runner_bypass_and_uses_the_ordinary_boundary() -> None:
+    source = inspect.getsource(migration_runner_module._migrate_service)
+    v8_branch_at = source.index("observed_version == 7")
+    ordinary_else_at = source.index("else:", v8_branch_at)
+    ordinary_boundary_at = source.index(
+        "_locked_boundary_differences",
+        ordinary_else_at,
+    )
+    ledger_append_at = source.index("_insert_ledger_row(", ordinary_boundary_at)
+
+    assert source.count(
+        "_locked_tenant_v8_post_source_boundary_differences"
+    ) == 1
+    assert "0009_runtime_bundle_global_content_retention.sql" not in source
+    assert "retain_runtime_content" not in source
+    assert v8_branch_at < ordinary_else_at < ordinary_boundary_at
+    assert ordinary_boundary_at < ledger_append_at
+
+
 def test_applies_exact_0001_then_verifies_a_noop_without_creating_the_ledger(
     tenant_target: _TenantTarget,
     tmp_path: Path,

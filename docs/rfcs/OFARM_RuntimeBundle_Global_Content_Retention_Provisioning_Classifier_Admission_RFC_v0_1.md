@@ -1,7 +1,8 @@
 # OFARM2 RuntimeBundle Global Content Retention Provisioning-Classifier Admission — Phase A Contract v0.1
 
-**Status:** proposed and inactive Phase A contract; documentation-only;
-unapproved; no implementation or database effect
+**Status:** architect-approved for Phase B implementation only in PR #298;
+no classifier, migration, database, runtime, route, output, deployment, legacy,
+or #192 effect follows from this record alone
 
 **Contract identity:**
 `ofarm.runtime-bundle-global-content-retention-provisioning-classifier-admission.issue176.v0.1`
@@ -498,3 +499,31 @@ ONE-FILE PHASE_A RFC IN NAMED DRAFT PR
 ```
 
 This Phase A stops before implementation.
+
+## Appendix A — Compact approval evidence
+
+This appendix is provisional, AI-attested evidence of the task user's
+pre-deployment repository decision. The user message is the authority; this
+appendix, repository credentials, review, CI, and merge metadata are not
+substitutes for it.
+
+- decision:
+  `ISSUE176-RUNTIME-CONTENT-RETENTION-PROVISIONING-CLASSIFIER-001`, version `1`;
+- Codex task: `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`;
+- complete live decision card: assistant-authored stable item `item-4636`;
+- exact approval: later user-authored stable item `item-4637`;
+- exact approval sentence:
+  `I approve OFARM2 decision ISSUE176-RUNTIME-CONTENT-RETENTION-PROVISIONING-CLASSIFIER-001 version 1.`;
+- observed order: `item-4636` immediately preceded `item-4637` in the same
+  task;
+- named implementation PR: `https://github.com/samovers/OFARM2/pull/298`;
+- reviewed Phase A head:
+  `79563c345c5577aa4c6cbd875d6db17a32f78487`;
+- exact-head technical review: GitHub review `4891114813`, no unresolved
+  Blocker; and
+- limitation: pre-deployment repository-development authority only, to be
+  replaced by independently human-controlled and independently verifiable
+  approval or signing before deployment.
+
+No later task-user cancellation, replacement card, or scope change was
+present when Phase B began.
