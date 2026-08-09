@@ -288,7 +288,8 @@ only when these decisions and the three-path closure remain unchanged.
 Required Phase A verification is:
 
 1. this RFC is the sole changed path;
-2. `python3 conformance/ofarm_pkg_contract_check.py` passes;
+2. the package contract check passes under the repository-supported CPython
+   3.12.13 runtime;
 3. `git diff --check` passes; and
 4. exact-head review finds no demonstrated decision-level Blocker.
 
@@ -318,8 +319,8 @@ prefixes. It does not pre-decide R10.
 
 Initial review disposition:
 
-- **Blocker:** exact-head Phase A review and explicit task-user approval are
-  still required.
+- **Blocker:** explicit task-user approval is still required. Exact-head Phase
+  A review must pass before the live decision card is shown.
 - **Follow-up:** after this prerequisite merges, PR #299 may be updated from
   `main` and reverified only under its own approved contracts.
 - **Preference:** none.
@@ -332,8 +333,8 @@ commit authorship, review, CI, repository credentials, generic approval, or PR
 
 Before a live card is shown:
 
-1. the draft pull request placeholder in this RFC must be replaced by the exact
-   already-created draft PR reference;
+1. this RFC must name the exact already-created draft PR, and that reference
+   must resolve to PR #300;
 2. the Phase A head must contain only this RFC;
 3. the exact head must be reviewed; and
 4. every demonstrated Phase A Blocker must be resolved.
