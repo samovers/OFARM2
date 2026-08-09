@@ -17,7 +17,8 @@ database authority
 **Blocked downstream pull request:** PR #299 at the observed failing head
 `2110186a2a447d24318a2af0debc812147aea3c5`
 
-**Draft pull request:** `DRAFT_PR_TO_BE_PINNED_BEFORE_EXACT_HEAD_REVIEW`
+**Draft pull request:**
+`https://github.com/samovers/OFARM2/pull/300`
 
 **Primary trust boundary:** test authority for the authenticated tenant
 migration-release transition from exact R8 to exact R9, including historical
