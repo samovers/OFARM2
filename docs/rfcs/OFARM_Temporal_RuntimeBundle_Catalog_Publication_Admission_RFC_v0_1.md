@@ -95,6 +95,11 @@ closed publication decision: the existing sixteen-row command-required subset
 is also the complete v0.1 temporal bundle. No seventeenth component and no
 unrelated current catalog component is permitted.
 
+The binding's closure permits unrelated components to exist while remaining
+inert for this command. This RFC does not narrow or reinterpret that rule. It
+separately decides that no such inert extra is published in the complete v0.1
+temporal command bundle.
+
 The selection binding remains `CANDIDATE_INACTIVE`, production-unbound, and
 outside every RuntimeBundle and active registry. This contract permits only an
 isolated future publisher to authenticate its exact reviewed rows as the source
@@ -282,7 +287,7 @@ contract.
 - the current `GOVERNED_INACTIVE` lifecycle state;
 - the explicitly chosen registered target tenant;
 - publisher credential custody;
-- all-or-nothing retention and sealing;
+- all-or-nothing retention and sealing with truthful completion reporting;
 - the absence of tenant selection or knowledge-position effects; and
 - the closed active catalog, production semantic surface, and
   production-versus-legacy firewall.
@@ -374,31 +379,68 @@ transaction it must:
 4. call `ofarm.publish_runtime_bundle(...)` once with only the explicit target,
    derived bundle digest, and exact canonical bundle document;
 5. verify the single returned bundle digest; and
-6. commit exactly once.
+6. submit `COMMIT` exactly once and report success only after receiving its
+   successful acknowledgement.
 
-Any exception or mismatch rolls back exactly once. The adapter must not commit
-inside either SQL function, use another connection, perform direct DML, or
-continue after an uncertain result.
+A mismatch or failure known to prevent a successful commit must report no new
+committed state. If the connection remains usable, the adapter must roll back
+exactly once on that connection. If the connection is lost before `COMMIT` is
+submitted, the server aborts the open transaction and the adapter discards the
+connection without pretending it sent `ROLLBACK`. If the connection instead
+fails while the commit acknowledgement is outstanding and the durable outcome
+cannot be established, the adapter must report the distinct outcome
+`PUBLICATION_COMMIT_OUTCOME_UNKNOWN`, discard the unusable connection, and
+terminate the call. It must not report success, claim rollback or no new
+committed state, open another connection, or retry inside that call.
 
-### 7.3 Database states
+After an unknown outcome, a later separately invoked exact call may use a fresh
+idle publisher connection for the same explicit target. It must repeat all
+pre-SQL authentication and reconstruction and then perform the same exact SQL
+sequence. This is a new invocation, not continuation or recovery inside the
+original call. Exact content retention and exact same-tenant sealing are
+idempotent, so the later invocation converges whether the earlier transaction
+committed or did not commit.
+
+### 7.3 Database and observed completion states
 
 ```text
-ABSENT
+TARGET_SEAL_ABSENT_AND_NO_EXACT_GLOBALS_RETAINED
   -- exact authorized call --> EXACT_GLOBALS_AND_TENANT_SEAL_COMMITTED
 
-PARTIAL_EXACT_GLOBALS_ALREADY_RETAINED
+TARGET_SEAL_ABSENT_AND_SOME_EXACT_GLOBALS_RETAINED
+  -- exact authorized call --> EXACT_GLOBALS_AND_TENANT_SEAL_COMMITTED
+
+TARGET_SEAL_ABSENT_AND_ALL_EXACT_GLOBALS_RETAINED
   -- exact authorized call --> EXACT_GLOBALS_AND_TENANT_SEAL_COMMITTED
 
 EXACT_GLOBALS_AND_TENANT_SEAL_COMMITTED
   -- exact replay ----------> SAME_STATE
 
-ANY_STATE
+ANY_PRECOMMIT_STATE
   -- changed authority, bytes, target absence, unequal reuse, SQL refusal,
-     invalid return, or transaction failure --> REFUSED; NO NEW COMMITTED STATE
+     invalid return, or failure known before successful commit
+     --> REFUSED; ROLLBACK IF CONNECTION REMAINS USABLE;
+         OTHERWISE CONNECTION-DROP ABORT;
+         NO NEW COMMITTED STATE
+
+COMMIT_ACKNOWLEDGEMENT_OUTSTANDING
+  -- connection fails and durable outcome cannot be established
+     --> PUBLICATION_COMMIT_OUTCOME_UNKNOWN;
+         CONNECTION DISCARDED; NO IN-CALL RETRY;
+         NO SUCCESS, ROLLBACK, OR NO-NEW-COMMITTED-STATE CLAIM
 ```
 
-Pre-existing exact global content remains valid shared content. A failed call
-does not remove pre-existing rows, but it commits no new content or bundle row.
+Pre-existing exact global content remains valid shared content. In particular,
+an earlier call for one tenant may have retained all sixteen global components
+while the current explicit target has no bundle seal; one exact call may then
+create only the current target's equal seal. This is one target per call, not
+bulk publication.
+
+A call known to fail before successful commit does not remove pre-existing rows
+and commits no new content or bundle row. An unknown commit outcome is a client
+observation, not an asserted database state. The original call performs no
+reconciliation. A later separate exact invocation begins from whichever lawful
+database state the server durably retained.
 
 ## 8. Invariants and acceptance criteria
 
@@ -429,15 +471,22 @@ does not remove pre-existing rows, but it commits no new content or bundle row.
 - **TRBCP-009 — Model before effects.** All lifecycle, binding, source,
   component, schema relationship, bundle, and derived-identity validation
   completes before the first database statement.
-- **TRBCP-010 — One transaction.** All content-retention calls and the one
-  bundle-sealing call commit together or no new state commits.
+- **TRBCP-010 — One transaction and truthful completion.** All
+  content-retention calls and the one bundle-sealing call commit together or
+  not at all. The adapter claims no new committed state only after establishing
+  that successful commit was prevented; lost commit acknowledgement remains
+  explicitly unknown.
 - **TRBCP-011 — Existing SQL transitions only.** The adapter uses only
   `ofarm.retain_runtime_content(...)` and
   `ofarm.publish_runtime_bundle(...)`; direct DML and alternate functions are
   forbidden.
-- **TRBCP-012 — Exact replay only.** Equal retained content and an equal tenant
-  seal are idempotent. Unequal reuse, invalid database return, or uncertain
-  completion refuses and rolls back.
+- **TRBCP-012 — Exact replay and unknown-outcome separation.** Equal retained
+  content and an equal target-tenant seal are idempotent, including when the
+  global content was retained for an earlier distinct target. Unequal reuse or
+  an invalid database return refuses before commit. Lost commit acknowledgement
+  reports `PUBLICATION_COMMIT_OUTCOME_UNKNOWN`, discards the connection, and
+  performs no in-call retry; only a later separate exact invocation on a fresh
+  idle connection may converge the outcome.
 - **TRBCP-013 — Publication is inert.** A sealed bundle creates no tenant
   selection, governed batch, knowledge position, command admission,
   authorization, materialization, qualification, read, output, route, or
@@ -476,8 +525,9 @@ does not remove pre-existing rows, but it commits no new content or bundle row.
 | TRBCP-007 | Nil UUID, string alias, inferred tenant, absent tenant, or bulk tenant enumeration | Refuse; absent tenant rolls back all new rows |
 | TRBCP-008 | Application, worker, binder, selector, authorizer, migrator, or unrelated control login invokes the adapter or SQL functions | Refuse with no committed new state |
 | TRBCP-009 | Source or binding failure occurs while an exact target and publisher connection are available | Zero SQL calls |
-| TRBCP-010, 011 | The ninth retention call, publication call, or result check fails after earlier inserts | One rollback; no new content or bundle survives; no direct-DML retry |
-| TRBCP-012 | Same digest names unequal existing bytes, existing seal differs, two result rows appear, or connection outcome is uncertain | Refuse and roll back; never report success |
+| TRBCP-010, 011 | The ninth retention call, publication call, or result check fails after earlier inserts but before `COMMIT` | One rollback; no new content or bundle survives; no direct-DML retry |
+| TRBCP-012 | Same digest names unequal existing bytes, an existing target seal differs, or two result rows appear before `COMMIT` | Refuse and roll back; never report success |
+| TRBCP-012 | The server may have committed but its successful acknowledgement is lost | Report `PUBLICATION_COMMIT_OUTCOME_UNKNOWN`; discard the connection; make no success, rollback, or no-new-state claim; perform no in-call reconnect or retry |
 | TRBCP-013 | Publication is followed by an attempt to resolve it as selected, allocate a knowledge position, or admit a command | No selection exists; later boundary remains required |
 | TRBCP-014 | RuntimeBundle presence is presented as active/current/default/deployed | Refuse the claim; lifecycle remains `GOVERNED_INACTIVE` |
 | TRBCP-015 | A temporal row is added to `kernel/runtime_bundle_components.json`, ActiveArtifactSet, Capability Manifest, or a profile | Changed-file and conformance gates refuse |
@@ -534,8 +584,8 @@ After all gates in section 7.1, publication Phase B is limited to:
 | Path | Permitted change |
 | --- | --- |
 | `deployment/postgresql/temporal_runtime_bundle_publication.py` | Add the one isolated, fixed-authority construction and publication operation defined here. |
-| `kernel/tests/test_temporal_runtime_bundle_publication.py` | Focused unit, authority, composition, transaction, result, and import-isolation tests. |
-| `kernel/tests/test_postgresql_tenant_migration.py` | Disposable real-role PostgreSQL tests for exact publication, replay, rollback, ACL refusal, and no selection or knowledge-position effect. |
+| `kernel/tests/test_temporal_runtime_bundle_publication.py` | Focused unit, authority, composition, transaction, result, commit-outcome, later-replay, and import-isolation tests. |
+| `kernel/tests/test_postgresql_tenant_migration.py` | Disposable real-role PostgreSQL tests for exact publication, distinct-target reuse of already retained globals, same-target replay, pre-commit rollback, lost commit acknowledgement, later fresh-connection replay, ACL refusal, and no selection or knowledge-position effect. |
 | `deployment/postgresql/README.md` | Document the isolated pre-deployment control adapter and its non-effects. |
 | `conformance/review_baseline_test_inventory.json` | Mechanical regeneration only when required by a change to the canonical collected test-node inventory, including a count or node-ID change. |
 
@@ -567,7 +617,8 @@ exact decision head + exact binding + exact fixed source bytes
   -> retain each exact global component
   -> seal one exact tenant bundle
   -> verify result
-  -> commit
+  -> submit one commit
+  -> acknowledged success, or distinct unknown outcome with no in-call retry
 ```
 
 ### 11.4 Why this is the smallest coherent design
@@ -611,8 +662,8 @@ This contract does not:
 - publish to a real tenant or retain any non-disposable state;
 - create, replace, supersede, roll back, delete, or read a tenant selection;
 - allocate a tenant knowledge position or governed write batch;
-- integrate `COMMIT_OPERATION_CLAIM_DRAFT`, authorization, replay, or batch
-  provenance;
+- integrate `COMMIT_OPERATION_CLAIM_DRAFT`, authorization, governed-command
+  replay, or batch provenance;
 - add a startup hook, CLI, service, worker, route, API, environment option,
   fleet loop, deployment step, or operator credential workflow;
 - implement a current-state read, historical view, WINDOW behavior,
@@ -648,7 +699,7 @@ an authority or state transition and requires a new versioned contract.
 | Invariants | Future owner | Required negative evidence | Smallest verification |
 | --- | --- | --- | --- |
 | TRBCP-001–006 | future adapter authority loader plus existing model | changed binding, decision, source, row, count, canonical identity, and caller-shaping tests | focused publication unit tests plus existing temporal RuntimeBundle and selection tests |
-| TRBCP-007–012 | future adapter transaction boundary plus existing SQL functions | wrong target type, absent tenant, wrong login, mid-sequence failure, unequal replay, invalid/ambiguous result | fake-connection transaction tests and disposable real-role PostgreSQL tests |
+| TRBCP-007–012 | future adapter transaction boundary plus existing SQL functions | wrong target type, absent tenant, wrong login, mid-sequence failure, unequal replay, invalid/ambiguous result, lost commit acknowledgement, and in-call retry attempt | fake-connection transaction tests and disposable real-role PostgreSQL tests, including later fresh-connection convergence |
 | TRBCP-013–015 | unchanged selection tables, knowledge ledger, active artifacts, and runtime catalog | publication followed by implicit selection/position/currentness claim; active catalog mutation | database absence assertions, exact changed-file check, and temporal conformance |
 | TRBCP-016, 017, 019 | architecture snapshot and separately admitted temporal checker | production/legacy/import-initializer reachability or marker in another path | architecture checker and temporal candidate checker |
 | TRBCP-018 | test-target lifecycle and PR boundary | non-disposable connection or retained state request | disposable-target teardown plus no operational invocation |
@@ -666,6 +717,11 @@ Phase A must prove:
 - package conformance passes.
 
 Required checks include:
+
+Each Python command must run under the repository-supported interpreter
+required by the current Python source-snapshot checker. An unsupported
+interpreter's fail-closed result is not a contract failure and may not be
+treated as a passing substitute.
 
 ```text
 python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance
@@ -686,6 +742,13 @@ python3 conformance/temporal_contract_candidate_check.py
 python3 conformance/ofarm_pkg_contract_check.py
 python3 conformance/run_review_baseline.py
 ```
+
+Focused Phase B tests must distinguish a known pre-commit failure from lost
+commit acknowledgement. They must prove that the unknown path discards the
+connection, makes no success or rollback claim, and performs no in-call retry;
+that a later exact call on a fresh idle connection converges after either
+durable server outcome; and that a distinct explicit target may receive the
+same exact seal when all global components are already retained.
 
 Hosted PostgreSQL 17, native amd64, native arm64, and the canonical native
 verifier remain required where the repository workflow requires them. Passing
@@ -720,8 +783,9 @@ Work stops before later implementation if:
 12. target choice must come from application, worker, request, route, profile,
     environment, principal, binder, selector, or inferred data;
 13. a combined retention-and-sealing SQL function, direct DML path, second
-    connection, autonomous transaction, or uncertain-success translation is
-    proposed;
+    connection or retry inside one adapter call, autonomous transaction, or
+    translation of an unknown commit outcome into success, rollback, or a
+    no-new-committed-state claim is proposed;
 14. a CLI, service, startup hook, deployment integration, bulk publisher, or
     real tenant publication is required;
 15. publication must imply selection, activation, current/default status,
