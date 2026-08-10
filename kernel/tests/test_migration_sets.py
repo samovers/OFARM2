@@ -234,10 +234,40 @@ def test_tenant_v8_pins_selection_storage_and_complete_release_identity():
     assert migration_set.prefix_digest(8) == \
         "sha256:7231c869066c56f7c642460d33391bab00456daecdb04530b34da7210e8e8a54"
     assert migration_set.digest == \
-        "sha256:7231c869066c56f7c642460d33391bab00456daecdb04530b34da7210e8e8a54"
+        "sha256:cef599a81bda42f84c6c9718845b245ecfa7d97564f5c132b0f12dda526d1293"
     assert b"observed_migration_count <> 8" in migration.source_bytes
     assert b"version-8 selection policy inventory differs" in migration.source_bytes
     assert b"activate_commit_operation_claim_draft_runtime_bundle_selection" in (
+        migration.source_bytes
+    )
+
+
+def test_tenant_v9_pins_inert_runtime_content_retention_and_release_identity():
+    migration_set = load_authoritative_migration_set(
+        PACKAGE_ROOT,
+        TENANT_SERVICE,
+    )
+    migration = migration_set.migrations[8]
+
+    assert migration.filename == \
+        "0009_runtime_bundle_global_content_retention.sql"
+    assert migration.source_sha256 == \
+        "sha256:10e1966f8a2f25ccc8be077b1484807f03230aae116b352d23c9167e15e45c8c"
+    assert migration.byte_length == 14567
+    assert migration_set.prefix_digest(9) == \
+        "sha256:cef599a81bda42f84c6c9718845b245ecfa7d97564f5c132b0f12dda526d1293"
+    assert migration_set.digest == \
+        "sha256:cef599a81bda42f84c6c9718845b245ecfa7d97564f5c132b0f12dda526d1293"
+    assert b"observed_migration_count <> 9" in migration.source_bytes
+    assert b"CREATE FUNCTION ofarm.retain_runtime_content(" in (
+        migration.source_bytes
+    )
+    assert b"ofarm.publish_runtime_bundle(uuid,text,jsonb)" in (
+        migration.source_bytes
+    )
+    assert b"INSERT INTO ofarm.runtime_content_blob" in migration.source_bytes
+    assert b"INSERT INTO ofarm.runtime_bundle" not in migration.source_bytes
+    assert b"tenant_command_runtime_bundle_selection" not in (
         migration.source_bytes
     )
 

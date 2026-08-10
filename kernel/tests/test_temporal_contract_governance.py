@@ -21,8 +21,14 @@ _SELECTION_STORAGE_V7_CATALOG_DIGEST = (
 _SELECTION_STORAGE_V8_CATALOG_DIGEST = (
     "sha256:28aaa41651c1338fec9f8ca6aa7f252b7bef4ef2f3b1760d399306aba69c8719"
 )
+_SELECTION_STORAGE_V9_CATALOG_DIGEST = (
+    "sha256:63439452af1358dcf717abf923e775f3d50f78fd8c8602b633b6dd4b838375c4"
+)
 _SELECTION_STORAGE_V8_CATALOG_SOURCE_SHA256 = (
     "sha256:130a96edc2b9f4ad92a640c1c34150fe6126bd3945a48704a96896bb88a0f1a7"
+)
+_SELECTION_STORAGE_V9_CATALOG_SOURCE_SHA256 = (
+    "sha256:625935c7342205e1561ed5148826b4e6c866b13a1b4bff33fbc58c5c02f1420c"
 )
 _GCRC_FORBIDDEN_V0_1 = (
     "contracts/candidates/temporal_coordinate/"
@@ -326,13 +332,36 @@ def _selection_storage_catalog_source(*, classified: bool) -> bytes:
     current = (PACKAGE_ROOT / relative_path).read_bytes()
     v7_digest = _SELECTION_STORAGE_V7_CATALOG_DIGEST.encode("utf-8")
     v8_digest = _SELECTION_STORAGE_V8_CATALOG_DIGEST.encode("utf-8")
+    v9_digest = _SELECTION_STORAGE_V9_CATALOG_DIGEST.encode("utf-8")
 
-    if current.count(v7_digest) == 1 and current.count(v8_digest) == 0:
+    if (
+        current.count(v7_digest) == 1
+        and current.count(v8_digest) == 0
+        and current.count(v9_digest) == 0
+    ):
         v7_source = current
-    elif current.count(v7_digest) == 0 and current.count(v8_digest) == 1:
+    elif (
+        current.count(v7_digest) == 0
+        and current.count(v8_digest) == 1
+        and current.count(v9_digest) == 0
+    ):
         v7_source = current.replace(v8_digest, v7_digest)
+    elif (
+        current.count(v7_digest) == 0
+        and current.count(v8_digest) == 0
+        and current.count(v9_digest) == 1
+    ):
+        if (
+            len(current) != byte_length
+            or "sha256:" + hashlib.sha256(current).hexdigest()
+            != _SELECTION_STORAGE_V9_CATALOG_SOURCE_SHA256
+        ):
+            raise AssertionError("current V9 tenant catalog source differs")
+        v7_source = current.replace(v9_digest, v7_digest)
     else:
-        raise AssertionError("current tenant catalog source is neither exact V7 nor V8")
+        raise AssertionError(
+            "current tenant catalog source is not exact V7, V8, or V9"
+        )
 
     if (
         len(v7_source) != byte_length
@@ -393,7 +422,7 @@ def _selection_storage_v7_authority(
     current = temporal.load_tenant_migration_authority_snapshot()
     migrations = current.migration_set.migrations
     if (
-        len(migrations) not in (7, 8)
+        len(migrations) not in (7, 8, 9)
         or tuple(migration.version for migration in migrations[:7])
         != tuple(range(1, 8))
         or current.migration_set.prefix_digest(7)
@@ -587,14 +616,28 @@ def _selection_storage_expected_current_state() -> str:
     if len(migrations) == 7 and not adapter_present:
         return temporal.SELECTION_STORAGE_CONFORMANT_ABSENT
     if (
-        len(migrations) == 8
+        len(migrations) in (8, 9)
         and migrations[7].version == 8
         and migrations[7].filename
         == temporal.SELECTION_STORAGE_MIGRATION_FILENAME
         and adapter_present
     ):
-        return temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
-    raise AssertionError("current selection-storage pair is neither V7 nor V8")
+        if len(migrations) == 8:
+            return temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+        if (
+            migrations[8].version == 9
+            and migrations[8].filename
+            == temporal.GLOBAL_CONTENT_RETENTION_MIGRATION_FILENAME
+            and temporal._classify_global_content_retention_migration(
+                authority,
+                authority.migration_set.prefix_digest(8),
+            )
+            == temporal.GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED
+        ):
+            return temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+    raise AssertionError(
+        "current selection-storage pair is not exact V7, V8, or V9"
+    )
 
 
 def _selection_storage_snapshot_view(

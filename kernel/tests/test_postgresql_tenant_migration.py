@@ -838,6 +838,18 @@ def _publish_runtime_bundle(
     return digest
 
 
+def _retain_runtime_content(
+    connection: psycopg.Connection,
+    canonical_bytes: bytes,
+) -> str:
+    digest = _sha256_id(canonical_bytes)
+    assert connection.execute(
+        "SELECT ofarm.retain_runtime_content(%s, %s)",
+        (digest, canonical_bytes),
+    ).fetchone() == (digest,)
+    return digest
+
+
 def _model_valid_temporal_carrier_bundle() -> RuntimeBundle:
     component = RuntimeComponent.from_selected_bytes(
         role=RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT,
@@ -1782,9 +1794,9 @@ def test_authoritative_source_ledger_contract_and_apply_noop(
         "write-lock-early-call-refused",
     )
     assert tenant_target.v7_report.applied_versions == (7,)
-    assert tenant_target.first_report.applied_versions == (8,)
+    assert tenant_target.first_report.applied_versions == (8, 9)
     assert tenant_target.noop_report.applied_versions == ()
-    assert tenant_target.noop_report.final_version == 8
+    assert tenant_target.noop_report.final_version == 9
 
 
 def test_tenant_knowledge_position_catalog_is_structurally_compatible(
@@ -4666,6 +4678,274 @@ def test_runtime_bundle_publication_is_exact_and_idempotent(
         ).fetchone() == (0,)
 
 
+def test_runtime_content_retention_function_and_acl_are_exact(
+    tenant_target: TenantTarget,
+) -> None:
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        routine = admin.execute(
+            """
+            SELECT pg_catalog.count(*) OVER (),
+                   pg_catalog.pg_get_function_arguments(routine.oid),
+                   pg_catalog.pg_get_function_result(routine.oid),
+                   owner.rolname,
+                   language.lanname,
+                   routine.prokind,
+                   routine.prosecdef,
+                   routine.proleakproof,
+                   routine.proisstrict,
+                   routine.provolatile,
+                   routine.proparallel,
+                   routine.proconfig
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = routine.pronamespace
+            JOIN pg_catalog.pg_roles AS owner ON owner.oid = routine.proowner
+            JOIN pg_catalog.pg_language AS language
+              ON language.oid = routine.prolang
+            WHERE namespace.nspname = 'ofarm'
+              AND routine.proname = 'retain_runtime_content'
+            """
+        ).fetchone()
+        assert routine == (
+            1,
+            "expected_content_digest text, canonical_bytes bytea",
+            "sha256_id",
+            "ofarm_owner",
+            "plpgsql",
+            "f",
+            True,
+            False,
+            False,
+            "v",
+            "u",
+            ["search_path=pg_catalog, pg_temp"],
+        )
+        acl = admin.execute(
+            """
+            SELECT CASE WHEN acl.grantee = 0 THEN 'PUBLIC'
+                        ELSE grantee.rolname END,
+                   grantor.rolname,
+                   acl.privilege_type,
+                   acl.is_grantable
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = routine.pronamespace
+            CROSS JOIN LATERAL pg_catalog.aclexplode(
+                COALESCE(
+                    routine.proacl,
+                    pg_catalog.acldefault('f', routine.proowner)
+                )
+            ) AS acl
+            LEFT JOIN pg_catalog.pg_roles AS grantee
+              ON grantee.oid = acl.grantee
+            JOIN pg_catalog.pg_roles AS grantor ON grantor.oid = acl.grantor
+            WHERE namespace.nspname = 'ofarm'
+              AND routine.proname = 'retain_runtime_content'
+            ORDER BY 1, 2, 3, 4
+            """
+        ).fetchall()
+        assert [tuple(row) for row in acl] == [
+            ("ofarm_owner", "ofarm_owner", "EXECUTE", False),
+            (
+                "ofarm_runtime_bundle_publisher",
+                "ofarm_owner",
+                "EXECUTE",
+                False,
+            ),
+        ]
+        for role_name in (
+            "ofarm_app",
+            "ofarm_worker",
+            "ofarm_runtime_bundle_control_login",
+            "ofarm_runtime_bundle_publisher",
+        ):
+            assert admin.execute(
+                "SELECT pg_catalog.has_table_privilege("
+                "%s, 'ofarm.runtime_content_blob', "
+                "'INSERT,UPDATE,DELETE,TRUNCATE')",
+                (role_name,),
+            ).fetchone() == (False,)
+
+
+def test_runtime_content_retention_validates_bytes_and_exact_replay(
+    tenant_target: TenantTarget,
+) -> None:
+    empty_digest = _sha256_id(b"")
+    content = b"fictional issue-176 retained content"
+    content_digest = _sha256_id(content)
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_runtime_bundle_control_login")
+    ) as publisher:
+        assert _retain_runtime_content(publisher, b"") == empty_digest
+        assert _retain_runtime_content(publisher, b"") == empty_digest
+        assert _retain_runtime_content(publisher, content) == content_digest
+        assert _retain_runtime_content(publisher, content) == content_digest
+
+        invalid_calls = (
+            (None, content),
+            (content_digest, None),
+            (content_digest.upper(), content),
+            ("sha256:not-a-digest", content),
+            (SHA256_ZERO, content),
+            (content_digest, b"different fictional bytes"),
+        )
+        for expected_digest, supplied_bytes in invalid_calls:
+            with pytest.raises(psycopg.errors.InvalidParameterValue):
+                with publisher.transaction():
+                    publisher.execute(
+                        "SELECT ofarm.retain_runtime_content(%s, %s)",
+                        (expected_digest, supplied_bytes),
+                    )
+
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        rows = admin.execute(
+            """
+            SELECT content_digest, canonical_bytes, byte_length
+            FROM ofarm.runtime_content_blob
+            WHERE content_digest = ANY (%s::text[])
+            ORDER BY content_digest
+            """,
+            ([empty_digest, content_digest, SHA256_ZERO],),
+        ).fetchall()
+        assert [tuple(row) for row in rows] == sorted(
+            (
+                (empty_digest, b"", 0),
+                (content_digest, content, len(content)),
+            )
+        )
+
+
+@pytest.mark.parametrize("role_name", ("ofarm_app", "ofarm_worker"))
+def test_runtime_content_retention_refuses_unrelated_callers(
+    tenant_target: TenantTarget,
+    role_name: str,
+) -> None:
+    content = f"fictional unauthorized content for {role_name}".encode()
+    digest = _sha256_id(content)
+    with psycopg.connect(tenant_target.role_dsn(role_name)) as caller:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            caller.execute(
+                "SELECT ofarm.retain_runtime_content(%s, %s)",
+                (digest, content),
+            )
+
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            "SELECT pg_catalog.count(*) FROM ofarm.runtime_content_blob "
+            "WHERE content_digest = %s",
+            (digest,),
+        ).fetchone() == (0,)
+
+
+def test_runtime_content_retention_has_no_direct_dml_or_mutation_path(
+    tenant_target: TenantTarget,
+) -> None:
+    content = b"fictional immutable retained content"
+    digest = _sha256_id(content)
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_runtime_bundle_control_login")
+    ) as publisher:
+        _retain_runtime_content(publisher, content)
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with publisher.transaction():
+                publisher.execute(
+                    "INSERT INTO ofarm.runtime_content_blob VALUES (%s, %s, %s)",
+                    (_sha256_id(b"direct"), b"direct", len(b"direct")),
+                )
+
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        for statement, parameters in (
+            (
+                "UPDATE ofarm.runtime_content_blob "
+                "SET canonical_bytes = canonical_bytes "
+                "WHERE content_digest = %s",
+                (digest,),
+            ),
+            (
+                "DELETE FROM ofarm.runtime_content_blob "
+                "WHERE content_digest = %s",
+                (digest,),
+            ),
+            ("TRUNCATE ofarm.runtime_content_blob CASCADE", ()),
+        ):
+            with pytest.raises(psycopg.errors.ObjectNotInPrerequisiteState):
+                with admin.transaction():
+                    admin.execute(statement, parameters)
+
+
+def test_runtime_content_retention_is_transactional_and_globally_inert(
+    tenant_target: TenantTarget,
+) -> None:
+    rolled_back = b"fictional rolled-back retained content"
+    rolled_back_digest = _sha256_id(rolled_back)
+    committed = b"fictional inert retained content"
+    committed_digest = _sha256_id(committed)
+    count_statement = """
+        SELECT
+            (SELECT pg_catalog.count(*) FROM ofarm.runtime_content_blob),
+            (SELECT pg_catalog.count(*) FROM ofarm.runtime_bundle),
+            (SELECT pg_catalog.count(*) FROM ofarm.runtime_bundle_component),
+            (SELECT pg_catalog.count(*) FROM ofarm.governed_write_batch),
+            (SELECT pg_catalog.count(*)
+               FROM ofarm.tenant_command_runtime_bundle_selection)
+    """
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        before = admin.execute(count_statement).fetchone()
+
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_runtime_bundle_control_login")
+    ) as publisher:
+        assert _retain_runtime_content(publisher, rolled_back) == (
+            rolled_back_digest
+        )
+        publisher.rollback()
+        assert _retain_runtime_content(publisher, committed) == committed_digest
+
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        after = admin.execute(count_statement).fetchone()
+        assert after == (before[0] + 1, *before[1:])
+        assert admin.execute(
+            "SELECT pg_catalog.count(*) FROM ofarm.runtime_content_blob "
+            "WHERE content_digest = %s",
+            (rolled_back_digest,),
+        ).fetchone() == (0,)
+        assert admin.execute(
+            "SELECT canonical_bytes, byte_length "
+            "FROM ofarm.runtime_content_blob WHERE content_digest = %s",
+            (committed_digest,),
+        ).fetchone() == (committed, len(committed))
+
+
+def test_runtime_content_retention_concurrent_equal_calls_converge(
+    tenant_target: TenantTarget,
+) -> None:
+    content = b"fictional concurrent retained content"
+    digest = _sha256_id(content)
+    barrier = threading.Barrier(2)
+
+    def retain() -> str:
+        # The publisher control login deliberately has CONNECTION LIMIT 1.
+        # The separately admitted database-owner path supplies the two real
+        # sessions needed to prove equal-call convergence without widening
+        # that existing role topology.
+        with psycopg.connect(
+            tenant_target.target_admin_dsn
+        ) as publisher:
+            barrier.wait()
+            return _retain_runtime_content(publisher, content)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = tuple(executor.submit(retain) for _ in range(2))
+        assert [future.result() for future in futures] == [digest, digest]
+
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            "SELECT pg_catalog.count(*), pg_catalog.min(byte_length) "
+            "FROM ofarm.runtime_content_blob WHERE content_digest = %s",
+            (digest,),
+        ).fetchone() == (1, len(content))
+
+
 @pytest.mark.parametrize("role_name", ("ofarm_app", "ofarm_worker"))
 def test_runtime_roles_cannot_directly_access_context_or_control_tables(
     tenant_target: TenantTarget,
@@ -7303,7 +7583,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:480149ae78390cc5b041898be4b9a50e0c691279bbc0a0d6d5b05ecc169915e7"
+                "sha256:4d9bcb9efc13ed0f21dcdf0b00bd1ed36f06b1e4b5feab72082b21a4c87e1afe"
             )
         finally:
             migrator.rollback()
@@ -7992,12 +8272,12 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:480149ae78390cc5b041898be4b9a50e0c691279bbc0a0d6d5b05ecc169915e7"
+        "sha256:4d9bcb9efc13ed0f21dcdf0b00bd1ed36f06b1e4b5feab72082b21a4c87e1afe"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
-    assert row[7] == 8
-    assert row[9] == 8
+    assert row[7] == 9
+    assert row[9] == 9
     assert row[10] is False
 
 

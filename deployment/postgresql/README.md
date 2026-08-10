@@ -94,6 +94,7 @@ The only accepted migrations are:
 - `kernel/migrations/0006_tenant_current_context_selection_owner_admission.sql`;
 - `kernel/migrations/0007_tenant_write_lock_selection_owner_admission.sql`;
 - `kernel/migrations/0008_tenant_command_runtime_bundle_selection.sql`;
+- `kernel/migrations/0009_runtime_bundle_global_content_retention.sql`;
 - `security_audit/migrations/0001_initial.sql`;
 - `security_audit/migrations/0002_hmac_v2_operations.sql`; and
 - `security_audit/migrations/0003_outcome_reason_vocabulary.sql`.
@@ -162,6 +163,14 @@ application or worker runtime service. Migration, repository state, and bundle
 publication create no selection. This boundary adds no command integration,
 route, runtime read, output, deployment activation, legacy behavior, or #192
 behavior.
+
+Tenant migration `0009` adds one publisher-capability
+`ofarm.retain_runtime_content(text,bytea)` transition. It derives length and
+SHA-256 from the supplied bytes, accepts only exact replay, and retains one
+append-only global blob inside the caller's transaction. Retention alone adds
+no tenant, bundle membership, selection, runtime activation, route, output, or
+current-truth effect. The existing RuntimeBundle publication function and role
+topology, including the governed database-owner path, remain unchanged.
 
 The A0/A1/A2/A4 matrix is the sole durable phase authority. A0 through head 4
 has all three capsules and no admission grants. A1 at exact head 5 has the V5

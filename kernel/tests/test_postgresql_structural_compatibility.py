@@ -481,6 +481,34 @@ def test_external_catalog_anchor_refuses_semantically_unchanged_verifier_body(
         assert restored_report.service_identity == SECURITY_AUDIT_SERVICE.identity
 
 
+def test_tenant_structural_observation_refuses_retention_function_drift(
+    structural_pair: _StructuralPair,
+):
+    signature = "ofarm.retain_runtime_content(text,bytea)"
+    try:
+        with psycopg.connect(
+            structural_pair.tenant_target_admin_dsn,
+            autocommit=True,
+        ) as admin:
+            admin.execute(f"ALTER FUNCTION {signature} PARALLEL SAFE")
+
+        with pytest.raises(PostgreSQLVerificationError):
+            verify_tenant_structural_compatibility(
+                tenant_structural_dsn=structural_pair.tenant_readiness_dsn
+            )
+    finally:
+        with psycopg.connect(
+            structural_pair.tenant_target_admin_dsn,
+            autocommit=True,
+        ) as admin:
+            admin.execute(f"ALTER FUNCTION {signature} PARALLEL UNSAFE")
+
+    restored = verify_tenant_structural_compatibility(
+        tenant_structural_dsn=structural_pair.tenant_readiness_dsn
+    )
+    assert restored.service_identity == TENANT_SERVICE.identity
+
+
 @pytest.mark.parametrize("lane", ("tenant", "security-audit"))
 def test_public_structural_observation_refuses_post_migration_rogue_collation(
     structural_pair: _StructuralPair,
