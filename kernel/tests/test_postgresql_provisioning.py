@@ -914,7 +914,23 @@ def _controlled_v8_authority() -> AuthoritativeMigration:
 def _controlled_r9_release(
 ) -> tuple[AuthoritativeMigrationSet, AuthoritativeMigration]:
     authority = provisioning_module.TENANT_AUTHORITATIVE_MIGRATION_SET
-    assert len(authority.migrations) == 8
+    assert len(authority.migrations) in (8, 9)
+    v8_authority = (
+        provisioning_module._authoritative_tenant_selection_activation_migration()
+    )
+    assert v8_authority == authority.migrations[7]
+    current_v9_authority = (
+        provisioning_module
+        ._authoritative_tenant_global_content_retention_migration()
+    )
+    assert current_v9_authority == (
+        authority.migrations[8] if len(authority.migrations) == 9 else None
+    )
+    controlled_r8 = replace(
+        authority,
+        migrations=authority.migrations[:8],
+        digest=v8_authority.applied_prefix_digest,
+    )
     v9_authority = AuthoritativeMigration(
         version=9,
         filename="0009_runtime_bundle_global_content_retention.sql",
@@ -924,8 +940,8 @@ def _controlled_r9_release(
     )
     return (
         replace(
-            authority,
-            migrations=authority.migrations + (v9_authority,),
+            controlled_r8,
+            migrations=controlled_r8.migrations + (v9_authority,),
             digest=v9_authority.applied_prefix_digest,
         ),
         v9_authority,
@@ -1030,16 +1046,21 @@ def test_tenant_binding_stable_v8_refuses_without_literal_eighth_authority(
 def test_closed_tenant_release_family_recognizes_exact_r8_and_r9(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    r8_authority = provisioning_module.TENANT_AUTHORITATIVE_MIGRATION_SET
+    current_authority = provisioning_module.TENANT_AUTHORITATIVE_MIGRATION_SET
+    assert len(current_authority.migrations) in (8, 9)
     assert (
         provisioning_module
         ._authoritative_tenant_selection_activation_migration()
-        == r8_authority.migrations[7]
+        == current_authority.migrations[7]
     )
     assert (
         provisioning_module
         ._authoritative_tenant_global_content_retention_migration()
-        is None
+        == (
+            current_authority.migrations[8]
+            if len(current_authority.migrations) == 9
+            else None
+        )
     )
 
     r9_authority, v9_authority = _controlled_r9_release()

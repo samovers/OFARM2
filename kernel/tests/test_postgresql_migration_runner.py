@@ -2346,11 +2346,11 @@ def test_v6_postcommit_acknowledgement_loss_recovers_as_verified_noop(
 
 
 def _tenant_v7_migration_set() -> MigrationSet:
-    full_set = load_migration_set(
+    full_set = load_authoritative_migration_set(
         Path(__file__).resolve().parents[2],
         TENANT_SERVICE,
     )
-    assert len(full_set.migrations) in (7, 8)
+    assert len(full_set.migrations) in (8, 9)
     return MigrationSet(
         service=TENANT_SERVICE,
         migrations=full_set.migrations[:7],

@@ -4,10 +4,10 @@
 `ofarm.runtime-bundle-global-content-retention-baseline-transition-test-admission.issue176.v0.1`
 
 **Decision identity:**
-`ISSUE176-RUNTIME-CONTENT-RETENTION-BASELINE-TRANSITION-TESTS-001`, proposed version `2`
+`ISSUE176-RUNTIME-CONTENT-RETENTION-BASELINE-TRANSITION-TESTS-001`, approved version `2`
 
-**Status:** proposed and inactive; Phase A only; no test implementation or
-database authority
+**Status:** approved for bounded pre-deployment implementation in PR #300;
+no database or PR #299 authority
 
 **Issue:** #176
 
@@ -389,3 +389,37 @@ Work stops before:
 Once this contract is approved and every bounded acceptance criterion passes,
 this prerequisite may merge under the accepted pre-deployment workflow. It
 does not authorize another boundary.
+
+## 12. Compact approval evidence
+
+This appendix is provisional, AI-attested evidence of the task user's
+pre-deployment repository decision. The user message is the authority; this
+appendix, repository credentials, review, CI, and merge metadata are not
+substitutes for it.
+
+- **Decision:**
+  `ISSUE176-RUNTIME-CONTENT-RETENTION-BASELINE-TRANSITION-TESTS-001`, version
+  `2`.
+- **Codex task:** `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`.
+- **Complete live decision card:** turn
+  `019fea92-7f36-73c2-8dcd-4aae2eab3ad1`, assistant-authored stable item
+  `item-4787`.
+- **Exact approval:** turn `019feab1-60f3-7273-96bd-15a72a5cd73c`, later
+  user-authored stable item `item-4788`.
+- **Exact approval sentence:**
+  `I approve OFARM2 decision ISSUE176-RUNTIME-CONTENT-RETENTION-BASELINE-TRANSITION-TESTS-001 version 2.`
+- **Observed role and order:** `item-4787` is the complete AI-presented card;
+  `item-4788` is a later user-authored message in the same task containing
+  only the exact approval sentence. No replacement card, cancellation, or
+  stop-like user message intervened before Phase B began.
+- **Named implementation pull request:**
+  `https://github.com/samovers/OFARM2/pull/300`.
+- **Permitted effect:** implement, verify, review, and merge only section 8's
+  three-path boundary under RCBTT-001 through RCBTT-013 after every required
+  gate passes.
+- **Non-effects:** no authority for PR #299, migration 0009, production,
+  database, runtime, route, materialization, output, deployment, legacy, or
+  #192 behavior.
+- **Provisional limitation:** repository-development authority only. Before
+  deployment, independently human-controlled and independently verifiable
+  approval or signing must replace this evidence.
