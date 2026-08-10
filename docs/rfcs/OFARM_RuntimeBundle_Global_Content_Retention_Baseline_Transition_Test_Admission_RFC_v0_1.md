@@ -4,7 +4,7 @@
 `ofarm.runtime-bundle-global-content-retention-baseline-transition-test-admission.issue176.v0.1`
 
 **Decision identity:**
-`ISSUE176-RUNTIME-CONTENT-RETENTION-BASELINE-TRANSITION-TESTS-001`, proposed version `1`
+`ISSUE176-RUNTIME-CONTENT-RETENTION-BASELINE-TRANSITION-TESTS-001`, proposed version `2`
 
 **Status:** proposed and inactive; Phase A only; no test implementation or
 database authority
@@ -53,9 +53,9 @@ from two test-only assumptions that were true on R8 and become false on R9:
 The production classifier is not the demonstrated cause. Its exact R8/R9
 recognition is already correct. The defect is that test evidence derives a
 historical or controlled state from an implicit assumption about the current
-repository head. This also reaches the classifier contract's GCPV-004 negative
-case: an exact R9 release must not be defeated by a test helper that still
-requires total length eight.
+repository head. This is the same failure mode that the classifier contract's
+GCPV-004 anticipated: an exact R9 release must not be defeated by a test helper
+that still requires total length eight.
 
 This contract admits one separate test-only prerequisite. It makes the two
 fixtures state-explicit on both sides of the R8-to-R9 transition while leaving
@@ -249,7 +249,7 @@ because RCBTT-010 forbids collected-node changes.
 
 ### 8.2 Governing dependencies
 
-This contract depends on, but does not amend:
+This contract depends on, but does not amend these accepted artifacts in place:
 
 - `ofarm.runtime-bundle-global-content-retention-admission.issue176.v0.1`,
   38,116 bytes,
@@ -257,10 +257,20 @@ This contract depends on, but does not amend:
 - `ofarm.runtime-bundle-global-content-retention-catalog-anchor-test-allowlist-amendment.issue176.v0.2`,
   19,491 bytes,
   `sha256:b126e49f6c86bfe6bdac81480c6af6ed9c719d9abecbcd13535a7aa326e8e9a3`;
+- `ofarm.tenant-command-runtime-bundle-selection-activation-baseline-transition-test-admission.issue176.v0.1`,
+  26,314 bytes,
+  `sha256:136318ac6dd49987b4652710ab55e68364ea5aa2f23f58d274a40f809fcb4168`;
   and
 - `ofarm.runtime-bundle-global-content-retention-provisioning-classifier-admission.issue176.v0.1`,
   27,497 bytes,
   `sha256:5661b264525e31df6c8b0b17cc9566862a2219daf10e003d8d6f25593e9f2804`.
+
+The baseline-transition dependency owns the existing stable-V7 helper.
+RCBTT-008 preserves its BTT-008 rule that historical V7 executes exactly rows
+1 through 7 and binds the seventh prefix digest. RCBTT-004 narrows only that
+helper's accepted checked-out current-release family from `(7, 8)` to the
+authenticated `(8, 9)` family. It does not change BTT-008's historical
+seven-row meaning.
 
 The reviewed base test blobs are:
 
@@ -270,8 +280,11 @@ The reviewed base test blobs are:
   `9387b7bfcac9ab2a1b63a5d9aa1e502b238d2330`.
 
 If either test blob or the production classifier blob changes before Phase B,
-work stops for exact-head assessment. A semantics-preserving rebase may proceed
-only when these decisions and the three-path closure remain unchanged.
+or PR #299 moves from exact head
+`2110186a2a447d24318a2af0debc812147aea3c5`, work stops for exact-head
+assessment. A semantics-preserving rebase may proceed only when these decisions,
+the exact R9 overlay, and the three-path closure remain unchanged and the pins
+and evidence are refreshed.
 
 ## 9. Traceability and verification
 
@@ -301,7 +314,8 @@ After approval, Phase B verification must include:
 4. the complete provisioning and migration-runner test modules on disposable
    PostgreSQL targets against R8 `main`;
 5. the same test-only diff and complete affected modules in a disposable
-   overlay of PR #299's exact R9 head;
+   overlay of PR #299's exact R9 head
+   `2110186a2a447d24318a2af0debc812147aea3c5`;
 6. the complete applicable Kernel baseline in both states;
 7. package, architecture, migration-release, and ordinary hosted conformance
    gates; and
@@ -342,7 +356,7 @@ Before a live card is shown:
 The complete live decision card must use this exact approval sentence:
 
 ```text
-I approve OFARM2 decision ISSUE176-RUNTIME-CONTENT-RETENTION-BASELINE-TRANSITION-TESTS-001 version 1.
+I approve OFARM2 decision ISSUE176-RUNTIME-CONTENT-RETENTION-BASELINE-TRANSITION-TESTS-001 version 2.
 ```
 
 Only the entire visible text of a later user-authored message in the same Codex
@@ -365,8 +379,9 @@ Work stops before:
    state;
 8. adding either test file to PR #299;
 9. treating this decision as authority to update or merge PR #299;
-10. continuing when either reviewed test blob or the production classifier
-    changes incompatibly; or
+10. continuing without a new exact-head assessment when either reviewed test
+    blob or the production classifier changes, or when PR #299 moves from
+    `2110186a2a447d24318a2af0debc812147aea3c5`; or
 11. merging without dual-baseline evidence, exact-head review, live approval,
     the scope report, every required green gate, and an absence-of-cancellation
     check.
