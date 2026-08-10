@@ -601,8 +601,13 @@ The later module needs only:
 
 - one immutable in-memory catalog value parsed from the authenticated binding;
 - the existing immutable `RuntimeComponent` and `RuntimeBundle` values; and
-- one small immutable publication result containing the exact target UUID and
-  bundle digest, or just the exact digest.
+- one exact bundle-digest success return plus one dedicated
+  `PublicationCommitOutcomeUnknown` exception type.
+
+The observed state `PUBLICATION_COMMIT_OUTCOME_UNKNOWN` is represented only by
+raising that exception. It carries no success result and must never be encoded
+as `None`, a Boolean, a sentinel digest, or a success-shaped result variant.
+The operation signature in section 3.4 describes acknowledged success only.
 
 It introduces no mutable registry, cache, service object, optional capability
 bag, `Any`-typed authority value, background worker, or compatibility shim.
