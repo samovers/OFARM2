@@ -281,6 +281,15 @@ active-surface loader or dynamically discovered path is forbidden. Profiles,
 routes, outputs, runtime roots, and other authorities remain stop conditions,
 not new scan targets.
 
+For parent section 10 item 7, the ActiveArtifactSet and Capability Manifest
+are the exact active non-Python profile-surface authorities. Inventoried
+profile Python remains covered by the closed all-source marker-ownership
+matrix. The remaining `profile_si_ffs/` artifacts are unchanged preservation
+inputs outside the future Phase B allowlist, not dynamically discovered
+active-authority scan targets; any need to edit or classify one stops under
+section 14.11. This preserves the parent's profile requirement without adding
+a competing loader or widening the active temporal surface.
+
 ## 4. Authority map and exact reviewed state
 
 | Authority | Exact reviewed identity | Authority retained |
