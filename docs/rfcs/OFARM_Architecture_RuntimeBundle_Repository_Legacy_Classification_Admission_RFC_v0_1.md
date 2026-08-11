@@ -46,8 +46,9 @@ needed for the narrow decision:
 
 ```text
 production reachability: absent
-legacy reachability:
+legacy reachability through kernel.store from fixed roots:
   kernel.legacy_m1.api -> kernel.store -> kernel.runtime_bundle_repository
+  kernel.legacy_m1.runtime -> kernel.store -> kernel.runtime_bundle_repository
 current architecture legacy classification: false
 ```
 
@@ -207,8 +208,7 @@ operational authority is a forbidden transition and stops this boundary.
   repository module.
 - **RBRLC-005 — Legacy preservation.** The reviewed current tree remains
   architecture-conformant: the repository is absent from production
-  reachability and present only on the existing legacy path through
-  `kernel.store`.
+  reachability and present only in legacy reachability through `kernel.store`.
 - **RBRLC-006 — Classification only.** The target module's bytes, behavior,
   callers, persistence semantics, database objects, and public APIs do not
   change.
@@ -233,7 +233,7 @@ operational authority is a forbidden transition and stops this boundary.
 | RBRLC-002 | The temporal checker gains a private repository-name exception or another legacy collection | exact changed-path/source review refuses; existing consumer must remain unchanged |
 | RBRLC-003 | Temporary production tree: `kernel.api -> kernel.helper -> kernel.runtime_bundle_repository` | architecture gate reports the full path and fails |
 | RBRLC-004 | Temporary exact publication adapter imports `kernel.runtime_bundle_repository` | temporal candidate conformance raises its existing legacy-authority refusal |
-| RBRLC-005 | The current snapshot reports the target in production reachability, loses the legacy path, or the architecture checker fails after the set addition | stop; do not merge or alter another module to make the test pass |
+| RBRLC-005 | The current snapshot reports the target in production reachability, loses legacy reachability through `kernel.store`, or the architecture checker fails after the set addition | stop; do not merge or alter another module to make the test pass |
 | RBRLC-006 | Implementation edits the repository, Store, RuntimeBundle model, schema, migration, or either checker consumer | changed-path gate refuses |
 | RBRLC-007 | Snapshot authority is unavailable, substituted, malformed, or inconsistent | existing architecture or temporal entry point returns non-success; never treat the dependency as safe |
 | RBRLC-008 | Any non-allowlisted path changes, or inventory changes without a canonical node-ID change | exact diff/inventory gate refuses |
@@ -340,8 +340,7 @@ Phase A verification must show:
 - only this RFC changed;
 - every authority identity in section 3 reconstructs from reviewed `main`;
 - the target is absent from production reachability;
-- its legacy path is exactly
-  `kernel.legacy_m1.api -> kernel.store -> kernel.runtime_bundle_repository`;
+- it is legacy-reachable through `kernel.store` from both fixed legacy roots;
 - the current predicate returns false, demonstrating the gap;
 - the current architecture, temporal, and package conformance gates pass under
   exact CPython 3.12.13;
@@ -379,8 +378,8 @@ Stop without implementation or merge if:
 2. the active workflow approval is absent, invalid, superseded, cancelled, or
    no longer directly retrievable;
 3. the reviewed base changes such that the target is production-reachable,
-   the existing legacy path differs, or the governing contracts no longer name
-   the module as quarantined;
+   its legacy reachability through `kernel.store` differs, or the governing
+   contracts no longer name the module as quarantined;
 4. implementation requires a new prefix, another identity, duplicate
    classifier, consumer edit, or another changed path;
 5. adding the exact identity makes the real current architecture checker fail;
