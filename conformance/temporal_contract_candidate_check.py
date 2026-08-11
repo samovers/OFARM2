@@ -3723,6 +3723,20 @@ def _classify_temporal_runtime_bundle_publication_adapter(
                 raise TemporalCandidateError(
                     "temporal RuntimeBundle publication marker conjunction differs"
                 )
+            try:
+                publication_edges = snapshot.import_graph[unit_module_name]
+            except (AttributeError, KeyError, TypeError) as exc:
+                raise TemporalCandidateError(
+                    "temporal RuntimeBundle publication import evidence differs"
+                ) from exc
+            if any(
+                architecture._is_legacy_module(edge.target)
+                for edge in publication_edges
+            ):
+                raise TemporalCandidateError(
+                    "temporal RuntimeBundle publication adapter imports "
+                    "legacy authority"
+                )
         elif relative_path == SELECTION_STORAGE_ADAPTER_RELATIVE_PATH:
             if occurrences != selection_ownership:
                 raise TemporalCandidateError(

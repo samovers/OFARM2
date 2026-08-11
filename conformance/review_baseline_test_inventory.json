@@ -12456,6 +12456,16 @@
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_publication_classifier_refuses_direct_legacy_dependency[exact-legacy-module]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_publication_classifier_refuses_direct_legacy_dependency[legacy-prefix]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_publication_classifier_refuses_every_initializer_import_form[absent-absolute-from]",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
@@ -13961,8 +13971,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "5fe3cb14b1a1fb7a1d38d6f2ba4229a1522cc674cbe8317a226dac81a0ef7cb3",
-  "entryCount": 2792,
+  "entriesSha256": "093338e48b5289d6dafb8eedb771b66b3212baabb7d20f129c8d90b71cd353c4",
+  "entryCount": 2794,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

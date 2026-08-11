@@ -3040,6 +3040,46 @@ def test_publication_classifier_refuses_exact_path_with_wrong_module(
         )
 
 
+@pytest.mark.parametrize(
+    ("legacy_module", "legacy_path"),
+    (
+        ("kernel.legacy_m1.runtime", "kernel/legacy_m1/runtime.py"),
+        ("kernel.store", "kernel/store.py"),
+    ),
+    ids=("legacy-prefix", "exact-legacy-module"),
+)
+def test_publication_classifier_refuses_direct_legacy_dependency(
+    tmp_path: Path,
+    legacy_module: str,
+    legacy_path: str,
+):
+    selection_source = _selection_storage_python_markers()
+    authority = _global_content_retention_v9_authority(
+        selection_source,
+        _global_content_retention_migration_source(),
+    )
+    publication_source = (
+        _publication_adapter_python_markers()
+        + f"import {legacy_module}\n".encode("utf-8")
+    )
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: selection_source,
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH: (
+                publication_source
+            ),
+            legacy_path: b"",
+        },
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="publication adapter imports legacy authority",
+    ):
+        temporal._validate_selection_storage_conformance(authority, snapshot)
+
+
 def test_publication_classifier_refuses_alias_path_with_complete_markers(
     tmp_path: Path,
 ):
