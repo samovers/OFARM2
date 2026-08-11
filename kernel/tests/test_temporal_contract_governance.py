@@ -3045,8 +3045,16 @@ def test_publication_classifier_refuses_exact_path_with_wrong_module(
     (
         ("kernel.legacy_m1.runtime", "kernel/legacy_m1/runtime.py"),
         ("kernel.store", "kernel/store.py"),
+        (
+            "kernel.runtime_bundle_repository",
+            "kernel/runtime_bundle_repository.py",
+        ),
     ),
-    ids=("legacy-prefix", "exact-legacy-module"),
+    ids=(
+        "legacy-prefix",
+        "exact-legacy-module",
+        "runtime-bundle-repository",
+    ),
 )
 def test_publication_classifier_refuses_direct_legacy_dependency(
     tmp_path: Path,

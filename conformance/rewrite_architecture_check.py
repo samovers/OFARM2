@@ -191,6 +191,7 @@ LEGACY_MODULES = frozenset(
         "kernel.policy",
         "kernel.profile_policy",
         "kernel.runtime_activation",
+        "kernel.runtime_bundle_repository",
         "kernel.schema_posture",
         "kernel.stages",
         "kernel.store",
