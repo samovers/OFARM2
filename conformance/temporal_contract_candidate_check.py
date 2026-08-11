@@ -227,6 +227,58 @@ CAPABILITY_MANIFEST_PATH = (
     / "profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
 )
 
+TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_SELF_RELATIVE_PATH = (
+    "docs/rfcs/"
+    "OFARM_Temporal_RuntimeBundle_Publication_Conformance_Admission_"
+    "RFC_v0_1.md"
+)
+TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_SELF_CONTRACT_IDENTITY = (
+    "ofarm.temporal-runtime-bundle-publication-conformance-"
+    "admission.issue176.v0.1"
+)
+TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_SELF_BYTE_LENGTH = 42_596
+TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_SELF_SHA256 = (
+    "sha256:17014b754f7401a5ccf809dd8bb4281875592bfc0732abf08ca47dc378fb7cb1"
+)
+TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_PARENT_RELATIVE_PATH = (
+    "docs/rfcs/"
+    "OFARM_Temporal_RuntimeBundle_Catalog_Publication_Admission_RFC_v0_1.md"
+)
+TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_PARENT_CONTRACT_IDENTITY = (
+    "ofarm.temporal-runtime-bundle-catalog-publication-"
+    "admission.issue176.v0.1"
+)
+TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_PARENT_BYTE_LENGTH = 47_814
+TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_PARENT_SHA256 = (
+    "sha256:2161e9368f85b373b7cf54b6708edb7b291596defcf9683342e9583657a2298f"
+)
+TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH = (
+    "deployment/postgresql/temporal_runtime_bundle_publication.py"
+)
+TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_MODULE = (
+    "deployment.postgresql.temporal_runtime_bundle_publication"
+)
+TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_ABSENT = (
+    "TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_ABSENT"
+)
+TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_CLASSIFIED = (
+    "TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_CLASSIFIED"
+)
+PUBLICATION_ADAPTER_REQUIRED_MARKERS = (
+    "ofarm.tenant-command-runtime-bundle-selection.commit-operation-claim-draft.v0.1",
+    "sha256:56fb0f14a2514b34428841cb7bfc8681bb577ea3ecf57598be480683fb68524f",
+    "sha256:ed48914f77bedacdfce32fb621819da7df7701b54d7862477db0a49ceee5cdc6",
+    "sha256:c774100b13ad7d3f353148eeceeabd319167846825c7392ebbaca1f4ba62faea",
+    "ofarm.retain_runtime_content",
+    "ofarm.publish_runtime_bundle",
+)
+TEMPORAL_DECISION_LOG_CHECK_RELATIVE_PATH = (
+    "conformance/temporal_decision_log_check.py"
+)
+TEMPORAL_CANDIDATE_CHECK_RELATIVE_PATH = (
+    "conformance/temporal_contract_candidate_check.py"
+)
+
 GLOBAL_CONTENT_RETENTION_SELF_RELATIVE_PATH = (
     "docs/rfcs/"
     "OFARM_RuntimeBundle_Global_Content_Retention_Conformance_"
@@ -3248,6 +3300,27 @@ def _authenticate_authority(
     return authority_bytes
 
 
+def validate_temporal_runtime_bundle_publication_authorities() -> None:
+    for authority in (
+        (
+            TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_SELF_RELATIVE_PATH,
+            TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_SELF_BYTE_LENGTH,
+            TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_SELF_SHA256,
+            TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_SELF_CONTRACT_IDENTITY,
+        ),
+        (
+            TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_PARENT_RELATIVE_PATH,
+            TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_PARENT_BYTE_LENGTH,
+            TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_PARENT_SHA256,
+            TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_PARENT_CONTRACT_IDENTITY,
+        ),
+    ):
+        _authenticate_authority(
+            *authority,
+            authority_label="temporal-runtime-bundle-publication",
+        )
+
+
 def validate_global_content_retention_authorities() -> None:
     for authority in (
         (
@@ -3489,6 +3562,13 @@ def _classify_selection_storage_pair(
                 raise TemporalCandidateError(
                     "selection-storage adapter marker pair differs"
                 )
+        elif relative_path == (
+            TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH
+        ):
+            # The subordinate publication classifier owns this exact path and
+            # requires the complete six-marker conjunction later in the same
+            # checker invocation.
+            pass
         elif any(occurrences) and not _is_python_marker_exemption(relative_path):
             raise TemporalCandidateError(
                 "selection-storage marker entered another production Python source"
@@ -3573,6 +3653,132 @@ def _classify_global_content_retention_migration(
     return GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED
 
 
+def _classify_temporal_runtime_bundle_publication_adapter(
+    snapshot: architecture.PythonSourceSnapshotV1,
+    selection_state: str,
+    retention_state: str | None,
+) -> str:
+    if selection_state not in (
+        SELECTION_STORAGE_CONFORMANT_ABSENT,
+        SELECTION_STORAGE_CONFORMANT_CLASSIFIED,
+    ):
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle publication selection state differs"
+        )
+    if retention_state not in (
+        None,
+        GLOBAL_CONTENT_RETENTION_MIGRATION_ABSENT,
+        GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED,
+    ):
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle publication retention state differs"
+        )
+
+    try:
+        source_units = tuple(snapshot.modules_by_relative_path.items())
+    except (AttributeError, TypeError) as exc:
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle publication source inventory differs"
+        ) from exc
+
+    target_present = False
+    selection_ownership = (True, True, False, False, False, False)
+    lifecycle_ownership = (False, False, True, False, False, False)
+    enforcement_ownership = (True, True, True, True, True, True)
+    decision_log_owner_present = False
+    temporal_checker_owner_present = False
+    for relative_path, unit in source_units:
+        try:
+            unit_relative_path = unit.relative_path
+            unit_module_name = unit.module_name
+            source_text = unit.source_text
+        except AttributeError as exc:
+            raise TemporalCandidateError(
+                "temporal RuntimeBundle publication source unit differs"
+            ) from exc
+        if (
+            type(relative_path) is not str
+            or unit_relative_path != relative_path
+            or type(unit_module_name) is not str
+            or type(source_text) is not str
+        ):
+            raise TemporalCandidateError(
+                "temporal RuntimeBundle publication source unit differs"
+            )
+        occurrences = tuple(
+            marker in source_text
+            for marker in PUBLICATION_ADAPTER_REQUIRED_MARKERS
+        )
+        if relative_path == (
+            TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH
+        ):
+            target_present = True
+            if unit_module_name != (
+                TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_MODULE
+            ):
+                raise TemporalCandidateError(
+                    "temporal RuntimeBundle publication adapter module differs"
+                )
+            if occurrences != enforcement_ownership:
+                raise TemporalCandidateError(
+                    "temporal RuntimeBundle publication marker conjunction differs"
+                )
+        elif relative_path == SELECTION_STORAGE_ADAPTER_RELATIVE_PATH:
+            if occurrences != selection_ownership:
+                raise TemporalCandidateError(
+                    "selection adapter publication-marker ownership differs"
+                )
+        elif relative_path == TEMPORAL_DECISION_LOG_CHECK_RELATIVE_PATH:
+            decision_log_owner_present = True
+            if occurrences != lifecycle_ownership:
+                raise TemporalCandidateError(
+                    "decision-log checker publication-marker ownership differs"
+                )
+        elif relative_path == TEMPORAL_CANDIDATE_CHECK_RELATIVE_PATH:
+            temporal_checker_owner_present = True
+            if occurrences != enforcement_ownership:
+                raise TemporalCandidateError(
+                    "temporal checker publication-marker ownership differs"
+                )
+        elif relative_path.startswith("kernel/tests/"):
+            continue
+        elif any(occurrences):
+            raise TemporalCandidateError(
+                "publication marker entered an unapproved Python source"
+            )
+
+    if not decision_log_owner_present or not temporal_checker_owner_present:
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle publication marker-owner evidence is missing"
+        )
+
+    if target_present:
+        if (
+            selection_state == SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+            and retention_state
+            == GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED
+        ):
+            return TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_CLASSIFIED
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle publication foundation state differs"
+        )
+    if (
+        selection_state == SELECTION_STORAGE_CONFORMANT_ABSENT
+        and retention_state is None
+    ) or (
+        selection_state == SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+        and retention_state
+        in (
+            GLOBAL_CONTENT_RETENTION_MIGRATION_ABSENT,
+            GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED,
+        )
+    ):
+        return TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_ABSENT
+    raise TemporalCandidateError(
+        "temporal RuntimeBundle publication foundation state differs"
+    )
+
+
 def _validate_global_content_retention_python_isolation(
     snapshot: architecture.PythonSourceSnapshotV1,
 ) -> None:
@@ -3580,6 +3786,8 @@ def _validate_global_content_retention_python_isolation(
         if (
             any(marker in unit.source_text for marker in _GCRC_REQUIRED_MARKERS)
             and not _is_python_marker_exemption(relative_path)
+            and relative_path
+            != TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH
         ):
             raise TemporalCandidateError(
                 "global-content-retention marker entered production Python source"
@@ -3588,7 +3796,8 @@ def _validate_global_content_retention_python_isolation(
 
 def _validate_initializer_import_prohibition(
     snapshot: architecture.PythonSourceSnapshotV1,
-    state: str,
+    selection_state: str,
+    publication_state: str,
 ) -> None:
     initializer = snapshot.modules_by_relative_path.get(
         POSTGRESQL_INITIALIZER_RELATIVE_PATH
@@ -3630,23 +3839,42 @@ def _validate_initializer_import_prohibition(
                 ".".join(part for part in (base, alias.name) if part)
                 for alias in node.names
             )
-        if SELECTION_STORAGE_ADAPTER_MODULE in candidates:
+        if any(
+            module_name in candidates
+            for module_name in (
+                SELECTION_STORAGE_ADAPTER_MODULE,
+                TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_MODULE,
+            )
+        ):
             raise TemporalCandidateError(
-                "PostgreSQL initializer imports the selection-storage adapter"
+                "PostgreSQL initializer imports an isolated temporal adapter"
             )
 
-    if state == SELECTION_STORAGE_CONFORMANT_CLASSIFIED and any(
+    if selection_state == SELECTION_STORAGE_CONFORMANT_CLASSIFIED and any(
         edge.target == SELECTION_STORAGE_ADAPTER_MODULE
         for edge in snapshot.import_graph[POSTGRESQL_INITIALIZER_MODULE]
     ):
         raise TemporalCandidateError(
             "PostgreSQL initializer graph reaches the selection-storage adapter"
         )
+    if (
+        publication_state
+        == TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_CLASSIFIED
+        and any(
+            edge.target
+            == TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_MODULE
+            for edge in snapshot.import_graph[POSTGRESQL_INITIALIZER_MODULE]
+        )
+    ):
+        raise TemporalCandidateError(
+            "PostgreSQL initializer graph reaches the publication adapter"
+        )
 
 
 def _validate_selection_storage_isolation(
     snapshot: architecture.PythonSourceSnapshotV1,
-    state: str,
+    selection_state: str,
+    publication_state: str,
 ) -> None:
     # The supported invocation reaches this helper only after
     # _build_selection_storage_snapshot authenticated these descriptor roots.
@@ -3667,6 +3895,13 @@ def _validate_selection_storage_isolation(
             raise TemporalCandidateError(
                 f"selection-storage adapter entered the {label} import closure"
             )
+        if (
+            TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_MODULE
+            in reachability
+        ):
+            raise TemporalCandidateError(
+                f"publication adapter entered the {label} import closure"
+            )
         for unit in snapshot.modules_by_relative_path.values():
             if (
                 _is_python_marker_exemption(unit.relative_path)
@@ -3675,7 +3910,11 @@ def _validate_selection_storage_isolation(
                 raise TemporalCandidateError(
                     f"temporal verification source entered the {label} import closure"
                 )
-    _validate_initializer_import_prohibition(snapshot, state)
+    _validate_initializer_import_prohibition(
+        snapshot,
+        selection_state,
+        publication_state,
+    )
 
 
 def _validate_selection_storage_active_authorities() -> None:
@@ -3683,6 +3922,9 @@ def _validate_selection_storage_active_authorities() -> None:
         *SELECTION_STORAGE_MARKERS,
         *SELECTION_STORAGE_ALLOWED_PRODUCTION_PATHS,
         *_GCRC_REQUIRED_MARKERS,
+        *PUBLICATION_ADAPTER_REQUIRED_MARKERS,
+        TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH,
+        TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_MODULE,
     )
     for path in SELECTION_STORAGE_ACTIVE_NON_PYTHON_PATHS:
         try:
@@ -3703,6 +3945,7 @@ def _validate_selection_storage_conformance(
 ) -> str:
     _validate_selection_storage_migration_prefix(authority)
     state = _classify_selection_storage_pair(authority, snapshot)
+    retention_state: str | None = None
     for pin in SELECTION_STORAGE_SOURCE_PINS:
         _validate_source_pin(snapshot, pin)
     migration_7 = authority.migration_set.migrations[6]
@@ -3754,9 +3997,20 @@ def _validate_selection_storage_conformance(
             raise TemporalCandidateError(
                 "selection-storage V8 migration-set identity differs"
             )
+    publication_state = (
+        _classify_temporal_runtime_bundle_publication_adapter(
+            snapshot,
+            state,
+            retention_state,
+        )
+    )
     _validate_global_content_retention_python_isolation(snapshot)
     _validate_selection_storage_active_authorities()
-    _validate_selection_storage_isolation(snapshot, state)
+    _validate_selection_storage_isolation(
+        snapshot,
+        state,
+        publication_state,
+    )
     return state
 
 
@@ -3946,6 +4200,7 @@ def validate_temporal_card_errata_trace(errata: str) -> None:
 
 
 def validate_candidate_governance() -> str:
+    validate_temporal_runtime_bundle_publication_authorities()
     validate_global_content_retention_authorities()
     validate_selection_storage_authorities()
     migration_authority = load_tenant_migration_authority_snapshot()

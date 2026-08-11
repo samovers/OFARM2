@@ -393,6 +393,12 @@ def _selection_storage_source_snapshot(
         "kernel/legacy_m1/api.py": b"",
         "kernel/legacy_m1/runtime.py": b"",
         temporal.POSTGRESQL_INITIALIZER_RELATIVE_PATH: b"",
+        temporal.TEMPORAL_CANDIDATE_CHECK_RELATIVE_PATH: (
+            PACKAGE_ROOT / temporal.TEMPORAL_CANDIDATE_CHECK_RELATIVE_PATH
+        ).read_bytes(),
+        temporal.TEMPORAL_DECISION_LOG_CHECK_RELATIVE_PATH: (
+            PACKAGE_ROOT / temporal.TEMPORAL_DECISION_LOG_CHECK_RELATIVE_PATH
+        ).read_bytes(),
     }
     for (
         relative_path,
@@ -559,6 +565,19 @@ def _selection_storage_python_markers() -> bytes:
         )
         + "\n"
     ).encode("utf-8")
+
+
+def _publication_adapter_python_markers(
+    markers: tuple[str, ...] | None = None,
+) -> bytes:
+    selected = (
+        temporal.PUBLICATION_ADAPTER_REQUIRED_MARKERS
+        if markers is None
+        else markers
+    )
+    return ("\n".join(f"# {marker}" for marker in selected) + "\n").encode(
+        "utf-8"
+    )
 
 
 def _changed_migration(migration: object, **changes: object) -> SimpleNamespace:
@@ -2067,6 +2086,114 @@ def test_candidate_paths_are_not_frozen_or_active_contract_directories():
         )
 
 
+def test_publication_conformance_authenticates_self_then_parent(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    observed: list[tuple[str, str]] = []
+
+    def record(
+        relative_path: str,
+        _byte_length: int,
+        _sha256: str,
+        _contract_identity: str | None,
+        *,
+        authority_label: str = "selection-storage",
+    ) -> bytes:
+        observed.append((relative_path, authority_label))
+        return b""
+
+    monkeypatch.setattr(temporal, "_authenticate_authority", record)
+    temporal.validate_temporal_runtime_bundle_publication_authorities()
+
+    assert observed == [
+        (
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_SELF_RELATIVE_PATH,
+            "temporal-runtime-bundle-publication",
+        ),
+        (
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_PARENT_RELATIVE_PATH,
+            "temporal-runtime-bundle-publication",
+        ),
+    ]
+
+
+@pytest.mark.parametrize("authority_name", ("self", "parent"))
+@pytest.mark.parametrize(
+    ("failure", "message"),
+    (
+        ("missing", "authority is missing"),
+        ("symlink", "authority is missing"),
+        ("unreadable", "authority is unreadable"),
+        ("length", "byte length differs"),
+        ("digest", "digest differs"),
+        ("identity", "contract identity differs"),
+    ),
+    ids=("missing", "symlink", "unreadable", "length", "digest", "identity"),
+)
+def test_publication_conformance_authority_refuses_inexact_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    authority_name: str,
+    failure: str,
+    message: str,
+):
+    authorities = {
+        "self": (
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_SELF_RELATIVE_PATH,
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_SELF_CONTRACT_IDENTITY,
+            "TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_SELF_SHA256",
+        ),
+        "parent": (
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_PARENT_RELATIVE_PATH,
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_PARENT_CONTRACT_IDENTITY,
+            "TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_PARENT_SHA256",
+        ),
+    }
+    for relative_path, _identity, _sha_name in authorities.values():
+        destination = tmp_path / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes((PACKAGE_ROOT / relative_path).read_bytes())
+
+    relative_path, identity, sha_name = authorities[authority_name]
+    authority_path = tmp_path / relative_path
+    if failure == "missing":
+        authority_path.unlink()
+    elif failure == "symlink":
+        target = authority_path.with_suffix(".target")
+        authority_path.replace(target)
+        authority_path.symlink_to(target)
+    elif failure == "length":
+        authority_path.write_bytes(authority_path.read_bytes() + b"\n")
+    elif failure == "digest":
+        source = authority_path.read_bytes()
+        authority_path.write_bytes(bytes((source[0] ^ 1,)) + source[1:])
+    elif failure == "identity":
+        source = authority_path.read_bytes().replace(
+            identity.encode("utf-8"),
+            b"x" * len(identity),
+        )
+        authority_path.write_bytes(source)
+        monkeypatch.setattr(
+            temporal,
+            sha_name,
+            "sha256:" + hashlib.sha256(source).hexdigest(),
+        )
+
+    if failure == "unreadable":
+        original_read_bytes = Path.read_bytes
+
+        def read_bytes(path: Path) -> bytes:
+            if path == authority_path:
+                raise OSError("unavailable")
+            return original_read_bytes(path)
+
+        monkeypatch.setattr(Path, "read_bytes", read_bytes)
+
+    monkeypatch.setattr(temporal, "PACKAGE_ROOT", tmp_path)
+    with pytest.raises(temporal.TemporalCandidateError, match=message):
+        temporal.validate_temporal_runtime_bundle_publication_authorities()
+
+
 def test_global_content_retention_authenticates_self_then_parent(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -2183,6 +2310,9 @@ def test_complete_check_authenticates_retention_before_selection(
     class StopAfterSelectionAuthority(Exception):
         pass
 
+    def publication_authority() -> None:
+        observed.append("publication")
+
     def retention_authority() -> None:
         observed.append("retention")
 
@@ -2190,6 +2320,11 @@ def test_complete_check_authenticates_retention_before_selection(
         observed.append("selection")
         raise StopAfterSelectionAuthority
 
+    monkeypatch.setattr(
+        temporal,
+        "validate_temporal_runtime_bundle_publication_authorities",
+        publication_authority,
+    )
     monkeypatch.setattr(
         temporal,
         "validate_global_content_retention_authorities",
@@ -2203,7 +2338,7 @@ def test_complete_check_authenticates_retention_before_selection(
 
     with pytest.raises(StopAfterSelectionAuthority):
         temporal.validate_candidate_governance()
-    assert observed == ["retention", "selection"]
+    assert observed == ["publication", "retention", "selection"]
 
 
 def test_selection_storage_authenticates_amendment_first(
@@ -2644,6 +2779,589 @@ def test_global_content_retention_exact_v9_preserves_public_state(
     ) == temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
 
 
+def test_publication_classifier_constants_are_exact():
+    assert temporal.PUBLICATION_ADAPTER_REQUIRED_MARKERS == (
+        "ofarm.tenant-command-runtime-bundle-selection.commit-operation-claim-draft.v0.1",
+        "sha256:56fb0f14a2514b34428841cb7bfc8681bb577ea3ecf57598be480683fb68524f",
+        "sha256:ed48914f77bedacdfce32fb621819da7df7701b54d7862477db0a49ceee5cdc6",
+        "sha256:c774100b13ad7d3f353148eeceeabd319167846825c7392ebbaca1f4ba62faea",
+        "ofarm.retain_runtime_content",
+        "ofarm.publish_runtime_bundle",
+    )
+    assert temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH == (
+        "deployment/postgresql/temporal_runtime_bundle_publication.py"
+    )
+    assert temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_MODULE == (
+        "deployment.postgresql.temporal_runtime_bundle_publication"
+    )
+    assert temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_ABSENT == (
+        "TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_ABSENT"
+    )
+    assert temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_CLASSIFIED == (
+        "TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_CLASSIFIED"
+    )
+
+
+def test_publication_adapter_is_absent_from_real_conformance_phase_b_tree():
+    assert not (
+        PACKAGE_ROOT
+        / temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH
+    ).exists()
+
+
+def test_publication_classifier_accepts_all_four_lawful_compositions(
+    tmp_path: Path,
+):
+    selection_source = _selection_storage_python_markers()
+    retention_source = _global_content_retention_migration_source()
+    publication_source = _publication_adapter_python_markers()
+    v9 = _global_content_retention_v9_authority(
+        selection_source,
+        retention_source,
+    )
+    cases = (
+        (
+            _selection_storage_v7_authority(),
+            _selection_storage_source_snapshot(tmp_path / "v7"),
+            temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+        ),
+        (
+            _selection_storage_v8_authority(selection_source),
+            _selection_storage_source_snapshot(
+                tmp_path / "v8",
+                {
+                    temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: (
+                        selection_source
+                    )
+                },
+            ),
+            temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED,
+        ),
+        (
+            v9,
+            _selection_storage_source_snapshot(
+                tmp_path / "v9-absent",
+                {
+                    temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: (
+                        selection_source
+                    )
+                },
+            ),
+            temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED,
+        ),
+        (
+            v9,
+            _selection_storage_source_snapshot(
+                tmp_path / "v9-present",
+                {
+                    temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: (
+                        selection_source
+                    ),
+                    temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH: (
+                        publication_source
+                    ),
+                },
+            ),
+            temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED,
+        ),
+    )
+
+    for authority, snapshot, public_state in cases:
+        assert temporal._validate_selection_storage_conformance(
+            authority,
+            snapshot,
+        ) == public_state
+
+    assert temporal._classify_temporal_runtime_bundle_publication_adapter(
+        cases[-1][1],
+        temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED,
+        temporal.GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED,
+    ) == temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_CLASSIFIED
+
+
+@pytest.mark.parametrize("migration_state", ("v7", "v8"))
+def test_publication_classifier_refuses_target_before_v9_foundation(
+    tmp_path: Path,
+    migration_state: str,
+):
+    selection_source = _selection_storage_python_markers()
+    overrides = {
+        temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH: (
+            _publication_adapter_python_markers()
+        )
+    }
+    if migration_state == "v8":
+        overrides[temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH] = (
+            selection_source
+        )
+        authority = _selection_storage_v8_authority(selection_source)
+    else:
+        authority = _selection_storage_v7_authority()
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="publication foundation state differs",
+    ):
+        temporal._validate_selection_storage_conformance(
+            authority,
+            _selection_storage_source_snapshot(tmp_path, overrides),
+        )
+
+
+@pytest.mark.parametrize(
+    ("selection_state", "retention_state"),
+    (
+        (
+            temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+            temporal.GLOBAL_CONTENT_RETENTION_MIGRATION_ABSENT,
+        ),
+        (
+            temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+            temporal.GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED,
+        ),
+        (temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED, None),
+    ),
+    ids=("v7-with-v8-evidence", "v7-with-v9-evidence", "classified-without-retention"),
+)
+def test_publication_classifier_refuses_unlawful_internal_composition(
+    tmp_path: Path,
+    selection_state: str,
+    retention_state: str | None,
+):
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="publication foundation state differs",
+    ):
+        temporal._classify_temporal_runtime_bundle_publication_adapter(
+            _selection_storage_source_snapshot(tmp_path),
+            selection_state,
+            retention_state,
+        )
+
+
+@pytest.mark.parametrize(
+    ("selection_state", "retention_state", "message"),
+    (
+        (
+            "CALLER_SELECTED",
+            None,
+            "publication selection state differs",
+        ),
+        (
+            temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+            "CALLER_SELECTED",
+            "publication retention state differs",
+        ),
+    ),
+    ids=("selection", "retention"),
+)
+def test_publication_classifier_refuses_unknown_internal_state(
+    tmp_path: Path,
+    selection_state: str,
+    retention_state: str | None,
+    message: str,
+):
+    with pytest.raises(temporal.TemporalCandidateError, match=message):
+        temporal._classify_temporal_runtime_bundle_publication_adapter(
+            _selection_storage_source_snapshot(tmp_path),
+            selection_state,
+            retention_state,
+        )
+
+
+@pytest.mark.parametrize(
+    "missing_marker",
+    temporal.PUBLICATION_ADAPTER_REQUIRED_MARKERS,
+)
+def test_publication_classifier_refuses_incomplete_target_conjunction(
+    tmp_path: Path,
+    missing_marker: str,
+):
+    selection_source = _selection_storage_python_markers()
+    authority = _global_content_retention_v9_authority(
+        selection_source,
+        _global_content_retention_migration_source(),
+    )
+    publication_source = _publication_adapter_python_markers(
+        tuple(
+            marker
+            for marker in temporal.PUBLICATION_ADAPTER_REQUIRED_MARKERS
+            if marker != missing_marker
+        )
+    )
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: selection_source,
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH: (
+                publication_source
+            ),
+        },
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="publication marker conjunction differs",
+    ):
+        temporal._validate_selection_storage_conformance(authority, snapshot)
+
+
+def test_publication_classifier_refuses_exact_path_with_wrong_module(
+    tmp_path: Path,
+):
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH: (
+                _publication_adapter_python_markers()
+            )
+        },
+    )
+    units = dict(snapshot.modules_by_relative_path)
+    target = units[
+        temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH
+    ]
+    units[
+        temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH
+    ] = target._replace(module_name="deployment.postgresql.publisher_alias")
+    snapshot_view = _selection_storage_snapshot_view(
+        snapshot,
+        modules_by_relative_path=units,
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="publication adapter module differs",
+    ):
+        temporal._classify_temporal_runtime_bundle_publication_adapter(
+            snapshot_view,
+            temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED,
+            temporal.GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED,
+        )
+
+
+def test_publication_classifier_refuses_alias_path_with_complete_markers(
+    tmp_path: Path,
+):
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            "deployment/postgresql/publication_alias.py": (
+                _publication_adapter_python_markers()
+            )
+        },
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="publication marker entered an unapproved Python source",
+    ):
+        temporal._classify_temporal_runtime_bundle_publication_adapter(
+            snapshot,
+            temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+            None,
+        )
+
+
+@pytest.mark.parametrize(
+    "extra_marker",
+    temporal.PUBLICATION_ADAPTER_REQUIRED_MARKERS[2:],
+)
+def test_publication_classifier_refuses_expanded_selection_adapter_owner(
+    tmp_path: Path,
+    extra_marker: str,
+):
+    selection_source = (
+        _selection_storage_python_markers()
+        + f"# {extra_marker}\n".encode("utf-8")
+    )
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: selection_source},
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="selection adapter publication-marker ownership differs",
+    ):
+        temporal._classify_temporal_runtime_bundle_publication_adapter(
+            snapshot,
+            temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED,
+            temporal.GLOBAL_CONTENT_RETENTION_MIGRATION_ABSENT,
+        )
+
+
+def test_publication_classifier_accepts_exact_decision_log_owner(
+    tmp_path: Path,
+):
+    lifecycle_marker = temporal.PUBLICATION_ADAPTER_REQUIRED_MARKERS[2]
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.TEMPORAL_DECISION_LOG_CHECK_RELATIVE_PATH: (
+                f"# {lifecycle_marker}\n".encode("utf-8")
+            )
+        },
+    )
+
+    assert temporal._classify_temporal_runtime_bundle_publication_adapter(
+        snapshot,
+        temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+        None,
+    ) == temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_ABSENT
+
+
+@pytest.mark.parametrize(
+    "changed_marker",
+    (None,)
+    + tuple(
+        marker
+        for index, marker in enumerate(
+            temporal.PUBLICATION_ADAPTER_REQUIRED_MARKERS
+        )
+        if index != 2
+    ),
+    ids=("missing-lifecycle", "binding-identity", "binding-digest", "bundle-digest", "retention", "publish"),
+)
+def test_publication_classifier_refuses_changed_decision_log_owner(
+    tmp_path: Path,
+    changed_marker: str | None,
+):
+    lifecycle_marker = temporal.PUBLICATION_ADAPTER_REQUIRED_MARKERS[2]
+    markers = () if changed_marker is None else (lifecycle_marker, changed_marker)
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.TEMPORAL_DECISION_LOG_CHECK_RELATIVE_PATH: (
+                _publication_adapter_python_markers(markers)
+            )
+        },
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="decision-log checker publication-marker ownership differs",
+    ):
+        temporal._classify_temporal_runtime_bundle_publication_adapter(
+            snapshot,
+            temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+            None,
+        )
+
+
+def test_publication_classifier_checker_constants_never_satisfy_target(
+    tmp_path: Path,
+):
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.TEMPORAL_CANDIDATE_CHECK_RELATIVE_PATH: (
+                _publication_adapter_python_markers()
+            )
+        },
+    )
+
+    assert temporal._classify_temporal_runtime_bundle_publication_adapter(
+        snapshot,
+        temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+        None,
+    ) == temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_ABSENT
+
+
+def test_publication_classifier_refuses_incomplete_checker_constants(
+    tmp_path: Path,
+):
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.TEMPORAL_CANDIDATE_CHECK_RELATIVE_PATH: (
+                _publication_adapter_python_markers(
+                    temporal.PUBLICATION_ADAPTER_REQUIRED_MARKERS[:-1]
+                )
+            )
+        },
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="temporal checker publication-marker ownership differs",
+    ):
+        temporal._classify_temporal_runtime_bundle_publication_adapter(
+            snapshot,
+            temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+            None,
+        )
+
+
+@pytest.mark.parametrize(
+    "missing_path",
+    (
+        temporal.TEMPORAL_CANDIDATE_CHECK_RELATIVE_PATH,
+        temporal.TEMPORAL_DECISION_LOG_CHECK_RELATIVE_PATH,
+    ),
+    ids=("temporal-checker", "decision-log-checker"),
+)
+def test_publication_classifier_refuses_missing_marker_owner_evidence(
+    tmp_path: Path,
+    missing_path: str,
+):
+    snapshot = _selection_storage_source_snapshot(tmp_path)
+    units = dict(snapshot.modules_by_relative_path)
+    units.pop(missing_path)
+    snapshot_view = _selection_storage_snapshot_view(
+        snapshot,
+        modules_by_relative_path=units,
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="publication marker-owner evidence is missing",
+    ):
+        temporal._classify_temporal_runtime_bundle_publication_adapter(
+            snapshot_view,
+            temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+            None,
+        )
+
+
+def test_publication_classifier_kernel_test_markers_never_satisfy_target(
+    tmp_path: Path,
+):
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            "kernel/tests/publication_fixture.py": (
+                _publication_adapter_python_markers()
+            )
+        },
+    )
+
+    assert temporal._classify_temporal_runtime_bundle_publication_adapter(
+        snapshot,
+        temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+        None,
+    ) == temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_ABSENT
+
+
+@pytest.mark.parametrize(
+    "marker",
+    temporal.PUBLICATION_ADAPTER_REQUIRED_MARKERS,
+)
+def test_publication_classifier_refuses_marker_in_every_other_source_class(
+    tmp_path: Path,
+    marker: str,
+):
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            "profile_si_ffs/tests/publication_fixture.py": (
+                f"# {marker}\n".encode("utf-8")
+            )
+        },
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="publication marker entered an unapproved Python source",
+    ):
+        temporal._classify_temporal_runtime_bundle_publication_adapter(
+            snapshot,
+            temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+            None,
+        )
+
+
+def test_publication_classifier_refuses_malformed_snapshot_unit(
+    tmp_path: Path,
+):
+    snapshot = _selection_storage_source_snapshot(tmp_path)
+    units = dict(snapshot.modules_by_relative_path)
+    path = temporal.POSTGRESQL_INITIALIZER_RELATIVE_PATH
+    units[path] = units[path]._replace(source_text=object())
+    snapshot_view = _selection_storage_snapshot_view(
+        snapshot,
+        modules_by_relative_path=units,
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="publication source unit differs",
+    ):
+        temporal._classify_temporal_runtime_bundle_publication_adapter(
+            snapshot_view,
+            temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+            None,
+        )
+
+
+def test_publication_classifier_reuses_one_retention_result_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    selection_source = _selection_storage_python_markers()
+    authority = _global_content_retention_v9_authority(
+        selection_source,
+        _global_content_retention_migration_source(),
+    )
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: selection_source},
+    )
+    retention_calls: list[tuple[object, str]] = []
+    publication_calls: list[tuple[object, str, str | None]] = []
+    original_retention = temporal._classify_global_content_retention_migration
+    original_publication = (
+        temporal._classify_temporal_runtime_bundle_publication_adapter
+    )
+
+    def retention_classifier(
+        selected_authority: object,
+        prefix: str,
+    ) -> str:
+        retention_calls.append((selected_authority, prefix))
+        return original_retention(selected_authority, prefix)
+
+    def publication_classifier(
+        selected_snapshot: object,
+        selection_state: str,
+        retention_state: str | None,
+    ) -> str:
+        publication_calls.append(
+            (selected_snapshot, selection_state, retention_state)
+        )
+        return original_publication(
+            selected_snapshot,
+            selection_state,
+            retention_state,
+        )
+
+    monkeypatch.setattr(
+        temporal,
+        "_classify_global_content_retention_migration",
+        retention_classifier,
+    )
+    monkeypatch.setattr(
+        temporal,
+        "_classify_temporal_runtime_bundle_publication_adapter",
+        publication_classifier,
+    )
+
+    assert temporal._validate_selection_storage_conformance(
+        authority,
+        snapshot,
+    ) == temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+    assert retention_calls == [
+        (authority, temporal.GLOBAL_CONTENT_RETENTION_V8_PREFIX_DIGEST)
+    ]
+    assert publication_calls == [
+        (
+            snapshot,
+            temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED,
+            temporal.GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED,
+        )
+    ]
+
+
 @pytest.mark.parametrize("missing_marker", temporal._GCRC_REQUIRED_MARKERS)
 def test_global_content_retention_refuses_incomplete_required_markers(
     tmp_path: Path,
@@ -2969,6 +3687,45 @@ def test_selection_storage_refuses_adapter_in_fixed_reachability(
             _selection_storage_v8_authority(source_bytes),
             snapshot,
         )
+
+
+@pytest.mark.parametrize(
+    ("root_path", "label"),
+    (
+        ("kernel/api.py", "production"),
+        ("kernel/legacy_m1/api.py", "legacy"),
+    ),
+    ids=("production", "legacy"),
+)
+def test_publication_classifier_refuses_adapter_in_fixed_reachability(
+    tmp_path: Path,
+    root_path: str,
+    label: str,
+):
+    selection_source = _selection_storage_python_markers()
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: selection_source,
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH: (
+                _publication_adapter_python_markers()
+            ),
+            root_path: (
+                b"import deployment.postgresql."
+                b"temporal_runtime_bundle_publication\n"
+            ),
+        },
+    )
+    authority = _global_content_retention_v9_authority(
+        selection_source,
+        _global_content_retention_migration_source(),
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match=f"publication adapter entered the {label} import closure",
+    ):
+        temporal._validate_selection_storage_conformance(authority, snapshot)
 
 
 @pytest.mark.parametrize(
@@ -3406,6 +4163,94 @@ def test_selection_storage_refuses_every_initializer_import_form(
         )
 
 
+@pytest.mark.parametrize(
+    "initializer_source",
+    (
+        "import deployment.postgresql.temporal_runtime_bundle_publication\n",
+        (
+            "from deployment.postgresql import "
+            "temporal_runtime_bundle_publication\n"
+        ),
+        "from . import temporal_runtime_bundle_publication\n",
+        (
+            "from .temporal_runtime_bundle_publication "
+            "import publish_runtime_bundle\n"
+        ),
+        "from ..postgresql import temporal_runtime_bundle_publication\n",
+        (
+            "from ..postgresql.temporal_runtime_bundle_publication "
+            "import publish_runtime_bundle\n"
+        ),
+        (
+            "def nested():\n"
+            "    from . import temporal_runtime_bundle_publication as publisher\n"
+        ),
+        (
+            "class Nested:\n"
+            "    from . import temporal_runtime_bundle_publication\n"
+        ),
+        (
+            "if TYPE_CHECKING:\n"
+            "    from .temporal_runtime_bundle_publication import *\n"
+        ),
+    ),
+    ids=(
+        "absolute-import",
+        "absolute-from",
+        "relative-from-package",
+        "relative-from-adapter",
+        "parent-relative-from-package",
+        "parent-relative-from-adapter",
+        "nested-alias",
+        "class-scope",
+        "type-checking-star",
+    ),
+)
+@pytest.mark.parametrize(
+    "target_present",
+    (False, True),
+    ids=("absent", "present"),
+)
+def test_publication_classifier_refuses_every_initializer_import_form(
+    tmp_path: Path,
+    initializer_source: str,
+    target_present: bool,
+):
+    overrides = {
+        temporal.POSTGRESQL_INITIALIZER_RELATIVE_PATH: (
+            initializer_source.encode("utf-8")
+        )
+    }
+    if target_present:
+        selection_source = _selection_storage_python_markers()
+        overrides.update(
+            {
+                temporal.SELECTION_STORAGE_ADAPTER_RELATIVE_PATH: (
+                    selection_source
+                ),
+                temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH: (
+                    _publication_adapter_python_markers()
+                ),
+            }
+        )
+        authority = _global_content_retention_v9_authority(
+            selection_source,
+            _global_content_retention_migration_source(),
+        )
+    else:
+        authority = _selection_storage_v7_authority()
+    snapshot = _selection_storage_source_snapshot(tmp_path, overrides)
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="initializer imports",
+    ):
+        temporal._validate_selection_storage_conformance(
+            authority,
+            snapshot,
+        )
+
+
 @pytest.mark.parametrize("missing", ("path", "graph"))
 def test_selection_storage_refuses_missing_initializer_evidence(
     tmp_path: Path,
@@ -3434,6 +4279,7 @@ def test_selection_storage_refuses_missing_initializer_evidence(
         temporal._validate_initializer_import_prohibition(
             snapshot_view,
             temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_ABSENT,
         )
 
 
@@ -3458,6 +4304,7 @@ def test_selection_storage_refuses_initializer_module_identity_drift(
         temporal._validate_initializer_import_prohibition(
             snapshot_view,
             temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_ABSENT,
         )
 
 
@@ -3490,6 +4337,7 @@ def test_selection_storage_refuses_initializer_ast_custody_failure(
         temporal._validate_initializer_import_prohibition(
             snapshot_view,
             temporal.SELECTION_STORAGE_CONFORMANT_ABSENT,
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_ABSENT,
         )
 
 
@@ -3521,6 +4369,42 @@ def test_selection_storage_refuses_classified_initializer_graph_edge(
         temporal._validate_initializer_import_prohibition(
             snapshot_view,
             temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED,
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_ABSENT,
+        )
+
+
+def test_publication_classifier_refuses_classified_initializer_graph_edge(
+    tmp_path: Path,
+):
+    snapshot = _selection_storage_source_snapshot(
+        tmp_path,
+        {
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH: (
+                _publication_adapter_python_markers()
+            )
+        },
+    )
+    graph = dict(snapshot.import_graph)
+    graph[temporal.POSTGRESQL_INITIALIZER_MODULE] = (
+        temporal.architecture.PythonImportEdgeV1(
+            1,
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_MODULE,
+        ),
+    )
+    snapshot_view = _selection_storage_snapshot_view(
+        snapshot,
+        import_graph=graph,
+        ast_for=lambda _module: ast.parse(""),
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="initializer graph reaches the publication adapter",
+    ):
+        temporal._validate_initializer_import_prohibition(
+            snapshot_view,
+            temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED,
+            temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_CLASSIFIED,
         )
 
 
@@ -3808,8 +4692,22 @@ def test_classified_state_does_not_evaluate_obsolete_v7_catalog_pin(
     (
         temporal.SELECTION_STORAGE_MARKERS[1],
         temporal._GCRC_REQUIRED_MARKERS[0],
+        temporal.PUBLICATION_ADAPTER_REQUIRED_MARKERS[0],
+        *temporal.PUBLICATION_ADAPTER_REQUIRED_MARKERS[2:],
+        temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH,
+        temporal.TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_MODULE,
     ),
-    ids=("selection", "global-content-retention"),
+    ids=(
+        "selection",
+        "global-content-retention",
+        "binding-identity",
+        "lifecycle-digest",
+        "bundle-digest",
+        "retention",
+        "publish",
+        "publication-path",
+        "publication-module",
+    ),
 )
 def test_selection_storage_active_authority_refuses_marker(
     tmp_path: Path,
@@ -3892,6 +4790,7 @@ def test_selection_storage_evidence_uses_retained_sources_only():
             temporal._validate_source_pin,
             temporal._classify_selection_storage_pair,
             temporal._classify_global_content_retention_migration,
+            temporal._classify_temporal_runtime_bundle_publication_adapter,
             temporal._validate_global_content_retention_python_isolation,
             temporal._validate_selection_storage_isolation,
             temporal._validate_selection_storage_conformance,
@@ -3913,6 +4812,27 @@ def test_selection_storage_evidence_uses_retained_sources_only():
     assert "modules_by_name" not in inspect.getsource(
         temporal._classify_selection_storage_pair
     )
+    publication_classifier_source = inspect.getsource(
+        temporal._classify_temporal_runtime_bundle_publication_adapter
+    )
+    for forbidden_operation in (
+        "ast_for(",
+        "ast.parse(",
+        "importlib",
+        ".read_bytes(",
+        ".read_text(",
+        ".glob(",
+        ".rglob(",
+        "open(",
+    ):
+        assert forbidden_operation not in publication_classifier_source
+    assert (
+        "TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH"
+        not in inspect.getsource(temporal._is_python_marker_exemption)
+    )
+    assert inspect.getsource(
+        temporal._validate_selection_storage_conformance
+    ).count("_classify_temporal_runtime_bundle_publication_adapter(") == 1
     for private_name in (
         "_module_sources",
         "_import_graph",
@@ -3949,6 +4869,7 @@ def test_selection_storage_evidence_uses_retained_sources_only():
             temporal._validate_source_pin,
             temporal._classify_selection_storage_pair,
             temporal._classify_global_content_retention_migration,
+            temporal._classify_temporal_runtime_bundle_publication_adapter,
             temporal._validate_global_content_retention_python_isolation,
             temporal._validate_initializer_import_prohibition,
             temporal._validate_selection_storage_isolation,
