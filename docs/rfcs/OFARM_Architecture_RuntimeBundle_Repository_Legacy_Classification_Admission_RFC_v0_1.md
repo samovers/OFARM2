@@ -1,8 +1,9 @@
 # OFARM2 RuntimeBundle Repository Legacy Classification Admission — Phase A Contract v0.1
 
-**Status:** proposed Phase A design; documentation-only, unapproved, and
-without architecture-checker, temporal-checker, repository, runtime, database,
-route, output, deployment, legacy-activation, or #192 effect
+**Status:** architect-approved Phase A design; pre-deployment only, with no
+architecture-checker, temporal-checker, repository, runtime, database, route,
+output, deployment, legacy-activation, or #192 effect until the separately
+bounded implementation is completed and verified
 
 **Issue:** #176
 
@@ -390,6 +391,21 @@ Stop without implementation or merge if:
    or
 8. an exact-head required check fails or a demonstrated Blocker remains.
 
-This Phase A stops before classifier implementation and before presenting a
-live decision card. The next lawful action is exact-head review of this one-file
-contract in its already-created draft pull request.
+This Phase A authorizes only the separately bounded implementation in its
+already-created draft pull request. It does not authorize another boundary.
+
+## Appendix A — Compact approval evidence
+
+- **Decision:**
+  `ISSUE176-RUNTIME-BUNDLE-REPOSITORY-LEGACY-CLASSIFICATION-001`, version `1`.
+- **Codex task:** `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`.
+- **Complete live card:** stable reference `item-5467` in that task.
+- **Architect approval:** stable reference `item-5468`, observed as a later
+  task-user message in the same task.
+- **Exact approval sentence:**
+  `I approve OFARM2 decision ISSUE176-RUNTIME-BUNDLE-REPOSITORY-LEGACY-CLASSIFICATION-001 version 1.`
+- **Implementation PR:** `https://github.com/samovers/OFARM2/pull/304`.
+- **Evidence posture:** these task references and role/order observations are
+  provisional AI-attested evidence of the architect's decision. This appendix
+  is not approval authority, deployment authority, or an independently
+  verifiable identity claim.

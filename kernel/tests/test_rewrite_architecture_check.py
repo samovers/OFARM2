@@ -324,6 +324,34 @@ def test_firewall_reports_indirect_legacy_import_path(tmp_path):
     ]
 
 
+def test_firewall_rejects_exact_runtime_bundle_repository_import(tmp_path):
+    assert "kernel.runtime_bundle_repository" in (
+        rewrite_architecture_check.LEGACY_MODULES
+    )
+    assert rewrite_architecture_check._is_legacy_module(
+        "kernel.runtime_bundle_repository"
+    )
+    assert not rewrite_architecture_check._is_legacy_module(
+        "kernel.runtime_bundle"
+    )
+
+    _firewall_tree(
+        tmp_path,
+        "from .runtime_bundle_repository import RuntimeBundleRepository\n",
+    )
+    _write_module(
+        tmp_path,
+        "kernel/runtime_bundle_repository.py",
+        "class RuntimeBundleRepository:\n    pass\n",
+    )
+
+    assert rewrite_architecture_check._check_import_firewall(tmp_path) == [
+        "kernel/api.py:1: production import path kernel.api -> "
+        "kernel.runtime_bundle_repository reaches legacy module "
+        "'kernel.runtime_bundle_repository'"
+    ]
+
+
 def test_firewall_rejects_prototype_schema_reference(tmp_path):
     _firewall_tree(tmp_path, "from .helper import SCHEMA\n")
     _write_module(tmp_path, "kernel/helper.py", "SCHEMA = 'schema.sql'\n")
