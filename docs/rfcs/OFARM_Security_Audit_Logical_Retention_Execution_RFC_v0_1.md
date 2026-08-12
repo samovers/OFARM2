@@ -1,7 +1,7 @@
 # OFARM Security-Audit Logical Retention Execution — Phase A Contract v0.1
 
-**Status:** proposed; Phase A contract complete in draft pull request #307;
-Phase B is not authorized
+**Status:** approved for Phase B repository implementation in draft pull
+request #307; deployment is not authorized
 
 **Draft implementation pull request:**
 `https://github.com/samovers/OFARM2/pull/307`
@@ -10,7 +10,7 @@ Phase B is not authorized
 `ofarm2.security-audit-logical-retention-execution.v0.1`
 
 **Decision identity:**
-`ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001`, proposed version `1`
+`ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001`, approved version `1`
 
 **Issue:** #192
 
@@ -543,6 +543,23 @@ or a demonstrated defect in the accepted database function. The likely upgrade
 path would be a separately governed forward migration or reconciliation
 boundary, never a silent expansion of this pull request.
 
+### 13.1 AI-attested approval evidence
+
+- **Task:** `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00`
+- **Live card:**
+  `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00#item-75`
+- **Approval:**
+  `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00#item-76`
+- **Exact approval sentence:** `I approve OFARM2 decision
+  ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001 version 1.`
+- **Observed role and order:** the assistant-authored complete live card was
+  directly followed in the same task by the task user's exact entire-message
+  approval. No later cancellation preceded implementation.
+- **Named pull request:** `https://github.com/samovers/OFARM2/pull/307`
+- **Evidence limitation:** the task message remains authority; this record is
+  AI-attested evidence only. The authority is provisional repository
+  development authority and grants no deployment or production authority.
+
 ## 14. Traceability and verification
 
 | ID | Owning code | Negative evidence | Acceptance evidence | Smallest verification |
@@ -598,8 +615,8 @@ collected test in the new module.
 
 ### 14.2 Review disposition
 
-- **Blockers:** exact later task-user approval of the complete live decision
-  card; Phase B remains unauthorized.
+- **Blockers:** none at approval recognition; merge remains conditioned on
+  every exact-head verification and review gate.
 - **Follow-ups:** separate remaining issue #192 boundaries, including external
   cadence and deployment ownership.
 - **Preferences:** none.
@@ -609,14 +626,10 @@ Once `RET-001` through `RET-010` pass and no demonstrated in-scope Blocker
 remains, the approved workflow permits merging the named pull request. New ideas
 and adjacent hardening remain follow-ups.
 
-## 15. Phase A stop
+## 15. Approved Phase B execution
 
-This proposed contract grants no Phase B implementation authority. It stops
-before production code, tests, operator-documentation changes, inventory
-regeneration, approval recognition, or any database operation.
-
-This RFC is published in the named draft pull request. After the stable PR
-reference is committed and the exact contract head is reviewed, the next
-lawful action is to display one complete live card for
-`ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001` version `1` and wait
-for the exact later approval message.
+The exact later task-user approval authorizes in-envelope repository
+implementation, tests, documentation, mechanical inventory regeneration,
+review handling, commits, pushes, and merge in the named pull request after
+every gate passes. It authorizes no database operation, deployment, release,
+production access, current/default promotion, or production security waiver.

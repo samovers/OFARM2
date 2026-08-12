@@ -410,6 +410,47 @@ versus-audit separation. Neither result proves uninterrupted tenant history or
 authorizes traffic. Issue #193 must supply an external non-rewindable witness
 before any restore or promotion decision can exist.
 
+## One-shot security-audit logical retention
+
+The retention command performs exactly one database-owned logical-retention
+batch and accepts no arguments:
+
+```bash
+export OFARM_SECURITY_AUDIT_RETENTION_PG_DSN='...'
+python -m deployment.postgresql.run_security_audit_retention
+```
+
+The route must authenticate only as
+`ofarm_security_audit_retention_login`. PostgreSQL chooses the cutoff, victims,
+ordering, cleanup, maintenance-event identity, and maximum deletion count of
+1,024 event rows. The command never accepts a cutoff, row identity, cursor,
+limit, role, service, or retry selector. An invocation before any row is
+eligible commits a matching `AUDIT_RETENTION` event with a zero deletion count.
+
+One process invocation makes one `psycopg.connect` call and submits the fixed
+function once. The five-second connection timeout applies to each libpq host or
+address attempt; it is not a total network or process deadline. Statement,
+lock, idle-transaction, transaction, and synchronous-commit settings are fixed
+by the command and override matching conninfo options.
+
+Exit `0` is the only acknowledged and completely reported result. It emits one
+canonical ASCII JSON line. Closed failures are:
+
+- exit `1`: refused before a commit could become ambiguous;
+- exit `2`: invalid command arguments or conninfo configuration;
+- exit `3`: unavailable with no commit sent;
+- exit `4`: commit outcome unknown; do not retry automatically; and
+- exit `5`: committed but reporting failed; do not retry automatically.
+
+Any invocation lacking one complete terminal protocol is operationally
+unknown. Operators and automation must not retry exit `4`, exit `5`, or an
+incomplete protocol automatically. A later invocation is a separately
+authorized new batch, not reconciliation of an ambiguous batch.
+
+This command is not a scheduler or drain loop. It makes no deployment,
+readiness, continuity, lossless-retention, legal-hold, backup, replica, WAL,
+vacuum, media-sanitization, or physical-erasure claim.
+
 ## Accepted limits
 
 The checked-in conformance workflow exercises three disposable PostgreSQL
