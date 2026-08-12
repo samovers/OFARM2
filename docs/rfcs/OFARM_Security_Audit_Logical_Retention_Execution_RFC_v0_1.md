@@ -550,8 +550,8 @@ boundary, never a silent expansion of this pull request.
   `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00#item-75`
 - **Approval:**
   `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00#item-76`
-- **Exact approval sentence:** `I approve OFARM2 decision
-  ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001 version 1.`
+- **Exact approval sentence:**
+  `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001 version 1.`
 - **Observed role and order:** the assistant-authored complete live card was
   directly followed in the same task by the task user's exact entire-message
   approval. No later cancellation preceded implementation.
