@@ -1,7 +1,7 @@
 # OFARM Security-Audit Logical Retention Execution Elapsed-Time Correction — Phase A Contract v0.2
 
-**Status:** proposed Phase A correction in a contract-only draft pull request;
-no Phase B implementation, deployment, database invocation, release, or
+**Status:** proposed Phase A correction in contract-only draft PR #308; no
+Phase B implementation, deployment, database invocation, release, or
 production authority
 
 **Contract identity:**
@@ -20,9 +20,7 @@ production authority
 **Merged implementation:** PR #307, exact head
 `0869f192c9c6cabc4c1e26b04a952d5c8b492e0e`
 
-**Named draft pull request:** pending assignment after the contract bootstrap
-commit is pushed; this field must be replaced by the stable draft-PR URL before
-the version-2 live decision card is shown
+**Named draft pull request:** `https://github.com/samovers/OFARM2/pull/308`
 
 **Primary trust boundary:** isolated security-audit logical-retention result
 validation across timezone-offset transitions
