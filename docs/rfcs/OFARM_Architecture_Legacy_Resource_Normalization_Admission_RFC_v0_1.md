@@ -53,10 +53,14 @@ For the current singleton vocabulary, the required accepted spellings are:
 ```text
 schema.sql
 kernel/schema.sql
-kernel\\schema.sql
+kernel\schema.sql (one literal backslash; shown once in this text block)
 ./kernel/schema.sql
 /absolute/path/kernel/schema.sql
 ```
+
+Where a later Python test source spells that one literal backslash, its source
+text uses `"kernel\\schema.sql"`. That source escaping denotes one backslash
+in the evaluated string; a two-backslash string is not an intended form.
 
 This is lexical classification only. It neither reads `kernel/schema.sql` nor
 changes any publisher, checker consumer, or operational authority.
@@ -102,8 +106,9 @@ AST string constant
 - **ALRN-002 — Exact normalized forms.** For every existing name, the
   normalized value matches only the bare name, `kernel/<name>`, or a value
   ending in `/kernel/<name>`.
-- **ALRN-003 — Backslash equivalence.** `kernel\\schema.sql` has exactly the
-  same classification as `kernel/schema.sql`; no second normalizer exists.
+- **ALRN-003 — Backslash equivalence.** The single-backslash literal
+  `kernel\schema.sql` has exactly the same classification as
+  `kernel/schema.sql`; no second normalizer exists.
 - **ALRN-004 — No over-classification.** `schema.sql.bak`,
   `kernel/schema.sqlx`, `not_kernel/schema.sql`, and an unrelated string
   literal remain non-violations.
@@ -122,7 +127,7 @@ AST string constant
 | --- | --- | --- |
 | ALRN-001 | Phase B adds a temporal resource list, caller override, or second normalizer | changed-path/source review refuses |
 | ALRN-002 | Static AST literal is `kernel/schema.sql` | evaluator reports `kernel/schema.sql` as a legacy resource |
-| ALRN-003 | Static AST literal is `kernel\\schema.sql` | evaluator reports the same normalized legacy resource result |
+| ALRN-003 | Static AST literal contains one backslash between `kernel` and `schema.sql` | evaluator reports the same normalized legacy resource result |
 | ALRN-004 | Static AST literal is `schema.sql.bak` or `not_kernel/schema.sql` | evaluator reports no legacy-resource violation |
 | ALRN-005 | Temporary production tree has a helper with `kernel/schema.sql` | architecture firewall reports the full production path and fails |
 | ALRN-006 | A non-allowlisted path changes or inventory has an unexplained delta | diff/inventory gate refuses |
