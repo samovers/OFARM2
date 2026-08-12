@@ -1,8 +1,10 @@
 # OFARM Security-Audit Logical Retention Execution — Phase A Contract v0.1
 
-**Status:** proposed; Phase B is not authorized; the implementation draft pull
-request will be assigned after the first contract-only commit and before any
-live decision card is shown
+**Status:** proposed; Phase A contract complete in draft pull request #307;
+Phase B is not authorized
+
+**Draft implementation pull request:**
+`https://github.com/samovers/OFARM2/pull/307`
 
 **Contract identity:**
 `ofarm2.security-audit-logical-retention-execution.v0.1`
@@ -596,9 +598,8 @@ collected test in the new module.
 
 ### 14.2 Review disposition
 
-- **Blockers:** this contract must be committed to its draft pull request,
-  updated to name that stable PR, reviewed at the exact contract head, and
-  presented through the governing decision card before Phase B.
+- **Blockers:** exact later task-user approval of the complete live decision
+  card; Phase B remains unauthorized.
 - **Follow-ups:** separate remaining issue #192 boundaries, including external
   cadence and deployment ownership.
 - **Preferences:** none.
@@ -614,7 +615,8 @@ This proposed contract grants no Phase B implementation authority. It stops
 before production code, tests, operator-documentation changes, inventory
 regeneration, approval recognition, or any database operation.
 
-The next lawful actions are to publish this RFC alone in one draft pull request,
-replace the pending PR marker with that stable reference, review the exact
-contract head, and display one complete live card for
-`ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001` version `1`.
+This RFC is published in the named draft pull request. After the stable PR
+reference is committed and the exact contract head is reviewed, the next
+lawful action is to display one complete live card for
+`ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001` version `1` and wait
+for the exact later approval message.
