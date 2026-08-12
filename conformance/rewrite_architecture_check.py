@@ -1762,7 +1762,8 @@ def _legacy_resource_violations(
             continue
         normalized = node.value.replace("\\", "/")
         if normalized in LEGACY_RESOURCE_NAMES or any(
-            normalized.endswith(f"/kernel/{name}")
+            normalized == f"kernel/{name}"
+            or normalized.endswith(f"/kernel/{name}")
             for name in LEGACY_RESOURCE_NAMES
         ):
             violations.add((node.lineno, normalized))

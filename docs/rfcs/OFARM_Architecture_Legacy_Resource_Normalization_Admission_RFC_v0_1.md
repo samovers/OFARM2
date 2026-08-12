@@ -1,9 +1,8 @@
 # OFARM2 Architecture Legacy-Resource Normalization Admission — Phase A Contract v0.1
 
-**Status:** proposed Phase A design; documentation-only, unapproved, and
-without temporal checker, publication adapter, database, RuntimeBundle,
-selection, runtime, route, output, deployment, legacy-activation, or #192
-effect
+**Status:** architect-approved Phase A design; pre-deployment only, with no
+temporal checker, publication adapter, database, RuntimeBundle, selection,
+runtime, route, output, deployment, legacy-activation, or #192 effect
 
 **Issue:** #176
 
@@ -205,7 +204,30 @@ minimal comparison change are observable at the reviewed base.
   merges; its temporal-consumer approval remains separate.
 - Preferences: none.
 
-This Phase A stops before architecture implementation, temporal conformance
-work, a decision card, adapter creation, and every operational change. The
-next lawful action is exact-head plain-English review of this one-file contract
-in its already-created draft pull request.
+This Phase A approval authorizes only the separately bounded implementation in
+PR #306. It does not authorize temporal conformance work, a publication
+adapter, or any operational change.
+
+## Appendix A — Architect approval record
+
+This pre-deployment repository record is AI-attested evidence of the
+architect's decision; it is not a substitute for that user-authored decision.
+
+| Evidence | Recorded value |
+| --- | --- |
+| Decision | `ISSUE176-ARCHITECTURE-LEGACY-RESOURCE-NORMALIZATION-001` version 1 |
+| Contract | `ofarm.architecture-legacy-resource-normalization-admission.issue176.v0.1` |
+| Codex task | `019fa821-93c9-7ef1-8c94-1c0e92ea46b9` |
+| Complete live decision card | stable item `item-5572`, displayed before approval in this task |
+| Architect approval | stable item `item-5573`, later user-authored message in this task |
+| Approval sentence | `I approve OFARM2 decision ISSUE176-ARCHITECTURE-LEGACY-RESOURCE-NORMALIZATION-001 version 1.` |
+| Approved implementation PR | #306 only |
+
+The approval permits only section 6's four-path Phase B allowlist, subject to
+its invariants, verification, stop conditions, fresh hosted gates, and
+exact-head review. It preserves every stated non-goal, including no temporal
+checker, publication adapter, schema operation, database, migration,
+RuntimeBundle, selection, command, route, output, deployment,
+historical/window behavior, legacy activation, or #192 effect. A later
+user-authored cancellation or a change outside this envelope stops work and
+requires a separate decision.

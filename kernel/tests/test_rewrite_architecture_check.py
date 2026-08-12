@@ -362,6 +362,55 @@ def test_firewall_rejects_prototype_schema_reference(tmp_path):
     ]
 
 
+@pytest.mark.parametrize(
+    "literal",
+    [
+        "schema.sql",
+        "kernel/schema.sql",
+        "kernel\\schema.sql",
+        "./kernel/schema.sql",
+        "/absolute/path/kernel/schema.sql",
+    ],
+    ids=[
+        "bare",
+        "repository-relative",
+        "one-backslash",
+        "dot-relative",
+        "absolute",
+    ],
+)
+def test_legacy_resource_violations_recognize_normalized_schema_forms(literal):
+    tree = ast.parse(f"RESOURCE = {literal!r}\n")
+
+    assert rewrite_architecture_check._legacy_resource_violations(tree) == [
+        (1, literal.replace("\\", "/"))
+    ]
+
+
+@pytest.mark.parametrize(
+    "literal",
+    [
+        "schema.sql.bak",
+        "kernel/schema.sqlx",
+        "not_kernel/schema.sql",
+    ],
+)
+def test_legacy_resource_violations_leave_near_misses_clear(literal):
+    tree = ast.parse(f"RESOURCE = {literal!r}\n")
+
+    assert rewrite_architecture_check._legacy_resource_violations(tree) == []
+
+
+def test_firewall_rejects_repository_relative_schema_reference(tmp_path):
+    _firewall_tree(tmp_path, "from .helper import SCHEMA\n")
+    _write_module(tmp_path, "kernel/helper.py", "SCHEMA = 'kernel/schema.sql'\n")
+
+    assert rewrite_architecture_check._check_import_firewall(tmp_path) == [
+        "kernel/helper.py:1: production references legacy resource "
+        "'kernel/schema.sql'; production import path kernel.api -> kernel.helper"
+    ]
+
+
 def test_firewall_rejects_legacy_reverse_import(tmp_path):
     _firewall_tree(tmp_path, "")
     _write_module(tmp_path, "kernel/legacy_m1/__init__.py")

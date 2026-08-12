@@ -9311,6 +9311,11 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_rejects_repository_relative_schema_reference",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_reports_indirect_dynamic_import_path",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -9372,6 +9377,46 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_inventory_refuses_module_collisions_empty_names_and_missing_roots",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_legacy_resource_violations_leave_near_misses_clear[kernel/schema.sqlx]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_legacy_resource_violations_leave_near_misses_clear[not_kernel/schema.sql]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_legacy_resource_violations_leave_near_misses_clear[schema.sql.bak]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_legacy_resource_violations_recognize_normalized_schema_forms[absolute]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_legacy_resource_violations_recognize_normalized_schema_forms[bare]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_legacy_resource_violations_recognize_normalized_schema_forms[dot-relative]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_legacy_resource_violations_recognize_normalized_schema_forms[one-backslash]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_legacy_resource_violations_recognize_normalized_schema_forms[repository-relative]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -13981,8 +14026,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "8533aed1e885dc4be3daf4f7c398ae2e5f0e5199e8f31232835176437b31868b",
-  "entryCount": 2796,
+  "entriesSha256": "6a7a4a3c75df9799d3f71a9ecc43d77c9d5fad8ff7fcbe9a4427cec2ab2a4661",
+  "entryCount": 2805,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
