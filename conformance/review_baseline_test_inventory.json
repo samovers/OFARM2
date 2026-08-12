@@ -11376,6 +11376,216 @@
       "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_failure_protocol_is_closed_and_never_leaks_details[refused]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_failure_protocol_is_closed_and_never_leaks_details[unavailable]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_failure_protocol_is_closed_and_never_leaks_details[unexpected]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_failure_protocol_is_closed_and_never_leaks_details[unknown]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_rejects_every_nonempty_argument_shape_without_running[cutoff]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_rejects_every_nonempty_argument_shape_without_running[long-help]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_rejects_every_nonempty_argument_shape_without_running[positional]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_rejects_every_nonempty_argument_shape_without_running[separator]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_rejects_every_nonempty_argument_shape_without_running[short-help]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_rejects_invalid_conninfo_without_running[malformed]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_rejects_invalid_conninfo_without_running[missing]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_rejects_invalid_conninfo_without_running[whitespace]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_reporting_failure_is_exit_five_without_second_database_attempt[flush-error]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_reporting_failure_is_exit_five_without_second_database_attempt[short-write]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_reporting_failure_is_exit_five_without_second_database_attempt[write-error]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_writes_exact_acknowledged_bytes_and_flushes",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_connection_failure_is_unavailable_and_never_retried",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_deterministic_sql_failure_is_refused_before_commit",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_every_commit_exception_is_unknown_without_rollback_or_retry[operational-error]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_every_commit_exception_is_unknown_without_rollback_or_retry[other-server-error]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_invalid_result_rolls_back_and_never_commits[boolean-count]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_invalid_result_rolls_back_and_never_commits[duplicate-row]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_invalid_result_rolls_back_and_never_commits[inconsistent-purge-after]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_invalid_result_rolls_back_and_never_commits[missing-row]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_invalid_result_rolls_back_and_never_commits[naive-cutoff]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_invalid_result_rolls_back_and_never_commits[nil-event-id]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_invalid_result_rolls_back_and_never_commits[non-tuple-row]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_invalid_result_rolls_back_and_never_commits[oversized-count]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_invalid_result_rolls_back_and_never_commits[short-row]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_invalid_returned_connection_state_refuses_before_sql_or_commit[autocommit]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_invalid_returned_connection_state_refuses_before_sql_or_commit[closed]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_invalid_returned_connection_state_refuses_before_sql_or_commit[in-transaction]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_isolation_failure_refuses_before_sql_or_commit",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_live_conflicting_lock_refuses_with_fixed_timeout_and_no_second_attempt",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_live_early_invocation_acknowledges_zero_deletion_and_matching_event",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_live_wrong_role_refuses_without_deletion_or_retention_event",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_operator_documentation_is_one_shot_and_claim_limited",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_post_commit_close_failure_cannot_downgrade_acknowledgement",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_runner_normalizes_timezone_aware_values_to_six_digit_utc",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_runner_submits_one_fixed_transaction_and_renders_exact_report",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_transport_loss_after_submission_is_unavailable_without_commit",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_transport_loss_before_submission_is_unavailable_without_sql_or_commit",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_runtime.py::test_active_hmac_resource_requires_one_observed_active_version",
       "sourceModule": "kernel.tests.test_security_audit_runtime",
       "sourcePath": "kernel/tests/test_security_audit_runtime.py"
@@ -13981,8 +14191,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "8533aed1e885dc4be3daf4f7c398ae2e5f0e5199e8f31232835176437b31868b",
-  "entryCount": 2796,
+  "entriesSha256": "98918d4e65e93322ebf89cea2dda62a936594ededb86d1bc5aafddff5b4e3b49",
+  "entryCount": 2838,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
