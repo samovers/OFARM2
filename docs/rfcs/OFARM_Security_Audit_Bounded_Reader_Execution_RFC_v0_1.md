@@ -10,7 +10,7 @@ exact-head re-review; Phase B is not authorized
 `ofarm2.security-audit-bounded-reader-execution.v0.1`
 
 **Decision identity:**
-`ISSUE192-SECURITY-AUDIT-BOUNDED-READER-EXECUTION-001`, proposed version `1`
+`ISSUE192-SECURITY-AUDIT-BOUNDED-READER-EXECUTION-001`, proposed version `2`
 
 **Issue:** #192
 
@@ -590,8 +590,7 @@ prerequisite is unavailable.
 | `BRQ-003` | Use a control route whose commit acknowledgement is dropped after the commit call begins. | Exit `4`; zero reader connection attempts and zero retry attempts. |
 | `BRQ-004` | Point the control DSN at the reader login, the reader DSN at the control login, or the two routes at different accepted audit services. | Existing exact session-user or equal-intent checks refuse; no report or fallback. |
 | `BRQ-005` | Request a cursor page while a hostile seam returns a 257th row, a row at or above the cursor, or ascending order. | The single result fetch detects seam excess; post-intent failure emits no successful output and makes no second query. The database `LIMIT`, not the client fetch, owns the row bound. |
-| `BRQ-006` | Return valid retired historical reasons `TENANT_PARTY_PIN_REFUSED` for authentication and `SECURITY_ROUTE_REFUSED` for the router. | Both rows remain readable and their reasons appear unchanged in the canonical report. |
-| `BRQ-006` | Return a zero UUID, naive/infinite timestamp, wrong digest length, unknown event kind, bad maintenance extension, row beyond the fixed cut, or row whose `purge_after` is not later than intent expiry. | Post-intent failure before stdout. |
+| `BRQ-006` | Return valid retired historical reasons `TENANT_PARTY_PIN_REFUSED` for authentication and `SECURITY_ROUTE_REFUSED` for the router; separately return a zero UUID, naive/infinite timestamp, wrong digest length, unknown event kind, bad maintenance extension, row beyond the fixed cut, or row whose `purge_after` is not later than intent expiry. | Both retired-reason rows remain readable and appear unchanged in the canonical report; each malformed or out-of-bound row causes post-intent failure before stdout. |
 | `BRQ-007` | Return a carrier that would force a missing key or alternate encoding, then put a recognizable secret in either DSN and force each connection, SQL, validation, and output failure. | Success matches the exact schema; fixed diagnostic bytes never contain the secret, row data, access ID, or exception text. |
 | `BRQ-008` | Make stdout short-write or fail on flush after the complete report exists. | Exit `6`; never exit `0`; no retry. |
 | `BRQ-009` | Fail control connect, intent execute, control commit, reader connect, reader execute, row fetch, and report write in separate invocations. | Exact call counts remain at most one per permitted step; no resume or old-intent input exists. |
@@ -886,12 +885,14 @@ instead of exposing new policy inputs.
   success schema, diagnostic/failure protocol, and excess-row handling.
   Commit `2cedfa62c41a18c0441c60140b2587a5bf194ecc` corrected those gaps, and the
   permitted focused re-review of `BRQ-005` through `BRQ-008` passed.
-- **Blockers corrected pending focused re-review:** two top-level reviews of
-  exact head `cb5e0957702109b456a7250365b03f64fdaa2238` demonstrated that an
-  active-only reason check would reject valid retired historical rows and that
-  client-sent `temp_file_limit=0` could prevent the non-superuser routes from
-  connecting. This revision preserves historical reasons under database
-  authority and leaves `temp_file_limit=0` under provisioned role authority.
+- **Technical Blockers resolved:** two top-level reviews of exact head
+  `cb5e0957702109b456a7250365b03f64fdaa2238` demonstrated that an active-only
+  reason check would reject valid retired historical rows and that client-sent
+  `temp_file_limit=0` could prevent the non-superuser routes from connecting.
+  Commit `d9b1a12da75ecde3add2532a067663a7a2e125fa` preserves historical reasons
+  under database authority and leaves `temp_file_limit=0` under provisioned
+  role authority. Focused re-review of that exact head found no remaining
+  technical Blocker.
 - **Accuracy finding corrected:** the client fetch is now described as seam
   validation; only the database `LIMIT 256` is claimed as the row bound.
 - **Diagnostic clarification:** the exact reviewed blob already stored each
@@ -901,12 +902,22 @@ instead of exposing new policy inputs.
 - **Preference resolved by clarification:** top-level `maxBytes` remains an
   exactly representable JSON integer, while event-level `accessMaxBytes`
   retains the uniform `int8` carrier string encoding.
+- **Governance Blocker corrected pending focused re-review:** the formal review
+  of `d9b1a12da75ecde3add2532a067663a7a2e125fa` required a new decision version
+  because the withdrawn version-1 card preceded semantic authority and
+  invariant corrections. This revision advances every decision binding and
+  approval reference to proposed version `2`.
+- **Checklist Preference resolved:** section 8 now has one consolidated
+  `BRQ-006` row covering both valid retired reasons and malformed carriers.
 - **Follow-ups:** the remaining issue #192 boundaries listed in section 11.5.
 
-The prior live card bound to `cb5e0957702109b456a7250365b03f64fdaa2238`
-is superseded and cannot authorize Phase B. The corrected exact head requires
-focused Phase A re-review before a replacement live card may be shown. Decision
-version `1` remains proposed because no Phase B approval was given.
+The version-1 live card bound to
+`cb5e0957702109b456a7250365b03f64fdaa2238` is withdrawn and cannot authorize
+Phase B. It was never approved, but review required semantic changes to
+historical-reason acceptance, startup-setting authority, row-bound ownership,
+and diagnostic semantics. The repository workflow therefore requires proposed
+decision version `2`. The corrected exact head requires focused Phase A
+re-review before a version-2 live card may be shown.
 
 Once `BRQ-001` through `BRQ-011` pass and no demonstrated in-scope Blocker
 remains, the approved workflow permits merging the named pull request. New
@@ -929,7 +940,7 @@ not authorize implementation.
 The eventual exact approval form will be:
 
 ```text
-I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-BOUNDED-READER-EXECUTION-001 version 1.
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-BOUNDED-READER-EXECUTION-001 version 2.
 ```
 
 Approval will authorize only in-envelope repository implementation, tests,
