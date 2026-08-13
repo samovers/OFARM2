@@ -112,6 +112,8 @@ This pull request does not change or add:
   reuse of an earlier access intent;
 - tenant storage, tenant reconstruction, application pools, support paths,
   telemetry, ordinary logs, queues, files, caches, or spools;
+- process-signal management or a guarantee of a terminal protocol after
+  uncatchable process termination;
 - issue #172 authentication work or any issue #176 work;
 - deployment activation, production access, production readiness, wall-clock
   monotonicity evidence, or a security waiver; or
@@ -207,6 +209,7 @@ results, and output failure remain in scope.
 | Intent durability | Explicit control transaction `commit()` acknowledgement |
 | Permission to open the reader route | Runner state reached only after acknowledged intent commit |
 | Page membership and descending order | Existing bounded query function |
+| Report schema, JSON encodings, and fixed diagnostics | This approved contract and fixed runner/adapter constants |
 | Successful process report | Complete validated result plus one complete stdout write and flush |
 | Next cursor | Last validated row's normalized `(observed_at, event_id)` pair |
 | Conninfo input | `OFARM_SECURITY_AUDIT_CONTROL_PG_DSN` and `OFARM_SECURITY_AUDIT_READER_PG_DSN` |
@@ -323,7 +326,8 @@ Only `INTENT_ACKNOWLEDGED` permits the runner to:
 2. verify its autocommit and idle state;
 3. submit the exact bounded query once with the acknowledged access event ID,
    the same cursor, and the same fixed ceilings;
-4. fetch at most 256 rows and refuse any additional row;
+4. fetch at most 257 transport rows in one bounded operation, retain at most
+   256, and refuse if a 257th row exists;
 5. validate the exact 30-field carrier type, fixed policy identities, allowed
    event kind and producer/component shape, UUID and digest lengths, finite
    timestamps, 30-day elapsed retention relation, maintenance extensions,
@@ -333,26 +337,98 @@ Only `INTENT_ACKNOWLEDGED` permits the runner to:
 7. derive a next cursor only from the last validated row; and
 8. render the complete canonical report in memory before stdout is touched.
 
+The reader connection is then closed before stdout is touched. Normal close
+failure after the one autocommit query has returned and the complete page has
+validated cannot change the page, create commit ambiguity, or authorize a
+second query; it is suppressed and cannot downgrade the report. A close
+attempt never becomes a retry or an alternate route.
+
 The runner does not duplicate row selection, snapshot visibility, access
 expiry, or database byte accounting. Validation proves that the trusted
 database result fits the accepted carrier and the request's observable bounds;
 the database remains the policy authority.
 
-The canonical report is one ASCII JSON line with sorted object keys, no NaN,
-and one terminal newline. It contains:
+Carrier validation derives the event kinds, producer/reason matrix, known HMAC
+versions, policy identities, access protocols, and their limits from
+`SECURITY_AUDIT_CONTRACT`. It accepts every valid event kind as query data,
+including an `AUDIT_ACCESS` row for the separately governed break-glass export
+protocol if one later exists. Reading that evidence does not invoke export or
+grant an export capability. The validator never silently filters a valid event
+kind or invents a narrower access-event vocabulary.
 
-- acknowledged access event ID, data cut, and expiry;
-- the fixed purpose, function identity, row ceiling, and byte ceiling;
-- the input cursor or `null`;
-- an array of validated event-report objects;
-- the returned row count;
-- the derived next cursor or `null`; and
-- `"outcome":"ACKNOWLEDGED"`.
+The canonical report is one ASCII JSON line with sorted object keys, no NaN,
+compact separators, and one terminal newline. Its exact top-level keys and
+values are:
+
+| Key | Exact value |
+| --- | --- |
+| `schemaVersion` | `"ofarm.security-audit-bounded-query-report.v1"` |
+| `outcome` | `"ACKNOWLEDGED"` |
+| `accessEventId` | Canonical lowercase nonzero UUID text |
+| `dataCut` | Canonical UTC timestamp |
+| `expiresAt` | Canonical UTC timestamp exactly 300 elapsed seconds after `dataCut` |
+| `purpose` | `"OPERATIONAL_DIAGNOSTIC_QUERY_V1"` |
+| `functionIdentity` | The exact accepted query function identity |
+| `maxRows` | JSON integer `256` |
+| `maxBytes` | JSON integer `1048576` |
+| `inputCursor` | The exact canonical input cursor string or JSON `null` |
+| `returnedRowCount` | JSON integer from `0` through `256`, equal to the array length |
+| `nextCursor` | Cursor derived from the last event, or JSON `null` for an empty array |
+| `events` | One ordered array of the exact event objects below |
+
+Every event object contains all 30 keys below. A nullable database field remains
+an explicit JSON `null`; no key is omitted.
+
+| Event key | Database field | JSON encoding |
+| --- | --- | --- |
+| `eventId` | `event_id` | Canonical lowercase nonzero UUID text |
+| `observedAt` | `observed_at` | Canonical UTC timestamp |
+| `purgeAfter` | `purge_after` | Canonical UTC timestamp |
+| `eventKind` | `event_kind` | Closed ASCII text |
+| `producer` | `producer` | Closed ASCII text |
+| `component` | `component` | Closed ASCII text |
+| `reason` | `reason` | Closed ASCII text or `null` |
+| `correlationHmacDomain` | `correlation_hmac_domain` | Closed ASCII text or `null` |
+| `correlationHmacKeyVersion` | `correlation_hmac_key_version` | JSON integer or `null` |
+| `correlationHmacValue` | `correlation_hmac_value` | 64 lowercase hexadecimal characters without a prefix, or `null` |
+| `eventFormatIdentity` | `event_format_identity` | Closed ASCII text |
+| `redactionPolicyIdentity` | `redaction_policy_identity` | Closed ASCII text |
+| `retentionPolicyIdentity` | `retention_policy_identity` | Closed ASCII text |
+| `appendInputFingerprint` | `append_input_fingerprint` | 64 lowercase hexadecimal characters without a prefix |
+| `accessPurpose` | `access_purpose` | Closed ASCII text or `null` |
+| `accessFunctionIdentity` | `access_function_identity` | Closed ASCII text or `null` |
+| `accessDataCut` | `access_data_cut` | Canonical UTC timestamp or `null` |
+| `accessCursorObservedAt` | `access_cursor_observed_at` | Canonical UTC timestamp or `null` |
+| `accessCursorEventId` | `access_cursor_event_id` | Canonical lowercase nonzero UUID text or `null` |
+| `accessMaxRows` | `access_max_rows` | JSON integer or `null` |
+| `accessMaxBytes` | `access_max_bytes` | Base-10 integer string or `null` |
+| `accessExpiresAt` | `access_expires_at` | Canonical UTC timestamp or `null` |
+| `retentionCutoff` | `retention_cutoff` | Canonical UTC timestamp or `null` |
+| `retentionDeletedCount` | `retention_deleted_count` | Base-10 integer string or `null` |
+| `intervalStart` | `interval_start` | Canonical UTC timestamp or `null` |
+| `intervalEnd` | `interval_end` | Canonical UTC timestamp or `null` |
+| `intervalEventCount` | `interval_event_count` | Base-10 integer string or `null` |
+| `intervalCountUnknown` | `interval_count_unknown` | JSON boolean or `null` |
+| `affectedProducer` | `affected_producer` | Closed ASCII text or `null` |
+| `affectedComponent` | `affected_component` | Closed ASCII text or `null` |
+
+A canonical UTC timestamp has exactly the input cursor timestamp form:
+`YYYY-MM-DDTHH:MM:SS.ffffffZ`. All elapsed-time comparisons occur after UTC
+normalization. All `int8` event fields use base-10 strings so downstream JSON
+consumers cannot silently lose integer precision; `int4` fields remain JSON
+integers.
+
+The database's 1,048,576-byte ceiling applies to the sum of its canonical
+encoded event rows, not to the complete stdout line. The wrapper, key names,
+and explicit conversion can make stdout larger than that number. Output remains
+bounded by the fixed database byte ceiling, the 256-row ceiling, and the closed
+30-field carrier; this RFC makes no false one-megabyte stdout claim.
 
 The report never contains conninfo, database errors, Python exception text,
 visibility snapshots, internal sequence state, or access-clock lock identity.
-Bigint event counts are rendered as decimal strings so the protocol does not
-lose integer precision.
+The report schema version is owned by this command protocol. Changing a key,
+value encoding, null posture, ordering rule, or schema identity is a semantic
+contract change and requires reapproval.
 
 ### 6.5 Terminal command protocol
 
@@ -361,15 +437,30 @@ The process has these closed exits:
 | Exit | Meaning | stdout |
 | --- | --- | --- |
 | `0` | Intent commit acknowledged, exact query completed, and complete report written and flushed | one canonical JSON line |
-| `1` | Refused before a commit could become ambiguous | empty |
+| `1` | Refused after a control connection was returned but before a commit could become ambiguous | empty |
 | `2` | Invalid command, cursor, or conninfo configuration | empty |
-| `3` | Control route unavailable; no commit was sent | empty |
+| `3` | Control connection factory failed before returning a connection; no commit was sent | empty |
 | `4` | Access-intent commit outcome unknown; reader was not opened | empty |
 | `5` | Intent was acknowledged, but reader connection, query, result validation, or complete report construction failed | empty |
 | `6` | Complete query report existed, but stdout write or flush failed; partial output is possible | empty or partial |
 
-Every controlled failure writes only one fixed ASCII stderr line and flushes.
-An incomplete process protocol is not evidence of success.
+Every controlled failure writes and flushes exactly its corresponding ASCII
+line:
+
+| Exit | Exact stderr |
+| --- | --- |
+| `1` | `security-audit query was refused\n` |
+| `2` | `security-audit query command is invalid\n` |
+| `3` | `security-audit query control route is unavailable; no commit was sent\n` |
+| `4` | `security-audit query access-intent outcome is unknown; no query was sent; do not retry automatically\n` |
+| `5` | `security-audit query intent committed but no complete report is available; do not retry automatically\n` |
+| `6` | `security-audit query completed but reporting failed; do not retry automatically\n` |
+
+An unexpected ordinary `Exception` maps according to the state already
+reached, never to success. A `BaseException`, uncatchable process termination,
+or simultaneous stderr failure may leave an incomplete protocol. An incomplete
+process protocol is not evidence of success and is never a reason to retry
+automatically.
 
 The command performs no automatic retry in any state. A later invocation is a
 new access act and commits a new access intent. It never accepts an old access
@@ -405,22 +496,25 @@ fallback.
 
 After intent acknowledgement, one invocation submits the bounded query at most
 once with the acknowledged access event ID and the exact same cursor and
-ceilings. It returns at most 256 descending rows inside the fixed cut, expiry,
-and cursor boundary.
+ceilings. It fetches at most 257 transport rows to detect excess, retains and
+returns at most 256 descending rows inside the fixed cut, expiry, and cursor
+boundary.
 
 ### `BRQ-006` — carrier and output remain bounded and exact
 
 Every row must match the accepted 30-field event-report carrier and closed
 policy shapes before any byte is written. A missing, extra, malformed,
 misordered, out-of-cut, expired-at-intent, or cursor-violating row produces no
-successful report.
+successful report. Every valid accepted event kind remains readable; client
+validation cannot silently filter the result set.
 
 ### `BRQ-007` — canonical privileged output only
 
-Success is exactly one canonical ASCII JSON line. It may contain only the
-acknowledged access metadata, fixed query metadata, validated event reports,
-row count, and derived cursor. Diagnostics contain none of those values and no
-conninfo or exception text.
+Success is exactly one canonical ASCII JSON line matching the fixed report
+schema. It may contain only the acknowledged access metadata, fixed query
+metadata, validated event reports, row count, and derived cursor. Diagnostics
+are the exact fixed lines and contain none of those values, conninfo, or
+exception text.
 
 ### `BRQ-008` — honest terminal outcomes
 
@@ -454,9 +548,9 @@ prerequisite is unavailable.
 | `BRQ-002` | Supply extra limit or purpose tokens, or hostile DSN startup options. | Tokens refuse; code-owned fixed function arguments and settings cannot be widened. |
 | `BRQ-003` | Use a control route whose commit acknowledgement is dropped after the commit call begins. | Exit `4`; zero reader connection attempts and zero retry attempts. |
 | `BRQ-004` | Point the control DSN at the reader login, the reader DSN at the control login, or the two routes at different accepted audit services. | Existing exact session-user or equal-intent checks refuse; no report or fallback. |
-| `BRQ-005` | Request a cursor page while a hostile seam returns more than 256 rows, a row at or above the cursor, or ascending order. | Post-intent failure; no successful output and no second query. |
+| `BRQ-005` | Request a cursor page while a hostile seam returns a 257th row, a row at or above the cursor, or ascending order. | The single bounded fetch detects excess; post-intent failure emits no successful output and makes no second query. |
 | `BRQ-006` | Return a zero UUID, naive/infinite timestamp, wrong digest length, unknown event kind, bad maintenance extension, row beyond the fixed cut, or row whose `purge_after` is not later than intent expiry. | Post-intent failure before stdout. |
-| `BRQ-007` | Put a recognizable secret in either DSN and force each connection, SQL, validation, and output failure. | Fixed diagnostics never contain the secret, row data, access ID, or exception text. |
+| `BRQ-007` | Return a carrier that would force a missing key or alternate encoding, then put a recognizable secret in either DSN and force each connection, SQL, validation, and output failure. | Success matches the exact schema; fixed diagnostic bytes never contain the secret, row data, access ID, or exception text. |
 | `BRQ-008` | Make stdout short-write or fail on flush after the complete report exists. | Exit `6`; never exit `0`; no retry. |
 | `BRQ-009` | Fail control connect, intent execute, control commit, reader connect, reader execute, row fetch, and report write in separate invocations. | Exact call counts remain at most one per permitted step; no resume or old-intent input exists. |
 | `BRQ-010` | Invoke the command with only an ingest, retention, readiness, application, or tenant credential. | No direct relation read, alternate function, role assumption, or tenant path succeeds. |
