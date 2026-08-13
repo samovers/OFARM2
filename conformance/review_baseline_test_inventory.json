@@ -11376,6 +11376,11 @@
       "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_does_not_invent_state_for_nonconforming_runner_exception",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_failure_protocol_is_closed_and_secret_free[query-failed]",
       "sourceModule": "kernel.tests.test_security_audit_query",
       "sourcePath": "kernel/tests/test_security_audit_query.py"
@@ -11387,11 +11392,6 @@
     },
     {
       "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_failure_protocol_is_closed_and_secret_free[unavailable]",
-      "sourceModule": "kernel.tests.test_security_audit_query",
-      "sourcePath": "kernel/tests/test_security_audit_query.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_failure_protocol_is_closed_and_secret_free[unexpected]",
       "sourceModule": "kernel.tests.test_security_audit_query",
       "sourcePath": "kernel/tests/test_security_audit_query.py"
     },
@@ -11752,6 +11752,11 @@
     },
     {
       "nodeid": "kernel/tests/test_security_audit_query.py::test_retired_authentication_and_router_reasons_remain_readable_unchanged",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_row_fetch_failure_is_exit_five_without_retry_or_output",
       "sourceModule": "kernel.tests.test_security_audit_query",
       "sourcePath": "kernel/tests/test_security_audit_query.py"
     },
@@ -14616,8 +14621,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "16d0ff1352ccd670479312ff06bf59cef4dbad1e7d2c7c07df226c2418b487d8",
-  "entryCount": 2923,
+  "entriesSha256": "32244d50043c00dfe19bc4a1d310a9e53349c2739aff477cc9017fcedd366631",
+  "entryCount": 2924,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

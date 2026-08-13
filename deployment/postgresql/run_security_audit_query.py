@@ -126,8 +126,9 @@ def run_fixed_security_audit_query_cli(
         return _fail(stderr, 4, _UNKNOWN)
     except SecurityAuditQueryFailed:
         return _fail(stderr, 5, _QUERY_FAILED)
-    except Exception:
-        return _fail(stderr, 4, _UNKNOWN)
+    # Deliberately no catch-all: the production runner classifies every
+    # ordinary exception from its external steps by internal state.  This
+    # adapter cannot truthfully invent that state for a nonconforming runner.
 
     try:
         written = stdout.write(acknowledged.report_bytes)

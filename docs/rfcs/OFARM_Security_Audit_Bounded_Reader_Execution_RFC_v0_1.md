@@ -15,7 +15,7 @@ live card; the RFC filename is fixed by the approved path envelope and is not
 renamed under this decision.
 
 **Decision identity:**
-`ISSUE192-SECURITY-AUDIT-BOUNDED-READER-EXECUTION-001`, proposed version `2`
+`ISSUE192-SECURITY-AUDIT-BOUNDED-READER-EXECUTION-001`, approved version `2`
 
 **Issue:** #192
 
@@ -506,6 +506,13 @@ or simultaneous stderr failure may leave an incomplete protocol. An incomplete
 process protocol is not evidence of success and is never a reason to retry
 automatically.
 
+The production adapter uses `SecurityAuditQueryRunner`, which converts every
+ordinary external-step exception to a closed outcome using its internal state.
+The adapter deliberately has no catch-all for a nonconforming injected runner:
+it cannot observe that runner's state and therefore cannot truthfully claim
+either that no query was sent or that an intent committed. Such a programming
+seam failure is an incomplete protocol, never success.
+
 The command performs no automatic retry in any state. A later invocation is a
 new access act and commits a new access intent. It never accepts an old access
 event ID or resumes an interrupted report.
@@ -755,7 +762,10 @@ The existing issue #192 continues to own:
 - destructive HMAC retirement after its custody prerequisite;
 - break-glass export and temporary-login closure;
 - store-loss recovery; and
-- remaining end-to-end hostile evidence.
+- remaining end-to-end hostile evidence; and
+- any future migration that widens a persisted event constraint must recheck
+  `deployment/postgresql/security_audit_query.py` so the normal reader cannot
+  reject a newly lawful historical carrier after committing access intent.
 
 No new issue is required merely to duplicate those open acceptance criteria.
 

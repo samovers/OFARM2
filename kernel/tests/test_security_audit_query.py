@@ -174,9 +174,15 @@ class _FakeInfo:
 
 
 class _FakeCursor:
-    def __init__(self, rows: list[object]) -> None:
+    def __init__(
+        self,
+        rows: list[object],
+        *,
+        fetchmany_error: BaseException | None = None,
+    ) -> None:
         self.rows = list(rows)
         self.fetchmany_sizes: list[int] = []
+        self._fetchmany_error = fetchmany_error
 
     def fetchone(self) -> object:
         if not self.rows:
@@ -185,6 +191,8 @@ class _FakeCursor:
 
     def fetchmany(self, size: int) -> list[object]:
         self.fetchmany_sizes.append(size)
+        if self._fetchmany_error is not None:
+            raise self._fetchmany_error
         selected = self.rows[:size]
         del self.rows[:size]
         return selected
@@ -199,6 +207,7 @@ class _FakeConnection:
         closed: bool = False,
         transaction_status: TransactionStatus = TransactionStatus.IDLE,
         execute_error: BaseException | None = None,
+        fetchmany_error: BaseException | None = None,
         commit_error: BaseException | None = None,
         isolation_error: BaseException | None = None,
         close_error: Exception | None = None,
@@ -206,7 +215,7 @@ class _FakeConnection:
         self.closed = closed
         self.autocommit = autocommit
         self.info = _FakeInfo(transaction_status)
-        self.cursor = _FakeCursor(rows)
+        self.cursor = _FakeCursor(rows, fetchmany_error=fetchmany_error)
         self.executed: list[tuple[str, tuple[object, ...]]] = []
         self._isolation_level: IsolationLevel | None = None
         self._execute_error = execute_error
@@ -354,7 +363,7 @@ def _factory_for_rows(
 
 
 def _run_cli(
-    runner: _StubRunner,
+    runner: _StubRunner | SecurityAuditQueryRunner,
     *,
     argv: tuple[str, ...] = (),
     environ: dict[str, str] | None = None,
@@ -813,6 +822,31 @@ def test_reader_execute_failure_is_post_intent_failure_without_retry():
     assert reader.close_calls == 1
 
 
+def test_row_fetch_failure_is_exit_five_without_retry_or_output():
+    factory, control, reader = _factory_for_rows(
+        [_pretenant_row()],
+        reader_kwargs={
+            "fetchmany_error": psycopg.OperationalError(
+                "secret row fetch failure"
+            )
+        },
+    )
+
+    code, output, error = _run_cli(SecurityAuditQueryRunner(factory))
+
+    assert code == 5
+    assert output.getvalue() == b""
+    assert error.getvalue() == (
+        "security-audit query intent committed but no complete report is "
+        "available; do not retry automatically\n"
+    )
+    assert control.commit_calls == 1
+    assert len(factory.calls) == 2
+    assert len(reader.executed) == 1
+    assert reader.cursor.fetchmany_sizes == [QUERY_MAX_ROWS + 1]
+    assert reader.close_calls == 1
+
+
 @pytest.mark.parametrize(
     ("row", "identifier"),
     (
@@ -1089,13 +1123,6 @@ def test_cli_passes_one_parsed_cursor_and_writes_exact_report():
             "available; do not retry automatically\n",
             id="query-failed",
         ),
-        pytest.param(
-            RuntimeError("unexpected secret"),
-            4,
-            "security-audit query access-intent outcome is unknown; "
-            "no query was sent; do not retry automatically\n",
-            id="unexpected",
-        ),
     ),
 )
 def test_cli_failure_protocol_is_closed_and_secret_free(outcome, exit_code, line):
@@ -1107,6 +1134,28 @@ def test_cli_failure_protocol_is_closed_and_secret_free(outcome, exit_code, line
     assert output.getvalue() == b""
     assert error.getvalue() == line
     assert "secret" not in error.getvalue()
+    assert len(runner.calls) == 1
+
+
+def test_cli_does_not_invent_state_for_nonconforming_runner_exception():
+    runner = _StubRunner(RuntimeError("unexpected secret"))
+    output = BytesIO()
+    error = StringIO()
+
+    with pytest.raises(RuntimeError, match="unexpected secret"):
+        run_fixed_security_audit_query_cli(
+            argv=(),
+            environ={
+                CONTROL_DSN_ENVIRONMENT: "host=control dbname=audit",
+                READER_DSN_ENVIRONMENT: "host=reader dbname=audit",
+            },
+            stdout=output,
+            stderr=error,
+            runner=runner,
+        )
+
+    assert output.getvalue() == b""
+    assert error.getvalue() == ""
     assert len(runner.calls) == 1
 
 
