@@ -1,13 +1,18 @@
 # OFARM Security-Audit Bounded Reader Execution — Phase A Contract v0.1
 
-**Status:** proposed; Phase A correction in draft pull request #309 awaits
-exact-head re-review; Phase B is not authorized
+**Status:** approved for Phase B repository implementation in draft pull
+request #309; deployment and production operation are not authorized
 
 **Draft implementation pull request:**
 `https://github.com/samovers/OFARM2/pull/309`
 
 **Contract identity:**
 `ofarm2.security-audit-bounded-reader-execution.v0.1`
+
+The contract identity remains `v0.1` through its first approved publication.
+Decision version `2` instead records the semantic replacement of a withdrawn
+live card; the RFC filename is fixed by the approved path envelope and is not
+renamed under this decision.
 
 **Decision identity:**
 `ISSUE192-SECURITY-AUDIT-BOUNDED-READER-EXECUTION-001`, proposed version `2`
@@ -902,13 +907,19 @@ instead of exposing new policy inputs.
 - **Preference resolved by clarification:** top-level `maxBytes` remains an
   exactly representable JSON integer, while event-level `accessMaxBytes`
   retains the uniform `int8` carrier string encoding.
-- **Governance Blocker corrected pending focused re-review:** the formal review
+- **Governance Blocker resolved:** the formal review
   of `d9b1a12da75ecde3add2532a067663a7a2e125fa` required a new decision version
   because the withdrawn version-1 card preceded semantic authority and
-  invariant corrections. This revision advances every decision binding and
-  approval reference to proposed version `2`.
+  invariant corrections. Commit
+  `590a32f5a094432e35ea1630d719940a1945a32a` advanced every decision binding
+  and approval reference to proposed version `2`. Its exact-head focused
+  re-review passed with no remaining in-scope Phase A Blocker.
 - **Checklist Preference resolved:** section 8 now has one consolidated
   `BRQ-006` row covering both valid retired reasons and malformed carriers.
+- **Numbering observation settled:** contract identity `v0.1` tracks the first
+  approved publication, while decision version `2` tracks the semantic live-
+  card replacement. The existing filename remains inside the approved exact
+  path envelope; a rename would require reapproval.
 - **Follow-ups:** the remaining issue #192 boundaries listed in section 11.5.
 
 The version-1 live card bound to
@@ -917,7 +928,9 @@ Phase B. It was never approved, but review required semantic changes to
 historical-reason acceptance, startup-setting authority, row-bound ownership,
 and diagnostic semantics. The repository workflow therefore requires proposed
 decision version `2`. The corrected exact head requires focused Phase A
-re-review before a version-2 live card may be shown.
+re-review before a version-2 live card may be shown. That review passed at
+`590a32f5a094432e35ea1630d719940a1945a32a`; the complete live card and later
+exact approval are recorded below.
 
 Once `BRQ-001` through `BRQ-011` pass and no demonstrated in-scope Blocker
 remains, the approved workflow permits merging the named pull request. New
@@ -948,3 +961,26 @@ documentation, mechanical inventory regeneration, review handling, commits,
 pushes, and merge in the one named draft pull request after every gate passes.
 It will authorize no database operation, deployment, release, production
 access, current/default promotion, or production security waiver.
+
+### 15.1 AI-attested approval evidence
+
+- **Task:** `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00`
+- **Live card:**
+  `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00#item-437`
+- **Approval:**
+  `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00#item-438`
+- **Exact approval sentence:**
+  `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-BOUNDED-READER-EXECUTION-001 version 2.`
+- **Observed role and order:** the assistant-authored complete version-2 live
+  card was directly followed in the same task by the task user's exact entire-
+  message approval. No later cancellation preceded Phase B implementation.
+- **Named pull request:** `https://github.com/samovers/OFARM2/pull/309`
+- **Exact reviewed Phase A head:**
+  `590a32f5a094432e35ea1630d719940a1945a32a`
+- **Review evidence:** focused exact-head PASS review
+  `https://github.com/samovers/OFARM2/pull/309#pullrequestreview-4927679005`
+  and detailed review comment
+  `https://github.com/samovers/OFARM2/pull/309#issuecomment-5281183938`.
+- **Evidence limitation:** the task messages remain authority; this record is
+  AI-attested evidence only. The authority is provisional repository-
+  development authority and grants no deployment or production authority.

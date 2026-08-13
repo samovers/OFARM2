@@ -11376,6 +11376,421 @@
       "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_failure_protocol_is_closed_and_secret_free[query-failed]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_failure_protocol_is_closed_and_secret_free[refused]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_failure_protocol_is_closed_and_secret_free[unavailable]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_failure_protocol_is_closed_and_secret_free[unexpected]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_failure_protocol_is_closed_and_secret_free[unknown]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_passes_one_parsed_cursor_and_writes_exact_report",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_rejects_every_invalid_argument_shape_before_runner[extra]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_rejects_every_invalid_argument_shape_before_runner[long-help]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_rejects_every_invalid_argument_shape_before_runner[missing-cursor]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_rejects_every_invalid_argument_shape_before_runner[noncanonical-cursor]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_rejects_every_invalid_argument_shape_before_runner[positional]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_rejects_every_invalid_argument_shape_before_runner[separator]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_rejects_every_invalid_argument_shape_before_runner[short-help]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_reporting_failure_is_exit_six_without_second_runner_call[flush-error]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_reporting_failure_is_exit_six_without_second_runner_call[short-write]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_reporting_failure_is_exit_six_without_second_runner_call[write-error]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_validates_both_conninfo_values_before_runner[both-missing]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_validates_both_conninfo_values_before_runner[control-missing]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_validates_both_conninfo_values_before_runner[reader-malformed]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_validates_both_conninfo_values_before_runner[reader-whitespace]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_control_connection_factory_failure_is_unavailable_without_retry",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_control_execute_failure_rolls_back_without_reader_or_retry",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cursor_parser_accepts_only_the_canonical_pair[canonical]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cursor_parser_rejects_noncanonical_or_incomplete_values[empty]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cursor_parser_rejects_noncanonical_or_incomplete_values[nil-uuid]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cursor_parser_rejects_noncanonical_or_incomplete_values[no-fraction]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cursor_parser_rejects_noncanonical_or_incomplete_values[non-string]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cursor_parser_rejects_noncanonical_or_incomplete_values[offset]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cursor_parser_rejects_noncanonical_or_incomplete_values[uppercase-uuid]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_cursor_parser_rejects_noncanonical_or_incomplete_values[whitespace]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_every_commit_exception_is_unknown_and_never_opens_reader[database]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_every_commit_exception_is_unknown_and_never_opens_reader[transport]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_invalid_control_state_refuses_before_intent_or_reader[autocommit]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_invalid_control_state_refuses_before_intent_or_reader[closed]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_invalid_control_state_refuses_before_intent_or_reader[in-transaction]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_invalid_intent_result_rolls_back_and_never_opens_reader[duplicate]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_invalid_intent_result_rolls_back_and_never_opens_reader[missing]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_invalid_intent_result_rolls_back_and_never_opens_reader[naive-cut]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_invalid_intent_result_rolls_back_and_never_opens_reader[nil-id]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_invalid_intent_result_rolls_back_and_never_opens_reader[non-tuple]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_invalid_intent_result_rolls_back_and_never_opens_reader[short]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_invalid_intent_result_rolls_back_and_never_opens_reader[wrong-expiry]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_invalid_reader_state_is_post_intent_failure_without_query[closed]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_invalid_reader_state_is_post_intent_failure_without_query[in-transaction]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_invalid_reader_state_is_post_intent_failure_without_query[not-autocommit]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_isolation_selection_failure_refuses_before_intent_or_reader",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_live_final_options_connect_both_roles_and_preserve_server_hard_bound",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_live_reader_failure_occurs_after_one_durable_access_intent",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_live_reader_returns_fresh_events_with_canonical_cursor",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_live_valid_retired_historical_reasons_remain_queryable",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_live_wrong_control_role_refuses_without_access_intent",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[boolean-hmac-version]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[empty-reason]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[naive-time]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[nil-id]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[non-tuple]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[short-fingerprint]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[short-hmac]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[short]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[unexpected-access-field]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[unexpected-interval-field]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[unexpected-retention-field]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[unknown-hmac-version]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[unknown-kind]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[wrong-format]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[wrong-producer]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_malformed_carrier_is_refused_before_any_report[wrong-retention]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_operator_documentation_is_bounded_one_shot_and_claim_limited",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_post_acknowledgement_close_failures_cannot_downgrade_report",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_reader_execute_failure_is_post_intent_failure_without_retry",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_reader_factory_failure_occurs_only_after_acknowledged_intent",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_result_refuses_257th_row_without_a_second_query_or_fetch",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_result_refuses_duplicate_or_ascending_order",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_result_refuses_row_at_or_above_input_cursor",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_result_refuses_row_beyond_data_cut_or_not_live_through_intent_expiry",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_retired_authentication_and_router_reasons_remain_readable_unchanged",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_runner_accepts_every_valid_maintenance_event_shape[AUDIT_ACCESS]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_runner_accepts_every_valid_maintenance_event_shape[AUDIT_GAP]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_runner_accepts_every_valid_maintenance_event_shape[AUDIT_RETENTION]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_runner_accepts_every_valid_maintenance_event_shape[OVERFLOW_ENDED]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_runner_accepts_every_valid_maintenance_event_shape[OVERFLOW_STARTED]",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_runner_binds_one_immutable_cursor_to_both_database_calls",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_runner_submits_one_fixed_intent_then_one_equal_query",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_retention.py::test_cli_failure_protocol_is_closed_and_never_leaks_details[refused]",
       "sourceModule": "kernel.tests.test_security_audit_retention",
       "sourcePath": "kernel/tests/test_security_audit_retention.py"
@@ -14201,8 +14616,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "e8ab1978b0849c3f1cb40c2b2bf1912a387eb53a0c603db9841fba1fae15985c",
-  "entryCount": 2840,
+  "entriesSha256": "16d0ff1352ccd670479312ff06bf59cef4dbad1e7d2c7c07df226c2418b487d8",
+  "entryCount": 2923,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
