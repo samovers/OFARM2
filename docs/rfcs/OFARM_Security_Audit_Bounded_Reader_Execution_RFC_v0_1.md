@@ -1,7 +1,7 @@
 # OFARM Security-Audit Bounded Reader Execution — Phase A Contract v0.1
 
-**Status:** proposed; Phase A contract complete in draft pull request #309;
-Phase B is not authorized
+**Status:** proposed; Phase A correction in draft pull request #309 awaits
+exact-head re-review; Phase B is not authorized
 
 **Draft implementation pull request:**
 `https://github.com/samovers/OFARM2/pull/309`
@@ -273,26 +273,34 @@ Each required route gets at most one `psycopg.connect` call. Libpq may make
 multiple host or address attempts inside one call. The five-second connect
 timeout is per libpq host or address attempt, not a total command deadline.
 
-Both routes use fixed operator settings that override matching conninfo
-options:
+Both routes use these fixed client-owned USERSET and output settings, supplied
+as one code-owned libpq `options` value that replaces any caller-supplied
+conninfo `options` value:
 
 ```text
 statement_timeout=5000
 lock_timeout=500
 idle_in_transaction_session_timeout=10000
 transaction_timeout=15000
-temp_file_limit=0
 work_mem=1024kB
 bytea_output=hex
 TimeZone=UTC
 DateStyle=ISO,MDY
 ```
 
-The control route additionally fixes `synchronous_commit=on`. The control
-connection must be open, non-autocommit, idle, and set to `READ COMMITTED`
-before submission. The reader connection must be open, autocommit, and idle
-before its single query. Any unequal connection posture refuses without a
-fallback.
+`temp_file_limit=0` is not client-owned startup policy. Provisioning installs
+it as an exact database-scoped role default for both non-superuser logins, and
+this command neither sends it in startup options nor adds `SET` privilege on
+the parameter. A hostile caller therefore cannot replace it through conninfo,
+while the command also cannot cause either login to fail by attempting to set
+a superuser-scoped parameter.
+
+The control route additionally includes `synchronous_commit=on` in the same
+code-owned options value. The control connection must be open,
+non-autocommit, idle, and set to `READ COMMITTED` before submission. The reader
+connection must be open, autocommit, and idle before its single query. Any
+unequal connection posture refuses without a fallback. The production command
+adds no identity, readiness, or `SHOW` query to verify provisioned settings.
 
 ### 6.3 Access-intent transaction
 
@@ -326,8 +334,8 @@ Only `INTENT_ACKNOWLEDGED` permits the runner to:
 2. verify its autocommit and idle state;
 3. submit the exact bounded query once with the acknowledged access event ID,
    the same cursor, and the same fixed ceilings;
-4. fetch at most 257 transport rows in one bounded operation, retain at most
-   256, and refuse if a 257th row exists;
+4. request at most 257 rows from the client cursor in one fetch call, retain at
+   most 256, and refuse if the cursor seam exposes a 257th row;
 5. validate the exact 30-field carrier type, fixed policy identities, allowed
    event kind and producer/component shape, UUID and digest lengths, finite
    timestamps, 30-day elapsed retention relation, maintenance extensions,
@@ -348,13 +356,35 @@ expiry, or database byte accounting. Validation proves that the trusted
 database result fits the accepted carrier and the request's observable bounds;
 the database remains the policy authority.
 
-Carrier validation derives the event kinds, producer/reason matrix, known HMAC
-versions, policy identities, access protocols, and their limits from
-`SECURITY_AUDIT_CONTRACT`. It accepts every valid event kind as query data,
-including an `AUDIT_ACCESS` row for the separately governed break-glass export
-protocol if one later exists. Reading that evidence does not invoke export or
-grant an export capability. The validator never silently filters a valid event
-kind or invents a narrower access-event vocabulary.
+The database function's `LIMIT 256` is the authoritative row bound. A normal
+client-side psycopg cursor may have materialized the complete server result
+before `fetchmany(257)` returns, so the client fetch is a hostile-seam
+validation and not a network or transport bound. No server-side cursor or
+second statement is introduced.
+
+Carrier validation derives the event kinds, producer/component pairs, known
+HMAC versions, policy identities, access protocols, and their limits from
+`SECURITY_AUDIT_CONTRACT`. The active fresh-append reason lists are not treated
+as a historical query-membership registry. For a `PRE_TENANT_FAILURE` row, the
+validator requires:
+
+- an exact producer/component pair from the contract reason matrix;
+- a non-empty closed ASCII `reason` token;
+- the contract HMAC domain, a known key version, and an exact 32-byte HMAC; and
+- the remaining exact carrier identities and shapes.
+
+The trusted relation constraints and bounded database function remain
+authoritative for historical reason membership. The client therefore accepts
+and preserves retired immutable reasons that the database can lawfully return,
+including authentication `TENANT_PARTY_PIN_REFUSED` and `CAPABILITY_REFUSED`,
+and router `SECURITY_ROUTE_REFUSED` and `ACTOR_BINDING_REFUSED`; it does not add
+those reasons to the active append contract.
+
+The validator accepts every valid event kind as query data, including an
+`AUDIT_ACCESS` row for the separately governed break-glass export protocol if
+one later exists. Reading that evidence does not invoke export or grant an
+export capability. The validator never silently filters a valid event kind or
+invents a narrower access-event vocabulary.
 
 The canonical report is one ASCII JSON line with sorted object keys, no NaN,
 compact separators, and one terminal newline. Its exact top-level keys and
@@ -416,7 +446,11 @@ A canonical UTC timestamp has exactly the input cursor timestamp form:
 `YYYY-MM-DDTHH:MM:SS.ffffffZ`. All elapsed-time comparisons occur after UTC
 normalization. All `int8` event fields use base-10 strings so downstream JSON
 consumers cannot silently lose integer precision; `int4` fields remain JSON
-integers.
+integers. Top-level `maxBytes` is fixed command-protocol metadata and remains a
+JSON integer because `1048576` is exactly representable. Event-level
+`accessMaxBytes` follows the uniform `int8` event-carrier rule and remains a
+base-10 string. The deliberate encoding difference is part of schema version
+`ofarm.security-audit-bounded-query-report.v1`.
 
 The database's 1,048,576-byte ceiling applies to the sum of its canonical
 encoded event rows, not to the complete stdout line. The wrapper, key names,
@@ -446,6 +480,11 @@ The process has these closed exits:
 
 Every controlled failure writes and flushes exactly its corresponding ASCII
 line:
+
+In the table, the two source characters `\n` denote exactly one terminal LF
+byte (`0x0A`). The backslash and `n` are not emitted; no CR or other trailing
+byte is permitted. Each complete diagnostic appears on one physical source
+line.
 
 | Exit | Exact stderr |
 | --- | --- |
@@ -496,9 +535,10 @@ fallback.
 
 After intent acknowledgement, one invocation submits the bounded query at most
 once with the acknowledged access event ID and the exact same cursor and
-ceilings. It fetches at most 257 transport rows to detect excess, retains and
-returns at most 256 descending rows inside the fixed cut, expiry, and cursor
-boundary.
+ceilings. The database `LIMIT 256` owns the row bound. One client fetch requests
+at most 257 rows to detect a hostile-seam excess, retains and returns at most
+256 descending rows inside the fixed cut, expiry, and cursor boundary, and
+makes no transport-bound claim.
 
 ### `BRQ-006` — carrier and output remain bounded and exact
 
@@ -506,7 +546,8 @@ Every row must match the accepted 30-field event-report carrier and closed
 policy shapes before any byte is written. A missing, extra, malformed,
 misordered, out-of-cut, expired-at-intent, or cursor-violating row produces no
 successful report. Every valid accepted event kind remains readable; client
-validation cannot silently filter the result set.
+validation cannot silently filter the result set. In particular, active
+fresh-append reason lists cannot reject a valid retired historical reason.
 
 ### `BRQ-007` — canonical privileged output only
 
@@ -545,10 +586,11 @@ prerequisite is unavailable.
 | Invariant | Supported entry and counterexample | Required result |
 | --- | --- | --- |
 | `BRQ-001` | Run the module with `--help`, a partial cursor, a noncanonical timestamp, an uppercase UUID, an empty control DSN, or a malformed reader DSN. | Exit `2`; no connection, stdout, access intent, or leaked input. |
-| `BRQ-002` | Supply extra limit or purpose tokens, or hostile DSN startup options. | Tokens refuse; code-owned fixed function arguments and settings cannot be widened. |
+| `BRQ-002` | Supply extra limit or purpose tokens, or hostile DSN startup options. | Tokens refuse; code-owned fixed function arguments and USERSET/output settings cannot be widened, while provisioned `temp_file_limit=0` remains server-owned. |
 | `BRQ-003` | Use a control route whose commit acknowledgement is dropped after the commit call begins. | Exit `4`; zero reader connection attempts and zero retry attempts. |
 | `BRQ-004` | Point the control DSN at the reader login, the reader DSN at the control login, or the two routes at different accepted audit services. | Existing exact session-user or equal-intent checks refuse; no report or fallback. |
-| `BRQ-005` | Request a cursor page while a hostile seam returns a 257th row, a row at or above the cursor, or ascending order. | The single bounded fetch detects excess; post-intent failure emits no successful output and makes no second query. |
+| `BRQ-005` | Request a cursor page while a hostile seam returns a 257th row, a row at or above the cursor, or ascending order. | The single result fetch detects seam excess; post-intent failure emits no successful output and makes no second query. The database `LIMIT`, not the client fetch, owns the row bound. |
+| `BRQ-006` | Return valid retired historical reasons `TENANT_PARTY_PIN_REFUSED` for authentication and `SECURITY_ROUTE_REFUSED` for the router. | Both rows remain readable and their reasons appear unchanged in the canonical report. |
 | `BRQ-006` | Return a zero UUID, naive/infinite timestamp, wrong digest length, unknown event kind, bad maintenance extension, row beyond the fixed cut, or row whose `purge_after` is not later than intent expiry. | Post-intent failure before stdout. |
 | `BRQ-007` | Return a carrier that would force a missing key or alternate encoding, then put a recognizable secret in either DSN and force each connection, SQL, validation, and output failure. | Success matches the exact schema; fixed diagnostic bytes never contain the secret, row data, access ID, or exception text. |
 | `BRQ-008` | Make stdout short-write or fail on flush after the complete report exists. | Exit `6`; never exit `0`; no retry. |
@@ -759,11 +801,11 @@ and independently verifiable approval or signing system.
 | ID | Owning code | Negative evidence | Acceptance evidence | Smallest verification |
 | --- | --- | --- | --- | --- |
 | `BRQ-001` | Command adapter and cursor parser | Invalid argv/cursor plus malformed second DSN | Zero factory calls | Focused CLI tests |
-| `BRQ-002` | Runner constants and intent call | Extra purpose/limit tokens and hostile options | Exact parameters and one submission | Runner seam plus live intent test |
+| `BRQ-002` | Runner constants and intent call | Extra purpose/limit tokens and hostile options | Exact parameters, one submission, final options connect both roles, and server-owned `temp_file_limit=0` remains in force | Runner seam plus live connection and intent tests |
 | `BRQ-003` | Explicit intent state machine | Commit acknowledgement exception | No reader factory call | Deterministic commit seam |
 | `BRQ-004` | Existing functions and two DSNs | Swapped roles and cross-service routes | Exact role/equal-intent refusal | PostgreSQL integration test |
 | `BRQ-005` | Immutable request and query call | Extra, misordered, out-of-cursor row | One equal query and bounded page | Runner seam plus live cursor test |
-| `BRQ-006` | Event carrier validator | Malformed field, digest, time, policy, or extension | Complete accepted carrier | Parametric seam tests and live query |
+| `BRQ-006` | Event carrier validator | Malformed field, digest, time, policy, extension, or active-only historical-reason check | Complete accepted carrier, including unchanged retired authentication and router reasons | Parametric seam tests and live query |
 | `BRQ-007` | Renderer and fixed diagnostics | Canary secret across every failure phase | Exact success/failure bytes | Byte-level protocol tests |
 | `BRQ-008` | CLI terminal mapping | Intent ambiguity, post-intent failure, short write, flush failure | Distinct exits `4`, `5`, and `6` | State and sink tests |
 | `BRQ-009` | Runner and CLI surface | Failure injected at every external step | Exact maximum call counts and no access-ID input | Seam call assertions |
@@ -804,6 +846,14 @@ git diff --check
 PostgreSQL-backed skips are reported as skips and never presented as passing
 evidence.
 
+PostgreSQL-backed Phase B evidence must additionally prove that the provisioned
+control and reader logins both connect with the final code-owned options, each
+connection still inherits `temp_file_limit=0` from its database-scoped role
+default, and hostile conninfo options cannot replace the code-owned
+USERSET/output settings. These observations belong to tests and provisioning
+evidence; the production command must not add an identity, readiness, or
+settings-observation query.
+
 Before merge, the AI must also:
 
 1. compare every path changed from the reviewed base through exact PR head
@@ -831,15 +881,32 @@ instead of exposing new policy inputs.
 
 ### 14.2 Review disposition
 
-- **Blockers:** none. The one unconstrained Phase A review examined head
-  `8bf9f935b2484f8e86e935c407a099467804c432` and found three in-scope gaps:
-  the success schema was not exact, the diagnostic bytes and failure-phase
-  mapping were not exact, and the excess-row wording could not detect a 257th
-  row. Commit `2cedfa62c41a18c0441c60140b2587a5bf194ecc` corrected those gaps.
-  The permitted focused re-review of `BRQ-005` through `BRQ-008` at that head
-  found no remaining Blocker.
+- **Earlier review:** the unconstrained review at
+  `8bf9f935b2484f8e86e935c407a099467804c432` found three in-scope gaps in the
+  success schema, diagnostic/failure protocol, and excess-row handling.
+  Commit `2cedfa62c41a18c0441c60140b2587a5bf194ecc` corrected those gaps, and the
+  permitted focused re-review of `BRQ-005` through `BRQ-008` passed.
+- **Blockers corrected pending focused re-review:** two top-level reviews of
+  exact head `cb5e0957702109b456a7250365b03f64fdaa2238` demonstrated that an
+  active-only reason check would reject valid retired historical rows and that
+  client-sent `temp_file_limit=0` could prevent the non-superuser routes from
+  connecting. This revision preserves historical reasons under database
+  authority and leaves `temp_file_limit=0` under provisioned role authority.
+- **Accuracy finding corrected:** the client fetch is now described as seam
+  validation; only the database `LIMIT 256` is claimed as the row bound.
+- **Diagnostic clarification:** the exact reviewed blob already stored each
+  table value on one source line with the literal source characters `\n`.
+  This revision now defines those characters explicitly as one emitted LF byte
+  and forbids CR or any additional trailing byte.
+- **Preference resolved by clarification:** top-level `maxBytes` remains an
+  exactly representable JSON integer, while event-level `accessMaxBytes`
+  retains the uniform `int8` carrier string encoding.
 - **Follow-ups:** the remaining issue #192 boundaries listed in section 11.5.
-- **Preferences:** none.
+
+The prior live card bound to `cb5e0957702109b456a7250365b03f64fdaa2238`
+is superseded and cannot authorize Phase B. The corrected exact head requires
+focused Phase A re-review before a replacement live card may be shown. Decision
+version `1` remains proposed because no Phase B approval was given.
 
 Once `BRQ-001` through `BRQ-011` pass and no demonstrated in-scope Blocker
 remains, the approved workflow permits merging the named pull request. New
