@@ -831,7 +831,13 @@ instead of exposing new policy inputs.
 
 ### 14.2 Review disposition
 
-- **Blockers:** none before exact-head Phase A review.
+- **Blockers:** none. The one unconstrained Phase A review examined head
+  `8bf9f935b2484f8e86e935c407a099467804c432` and found three in-scope gaps:
+  the success schema was not exact, the diagnostic bytes and failure-phase
+  mapping were not exact, and the excess-row wording could not detect a 257th
+  row. Commit `2cedfa62c41a18c0441c60140b2587a5bf194ecc` corrected those gaps.
+  The permitted focused re-review of `BRQ-005` through `BRQ-008` at that head
+  found no remaining Blocker.
 - **Follow-ups:** the remaining issue #192 boundaries listed in section 11.5.
 - **Preferences:** none.
 
