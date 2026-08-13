@@ -1,8 +1,10 @@
 # OFARM Security-Audit Bounded Reader Execution — Phase A Contract v0.1
 
-**Status:** proposed; Phase B is not authorized; the implementation draft pull
-request will be assigned after the first contract-only commit and before any
-live decision card is shown
+**Status:** proposed; Phase A contract complete in draft pull request #309;
+Phase B is not authorized
+
+**Draft implementation pull request:**
+`https://github.com/samovers/OFARM2/pull/309`
 
 **Contract identity:**
 `ofarm2.security-audit-bounded-reader-execution.v0.1`
@@ -746,9 +748,9 @@ ideas, Preferences, and non-blocking hardening remain Follow-ups.
 ## 15. Phase A approval boundary
 
 This RFC grants no Phase B authority by authorship, commit, push, review, or
-GitHub activity. After this contract is committed in one draft pull request,
-bound to that stable pull-request reference, and reviewed at its exact head,
-the AI must display one complete live decision card in the same Codex task.
+GitHub activity. After this contract is bound to draft pull request #309 and
+reviewed at its exact head, the AI must display one complete live decision card
+in the same Codex task.
 
 Only the exact entire text of a later task-user message matching the live
 card's approval sentence can authorize Phase B. The original card and approval
