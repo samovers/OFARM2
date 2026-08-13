@@ -8,6 +8,7 @@ from io import BytesIO, StringIO
 from pathlib import Path
 from time import monotonic
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import psycopg
 import pytest
@@ -281,6 +282,71 @@ def test_runner_normalizes_timezone_aware_values_to_six_digit_utc():
     assert acknowledged.result.observed_at == OBSERVED_AT
     assert acknowledged.result.purge_after == PURGE_AFTER
     assert acknowledged.report_bytes == EXPECTED_REPORT
+
+
+@pytest.mark.parametrize(
+    ("purge_shift", "accepted"),
+    (
+        pytest.param(timedelta(0), True, id="exact-duration"),
+        pytest.param(
+            timedelta(microseconds=1),
+            False,
+            id="one-microsecond-late",
+        ),
+    ),
+)
+def test_runner_validates_elapsed_duration_across_zoneinfo_transition(
+    purge_shift: timedelta,
+    accepted: bool,
+):
+    zone = ZoneInfo("Europe/Belgrade")
+    observed_at = datetime(2026, 3, 15, 12, tzinfo=zone)
+    normalized_observed_at = observed_at.astimezone(timezone.utc)
+    purge_after = (
+        normalized_observed_at
+        + timedelta(seconds=RETENTION_SECONDS)
+        + purge_shift
+    ).astimezone(zone)
+    normalized_purge_after = purge_after.astimezone(timezone.utc)
+    cutoff = normalized_observed_at - timedelta(seconds=RETENTION_SECONDS)
+    connection = _FakeConnection(
+        [(cutoff, 1024, RETENTION_EVENT_ID, observed_at, purge_after)]
+    )
+    factory = _FakeFactory(connection)
+    runner = SecurityAuditRetentionRunner(factory)
+
+    assert observed_at.utcoffset() == timedelta(hours=1)
+    assert purge_after.utcoffset() == timedelta(hours=2)
+
+    if accepted:
+        acknowledged = runner.run("host=audit")
+
+        assert acknowledged.result == SecurityAuditRetentionResult(
+            cutoff=cutoff,
+            deleted_count=1024,
+            retention_event_id=RETENTION_EVENT_ID,
+            observed_at=normalized_observed_at,
+            purge_after=normalized_purge_after,
+        )
+        assert acknowledged.report_bytes == (
+            b'{"cutoff":"2026-02-13T11:00:00.000000Z","deletedCount":1024,'
+            b'"observedAt":"2026-03-15T11:00:00.000000Z",'
+            b'"outcome":"ACKNOWLEDGED",'
+            b'"purgeAfter":"2026-04-14T11:00:00.000000Z",'
+            b'"retentionEventId":"11111111-1111-4111-8111-111111111111"}\n'
+        )
+        assert connection.rollback_calls == 0
+        assert connection.commit_calls == 1
+    else:
+        with pytest.raises(SecurityAuditRetentionRefused):
+            runner.run("host=audit")
+
+        assert connection.rollback_calls == 1
+        assert connection.commit_calls == 0
+
+    assert len(factory.calls) == 1
+    assert connection.executed == [RETENTION_SQL]
+    assert connection.close_calls == 1
 
 
 def test_connection_failure_is_unavailable_and_never_retried():
