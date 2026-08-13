@@ -1,17 +1,21 @@
-# OFARM Security-Audit Logical Retention Execution Elapsed-Time Correction — Phase A Contract v0.2
+# OFARM Security-Audit Logical Retention Execution Elapsed-Time Correction — Phase A Contract v0.3
 
 **Status:** proposed Phase A correction in contract-only draft PR #308; no
 Phase B implementation, deployment, database invocation, release, or
 production authority
 
 **Contract identity:**
-`ofarm2.security-audit-logical-retention-execution-elapsed-time-correction.v0.2`
+`ofarm2.security-audit-logical-retention-execution-elapsed-time-correction.v0.3`
 
 **Amended contract identity:**
 `ofarm2.security-audit-logical-retention-execution.v0.1`
 
 **Decision identity:**
-`ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001`, proposed version `2`
+`ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001`, proposed version `3`
+
+**Supersession:** the previously shown version-2 live card is withdrawn. It
+was never approved. Review required a semantic contract change, so the
+repository workflow requires this new decision version.
 
 **Issue:** #192
 
@@ -74,6 +78,12 @@ The database remains the authority for the returned instants. The runner only
 proves that the two returned instants are separated by the already accepted
 literal duration.
 
+Both operands must already be normalized to UTC before any duration
+comparison. A difference-based check using the original connection-timezone
+values, such as `purge_after - observed_at`, is explicitly forbidden: when
+both datetimes carry the same `ZoneInfo` object, Python subtraction compares
+their wall-clock fields without adjusting for the intervening offset change.
+
 Official behavior supporting the reproduction is documented by:
 
 - Psycopg date/time adaptation:
@@ -92,27 +102,28 @@ transaction, retry, output, and authorization boundaries from version 1.
 
 ## 3. Review-finding disposition
 
-The post-merge review contained two claimed Blockers.
+Post-merge review raised an approval-provenance claim and reproduced the
+timezone-transition defect. Phase A review of PR #308 then found that deciding
+the provenance claim here would combine a separate authority boundary with
+the elapsed-time correction.
 
-### 3.1 Approval-provenance claim — not reproduced
+### 3.1 Approval provenance — separate prerequisite, not adjudicated
 
-The task platform directly preserves the opposite role sequence from the
-review's claim:
+PR #308 does not validate, invalidate, amend, or retrospectively ratify PR
+#307's approval provenance. A repository reviewer cannot authenticate the
+original task roles and ordering from self-attested repository text, and that
+authority question is outside the primary trust boundary of this correction.
 
-- task: `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00`;
-- complete assistant-authored live card: `item-75`; and
-- later task-user approval message: `item-76`.
+Before Phase B and again immediately before merge, the responsible same-task
+agent must directly retrieve the original version-1 card and later task-user
+approval and validate their task, roles, order, exact visible text, decision,
+version, and named-PR binding under `AGENTS.md`. The task messages remain the
+authority; any repository record is AI-attested evidence only.
 
-The entire visible text of `item-76` is:
-
-```text
-I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001 version 1.
-```
-
-The version-1 approval therefore satisfied the repository workflow. PR #307
-does not require a governance revert or retrospective ratification. This
-version-2 decision is prospective authority for the elapsed-time correction
-only. It does not reinterpret, transfer, or replay version-1 approval.
+Missing, ambiguous, or contradictory evidence stops PR #308. Any decision to
+retain, revert, or prospectively reimplement the merged version-1 work must be
+made outside this elapsed-time-correction boundary under separate authority.
+This contract does not assume or pre-decide that outcome.
 
 ### 3.2 Timezone-transition false refusal — reproduced Blocker
 
@@ -146,13 +157,16 @@ batch and reports exit `1`, preventing the supported operation from making
 progress for affected instants.
 
 **Smallest fix:** compare the already normalized UTC values and add one
-`ZoneInfo` regression. No revert, migration, route change, or timezone pin is
+focused `ZoneInfo` regression definition covering both exact acceptance and a
+one-microsecond refusal. No migration, route change, or timezone pin is
 needed.
 
 ## 4. Non-goals
 
-- Reverting merge commit `273fafb5` or rewriting PR #307 history.
-- Reusing or retroactively changing version-1 approval.
+- Adjudicating, amending, or retrospectively ratifying PR #307's approval
+  provenance, or choosing a repository transition if its separate evidence
+  check fails.
+- Editing the merged version-1 RFC or reusing version-1 approval.
 - Deploying, invoking, releasing, or promoting the retention command.
 - Changing the database function, migration bytes, relation constraints,
   roles, grants, provisioning, retention duration, cutoff, victim selection,
@@ -185,7 +199,7 @@ needed.
 - PostgreSQL `timestamptz` and literal-seconds interval semantics.
 - The existing literal `RETENTION_SECONDS` authority.
 - Psycopg date/time adaptation and Python's UTC conversion.
-- The deployment-layer runner after the version-2 correction.
+- The deployment-layer runner after the version-3 correction.
 - The IANA timezone database supplied through Python `zoneinfo`.
 
 ### 5.3 Untrusted or variable inputs
@@ -216,10 +230,11 @@ Their status is unchanged from version 1.
 | Cutoff, victims, ordering, ceiling, cleanup, identity, and event | Existing PostgreSQL function |
 | Transaction finality | Normal return from explicit `Connection.commit()` |
 | Process protocol | Existing fixed CLI and renderer |
-| Prospective repository authority | Exact later same-task approval of the unique version-2 live card |
+| Prospective repository authority | Exact later same-task approval of the unique version-3 live card |
 
-There is no fallback comparison. Raw connection-timezone arithmetic is removed
-from duration acceptance rather than retained as a second accepted rule.
+There is no fallback comparison. Raw connection-timezone addition and raw
+connection-timezone subtraction are both forbidden rather than retained as a
+second accepted rule.
 
 ## 7. State machine and ordering
 
@@ -271,27 +286,31 @@ introduced.
 - **RET-DST-007 — Pre-deployment only.** Repository correction creates no
   deployment, invocation, production, release, scheduler, or security-waiver
   authority.
-- **RET-DST-008 — Historical evidence preserved.** Version-1 RFC and approval
-  evidence are not edited, withdrawn, or repurposed; version 2 binds only its
-  new named draft PR.
+- **RET-DST-008 — Provenance adjudication remains separate.** PR #308 neither
+  validates nor invalidates PR #307's approval provenance. Direct same-task
+  evidence verification is required before Phase B and merge; unavailable,
+  ambiguous, or contradictory evidence stops this PR for resolution outside
+  this trust boundary.
 
 ## 9. Production-reachable negative cases
 
 | Invariant | Counterexample and required result |
 | --- | --- |
 | `RET-DST-001` | With connection `TimeZone=Europe/Belgrade`, the function returns `2026-03-15T12:00:00+01:00` and `2026-04-14T13:00:00+02:00`; the exact 2,592,000-second result is accepted. |
-| `RET-DST-002` | Move the normalized purge instant by one microsecond; validation refuses, rolls back, and never commits. |
+| `RET-DST-002` | With the same live `Europe/Belgrade` transition, move the database purge instant by one microsecond; validation refuses, rolls back, and never commits. |
 | `RET-DST-003` | Return a naive observed timestamp or a second row; the existing refusal path remains exact. |
 | `RET-DST-004` | Make explicit `commit()` raise; the existing unknown outcome and no-retry behavior remains unchanged. |
 | `RET-DST-005` | Accept the transition-spanning row; output uses the two normalized UTC instants and the existing exact byte shape. |
 | `RET-DST-006` | Supply CLI arguments or a caller-selected duration; the unchanged CLI refuses before connection and no new parameter exists. |
 | `RET-DST-007` | Merge the repository fix without deployment authority; no database command is run and no deployment state changes. |
-| `RET-DST-008` | Attempt to apply version-2 approval to PR #307 or edit its merged RFC record; execution stops because the version and named PR do not match. |
+| `RET-DST-008` | The original version-1 card or approval cannot be directly retrieved with unambiguous role and order; Phase B or merge stops, and this contract chooses no retain, revert, or reimplementation transition. |
 
 The focused regression uses the runner's supported constructor-bound
-connection-factory seam and real `ZoneInfo`, not private-field mutation. Live
-PostgreSQL evidence from the full suite remains useful but is not required to
-manufacture a clock date at the one-statement result seam.
+connection-factory seam and real `ZoneInfo`, not private-field mutation. Its
+accept and refuse cases use the same transition-spanning inputs except for the
+one-microsecond inconsistency. Live PostgreSQL evidence from the full suite
+remains useful but is not required to manufacture a clock date at the
+one-statement result seam.
 
 ## 10. Proposed architecture and smallest change
 
@@ -303,17 +322,21 @@ or normalized_purge_after
 != normalized_observed_at + timedelta(seconds=RETENTION_SECONDS)
 ```
 
-The focused test module imports `ZoneInfo`, constructs one spring-transition
-case, routes it through `SecurityAuditRetentionRunner`, and proves:
+The focused test module imports `ZoneInfo` and defines one parametrized
+spring-transition regression with two cases routed through
+`SecurityAuditRetentionRunner`:
 
-- the exact elapsed duration is accepted and committed;
-- the returned values are normalized to UTC;
-- the existing canonical report is derived from normalized instants; and
-- no rollback, second SQL submission, or second connection occurs.
+- the exact elapsed duration is accepted and committed, its returned values
+  are normalized to UTC, and its canonical report is derived from those
+  normalized instants; and
+- the same transition-spanning result shifted by one microsecond is refused,
+  rolled back, and never committed.
 
-One new collected test node requires mechanical inventory regeneration. The
-existing fixed-offset test remains because it independently proves rendering
-and normalization without an offset transition.
+Both cases prove there is no second SQL submission or second connection. One
+new test definition produces two collected parameter cases and therefore
+requires mechanical inventory regeneration. The existing fixed-offset test
+remains because it independently proves rendering and normalization without an
+offset transition.
 
 Pinning the connection timezone to UTC would hide this one representation but
 would change connection options and acceptability of deployment routes. A
@@ -327,7 +350,8 @@ Comparing the already normalized values is the minimum coherent correction.
 - Duration comparisons: one, after UTC normalization.
 - New production types, helpers, abstractions, or configuration: zero.
 - New connection, SQL, transaction, retry, or output paths: zero.
-- New collected regression nodes: one.
+- New regression definitions: one parametrized function.
+- New collected regression cases: two.
 - Obsolete behavior removed: the raw connection-timezone duration comparison.
 
 A clean rewrite is unnecessary. The existing validator already computes the
@@ -341,24 +365,25 @@ comparison.
 Before approval, the draft PR may change only:
 
 ```text
-docs/rfcs/OFARM_Security_Audit_Logical_Retention_Execution_Elapsed_Time_Correction_RFC_v0_2.md
+docs/rfcs/OFARM_Security_Audit_Logical_Retention_Execution_Elapsed_Time_Correction_RFC_v0_3.md
 ```
 
-It may update that RFC only to bind the stable draft-PR URL and record
-meaning-preserving exact-head review disposition before the live card.
+It may update that RFC only to incorporate in-boundary Phase A review, bind
+the stable draft-PR URL, record exact-head review disposition, and identify
+superseded unapproved decision cards before the next live card.
 
 ### 12.2 Exact prospective Phase B allowlist
 
-After valid version-2 approval, the same named draft PR may change exactly:
+After valid version-3 approval, the same named draft PR may change exactly:
 
 ```text
-docs/rfcs/OFARM_Security_Audit_Logical_Retention_Execution_Elapsed_Time_Correction_RFC_v0_2.md
+docs/rfcs/OFARM_Security_Audit_Logical_Retention_Execution_Elapsed_Time_Correction_RFC_v0_3.md
 deployment/postgresql/security_audit_retention.py
 kernel/tests/test_security_audit_retention.py
 conformance/review_baseline_test_inventory.json
 ```
 
-The RFC may then change only to mark version-2 approval, append compact
+The RFC may then change only to mark version-3 approval, append compact
 AI-attested approval evidence, and record meaning-preserving implementation or
 verification disposition. The inventory change is mechanical and must contain
 the complete canonical collected test set.
@@ -379,14 +404,16 @@ TASK_PROMPT.md
 ### 12.3 Dependencies and reviewer non-requirements
 
 - Reviewed base is merge commit `273fafb5b18d2d6e432f755140ce6446cb616efc`.
-- PR #307 and its version-1 contract remain merged dependencies.
+- PR #307 remains the merged technical base. PR #308 makes no determination
+  about its approval provenance.
 - There is no stacked pull request.
 - Issue #192 remains open; this correction does not close it.
 - PRs #305 and #306 remain parked and untouched.
 
-Reviewers must not require a revert of PR #307, a migration, connection
-timezone pin, route change, CLI change, scheduler, deployment action, or an
-adjacent #192 operation from this correction.
+This correction neither requires nor forbids a separate repository transition
+resulting from the provenance prerequisite in section 3.1. Reviewers must not
+require a migration, connection timezone pin, route change, CLI change,
+scheduler, deployment action, or adjacent #192 operation from this correction.
 
 ### 12.4 Stop and reapproval conditions
 
@@ -401,7 +428,7 @@ Stop before editing another path or changing:
 - any deployment, invocation, release, production, or security-waiver state.
 
 Those changes require a separate prerequisite, follow-up, or new decision
-version. Closing the named PR unmerged expires version-2 authority.
+version. Closing the named PR unmerged expires version-3 authority.
 
 ## 13. Provisional design record
 
@@ -424,13 +451,13 @@ opposite. If such evidence appears, stop rather than widening this PR.
 | Invariant | Owning code | Negative evidence | Acceptance evidence | Smallest verification |
 | --- | --- | --- | --- | --- |
 | `RET-DST-001` | `_validated_result()` normalized comparison | Transition-spanning `ZoneInfo` values rejected by current code | Same row accepted and committed | Focused runner regression |
-| `RET-DST-002` | `_validated_result()` | Purge instant shifted by one microsecond | Exact duration only | Existing invalid-result test plus focused regression |
+| `RET-DST-002` | `_validated_result()` | Transition-spanning purge instant shifted by one microsecond | Exact duration only | Focused `ZoneInfo` accept/refuse regression |
 | `RET-DST-003` | `_utc_timestamp()` and existing shape checks | Naive, malformed, missing, or duplicate result | Existing refusal suite unchanged | Focused module |
 | `RET-DST-004` | Existing runner state machine | Commit exception or invalid result | Existing rollback/unknown/no-retry tests | Focused module and architecture check |
 | `RET-DST-005` | Existing renderer | Local-time representation leaks into output | Exact normalized UTC report | Focused transition regression |
 | `RET-DST-006` | Existing fixed CLI and SQL | Caller policy input | Existing argument and fixed-query tests | Focused module |
 | `RET-DST-007` | PR boundary and workflow | Deployment or database invocation claim | Repository-only diff | Exact path checks |
-| `RET-DST-008` | This RFC and live card | Version/PR replay | Stable version-2 card and later user approval | Task-evidence and named-PR recheck |
+| `RET-DST-008` | Workflow prerequisite outside production code | Unavailable, ambiguous, or contradictory version-1 task evidence | No provenance conclusion in this RFC; Phase B and merge stop when evidence cannot be validated | Same-task evidence recheck before Phase B and merge |
 
 The package contract check must pass before every commit. The exact Phase A
 head must pass:
@@ -461,22 +488,25 @@ cancellation.
 
 ## 15. Open decisions and review disposition
 
-- **Blockers:** the reproduced timezone-transition false refusal; Phase B is
-  blocked pending a complete named draft PR, unique version-2 live card, and
-  exact later task-user approval.
+- **Blockers:** the reproduced timezone-transition false refusal remains the
+  implementation Blocker. The Phase A boundary-mixing Blocker is resolved;
+  Phase B remains gated by section 3.1 and exact later approval of the unique
+  version-3 live card.
 - **Follow-ups:** none.
-- **Preferences:** none.
+- **Preferences:** an autumn-fold regression is optional and does not delay
+  this correction.
 - **Open material decisions:** none.
 
-The invalid-approval-provenance claim is rejected on direct task-role evidence
-and is not a Blocker. The reproduced elapsed-time defect is the only technical
-Blocker owned by this correction.
+PR #308 now leaves approval provenance unadjudicated, explicitly forbids raw
+connection-zone subtraction, and contracts for both accept and refuse cases
+under a live transition. The reproduced elapsed-time defect is the only
+technical Blocker owned by this correction.
 
 ## 16. Merge stop rule
 
 Once `RET-DST-001` through `RET-DST-008` pass, every exact-head gate is green,
 and no demonstrated in-scope Blocker remains, the approved workflow permits
-merging the named version-2 PR. New ideas and adjacent hardening remain outside
+merging the named version-3 PR. New ideas and adjacent hardening remain outside
 this boundary and do not reopen review.
 
 ## 17. Phase A approval boundary
@@ -488,15 +518,16 @@ draft-PR creation. Before implementation:
 2. replace the pending named-PR field with its stable URL;
 3. review the exact contract head;
 4. present one complete live card for decision
-   `ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001`, version `2`,
+   `ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001`, version `3`,
    naming that draft PR and the maximum four-path envelope; and
 5. wait for a later task-user message whose entire visible text is exactly:
 
 ```text
-I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001 version 2.
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001 version 3.
 ```
 
 No current message, attachment, review text, GitHub activity, AI message, tool
-output, version-1 approval, or generic instruction supplies version-2
-approval. Phase B remains stopped until that exact later user message is
-directly retrievable in this task after the unique complete card.
+output, version-1 approval, the withdrawn version-2 card, or generic
+instruction supplies version-3 approval. Phase B remains stopped until that
+exact later user message is directly retrievable in this task after the unique
+complete card.
