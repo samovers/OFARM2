@@ -11576,6 +11576,16 @@
       "sourcePath": "kernel/tests/test_security_audit_retention.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_runner_validates_elapsed_duration_across_zoneinfo_transition[exact-duration]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_retention.py::test_runner_validates_elapsed_duration_across_zoneinfo_transition[one-microsecond-late]",
+      "sourceModule": "kernel.tests.test_security_audit_retention",
+      "sourcePath": "kernel/tests/test_security_audit_retention.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_retention.py::test_transport_loss_after_submission_is_unavailable_without_commit",
       "sourceModule": "kernel.tests.test_security_audit_retention",
       "sourcePath": "kernel/tests/test_security_audit_retention.py"
@@ -14191,8 +14201,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "98918d4e65e93322ebf89cea2dda62a936594ededb86d1bc5aafddff5b4e3b49",
-  "entryCount": 2838,
+  "entriesSha256": "e8ab1978b0849c3f1cb40c2b2bf1912a387eb53a0c603db9841fba1fae15985c",
+  "entryCount": 2840,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

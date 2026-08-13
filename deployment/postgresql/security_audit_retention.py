@@ -137,8 +137,8 @@ def _validated_result(row: object, second_row: object) -> SecurityAuditRetention
         or not 0 <= deleted_count <= PURGE_BATCH_ROWS
         or type(event_id) is not UUID
         or event_id.int == 0
-        or purge_after
-        != observed_at + timedelta(seconds=RETENTION_SECONDS)
+        or normalized_purge_after
+        != normalized_observed_at + timedelta(seconds=RETENTION_SECONDS)
     ):
         raise ValueError("retention result values are invalid")
     return SecurityAuditRetentionResult(

@@ -1,8 +1,7 @@
 # OFARM Security-Audit Logical Retention Execution Elapsed-Time Correction — Phase A Contract v0.3
 
-**Status:** proposed Phase A correction in contract-only draft PR #308; no
-Phase B implementation, deployment, database invocation, release, or
-production authority
+**Status:** approved for Phase B repository implementation in draft PR #308;
+no deployment, database invocation, release, or production authority
 
 **Contract identity:**
 `ofarm2.security-audit-logical-retention-execution-elapsed-time-correction.v0.3`
@@ -11,7 +10,7 @@ production authority
 `ofarm2.security-audit-logical-retention-execution.v0.1`
 
 **Decision identity:**
-`ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001`, proposed version `3`
+`ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001`, approved version `3`
 
 **Supersession:** the previously shown version-2 live card is withdrawn. It
 was never approved. Review required a semantic contract change, so the
@@ -336,7 +335,9 @@ Both cases prove there is no second SQL submission or second connection. One
 new test definition produces two collected parameter cases and therefore
 requires mechanical inventory regeneration. The existing fixed-offset test
 remains because it independently proves rendering and normalization without an
-offset transition.
+offset transition. The existing plain-UTC `inconsistent-purge-after` refusal
+case also remains as independent evidence for the ordinary non-transition
+path.
 
 Pinning the connection timezone to UTC would hide this one representation but
 would change connection options and acceptability of deployment routes. A
@@ -446,6 +447,32 @@ return the two fields under different instant semantics. The reviewed SQL,
 constants, official documentation, and deterministic reproduction show the
 opposite. If such evidence appears, stop rather than widening this PR.
 
+### 13.1 AI-attested prerequisite and approval evidence
+
+- **Task:** `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00`
+- **Version-1 live card:** assistant message
+  `msg_0f97422be79dd65f016a7c697a222481918b0eeb5cf67a8ae4`
+- **Version-1 approval:** later task-user message
+  `msg_019ff60a-acb9-7190-b9b0-ad31c1497d1e`
+- **Exact version-1 approval sentence:**
+  `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001 version 1.`
+- **Version-1 binding observed:** the complete assistant-authored card named
+  PR #307 and was followed in the same task by the user's exact entire-message
+  approval. This is the direct workflow prerequisite check required by section
+  3.1, not an adjudication of approval provenance.
+- **Version-3 live card:** assistant message
+  `msg_0f97422be79dd65f016a7d73a3174c8191bd05eca3a93c1bf8`
+- **Version-3 approval:** later task-user message
+  `msg_019ffa94-8fb2-7b61-bb25-87b60f0c8584`
+- **Exact version-3 approval sentence:**
+  `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-LOGICAL-RETENTION-EXECUTION-001 version 3.`
+- **Version-3 binding observed:** the unique complete assistant-authored card
+  named PR #308 and was followed in the same task by the user's exact
+  entire-message approval. No later cancellation preceded Phase B.
+- **Evidence limitation:** task messages remain authority; this repository
+  record is AI-attested evidence only. The authority is provisional repository
+  development authority and grants no deployment or production authority.
+
 ## 14. Traceability and verification
 
 | Invariant | Owning code | Negative evidence | Acceptance evidence | Smallest verification |
@@ -488,19 +515,20 @@ cancellation.
 
 ## 15. Open decisions and review disposition
 
-- **Blockers:** the reproduced timezone-transition false refusal remains the
-  implementation Blocker. The Phase A boundary-mixing Blocker is resolved;
-  Phase B remains gated by section 3.1 and exact later approval of the unique
-  version-3 live card.
+- **Blockers:** none known after the normalized comparison and focused
+  accept/refuse regression. The Phase A boundary-mixing Blocker remains
+  resolved, and the section 3.1 evidence prerequisite and exact version-3
+  approval were directly validated before Phase B. Exact-head review and the
+  pre-merge evidence recheck remain required gates.
 - **Follow-ups:** none.
 - **Preferences:** an autumn-fold regression is optional and does not delay
   this correction.
 - **Open material decisions:** none.
 
-PR #308 now leaves approval provenance unadjudicated, explicitly forbids raw
-connection-zone subtraction, and contracts for both accept and refuse cases
-under a live transition. The reproduced elapsed-time defect is the only
-technical Blocker owned by this correction.
+PR #308 leaves approval provenance unadjudicated, explicitly forbids raw
+connection-zone subtraction, and implements both accept and refuse cases under
+a live transition. The reproduced elapsed-time defect is resolved inside this
+correction's trust boundary.
 
 ## 16. Merge stop rule
 
