@@ -19,7 +19,7 @@ renamed under this decision.
 
 **Issue:** #192
 
-**Reviewed base:** `95775a3085c6f871980025259d086504dcd429d1`
+**Reviewed base:** `6db6d75bccad285e37510c3a3a7b74df8990815a`
 
 **Primary trust boundary:** isolated security-audit bounded normal-reader
 access execution
@@ -738,10 +738,11 @@ module necessarily adds collected nodes.
 
 ### 11.3 Dependencies
 
-- reviewed base `95775a3085c6f871980025259d086504dcd429d1`;
+- reviewed base `6db6d75bccad285e37510c3a3a7b74df8990815a`;
 - existing issue #174 database authority;
 - merged issue #192 foundations and retention corrections;
-- no stacked pull request;
+- merged test-only prerequisite pull request #310 and no open stacked pull
+  request;
 - open issue #172 does not block this isolated operation; and
 - completed issues #252 and #254 evidence is not recreated.
 
