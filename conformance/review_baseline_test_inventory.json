@@ -11376,6 +11376,376 @@
       "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_acknowledged_report_has_only_the_fixed_non_count_fields",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_does_not_invent_state_for_nonconforming_runner_exception",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_failure_protocol_is_closed_and_secret_free[refused]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_failure_protocol_is_closed_and_secret_free[unavailable]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_failure_protocol_is_closed_and_secret_free[unknown]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_rejects_every_nonempty_argument_shape_without_running[bucket]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_rejects_every_nonempty_argument_shape_without_running[limit]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_rejects_every_nonempty_argument_shape_without_running[long-help]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_rejects_every_nonempty_argument_shape_without_running[positional]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_rejects_every_nonempty_argument_shape_without_running[producer]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_rejects_every_nonempty_argument_shape_without_running[separator]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_rejects_every_nonempty_argument_shape_without_running[short-help]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_rejects_invalid_conninfo_without_running[malformed]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_rejects_invalid_conninfo_without_running[missing]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_rejects_invalid_conninfo_without_running[whitespace]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_reporting_failure_is_exit_five_without_second_database_attempt[flush-error]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_reporting_failure_is_exit_five_without_second_database_attempt[short-write]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_reporting_failure_is_exit_five_without_second_database_attempt[write-error]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_writes_each_exact_success_report_and_flushes[acknowledged]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_cli_writes_each_exact_success_report_and_flushes[no-bucket]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_close_execute_failure_uses_fixed_transport_split[refused]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_close_execute_failure_uses_fixed_transport_split[unavailable]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_close_fetch_failure_uses_fixed_transport_split[first-fetch-refused]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_close_fetch_failure_uses_fixed_transport_split[second-fetch-unavailable]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_commit_base_exception_escapes_without_fabricated_terminal_outcome",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_connection_configuration_failure_uses_fixed_transport_split[deterministic]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_connection_configuration_failure_uses_fixed_transport_split[transport]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_connection_factory_failure_is_unavailable_and_never_retried",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_diagnostic_delivery_failure_leaves_no_claimed_terminal_protocol[flush-error]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_diagnostic_delivery_failure_leaves_no_claimed_terminal_protocol[short-write]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_diagnostic_delivery_failure_leaves_no_claimed_terminal_protocol[write-error]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_every_ordinary_commit_exception_is_unknown_without_retry[operational-error]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_every_ordinary_commit_exception_is_unknown_without_retry[other-server-error]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_close_result_rolls_back_and_never_commits[duplicate-row]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_close_result_rolls_back_and_never_commits[inconsistent-purge-after]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_close_result_rolls_back_and_never_commits[missing-row]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_close_result_rolls_back_and_never_commits[naive-observed-at]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_close_result_rolls_back_and_never_commits[nil-event-id]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_close_result_rolls_back_and_never_commits[non-tuple]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_close_result_rolls_back_and_never_commits[non-uuid-event-id]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_close_result_rolls_back_and_never_commits[short-row]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_observation_rolls_back_and_never_closes_or_commits[duplicate-row]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_observation_rolls_back_and_never_closes_or_commits[misaligned-bucket]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_observation_rolls_back_and_never_closes_or_commits[naive-bucket]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_observation_rolls_back_and_never_closes_or_commits[non-text-producer]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_observation_rolls_back_and_never_closes_or_commits[non-tuple]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_observation_rolls_back_and_never_closes_or_commits[row-after-empty]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_observation_rolls_back_and_never_closes_or_commits[short-row]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_observation_rolls_back_and_never_closes_or_commits[unknown-pair]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_returned_connection_refuses_before_observation_or_commit[autocommit]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_returned_connection_refuses_before_observation_or_commit[closed]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_invalid_returned_connection_refuses_before_observation_or_commit[in-transaction]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_live_conflicting_lock_refuses_with_fixed_timeout_and_no_commit",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_live_no_bucket_is_a_rolled_back_success_without_event",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_live_runner_acknowledges_concurrent_idempotent_closure_identity",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_live_runner_closes_only_the_database_selected_oldest_bucket",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_live_two_runner_state_machines_report_one_closure_identity",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_live_wrong_role_refuses_without_closing_a_bucket",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_no_bucket_close_failure_cannot_downgrade_known_result",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_no_bucket_rollback_failure_uses_fixed_transport_split[refused]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_no_bucket_rollback_failure_uses_fixed_transport_split[unavailable]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_no_bucket_rolls_back_without_close_or_commit_and_reports_exact_bytes",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_observer_execute_failure_uses_fixed_transport_split[refused]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_observer_execute_failure_uses_fixed_transport_split[unavailable]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_observer_fetch_failure_uses_fixed_transport_split[first-fetch-refused]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_observer_fetch_failure_uses_fixed_transport_split[second-fetch-unavailable]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_operator_documentation_is_one_shot_and_claim_limited",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_post_commit_close_failure_cannot_downgrade_acknowledgement",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_precommit_cleanup_failures_do_not_replace_refused_classification",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_real_runner_cli_transport_failure_leaks_no_conninfo_or_exception",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_runner_closes_one_observed_bucket_in_one_transaction",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_runner_normalizes_all_aware_timestamps_to_six_digit_utc",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_runner_validates_elapsed_retention_across_zoneinfo_transition[exact-duration]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_overflow.py::test_runner_validates_elapsed_retention_across_zoneinfo_transition[one-microsecond-late]",
+      "sourceModule": "kernel.tests.test_security_audit_overflow",
+      "sourcePath": "kernel/tests/test_security_audit_overflow.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_does_not_invent_state_for_nonconforming_runner_exception",
       "sourceModule": "kernel.tests.test_security_audit_query",
       "sourcePath": "kernel/tests/test_security_audit_query.py"
@@ -14621,8 +14991,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "32244d50043c00dfe19bc4a1d310a9e53349c2739aff477cc9017fcedd366631",
-  "entryCount": 2924,
+  "entriesSha256": "c5fdfe96ae94d8aa2d0288fc763d99618a845fb0562b07acdeef73f714484cbc",
+  "entryCount": 2998,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

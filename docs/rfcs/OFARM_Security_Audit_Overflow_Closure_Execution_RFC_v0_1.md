@@ -1,7 +1,7 @@
 # OFARM Security-Audit Overflow Closure Execution — Phase A Contract v0.1
 
-**Status:** proposed in draft pull request #311; Phase B implementation,
-deployment, and production operation are not authorized
+**Status:** approved for Phase B repository implementation in draft pull
+request #311; deployment and production operation are not authorized
 
 **Draft implementation pull request:**
 `https://github.com/samovers/OFARM2/pull/311`
@@ -10,7 +10,7 @@ deployment, and production operation are not authorized
 `ofarm2.security-audit-overflow-closure-execution.v0.1`
 
 **Decision identity:**
-`ISSUE192-SECURITY-AUDIT-OVERFLOW-CLOSURE-EXECUTION-001`, proposed version `1`
+`ISSUE192-SECURITY-AUDIT-OVERFLOW-CLOSURE-EXECUTION-001`, approved version `1`
 
 **Issue:** #192
 
@@ -797,13 +797,21 @@ failure protocol instead of exposing policy inputs.
   bytes, and incorporates the idempotent-acknowledgement and `COUNT_UNKNOWN`
   documentation clarifications without changing authority, effects, paths, or
   the primary boundary.
-- **Blockers:** corrections are present but require focused exact-head
-  re-review of `OVC-003`, `OVC-007`, `OVC-008`, `OVC-009`, and `OVC-011`.
+- **Focused Phase A re-review:** exact head
+  `ff1ed57d7c6edc4fa9797b3144fb38ef7fc9f816` passed `OVC-003`,
+  `OVC-007`, `OVC-008`, `OVC-009`, and `OVC-011` with no remaining
+  in-scope Phase A Blocker.
+- **Blockers:** none at approval recognition; merge remains conditioned on
+  every exact-head implementation, verification, review, and scope gate.
 - **Follow-ups:** the separate issue #192 boundaries in section 11.5.
 - **Preferences:** both latest review preferences are incorporated in this
-  Phase A RFC revision.
-- **Phase B authority:** not ready for approval; do not display the live
-  decision card until the focused re-review passes.
+  Phase A RFC revision. The later traceback-documentation wording suggestion
+  remains a non-blocking parked Preference and is not added after approval.
+- **Hosted conformance:** red retained-native-evidence reverification is an
+  out-of-boundary pre-merge prerequisite and does not authorize a CI change in
+  this pull request.
+- **Phase B authority:** the exact later task-user approval recorded in section
+  15.1 authorizes only the in-envelope repository work in pull request #311.
 
 Once `OVC-001` through `OVC-011` pass and no demonstrated in-scope Blocker
 remains, the approved workflow permits merging the named pull request. New
@@ -836,3 +844,32 @@ A valid approval binds only the named draft pull request and the card's path
 envelope. It authorizes no database operation, deployment, production access,
 release, current/default promotion, issue #176 work, or production security
 waiver.
+
+### 15.1 AI-attested approval evidence
+
+- **Task:** `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00`
+- **Live card:**
+  `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00#item-640`
+- **Approval:**
+  `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00#item-641`
+- **Exact approval sentence:**
+  `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OVERFLOW-CLOSURE-EXECUTION-001 version 1.`
+- **Observed role and order:** the assistant-authored complete version-1 live
+  card was directly followed in the same task by the task user's exact entire-
+  message approval. No later cancellation preceded Phase B implementation.
+- **Named pull request:** `https://github.com/samovers/OFARM2/pull/311`
+- **Exact reviewed Phase A head:**
+  `ff1ed57d7c6edc4fa9797b3144fb38ef7fc9f816`
+- **Review evidence:** focused exact-head PASS review
+  `https://github.com/samovers/OFARM2/pull/311#pullrequestreview-4936596045`.
+- **Evidence limitation:** the task messages remain authority; this record is
+  AI-attested evidence only. The authority is provisional repository-
+  development authority and grants no deployment or production authority.
+
+### 15.2 Approved Phase B execution
+
+The exact later task-user approval authorizes in-envelope repository
+implementation, tests, documentation, mechanical inventory regeneration,
+review handling, commits, pushes, and merge in the named pull request after
+every gate passes. It authorizes no database operation, deployment, release,
+production access, current/default promotion, or production security waiver.
