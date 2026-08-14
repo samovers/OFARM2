@@ -350,12 +350,34 @@ For an empty observation:
 
 For an acknowledged closure, the report contains only:
 
-- the fixed schema and `ACKNOWLEDGED` outcome;
-- the closed contract producer and component;
-- the normalized bucket start;
-- the returned `OVERFLOW_ENDED` event ID;
-- the returned observation time; and
-- the returned purge deadline.
+- `schema`, fixed to
+  `ofarm.security-audit-overflow-closure-report.v1`;
+- `outcome`, fixed to `ACKNOWLEDGED`;
+- `producer` and `component`, copied from the validated closed contract pair;
+- `bucketStart`, copied from the validated observed bucket;
+- `overflowEndedEventId`, copied from the validated close result;
+- `observedAt`, copied from the validated close result; and
+- `purgeAfter`, copied from the validated close result.
+
+Every timestamp is normalized to UTC and encoded with exactly six fractional
+digits and a final `Z`. Every UUID uses Python's canonical lowercase string
+form. Both report forms use:
+
+```python
+json.dumps(
+    document,
+    ensure_ascii=True,
+    allow_nan=False,
+    sort_keys=True,
+    separators=(",", ":"),
+).encode("ascii") + b"\n"
+```
+
+An acknowledged closure therefore has exactly these keys and ordering:
+
+```json
+{"bucketStart":"2026-08-14T08:00:00.000000Z","component":"AUTHENTICATION","observedAt":"2026-08-14T08:01:00.123456Z","outcome":"ACKNOWLEDGED","overflowEndedEventId":"11111111-1111-4111-8111-111111111111","producer":"AUTHENTICATION_BOUNDARY_V1","purgeAfter":"2026-09-13T08:01:00.123456Z","schema":"ofarm.security-audit-overflow-closure-report.v1"}
+```
 
 It deliberately contains no overflow count or `COUNT_UNKNOWN` field. Those
 remain visible only through the separately authorized reader and cannot be
@@ -364,6 +386,16 @@ inferred by this command.
 Failure diagnostics are fixed ASCII lines with no raw exception, DSN,
 credential, database result, bucket, timestamp, UUID, tenant, principal,
 request, route, or correlation value.
+
+The exact diagnostic lines are:
+
+```text
+security-audit overflow closure was refused
+security-audit overflow closure command is invalid
+security-audit overflow closure is unavailable; no commit was sent
+security-audit overflow closure outcome is unknown; do not retry automatically
+security-audit overflow closure result reporting failed; do not retry automatically
+```
 
 Closed terminal exits are:
 
@@ -374,6 +406,12 @@ Closed terminal exits are:
 - `3`: the route was unavailable and no commit was sent;
 - `4`: closure commit outcome is unknown; and
 - `5`: a terminal result existed but report write or flush failed.
+
+The command adapter maps any unexpected ordinary `Exception` escaping the
+runner to the same fixed exit-`4` unknown protocol. It never guesses which
+internal state raised the exception, prints the exception, or retries. A
+`BaseException` is not converted; it may leave no terminal protocol and is
+operationally unknown after `CLOSE_SUBMITTED`.
 
 Operators and automation must not retry exit `4`, exit `5`, or an incomplete
 process protocol automatically. A later invocation does not reconcile an
@@ -390,8 +428,8 @@ could close a different one.
 | `OVC-004` | One invocation makes exactly one `psycopg.connect` call, begins from an open idle non-autocommit connection, runs at `READ_COMMITTED`, and makes no automatic retry. Code-owned connection parameters override matching conninfo settings without claiming a global deadline. |
 | `OVC-005` | Observation and close occur in the same explicit transaction. A closure success requires one valid result, complete pre-rendering, and normal return from explicit `commit()` with `synchronous_commit=on`. |
 | `OVC-006` | PostgreSQL alone decides closeability, ordering, count posture, writer fencing, high-water, receipts, interval, and maintenance-event values. Client validation cannot widen or replace that authority. |
-| `OVC-007` | A failure before `COMMITTING` never becomes commit ambiguity. Every controlled `commit()` exception is `OUTCOME_UNKNOWN`, exposes no closure result, and triggers no retry or second credential. |
-| `OVC-008` | Output contains only the fixed no-bucket report or the six validated closure identity fields plus fixed schema/outcome. It contains no count claim, event payload, tenant, Party, actor, principal, request, credential, route, correlation value, DSN, or raw exception detail. |
+| `OVC-007` | A failure before `COMMITTING` never becomes commit ambiguity. Every controlled `commit()` exception is `OUTCOME_UNKNOWN`, exposes no closure result, and triggers no retry or second credential. The adapter conservatively maps any unexpected ordinary runner exception to the same fixed unknown protocol. |
+| `OVC-008` | Output is exactly one of the two fixed canonical JSON forms and contains only the fixed schema/outcome plus the six named validated closure identity fields when applicable. It contains no count claim, event payload, tenant, Party, actor, principal, request, credential, route, correlation value, DSN, or raw exception detail. |
 | `OVC-009` | A terminal database/no-bucket result followed by report failure produces exit `5`, never a false successful report or a database retry. Post-terminal cleanup failure cannot downgrade the known result. |
 | `OVC-010` | The implementation remains in `deployment/postgresql`; Kernel production composition, audit-health/readiness, gap handling, and every independent authority remain unchanged. |
 | `OVC-011` | The command makes no scheduler, deadline, lossless delivery, exact-count, dynamic-readiness, external-clock, deployment, or production-operation claim. |
@@ -407,8 +445,8 @@ could close a different one.
 | `OVC-005` | Return a valid bucket, then zero, two, nil-UUID, naive-time, or retention-inconsistent close rows through the public runner seam. The runner rolls back and never calls commit. |
 | `OVC-006` | Race an admitted writer and closure in the existing live PostgreSQL test. The writer barrier and high-water prevent premature close or bucket recreation; the runner introduces no alternate decision. |
 | `OVC-006` | Set the observed database bucket to a never-overflowed, active, malformed, or wrong-pair value through the supported result seam. Client validation or the close function refuses; no marker commits. |
-| `OVC-007` | Return one valid close result, pre-render it, then make `commit()` raise both a class-08 `OperationalError` and a different Psycopg server exception in separate tests. Exit `4`; no output fields, retry, or fallback. |
-| `OVC-008` | Cause authentication failure with canaries in the DSN and raw exception. Stdout remains empty and stderr is only the fixed diagnostic. Compare both success report forms byte-for-byte and prove no count field exists. |
+| `OVC-007` | Return one valid close result, pre-render it, then make `commit()` raise both a class-08 `OperationalError` and a different Psycopg server exception in separate tests. Exit `4`; no output fields, retry, or fallback. Make a stub runner raise an unexpected canary-bearing `RuntimeError`; the adapter emits the same fixed exit-`4` line without the canary. |
+| `OVC-008` | Cause authentication failure with canaries in the DSN and raw exception. Stdout remains empty and stderr is only the fixed diagnostic. Compare both success report forms byte-for-byte, including exact keys, UTC microseconds, UUID spelling, sort order, separators, and final LF; prove no count field exists. |
 | `OVC-009` | After a normal no-bucket rollback or acknowledged close, make stdout short-write or flush fail. Exit `5`; no second database attempt. Make post-terminal close fail and prove the known result remains reportable. |
 | `OVC-010` | Architecture checks prove no Kernel production module imports the operational runner and every forbidden path remains unchanged. |
 | `OVC-011` | Inspect the command and README. They provide one-shot operation only and expressly disclaim scheduling, gap recovery, readiness, deployment, and exact-count claims. |
@@ -630,8 +668,8 @@ human-controlled and independently verifiable approval or signing system.
 | `OVC-004` | Connection composition and idle-state gate | Hostile conninfo and active returned connection | One connect call, fixed options, `READ_COMMITTED` | Public runner-seam tests |
 | `OVC-005` | Explicit transaction and result validators | Missing, duplicate, or malformed rows | Same transaction, pre-render, one explicit commit | Seam and live tests |
 | `OVC-006` | Existing database functions | Writer race, wrong pair, active and never-overflowed bucket | Barrier, high-water, count posture remain database-owned | Existing live overflow suites |
-| `OVC-007` | Explicit `COMMITTING` state | Two distinct commit exceptions | Exit `4`, no result or retry | Deterministic commit-seam tests |
-| `OVC-008` | Renderer and CLI | Canary DSN/error plus malformed result carriers | Exact byte reports and fixed diagnostics without count | Byte-level protocol tests |
+| `OVC-007` | Explicit `COMMITTING` state and command adapter | Two distinct commit exceptions plus unexpected runner exception | Exit `4`, no result, detail, or retry | Deterministic commit- and adapter-seam tests |
+| `OVC-008` | Renderer and CLI | Canary DSN/error plus malformed result carriers | Exact byte reports, UTC timestamp/UUID forms, and fixed diagnostics without count | Byte-level protocol tests |
 | `OVC-009` | CLI reporting and cleanup order | Short write, flush failure, close failure | Exit `5`; cleanup cannot downgrade known result | Output-sink tests |
 | `OVC-010` | Deployment placement | Forbidden import edge and path diff | Kernel and independent authorities unchanged | Architecture and path checks |
 | `OVC-011` | README and command surface | Search for scheduler/readiness/claim drift | One-shot claim-limited documentation | Documentation assertions |
@@ -691,7 +729,14 @@ failure protocol instead of exposing policy inputs.
 
 ### 14.2 Review disposition
 
-- **Blockers:** Phase A review pending.
+- **Full Phase A review:** exact head
+  `ba2419d8dd0a94080fe28123dcc06ebf401c61d2` found two in-scope gaps: the
+  closure report encoding was not fully fixed, and an unexpected ordinary
+  runner exception lacked a safe adapter mapping. This revision fixes both
+  affected `OVC-007`/`OVC-008` contracts without changing authority, effects,
+  paths, or the primary boundary. Focused re-review is pending.
+- **Blockers:** none outside the two corrected findings; merge remains
+  conditioned on focused re-review and every later Phase B gate.
 - **Follow-ups:** the separate issue #192 boundaries in section 11.5.
 - **Preferences:** none.
 
