@@ -734,9 +734,11 @@ failure protocol instead of exposing policy inputs.
   closure report encoding was not fully fixed, and an unexpected ordinary
   runner exception lacked a safe adapter mapping. This revision fixes both
   affected `OVC-007`/`OVC-008` contracts without changing authority, effects,
-  paths, or the primary boundary. Focused re-review is pending.
-- **Blockers:** none outside the two corrected findings; merge remains
-  conditioned on focused re-review and every later Phase B gate.
+  paths, or the primary boundary. Focused re-review of exact correction head
+  `26090478164005f3924c096323b52e6d2a1a4212` passed with no remaining
+  in-scope Phase A Blocker.
+- **Blockers:** none; any later Phase B merge remains conditioned on explicit
+  approval and every implementation, verification, and exact-head review gate.
 - **Follow-ups:** the separate issue #192 boundaries in section 11.5.
 - **Preferences:** none.
 
