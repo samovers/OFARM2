@@ -1,16 +1,19 @@
-# OFARM Security-Audit Overflow Closure Execution — Phase A Contract v0.1
+# OFARM Security-Audit Overflow Closure Execution — Phase A Contract v0.2
 
-**Status:** approved for Phase B repository implementation in draft pull
-request #311; deployment and production operation are not authorized
+**Status:** proposed decision-version-2 contract amendment under exact-head
+Phase A review; version-2 Phase B implementation, deployment, and production
+operation are not authorized
 
 **Draft implementation pull request:**
 `https://github.com/samovers/OFARM2/pull/311`
 
 **Contract identity:**
-`ofarm2.security-audit-overflow-closure-execution.v0.1`
+`ofarm2.security-audit-overflow-closure-execution.v0.2`
 
 **Decision identity:**
-`ISSUE192-SECURITY-AUDIT-OVERFLOW-CLOSURE-EXECUTION-001`, approved version `1`
+`ISSUE192-SECURITY-AUDIT-OVERFLOW-CLOSURE-EXECUTION-001`, proposed version `2`;
+the version-1 approval remains historical evidence only for this semantic
+amendment
 
 **Issue:** #192
 
@@ -18,7 +21,10 @@ request #311; deployment and production operation are not authorized
 
 **Primary trust boundary:** isolated security-audit overflow-closure execution
 
-**Phase A review-head boundary:** this RFC only
+**Phase A version-2 review boundary:** the semantic RFC amendment only. The
+same pull-request head may also contain the meaning-preserving binary-stderr
+correction authorized by version 1; no version-2 semantic implementation may
+precede exact version-2 approval
 
 **Maximum final pull request boundary:** this RFC, one deployment-layer
 overflow runner, one fixed command adapter, one focused test module, minimal
@@ -490,7 +496,7 @@ could close a different one.
 | --- | --- |
 | `OVC-001` | Invoke with `-h`, `--help`, `--bucket`, a producer, a timestamp, `--`, or any positional token. Exit `2`; no connection call. Supply blank or malformed conninfo with the same result. |
 | `OVC-002` | Supply a reader, retention, producer, readiness, application, or tenant DSN. The public observer refuses through its exact `session_user` rule; the runner performs no fallback or close. |
-| `OVC-003` | Seed two closeable overflow buckets in the live isolated audit fixture. One run closes only the database-ordered oldest bucket and leaves the second observable. Run with no bucket and prove no close query or commit. Race two runners on one bucket: both report `ACKNOWLEDGED` with the same event ID, and exactly one `OVERFLOW_ENDED` event exists. |
+| `OVC-003` | Seed two closeable overflow buckets in the live isolated audit fixture. One run closes only the database-ordered oldest bucket and leaves the second observable. Run with no bucket and prove no close query or commit. Through the provisioned control login, pause one real runner after it observes one exact bucket and before it submits the close. Commit that same exact close through a controlled test-only closer, then resume the runner. The runner reports `ACKNOWLEDGED` with the closer's event ID, and exactly one `OVERFLOW_ENDED` event exists. This evidence requires only one simultaneous connection through the connection-limited control login and makes no two-runner production claim. |
 | `OVC-004` | Put `connect_timeout=0` and timeout-disabling `options` in valid conninfo. The supported connection seam observes exactly one connect call with code-owned overrides. Return an already-active connection and prove both functions and commit remain untouched. |
 | `OVC-005` | Return a valid bucket, then zero, two, nil-UUID, naive-time, or retention-inconsistent close rows through the public runner seam. The runner rolls back and never calls commit. |
 | `OVC-006` | Race an admitted writer and closure in the existing live PostgreSQL test. The writer barrier and high-water prevent premature close or bucket recreation; the runner introduces no alternate decision. |
@@ -617,6 +623,10 @@ semantic contract change requires a new decision version.
 The inventory is a required mechanical Phase B change because the focused
 test module necessarily adds collected nodes.
 
+The existing `v0_1` filename is retained because renaming it would leave the
+exact technical path envelope. The contract identity inside that fixed path
+advances to `v0.2` for decision version 2.
+
 ### 11.2 Explicitly unchanged paths and authorities
 
 - every production Kernel module and `kernel/README.md`;
@@ -718,7 +728,7 @@ human-controlled and independently verifiable approval or signing system.
 | --- | --- | --- | --- | --- |
 | `OVC-001` | Command adapter | Every argument and malformed conninfo rejected | No connection before complete validation | Focused CLI tests |
 | `OVC-002` | Runner and existing public functions | Wrong-role live invocation and forbidden SQL inspection | Exact two-query maximum on one route | Seam tests plus PostgreSQL role test |
-| `OVC-003` | Runner state machine and database observer | Two closeable buckets, empty database, and concurrent close | Oldest only; zero close/commit on empty; one idempotent event identity | Live focused tests |
+| `OVC-003` | Runner state machine and database observer | Two closeable buckets, empty database, and a paused real runner followed by a controlled test-only close | Oldest only; zero close/commit on empty; the resumed runner acknowledges the one committed event identity | Live focused tests |
 | `OVC-004` | Connection composition and idle-state gate | Hostile conninfo and active returned connection | One connect call, fixed options, `READ_COMMITTED` | Public runner-seam tests |
 | `OVC-005` | Explicit transaction and result validators | Missing, duplicate, or malformed rows | Same transaction, pre-render, one explicit commit | Seam and live tests |
 | `OVC-006` | Existing database functions | Writer race, wrong pair, active and never-overflowed bucket | Barrier, high-water, count posture remain database-owned | Existing live overflow suites |
@@ -730,16 +740,18 @@ human-controlled and independently verifiable approval or signing system.
 
 ### 13.1 Phase A verification gates
 
-Before the live decision card, the RFC-only exact head must pass:
+Before the version-2 live decision card, the exact amendment head must pass:
 
 ```text
 python3 conformance/ofarm_pkg_contract_check.py
 git diff --check
 ```
 
-The exact head must receive one full Phase A review against this contract.
-Every demonstrated in-scope Blocker must be corrected and the affected
-invariants re-reviewed before a live card is shown.
+The semantic review scope is the RFC amendment, while the exact pull-request
+head may also carry the separately authorized meaning-preserving binary-stderr
+correction. The exact head must receive one full Phase A review against this
+contract. Every demonstrated in-scope Blocker must be corrected and the
+affected invariants re-reviewed before a version-2 live card is shown.
 
 ### 13.2 Phase B verification gates
 
@@ -776,10 +788,12 @@ Before merge, the AI must also:
 
 ### 14.1 Open material decisions
 
-None. The database already fixes bucket selection, pair identity, interval,
-count posture, writer ordering, idempotence, event identity, and retention.
-The command fixes the credential, one-bucket bound, transaction, report, and
-failure protocol instead of exposing policy inputs.
+None inside the proposed version-2 contract. The amendment replaces an
+unreachable simultaneous-two-runner evidence requirement with a deterministic
+paused-runner interleaving that exercises one real provisioned control-login
+connection and one controlled test-only closer. It does not change the
+database authority, production connection limit, timeouts, runner behavior,
+idempotence claim, permitted effects, or primary trust boundary.
 
 ### 14.2 Review disposition
 
@@ -810,11 +824,29 @@ failure protocol instead of exposing policy inputs.
 - **Hosted conformance:** red retained-native-evidence reverification is an
   out-of-boundary pre-merge prerequisite and does not authorize a CI change in
   this pull request.
-- **Phase B authority:** the exact later task-user approval recorded in section
-  15.1 authorizes only the in-envelope repository work in pull request #311.
+- **Post-implementation exact-head review:** exact head
+  `8d1b3b5cfa2549e16d079c4f5b0e8a5dd072e878` demonstrated two Phase B
+  Blockers. First, the adapter used text stderr even though `OVC-008` freezes
+  exact diagnostic bytes. The correction converts all diagnostics and both
+  output sinks to binary without changing the approved protocol. Second, the
+  mandatory simultaneous-two-runner evidence bypassed the provisioned
+  control login's `CONNECTION LIMIT 1` and could fail nondeterministically
+  under the fixed lock timeout. This version-2 amendment retains the already
+  present paused-runner live evidence and removes the unreachable two-runner
+  production claim without widening credentials, connection limits, or
+  timeouts.
+- **Current Blockers:** the binary-stderr correction requires exact-head
+  re-review. Removing the simultaneous-two-runner test and regenerating the
+  inventory are version-2 semantic implementation and remain blocked until a
+  complete version-2 card receives the exact approval in section 15.
+- **Phase B authority:** the version-1 approval in section 15.1 authorizes the
+  meaning-preserving binary-stderr correction. It does not authorize this
+  semantic amendment or its version-2 implementation.
 
-Once `OVC-001` through `OVC-011` pass and no demonstrated in-scope Blocker
-remains, the approved workflow permits merging the named pull request. New
+The named pull request cannot merge until the version-2 amendment passes
+exact-head review, a complete live version-2 card receives exact user
+approval, the authorized semantic implementation is completed, and
+`OVC-001` through `OVC-011` pass with no demonstrated in-scope Blocker. New
 ideas, Preferences, and non-blocking hardening remain follow-ups.
 
 ## 15. Phase A approval boundary
@@ -824,14 +856,14 @@ GitHub activity. After this contract is bound to one draft pull request and
 reviewed at its exact head, the AI must display one complete live decision card
 in the same Codex task.
 
-The complete card must state the decision identity and version, problem,
+The complete version-2 card must state the decision identity and version, problem,
 recommended decision, primary trust boundary, authority map, primary risk and
 bound, permitted effects, non-effects, decision-level invariants, maximum path
 envelope, named draft pull request, verification gates, reapproval triggers,
 provisional posture, and this exact approval form:
 
 ```text
-I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OVERFLOW-CLOSURE-EXECUTION-001 version 1.
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OVERFLOW-CLOSURE-EXECUTION-001 version 2.
 ```
 
 Only the exact entire text of a later task-user message matching that sentence
@@ -845,7 +877,7 @@ envelope. It authorizes no database operation, deployment, production access,
 release, current/default promotion, issue #176 work, or production security
 waiver.
 
-### 15.1 AI-attested approval evidence
+### 15.1 Historical version-1 AI-attested approval evidence
 
 - **Task:** `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00`
 - **Live card:**
@@ -865,11 +897,17 @@ waiver.
 - **Evidence limitation:** the task messages remain authority; this record is
   AI-attested evidence only. The authority is provisional repository-
   development authority and grants no deployment or production authority.
+  Version 1 does not authorize the version-2 semantic amendment or removal of
+  the simultaneous-two-runner evidence node.
 
-### 15.2 Approved Phase B execution
+### 15.2 Version-2 Phase B execution boundary
 
-The exact later task-user approval authorizes in-envelope repository
-implementation, tests, documentation, mechanical inventory regeneration,
-review handling, commits, pushes, and merge in the named pull request after
-every gate passes. It authorizes no database operation, deployment, release,
-production access, current/default promotion, or production security waiver.
+Version-2 Phase B authority has not been granted. Only a later task-user
+message whose entire text exactly matches the version-2 sentence in section
+15, after a complete live version-2 card at the reviewed exact head, can
+authorize the semantic test removal and mechanical inventory regeneration.
+If granted, that approval authorizes only in-envelope repository
+implementation, tests, documentation, review handling, commits, pushes, and
+merge in the named pull request after every gate passes. It authorizes no
+database operation, deployment, release, production access, current/default
+promotion, or production security waiver.
