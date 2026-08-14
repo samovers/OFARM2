@@ -1770,6 +1770,26 @@ def test_bounded_reader_requires_an_equal_committed_access_intent(
                 (uuid4(),),
             )
 
+    seed_event_id = uuid4()
+    with psycopg.connect(
+        _role_dsn(
+            state,
+            "ofarm_security_authentication_producer_login",
+        ),
+        autocommit=True,
+    ) as producer:
+        seeded = producer.execute(
+            """
+            SELECT * FROM ofarm_security.append_pretenant_failure(
+                %s, 'CREDENTIAL_MISSING', %s,
+                'OFARM_PRETENANT_CORRELATION_V1', 2
+            )
+            """,
+            (seed_event_id, bytes(range(32))),
+        ).fetchone()
+    assert seeded[0] == seed_event_id
+    assert seeded[3] is True
+
     with psycopg.connect(
         _role_dsn(state, "ofarm_security_audit_control_login"),
         autocommit=True,
@@ -1806,6 +1826,7 @@ def test_bounded_reader_requires_an_equal_committed_access_intent(
                 (access[0],),
             )
     assert 1 <= len(rows) <= 10
+    assert seed_event_id in {row[0] for row in rows}
     assert all(row[2] > access[1] for row in rows)
 
 
