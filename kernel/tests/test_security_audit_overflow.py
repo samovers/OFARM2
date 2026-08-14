@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
-from threading import Barrier, Event
+from threading import Event
 from time import monotonic
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -62,6 +62,33 @@ EXPECTED_NO_BUCKET_REPORT = (
     b'{"outcome":"NO_CLOSEABLE_BUCKET",'
     b'"schema":"ofarm.security-audit-overflow-closure-report.v1"}\n'
 )
+
+
+def _expected_closure_report(
+    result: SecurityAuditOverflowClosureResult,
+) -> bytes:
+    def timestamp(value: datetime) -> str:
+        return value.isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+    return (
+        json.dumps(
+            {
+                "bucketStart": timestamp(result.bucket.bucket_start),
+                "component": result.bucket.component,
+                "observedAt": timestamp(result.observed_at),
+                "outcome": "ACKNOWLEDGED",
+                "overflowEndedEventId": str(result.overflow_ended_event_id),
+                "producer": result.bucket.producer,
+                "purgeAfter": timestamp(result.purge_after),
+                "schema": "ofarm.security-audit-overflow-closure-report.v1",
+            },
+            ensure_ascii=True,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("ascii")
+        + b"\n"
+    )
 
 
 def _valid_observation_row(
@@ -1347,100 +1374,6 @@ class _PausedObservationFactory:
         )
 
 
-class _ConcurrentObservationCursor:
-    def __init__(self, cursor, barrier: Barrier) -> None:
-        self._cursor = cursor
-        self._barrier = barrier
-        self._fetchone_calls = 0
-
-    def fetchone(self) -> object:
-        row = self._cursor.fetchone()
-        self._fetchone_calls += 1
-        if self._fetchone_calls == 2:
-            self._barrier.wait(timeout=10)
-        return row
-
-
-class _ConcurrentObservationConnection:
-    def __init__(self, connection, barrier: Barrier) -> None:
-        self._connection = connection
-        self._barrier = barrier
-
-    @property
-    def closed(self) -> bool:
-        return self._connection.closed
-
-    @property
-    def autocommit(self) -> bool:
-        return self._connection.autocommit
-
-    @property
-    def isolation_level(self) -> IsolationLevel | None:
-        return self._connection.isolation_level
-
-    @isolation_level.setter
-    def isolation_level(self, value: IsolationLevel | None) -> None:
-        self._connection.isolation_level = value
-
-    @property
-    def info(self):
-        return self._connection.info
-
-    def execute(
-        self,
-        query: str,
-        parameters: tuple[object, ...] | None = None,
-    ):
-        if parameters is None:
-            cursor = self._connection.execute(query)
-        else:
-            cursor = self._connection.execute(query, parameters)
-        if query == OBSERVE_OVERFLOW_SQL:
-            return _ConcurrentObservationCursor(cursor, self._barrier)
-        return cursor
-
-    def rollback(self) -> None:
-        self._connection.rollback()
-
-    def commit(self) -> None:
-        self._connection.commit()
-
-    def close(self) -> None:
-        self._connection.close()
-
-
-class _ImpersonatingConcurrentFactory:
-    """Exercise two runner state machines despite the login's limit of one."""
-
-    def __init__(self, admin_dsn: str, barrier: Barrier) -> None:
-        self._admin_dsn = admin_dsn
-        self._barrier = barrier
-        self.calls = 0
-
-    def __call__(
-        self,
-        conninfo: str,
-        *,
-        autocommit: bool,
-        connect_timeout: int,
-        options: str,
-    ) -> _ConcurrentObservationConnection:
-        parameters = psycopg.conninfo.conninfo_to_dict(conninfo)
-        assert parameters["user"] == "ofarm_security_audit_control_login"
-        self.calls += 1
-        connection = psycopg.connect(
-            self._admin_dsn,
-            autocommit=True,
-            connect_timeout=connect_timeout,
-            options=options,
-        )
-        connection.execute(
-            "SET SESSION AUTHORIZATION ofarm_security_audit_control_login"
-        )
-        connection.autocommit = autocommit
-        return _ConcurrentObservationConnection(connection, self._barrier)
-
-
 def test_live_no_bucket_is_a_rolled_back_success_without_event(
     migrated_audit_service,
 ):
@@ -1601,7 +1534,22 @@ def test_live_runner_acknowledges_concurrent_idempotent_closure_identity(
         assert factory.calls == 1
         assert completed.result is not None
         assert closure_row is not None
-        assert completed.result.overflow_ended_event_id == closure_row[0]
+        event_id, observed_at, purge_after = closure_row
+        assert isinstance(event_id, UUID)
+        assert isinstance(observed_at, datetime)
+        assert isinstance(purge_after, datetime)
+        expected_result = SecurityAuditOverflowClosureResult(
+            bucket=SecurityAuditOverflowBucket(
+                producer="AUTHENTICATION_BOUNDARY_V1",
+                component="AUTHENTICATION",
+                bucket_start=bucket_start,
+            ),
+            overflow_ended_event_id=event_id,
+            observed_at=observed_at,
+            purge_after=purge_after,
+        )
+        assert completed.result == expected_result
+        assert completed.report_bytes == _expected_closure_report(expected_result)
         events = _live_overflow_events(
             state,
             producer="AUTHENTICATION_BOUNDARY_V1",
@@ -1610,51 +1558,6 @@ def test_live_runner_acknowledges_concurrent_idempotent_closure_identity(
         )
         assert len(events) == 1
         assert events[0][0] == completed.result.overflow_ended_event_id
-    finally:
-        _clear_live_buckets(state)
-
-
-def test_live_two_runner_state_machines_report_one_closure_identity(
-    migrated_audit_service,
-):
-    state = migrated_audit_service
-    _clear_live_buckets(state)
-    bucket_start = _current_live_bucket(state) - timedelta(minutes=45)
-    _insert_live_bucket(
-        state,
-        producer="AUTHENTICATION_BOUNDARY_V1",
-        component="AUTHENTICATION",
-        bucket_start=bucket_start,
-    )
-    barrier = Barrier(2)
-    factory = _ImpersonatingConcurrentFactory(
-        str(state["target_admin_dsn"]),
-        barrier,
-    )
-    runner = SecurityAuditOverflowRunner(factory)
-    conninfo = role_dsn(state, "ofarm_security_audit_control_login")
-    try:
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [executor.submit(runner.run, conninfo) for _ in range(2)]
-            completed = [future.result(timeout=15) for future in futures]
-
-        assert factory.calls == 2
-        assert all(result.result is not None for result in completed)
-        event_ids = {
-            result.result.overflow_ended_event_id
-            for result in completed
-            if result.result is not None
-        }
-        assert len(event_ids) == 1
-        assert completed[0].report_bytes == completed[1].report_bytes
-        events = _live_overflow_events(
-            state,
-            producer="AUTHENTICATION_BOUNDARY_V1",
-            component="AUTHENTICATION",
-            bucket_start=bucket_start,
-        )
-        assert len(events) == 1
-        assert events[0][0] == event_ids.pop()
     finally:
         _clear_live_buckets(state)
 

@@ -1,8 +1,8 @@
 # OFARM Security-Audit Overflow Closure Execution — Phase A Contract v0.2
 
-**Status:** proposed decision-version-2 contract amendment under exact-head
-Phase A review; version-2 Phase B implementation, deployment, and production
-operation are not authorized
+**Status:** decision version 2 approved for Phase B repository implementation
+in draft pull request #311; deployment and production operation are not
+authorized
 
 **Draft implementation pull request:**
 `https://github.com/samovers/OFARM2/pull/311`
@@ -11,9 +11,8 @@ operation are not authorized
 `ofarm2.security-audit-overflow-closure-execution.v0.2`
 
 **Decision identity:**
-`ISSUE192-SECURITY-AUDIT-OVERFLOW-CLOSURE-EXECUTION-001`, proposed version `2`;
-the version-1 approval remains historical evidence only for this semantic
-amendment
+`ISSUE192-SECURITY-AUDIT-OVERFLOW-CLOSURE-EXECUTION-001`, approved version `2`;
+the version-1 approval remains historical evidence only
 
 **Issue:** #192
 
@@ -21,10 +20,10 @@ amendment
 
 **Primary trust boundary:** isolated security-audit overflow-closure execution
 
-**Phase A version-2 review boundary:** the semantic RFC amendment only. The
-same pull-request head may also contain the meaning-preserving binary-stderr
-correction authorized by version 1; no version-2 semantic implementation may
-precede exact version-2 approval
+**Reviewed Phase A version-2 head:**
+`4dd3cf85618109f5cb0109f8cb624a1bdbaf1201`; the semantic review boundary was
+the RFC amendment, while the same head also carried the meaning-preserving
+binary-stderr correction authorized by version 1
 
 **Maximum final pull request boundary:** this RFC, one deployment-layer
 overflow runner, one fixed command adapter, one focused test module, minimal
@@ -788,7 +787,7 @@ Before merge, the AI must also:
 
 ### 14.1 Open material decisions
 
-None inside the proposed version-2 contract. The amendment replaces an
+None inside the approved version-2 contract. The amendment replaces an
 unreachable simultaneous-two-runner evidence requirement with a deterministic
 paused-runner interleaving that exercises one real provisioned control-login
 connection and one controlled test-only closer. It does not change the
@@ -835,19 +834,34 @@ idempotence claim, permitted effects, or primary trust boundary.
   present paused-runner live evidence and removes the unreachable two-runner
   production claim without widening credentials, connection limits, or
   timeouts.
-- **Current Blockers:** the binary-stderr correction requires exact-head
-  re-review. Removing the simultaneous-two-runner test and regenerating the
-  inventory are version-2 semantic implementation and remain blocked until a
-  complete version-2 card receives the exact approval in section 15.
-- **Phase B authority:** the version-1 approval in section 15.1 authorizes the
-  meaning-preserving binary-stderr correction. It does not authorize this
-  semantic amendment or its version-2 implementation.
+- **Focused version-2 exact-head re-review:** exact head
+  `4dd3cf85618109f5cb0109f8cb624a1bdbaf1201` passed the binary-stderr
+  correction and proposed version-2 contract with no remaining in-scope
+  Blocker. The review confirmed that the semantic test removal and inventory
+  regeneration had been properly withheld before approval.
+- **Independent exact-head re-review:** the later full mechanism review at the
+  same head agreed that no Blocker remained. Its non-blocking preference to
+  preserve byte-equality evidence is incorporated by comparing the retained
+  paused runner's report bytes with an independently rendered expectation.
+- **Current Blockers:** none inside the approved overflow-closure boundary;
+  merge remains blocked on final exact-head implementation review, every gate,
+  and green hosted conformance.
+- **Phase B authority:** the exact task-user approval recorded in section 15.2
+  authorizes the in-envelope version-2 semantic implementation in pull request
+  #311. It does not authorize deployment, production operation, or the
+  out-of-boundary hosted-conformance repair.
+- **Version-2 implementation verification:** the authorized delta collects 73
+  focused nodes and passes all 73 with no skip against PostgreSQL 17.10. The
+  two overflow-operation tests, six overflow-migration tests, two architecture
+  tests, focused Ruff check, package contract check, and `git diff --check`
+  pass. Mechanical inventory regeneration records 2,997 nodes and removes only
+  the invalid simultaneous-two-runner node.
 
-The named pull request cannot merge until the version-2 amendment passes
-exact-head review, a complete live version-2 card receives exact user
-approval, the authorized semantic implementation is completed, and
-`OVC-001` through `OVC-011` pass with no demonstrated in-scope Blocker. New
-ideas, Preferences, and non-blocking hardening remain follow-ups.
+The version-2 amendment review and exact task-user approval are complete. The
+named pull request cannot merge until the authorized semantic implementation
+is completed, `OVC-001` through `OVC-011` pass at the final exact head with no
+demonstrated in-scope Blocker, and hosted conformance is green. New ideas,
+Preferences, and non-blocking hardening remain follow-ups.
 
 ## 15. Phase A approval boundary
 
@@ -900,14 +914,32 @@ waiver.
   Version 1 does not authorize the version-2 semantic amendment or removal of
   the simultaneous-two-runner evidence node.
 
-### 15.2 Version-2 Phase B execution boundary
+### 15.2 Approved version-2 Phase B execution
 
-Version-2 Phase B authority has not been granted. Only a later task-user
-message whose entire text exactly matches the version-2 sentence in section
-15, after a complete live version-2 card at the reviewed exact head, can
-authorize the semantic test removal and mechanical inventory regeneration.
-If granted, that approval authorizes only in-envelope repository
-implementation, tests, documentation, review handling, commits, pushes, and
-merge in the named pull request after every gate passes. It authorizes no
-database operation, deployment, release, production access, current/default
-promotion, or production security waiver.
+- **Task:** `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00`
+- **Live card:**
+  `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00#item-709`
+- **Approval:**
+  `codex-task:019ff570-c253-7d02-bbda-1ad8f4143f00#item-710`
+- **Exact approval sentence:**
+  `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OVERFLOW-CLOSURE-EXECUTION-001 version 2.`
+- **Observed role and order:** the assistant-authored complete version-2 live
+  card was directly followed in the same task by the task user's exact entire-
+  message approval. No later cancellation preceded implementation.
+- **Named pull request:** `https://github.com/samovers/OFARM2/pull/311`
+- **Exact reviewed Phase A head:**
+  `4dd3cf85618109f5cb0109f8cb624a1bdbaf1201`
+- **Review evidence:** focused exact-head PASS review
+  `https://github.com/samovers/OFARM2/pull/311#pullrequestreview-4939146462`
+  and independent exact-head re-review
+  `https://github.com/samovers/OFARM2/pull/311#issuecomment-5295833964`.
+- **Evidence limitation:** the task messages remain authority; this record is
+  AI-attested evidence only. The authority is provisional repository-
+  development authority and grants no deployment or production authority.
+
+The exact task-user approval authorizes only the in-envelope version-2 test
+evidence correction, mechanical inventory regeneration, documentation,
+review handling, commits, pushes, and merge in the named pull request after
+every gate passes. It authorizes no database operation, deployment, release,
+production access, current/default promotion, hosted-conformance repair, or
+production security waiver.
