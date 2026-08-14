@@ -410,6 +410,75 @@ versus-audit separation. Neither result proves uninterrupted tenant history or
 authorizes traffic. Issue #193 must supply an external non-rewindable witness
 before any restore or promotion decision can exist.
 
+## One-shot security-audit bounded query
+
+The bounded-query command commits one fixed `AUDIT_ACCESS` intent through the
+control route, opens the reader route only after that commit is acknowledged,
+and returns one descending page with at most 256 event rows:
+
+```bash
+export OFARM_SECURITY_AUDIT_CONTROL_PG_DSN='...'
+export OFARM_SECURITY_AUDIT_READER_PG_DSN='...'
+python -m deployment.postgresql.run_security_audit_query
+```
+
+The only optional argument is one exact older-page cursor:
+
+```bash
+python -m deployment.postgresql.run_security_audit_query \
+  --cursor '2026-08-13T10:20:30.123456Z/11111111-1111-4111-8111-111111111111'
+```
+
+The control route must authenticate only as
+`ofarm_security_audit_control_login`; the reader route must authenticate only
+as `ofarm_security_audit_reader_login`. The command validates the cursor and
+both complete conninfo values before opening either route. It fixes the normal
+purpose, exact database function identity, maximum of 256 event rows, and
+1,048,576-byte database-encoded event ceiling. It never accepts an access-event
+ID, purpose, function, or limit from the caller.
+
+Each route gets at most one `psycopg.connect` call. Code-owned startup options
+replace caller-supplied conninfo options and fix the statement, lock,
+idle-transaction, transaction, work-memory, bytea, time-zone, and date-style
+settings. The control route also fixes `synchronous_commit=on`.
+`temp_file_limit=0` remains a database-scoped role default installed by
+provisioning; the non-superuser command does not send it or require permission
+to set it.
+
+After acknowledged intent commit, the reader submits the existing bounded
+query exactly once. PostgreSQL remains authoritative for authorization, the
+data cut, snapshot membership, five-minute intent expiry, ordering, and encoded
+byte accounting. The command validates the complete 30-field carrier and
+buffers one canonical ASCII JSON line before touching stdout. Valid historical
+reasons remain readable even when they are no longer accepted for fresh
+appends. A nonempty page reports a canonical `nextCursor` derived from its last
+row; following it is a new privileged access act with a new durable intent.
+
+Closed terminal outcomes are:
+
+- exit `0`: intent acknowledged, one query completed, and the complete report
+  was written and flushed;
+- exit `1`: refused after the control route opened but before commit ambiguity;
+- exit `2`: invalid arguments, cursor, or conninfo configuration;
+- exit `3`: the control connection factory failed before returning a
+  connection, so no commit was sent;
+- exit `4`: access-intent commit outcome unknown and no query was sent;
+- exit `5`: intent acknowledged but no complete validated report is available;
+  and
+- exit `6`: a complete report existed but stdout write or flush failed, so
+  partial output is possible.
+
+Operators and automation must not retry exits `4`, `5`, or `6`, or an
+incomplete process protocol, automatically. A later invocation never resumes
+or reconciles an earlier access event; it commits a new intent and makes at
+most one new query.
+
+This command is a privileged one-shot diagnostic primitive. It is not an
+export or break-glass operation, scheduler, loop, or web endpoint.
+It is not a deployment-readiness or external clock-fence claim. It grants no
+production-access authorization or guarantee that authorized output cannot be
+copied after disclosure.
+
 ## One-shot security-audit logical retention
 
 The retention command performs exactly one database-owned logical-retention
