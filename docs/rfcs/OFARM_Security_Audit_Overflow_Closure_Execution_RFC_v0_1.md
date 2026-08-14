@@ -299,9 +299,11 @@ The runner calls `rollback()` to end the observation transaction. It never
 calls the close function or `commit()`. Only normal return from `rollback()`
 permits the fixed `NO_CLOSEABLE_BUCKET` report.
 
-A rollback or transport failure cannot create durable overflow effects
-because no write or commit was submitted. It is a closed unavailable or
-refused outcome, never commit ambiguity.
+If `rollback()` raises, the runner applies section 6.5's fixed transport
+classifier: a transport failure is exit `3`, and every other ordinary
+exception is exit `1`. No close or commit was submitted, so neither outcome is
+commit ambiguity. Connection cleanup after a normally returned rollback is
+best effort and cannot downgrade the known no-bucket result.
 
 ### 6.4 Closure transition
 
@@ -325,9 +327,16 @@ The close result must contain exactly one non-nil event UUID, one finite aware
 `observed_at`, and one finite aware `purge_after` equal to `observed_at` plus
 the accepted retention duration. No second result row may exist.
 
+The close function is idempotent. If a concurrent closer committed first, the
+function can return that already-existing `OVERFLOW_ENDED` event. Therefore
+`ACKNOWLEDGED` means that the selected bucket is closed under the reported
+event identity; it does not prove that this invocation created the event, and
+the reported `observedAt` may predate this invocation.
+
 The complete success report is rendered before `COMMITTING`. Any observation,
-close, shape, or rendering failure before that state triggers best-effort
-rollback and close. `commit()` is never called.
+close, shape, or rendering failure before that state is classified by section
+6.5, then triggers best-effort rollback and close. Cleanup cannot replace the
+classification. `commit()` is never called.
 
 Only normal return from the one explicit `commit()` is acknowledgement.
 Every exception from that call is `OUTCOME_UNKNOWN`; the runner closes the
@@ -383,35 +392,76 @@ It deliberately contains no overflow count or `COUNT_UNKNOWN` field. Those
 remain visible only through the separately authorized reader and cannot be
 inferred by this command.
 
-Failure diagnostics are fixed ASCII lines with no raw exception, DSN,
-credential, database result, bucket, timestamp, UUID, tenant, principal,
-request, route, or correlation value.
+### 6.5.1 Complete state-to-terminal classification
 
-The exact diagnostic lines are:
+For failures after a connection has been returned and before `COMMITTING`, a
+transport failure is exactly a `psycopg.OperationalError` whose SQLSTATE is
+absent or starts with class `08`. Every other ordinary exception from a
+supported observer, close, result-validation, rendering, rollback, or
+connection-state step is non-transport and is refused. The connection factory
+is the one exception to that split: any ordinary exception before it returns
+a connection is unavailable.
 
-```text
-security-audit overflow closure was refused
-security-audit overflow closure command is invalid
-security-audit overflow closure is unavailable; no commit was sent
-security-audit overflow closure outcome is unknown; do not retry automatically
-security-audit overflow closure result reporting failed; do not retry automatically
-```
+The production runner applies this table without inspecting secret-bearing
+exception text:
 
-Closed terminal exits are:
+| Failure or completion point | Required terminal result |
+| --- | --- |
+| Invalid arguments, blank conninfo, or malformed conninfo | Exit `2`, command invalid; no connection call |
+| Connection factory raises before returning a connection | Exit `3`, unavailable; no commit sent |
+| Returned connection is closed, autocommit, non-idle, or otherwise deterministically invalid | Exit `1`, refused; no observer, close, or commit call |
+| Transport failure while validating or configuring the returned connection | Exit `3`, unavailable; no commit sent |
+| Non-transport observer or close SQL refusal | Best-effort rollback and close, then exit `1`, refused |
+| Transport failure during observer or close execution or fetch, before `COMMITTING` | Best-effort rollback and close, then exit `3`, unavailable; no commit sent |
+| Invalid observation, invalid close result, or report pre-rendering failure | Best-effort rollback and close, then exit `1`, refused |
+| Empty observation followed by transport failure from `rollback()` | Best-effort close, then exit `3`, unavailable; no commit sent |
+| Empty observation followed by any other ordinary `rollback()` exception | Best-effort close, then exit `1`, refused |
+| Empty observation followed by normal `rollback()` return | `NO_BUCKET_COMPLETE`; cleanup is best effort |
+| Any ordinary exception raised from the one explicit `commit()` | Exit `4`, `OUTCOME_UNKNOWN`; expose no result and do not retry |
+| Normal return from the one explicit `commit()` | `ACKNOWLEDGED`; cleanup is best effort |
+| Known no-bucket or acknowledged result followed by incomplete stdout write or failed flush | Exit `5`, reporting failed; partial stdout is invalid |
+| Known no-bucket or acknowledged result followed by complete stdout write and flush | Exit `0`, complete terminal report |
 
-- `0`: empty observation was rolled back normally, or closure committed and
-  the complete report was written and flushed;
-- `1`: a returned route or transaction was refused before commit ambiguity;
-- `2`: arguments or conninfo configuration were invalid;
-- `3`: the route was unavailable and no commit was sent;
-- `4`: closure commit outcome is unknown; and
-- `5`: a terminal result existed but report write or flush failed.
+Best-effort rollback or close failure never replaces the already selected
+terminal classification. Cleanup failure after normal no-bucket rollback or
+normal commit likewise cannot downgrade that known database result.
 
-The command adapter maps any unexpected ordinary `Exception` escaping the
-runner to the same fixed exit-`4` unknown protocol. It never guesses which
-internal state raised the exception, prints the exception, or retries. A
-`BaseException` is not converted; it may leave no terminal protocol and is
-operationally unknown after `CLOSE_SUBMITTED`.
+Exit `4` is reserved exclusively for an ordinary exception raised by the
+explicit `commit()` call. There is no commit-time SQLSTATE or exception-class
+allowlist: normal return from `commit()` is the only controlled path to
+`ACKNOWLEDGED`.
+
+### 6.5.2 Exact failure diagnostics
+
+Failure diagnostics contain no raw exception, DSN, credential, database
+result, bucket, timestamp, UUID, tenant, principal, request, route, or
+correlation value.
+
+In this table, the two source characters `\n` denote exactly one terminal LF
+byte (`0x0A`). The backslash and `n` are not emitted. Each diagnostic is ASCII
+on one physical line, with no CR or additional trailing byte.
+
+| Exit | Exact stderr bytes |
+| --- | --- |
+| `1` | `security-audit overflow closure was refused\n` |
+| `2` | `security-audit overflow closure command is invalid\n` |
+| `3` | `security-audit overflow closure is unavailable; no commit was sent\n` |
+| `4` | `security-audit overflow closure outcome is unknown; do not retry automatically\n` |
+| `5` | `security-audit overflow closure result reporting failed; do not retry automatically\n` |
+
+Every controlled failure requires the complete diagnostic write count and a
+successful stderr flush. If either fails, the invocation has no complete
+terminal protocol.
+
+The production runner converts every ordinary exception from its supported
+external steps into one declared outcome using the state it actually reached.
+The command adapter catches only those declared outcomes. It deliberately has
+no catch-all for an unexpected ordinary exception from a nonconforming
+injected runner, because it cannot reconstruct that runner's hidden state and
+cannot truthfully invent exit `1`, `3`, or `4`. Such a programming-seam
+failure, a `BaseException`, forced process termination, or stderr failure may
+leave an incomplete protocol; none is evidence that `commit()` was attempted
+or that the operation succeeded.
 
 Operators and automation must not retry exit `4`, exit `5`, or an incomplete
 process protocol automatically. A later invocation does not reconcile an
@@ -424,15 +474,15 @@ could close a different one.
 | --- | --- |
 | `OVC-001` | Empty `argv` and one syntactically valid, nonblank audit-control conninfo are the only caller inputs that can reach a connection. No bucket, producer, component, count, timestamp, limit, role, or retry selector is accepted. |
 | `OVC-002` | The runner invokes only the existing observer and, after exactly one valid nonempty result, the existing close function through one returned connection. It uses no table read, generic SQL, alternate role, `SET ROLE`, tenant connection, or fallback. |
-| `OVC-003` | One invocation observes at most one database-selected oldest closeable bucket and closes at most that exact bucket. An empty observation submits no close and no commit. |
+| `OVC-003` | One invocation observes at most one database-selected oldest closeable bucket and closes, or idempotently acknowledges, at most that exact bucket. An empty observation submits no close and no commit. `ACKNOWLEDGED` proves the bucket is closed under the reported event identity, not that this invocation created the event. |
 | `OVC-004` | One invocation makes exactly one `psycopg.connect` call, begins from an open idle non-autocommit connection, runs at `READ_COMMITTED`, and makes no automatic retry. Code-owned connection parameters override matching conninfo settings without claiming a global deadline. |
 | `OVC-005` | Observation and close occur in the same explicit transaction. A closure success requires one valid result, complete pre-rendering, and normal return from explicit `commit()` with `synchronous_commit=on`. |
 | `OVC-006` | PostgreSQL alone decides closeability, ordering, count posture, writer fencing, high-water, receipts, interval, and maintenance-event values. Client validation cannot widen or replace that authority. |
-| `OVC-007` | A failure before `COMMITTING` never becomes commit ambiguity. Every controlled `commit()` exception is `OUTCOME_UNKNOWN`, exposes no closure result, and triggers no retry or second credential. The adapter conservatively maps any unexpected ordinary runner exception to the same fixed unknown protocol. |
-| `OVC-008` | Output is exactly one of the two fixed canonical JSON forms and contains only the fixed schema/outcome plus the six named validated closure identity fields when applicable. It contains no count claim, event payload, tenant, Party, actor, principal, request, credential, route, correlation value, DSN, or raw exception detail. |
+| `OVC-007` | A failure before `COMMITTING` never becomes commit ambiguity. The production runner classifies every ordinary supported-step exception from its actual state. Every controlled `commit()` exception, and only such an exception, is `OUTCOME_UNKNOWN`, exposes no closure result, and triggers no retry or second credential. The adapter does not invent a state for a nonconforming runner. |
+| `OVC-008` | Output is exactly one of the two fixed canonical JSON forms and contains only the fixed schema/outcome plus the six named validated closure identity fields when applicable. Every controlled failure writes and flushes exactly the exit-paired ASCII diagnostic bytes. Neither channel contains a count claim, event payload, tenant, Party, actor, principal, request, credential, route, correlation value, DSN, or raw exception detail. |
 | `OVC-009` | A terminal database/no-bucket result followed by report failure produces exit `5`, never a false successful report or a database retry. Post-terminal cleanup failure cannot downgrade the known result. |
 | `OVC-010` | The implementation remains in `deployment/postgresql`; Kernel production composition, audit-health/readiness, gap handling, and every independent authority remain unchanged. |
-| `OVC-011` | The command makes no scheduler, deadline, lossless delivery, exact-count, dynamic-readiness, external-clock, deployment, or production-operation claim. |
+| `OVC-011` | The command makes no scheduler, deadline, lossless delivery, exact-count, dynamic-readiness, external-clock, deployment, or production-operation claim. Operator documentation repeats that every possibly ambiguous bucket must be marked `COUNT_UNKNOWN` before operational closure because closure makes its count posture immutable. |
 
 ## 8. Production-reachable negative cases
 
@@ -440,16 +490,16 @@ could close a different one.
 | --- | --- |
 | `OVC-001` | Invoke with `-h`, `--help`, `--bucket`, a producer, a timestamp, `--`, or any positional token. Exit `2`; no connection call. Supply blank or malformed conninfo with the same result. |
 | `OVC-002` | Supply a reader, retention, producer, readiness, application, or tenant DSN. The public observer refuses through its exact `session_user` rule; the runner performs no fallback or close. |
-| `OVC-003` | Seed two closeable overflow buckets in the live isolated audit fixture. One run closes only the database-ordered oldest bucket and leaves the second observable. Run with no bucket and prove no close query or commit. |
+| `OVC-003` | Seed two closeable overflow buckets in the live isolated audit fixture. One run closes only the database-ordered oldest bucket and leaves the second observable. Run with no bucket and prove no close query or commit. Race two runners on one bucket: both report `ACKNOWLEDGED` with the same event ID, and exactly one `OVERFLOW_ENDED` event exists. |
 | `OVC-004` | Put `connect_timeout=0` and timeout-disabling `options` in valid conninfo. The supported connection seam observes exactly one connect call with code-owned overrides. Return an already-active connection and prove both functions and commit remain untouched. |
 | `OVC-005` | Return a valid bucket, then zero, two, nil-UUID, naive-time, or retention-inconsistent close rows through the public runner seam. The runner rolls back and never calls commit. |
 | `OVC-006` | Race an admitted writer and closure in the existing live PostgreSQL test. The writer barrier and high-water prevent premature close or bucket recreation; the runner introduces no alternate decision. |
 | `OVC-006` | Set the observed database bucket to a never-overflowed, active, malformed, or wrong-pair value through the supported result seam. Client validation or the close function refuses; no marker commits. |
-| `OVC-007` | Return one valid close result, pre-render it, then make `commit()` raise both a class-08 `OperationalError` and a different Psycopg server exception in separate tests. Exit `4`; no output fields, retry, or fallback. Make a stub runner raise an unexpected canary-bearing `RuntimeError`; the adapter emits the same fixed exit-`4` line without the canary. |
-| `OVC-008` | Cause authentication failure with canaries in the DSN and raw exception. Stdout remains empty and stderr is only the fixed diagnostic. Compare both success report forms byte-for-byte, including exact keys, UTC microseconds, UUID spelling, sort order, separators, and final LF; prove no count field exists. |
+| `OVC-007` | Exercise a factory exception, invalid returned connection, deterministic observer and close refusals, observer and close transport losses, malformed carriers, and both transport and non-transport no-bucket rollback exceptions; require the exact exit `3`/`1` split and no commit. Return one valid close result, pre-render it, then make `commit()` raise both a class-08 `OperationalError` and a different Psycopg server exception in separate tests; only these cases exit `4`. Make a stub runner raise an unexpected canary-bearing `RuntimeError`; the exception escapes the adapter without a fabricated terminal diagnostic or retry. |
+| `OVC-008` | Cause authentication failure with canaries in the DSN and raw exception. Stdout remains empty and stderr is only the exit-paired fixed diagnostic. Compare all five diagnostics and both success reports byte-for-byte, including exact keys, UTC microseconds, UUID spelling, sort order, separators, and one final LF with no CR or extra byte; prove no count field exists. Make a diagnostic short-write or flush failure and require an incomplete protocol rather than a claimed exit. |
 | `OVC-009` | After a normal no-bucket rollback or acknowledged close, make stdout short-write or flush fail. Exit `5`; no second database attempt. Make post-terminal close fail and prove the known result remains reportable. |
 | `OVC-010` | Architecture checks prove no Kernel production module imports the operational runner and every forbidden path remains unchanged. |
-| `OVC-011` | Inspect the command and README. They provide one-shot operation only and expressly disclaim scheduling, gap recovery, readiness, deployment, and exact-count claims. |
+| `OVC-011` | Inspect the command and README. They provide one-shot operation only, expressly disclaim scheduling, gap recovery, readiness, deployment, and exact-count claims, and state the required `COUNT_UNKNOWN`-before-closure ordering for every possibly ambiguous bucket. |
 
 The existing live database tests remain authoritative for overflow receipt
 collisions, `COUNT_UNKNOWN`, concurrent quota-boundary writes, close barriers,
@@ -477,7 +527,8 @@ Python.
 - exact empty-argument enforcement;
 - environment lookup and conninfo validation;
 - production Psycopg connection composition;
-- exit-code mapping;
+- exit-code mapping for the runner's declared outcomes, with no generic
+  runner-exception catch-all;
 - stdout and stderr writes and flushing; and
 - terminal reporting failure.
 
@@ -501,6 +552,7 @@ fixed control DSN environment
         -> one bucket: validate closed pair and minute timestamp
             -> exact close function with the same three values
             -> validate event identity and retention deadline
+            -> acknowledge either this close or an idempotent concurrent close
             -> pre-render fixed closure report
             -> explicit COMMITTING boundary
             -> acknowledged commit
@@ -643,6 +695,8 @@ establish credential custody, route isolation, cadence, runtime-health
 coordination, and the rule that every possible ambiguous overflow bucket is
 marked `COUNT_UNKNOWN` before it can be operationally closed. This pull request
 does not authorize an operator to run the command against a deployed service.
+The operator README must repeat that ordering and explain that closure makes
+the database-owned count posture immutable.
 
 Evidence requiring technical redesign includes inability to keep observation
 and close on one transaction, a safe need for caller bucket selection or
@@ -664,15 +718,15 @@ human-controlled and independently verifiable approval or signing system.
 | --- | --- | --- | --- | --- |
 | `OVC-001` | Command adapter | Every argument and malformed conninfo rejected | No connection before complete validation | Focused CLI tests |
 | `OVC-002` | Runner and existing public functions | Wrong-role live invocation and forbidden SQL inspection | Exact two-query maximum on one route | Seam tests plus PostgreSQL role test |
-| `OVC-003` | Runner state machine and database observer | Two closeable buckets and empty database | Oldest only; zero close/commit on empty | Live focused tests |
+| `OVC-003` | Runner state machine and database observer | Two closeable buckets, empty database, and concurrent close | Oldest only; zero close/commit on empty; one idempotent event identity | Live focused tests |
 | `OVC-004` | Connection composition and idle-state gate | Hostile conninfo and active returned connection | One connect call, fixed options, `READ_COMMITTED` | Public runner-seam tests |
 | `OVC-005` | Explicit transaction and result validators | Missing, duplicate, or malformed rows | Same transaction, pre-render, one explicit commit | Seam and live tests |
 | `OVC-006` | Existing database functions | Writer race, wrong pair, active and never-overflowed bucket | Barrier, high-water, count posture remain database-owned | Existing live overflow suites |
-| `OVC-007` | Explicit `COMMITTING` state and command adapter | Two distinct commit exceptions plus unexpected runner exception | Exit `4`, no result, detail, or retry | Deterministic commit- and adapter-seam tests |
-| `OVC-008` | Renderer and CLI | Canary DSN/error plus malformed result carriers | Exact byte reports, UTC timestamp/UUID forms, and fixed diagnostics without count | Byte-level protocol tests |
+| `OVC-007` | Production runner state machine and no-catch-all command adapter | Pre-commit refusal/transport matrix, two distinct commit exceptions, and unexpected runner exception | Exact exits `1`/`3`; exit `4` only from commit; nonconforming seam remains incomplete | Deterministic state- and adapter-seam tests |
+| `OVC-008` | Renderer and CLI | Canary DSN/error, malformed result carriers, diagnostic short write, and flush failure | Exact byte reports and exit-paired diagnostics; UTC timestamp/UUID forms; no count | Byte-level protocol tests |
 | `OVC-009` | CLI reporting and cleanup order | Short write, flush failure, close failure | Exit `5`; cleanup cannot downgrade known result | Output-sink tests |
 | `OVC-010` | Deployment placement | Forbidden import edge and path diff | Kernel and independent authorities unchanged | Architecture and path checks |
-| `OVC-011` | README and command surface | Search for scheduler/readiness/claim drift | One-shot claim-limited documentation | Documentation assertions |
+| `OVC-011` | README and command surface | Search for scheduler/readiness/claim drift and missing `COUNT_UNKNOWN` precedence | One-shot claim-limited documentation with ambiguity-before-closure ordering | Documentation assertions |
 
 ### 13.1 Phase A verification gates
 
@@ -729,18 +783,27 @@ failure protocol instead of exposing policy inputs.
 
 ### 14.2 Review disposition
 
-- **Full Phase A review:** exact head
-  `ba2419d8dd0a94080fe28123dcc06ebf401c61d2` found two in-scope gaps: the
-  closure report encoding was not fully fixed, and an unexpected ordinary
-  runner exception lacked a safe adapter mapping. This revision fixes both
-  affected `OVC-007`/`OVC-008` contracts without changing authority, effects,
-  paths, or the primary boundary. Focused re-review of exact correction head
-  `26090478164005f3924c096323b52e6d2a1a4212` passed with no remaining
-  in-scope Phase A Blocker.
-- **Blockers:** none; any later Phase B merge remains conditioned on explicit
-  approval and every implementation, verification, and exact-head review gate.
+- **Earlier review history:** exact head
+  `ba2419d8dd0a94080fe28123dcc06ebf401c61d2` exposed report-encoding and
+  adapter-classification gaps; correction head
+  `26090478164005f3924c096323b52e6d2a1a4212` received a focused pass.
+- **Latest formal Phase A review:** exact head
+  `21c98c4f3f984a76d16cb80608471121135be80f` superseded the earlier
+  conversational disposition and demonstrated two remaining Blockers: an
+  adapter catch-all could invent commit ambiguity, and the pre-commit
+  state-to-exit plus diagnostic-byte protocol was incomplete. This revision
+  removes the catch-all, reserves exit `4` for explicit `commit()` exceptions,
+  fixes the complete exit `1`/`3` state classification, freezes all diagnostic
+  bytes, and incorporates the idempotent-acknowledgement and `COUNT_UNKNOWN`
+  documentation clarifications without changing authority, effects, paths, or
+  the primary boundary.
+- **Blockers:** corrections are present but require focused exact-head
+  re-review of `OVC-003`, `OVC-007`, `OVC-008`, `OVC-009`, and `OVC-011`.
 - **Follow-ups:** the separate issue #192 boundaries in section 11.5.
-- **Preferences:** none.
+- **Preferences:** both latest review preferences are incorporated in this
+  Phase A RFC revision.
+- **Phase B authority:** not ready for approval; do not display the live
+  decision card until the focused re-review passes.
 
 Once `OVC-001` through `OVC-011` pass and no demonstrated in-scope Blocker
 remains, the approved workflow permits merging the named pull request. New
