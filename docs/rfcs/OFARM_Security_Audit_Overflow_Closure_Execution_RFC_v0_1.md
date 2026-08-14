@@ -1,10 +1,10 @@
 # OFARM Security-Audit Overflow Closure Execution — Phase A Contract v0.1
 
-**Status:** proposed; Phase B implementation, deployment, and production
-operation are not authorized
+**Status:** proposed in draft pull request #311; Phase B implementation,
+deployment, and production operation are not authorized
 
-**Draft implementation pull request:** to be bound after this Phase A contract
-is published
+**Draft implementation pull request:**
+`https://github.com/samovers/OFARM2/pull/311`
 
 **Contract identity:**
 `ofarm2.security-audit-overflow-closure-execution.v0.1`
