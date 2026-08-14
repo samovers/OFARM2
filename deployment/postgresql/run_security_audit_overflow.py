@@ -20,18 +20,18 @@ from deployment.postgresql.security_audit_overflow import (
 
 OVERFLOW_DSN_ENVIRONMENT = "OFARM_SECURITY_AUDIT_CONTROL_PG_DSN"
 
-_REFUSED = "security-audit overflow closure was refused\n"
-_INVALID = "security-audit overflow closure command is invalid\n"
+_REFUSED = b"security-audit overflow closure was refused\n"
+_INVALID = b"security-audit overflow closure command is invalid\n"
 _UNAVAILABLE = (
-    "security-audit overflow closure is unavailable; no commit was sent\n"
+    b"security-audit overflow closure is unavailable; no commit was sent\n"
 )
 _UNKNOWN = (
-    "security-audit overflow closure outcome is unknown; "
-    "do not retry automatically\n"
+    b"security-audit overflow closure outcome is unknown; "
+    b"do not retry automatically\n"
 )
 _REPORT_FAILED = (
-    "security-audit overflow closure result reporting failed; "
-    "do not retry automatically\n"
+    b"security-audit overflow closure result reporting failed; "
+    b"do not retry automatically\n"
 )
 
 
@@ -45,13 +45,7 @@ class _BinaryOutput(Protocol):
     def flush(self) -> None: ...
 
 
-class _TextOutput(Protocol):
-    def write(self, value: str) -> int: ...
-
-    def flush(self) -> None: ...
-
-
-def _fail(stderr: _TextOutput, exit_code: int, line: str) -> int:
+def _fail(stderr: _BinaryOutput, exit_code: int, line: bytes) -> int:
     written = stderr.write(line)
     if type(written) is not int or written != len(line):
         raise OSError(
@@ -74,7 +68,7 @@ def run_fixed_security_audit_overflow_cli(
     argv: Sequence[str],
     environ: Mapping[str, str],
     stdout: _BinaryOutput,
-    stderr: _TextOutput,
+    stderr: _BinaryOutput,
     runner: _Runner,
 ) -> int:
     """Execute the closed overflow-closure protocol through explicit sinks."""
@@ -116,7 +110,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         argv=actual_argv,
         environ=os.environ,
         stdout=sys.stdout.buffer,
-        stderr=sys.stderr,
+        stderr=sys.stderr.buffer,
         runner=SecurityAuditOverflowRunner(),
     )
 

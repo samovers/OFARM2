@@ -6,7 +6,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from io import BytesIO, StringIO
+from io import BytesIO
 from pathlib import Path
 from threading import Barrier, Event
 from time import monotonic
@@ -282,33 +282,6 @@ class _RecordingBinaryOutput:
             raise self.flush_error
 
 
-class _RecordingTextOutput:
-    def __init__(
-        self,
-        *,
-        short_write: bool = False,
-        write_error: Exception | None = None,
-        flush_error: Exception | None = None,
-    ) -> None:
-        self.short_write = short_write
-        self.write_error = write_error
-        self.flush_error = flush_error
-        self.value = ""
-        self.flush_calls = 0
-
-    def write(self, value: str) -> int:
-        if self.write_error is not None:
-            raise self.write_error
-        count = len(value) - 1 if self.short_write else len(value)
-        self.value += value[:count]
-        return count
-
-    def flush(self) -> None:
-        self.flush_calls += 1
-        if self.flush_error is not None:
-            raise self.flush_error
-
-
 def _completed_closure(
     report: bytes = EXPECTED_ACKNOWLEDGED_REPORT,
 ) -> CompletedSecurityAuditOverflowRun:
@@ -340,14 +313,14 @@ def _run_cli(
     argv: tuple[str, ...] = (),
     environ: dict[str, str] | None = None,
     stdout: _RecordingBinaryOutput | BytesIO | None = None,
-    stderr: _RecordingTextOutput | StringIO | None = None,
+    stderr: _RecordingBinaryOutput | BytesIO | None = None,
 ) -> tuple[
     int,
     _RecordingBinaryOutput | BytesIO,
-    _RecordingTextOutput | StringIO,
+    _RecordingBinaryOutput | BytesIO,
 ]:
-    output = stdout or BytesIO()
-    error = stderr or StringIO()
+    output = BytesIO() if stdout is None else stdout
+    error = BytesIO() if stderr is None else stderr
     code = run_fixed_security_audit_overflow_cli(
         argv=argv,
         environ=(
@@ -924,7 +897,7 @@ def test_cli_rejects_every_nonempty_argument_shape_without_running(argv):
     assert code == 2
     assert output.getvalue() == b""
     assert error.getvalue() == (
-        "security-audit overflow closure command is invalid\n"
+        b"security-audit overflow closure command is invalid\n"
     )
     assert runner.calls == []
 
@@ -948,7 +921,7 @@ def test_cli_rejects_invalid_conninfo_without_running(environ):
     assert code == 2
     assert output.getvalue() == b""
     assert error.getvalue() == (
-        "security-audit overflow closure command is invalid\n"
+        b"security-audit overflow closure command is invalid\n"
     )
     assert runner.calls == []
 
@@ -978,7 +951,7 @@ def test_cli_writes_each_exact_success_report_and_flushes(completed, expected):
     assert returned_output is output
     assert bytes(output.value) == expected
     assert output.flush_calls == 1
-    assert error.getvalue() == ""
+    assert error.getvalue() == b""
     assert runner.calls == ["host=audit dbname=ofarm_security_audit"]
 
 
@@ -988,21 +961,21 @@ def test_cli_writes_each_exact_success_report_and_flushes(completed, expected):
         pytest.param(
             SecurityAuditOverflowRefused("secret"),
             1,
-            "security-audit overflow closure was refused\n",
+            b"security-audit overflow closure was refused\n",
             id="refused",
         ),
         pytest.param(
             SecurityAuditOverflowUnavailable("secret"),
             3,
-            "security-audit overflow closure is unavailable; "
-            "no commit was sent\n",
+            b"security-audit overflow closure is unavailable; "
+            b"no commit was sent\n",
             id="unavailable",
         ),
         pytest.param(
             SecurityAuditOverflowOutcomeUnknown("secret"),
             4,
-            "security-audit overflow closure outcome is unknown; "
-            "do not retry automatically\n",
+            b"security-audit overflow closure outcome is unknown; "
+            b"do not retry automatically\n",
             id="unknown",
         ),
     ),
@@ -1010,7 +983,7 @@ def test_cli_writes_each_exact_success_report_and_flushes(completed, expected):
 def test_cli_failure_protocol_is_closed_and_secret_free(
     outcome: Exception,
     exit_code: int,
-    line: str,
+    line: bytes,
 ):
     runner = _StubRunner(outcome)
 
@@ -1019,7 +992,7 @@ def test_cli_failure_protocol_is_closed_and_secret_free(
     assert code == exit_code
     assert output.getvalue() == b""
     assert error.getvalue() == line
-    assert "secret" not in error.getvalue()
+    assert b"secret" not in error.getvalue()
     assert len(runner.calls) == 1
 
 
@@ -1039,16 +1012,16 @@ def test_real_runner_cli_transport_failure_leaks_no_conninfo_or_exception():
     assert code == 3
     assert output.getvalue() == b""
     assert error.getvalue() == (
-        "security-audit overflow closure is unavailable; no commit was sent\n"
+        b"security-audit overflow closure is unavailable; no commit was sent\n"
     )
-    assert "secret" not in error.getvalue()
+    assert b"secret" not in error.getvalue()
     assert len(connection_factory.calls) == 1
 
 
 def test_cli_does_not_invent_state_for_nonconforming_runner_exception():
     runner = _StubRunner(RuntimeError("unexpected secret"))
     output = BytesIO()
-    error = StringIO()
+    error = BytesIO()
 
     with pytest.raises(RuntimeError, match="unexpected secret"):
         run_fixed_security_audit_overflow_cli(
@@ -1060,7 +1033,7 @@ def test_cli_does_not_invent_state_for_nonconforming_runner_exception():
         )
 
     assert output.getvalue() == b""
-    assert error.getvalue() == ""
+    assert error.getvalue() == b""
     assert len(runner.calls) == 1
 
 
@@ -1101,8 +1074,8 @@ def test_cli_reporting_failure_is_exit_five_without_second_database_attempt(
     assert bytes(output.value) == expected_prefix
     assert output.flush_calls == flush_calls
     assert error.getvalue() == (
-        "security-audit overflow closure result reporting failed; "
-        "do not retry automatically\n"
+        b"security-audit overflow closure result reporting failed; "
+        b"do not retry automatically\n"
     )
     assert len(runner.calls) == 1
 
@@ -1111,21 +1084,21 @@ def test_cli_reporting_failure_is_exit_five_without_second_database_attempt(
     "stderr",
     (
         pytest.param(
-            _RecordingTextOutput(short_write=True),
+            _RecordingBinaryOutput(short_write=True),
             id="short-write",
         ),
         pytest.param(
-            _RecordingTextOutput(write_error=OSError("write canary")),
+            _RecordingBinaryOutput(write_error=OSError("write canary")),
             id="write-error",
         ),
         pytest.param(
-            _RecordingTextOutput(flush_error=OSError("flush canary")),
+            _RecordingBinaryOutput(flush_error=OSError("flush canary")),
             id="flush-error",
         ),
     ),
 )
 def test_diagnostic_delivery_failure_leaves_no_claimed_terminal_protocol(
-    stderr: _RecordingTextOutput,
+    stderr: _RecordingBinaryOutput,
 ):
     runner = _StubRunner(_completed_closure())
 
