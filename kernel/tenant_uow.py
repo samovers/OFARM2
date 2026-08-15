@@ -21,10 +21,6 @@ from .tenant_capability_issuer import CapabilityMintError, TenantChallenge
 _ASCII_ID = re.compile(r"[A-Za-z0-9._:-]{1,255}")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 _KID = re.compile(r"[A-Za-z0-9_-]{43}")
-_TRANSACTION_CONTROL = re.compile(
-    r"\s*(?:BEGIN|COMMIT|END|ROLLBACK|ABORT|SAVEPOINT|RELEASE)\b",
-    re.IGNORECASE,
-)
 _POOL_MIN_SIZE = 1
 _POOL_MAX_SIZE = 8
 _POOL_WAIT_SECONDS = 5.0
@@ -194,7 +190,6 @@ class TenantUnitOfWork:
         self.binding = binding
         self._active = True
         self._batch: GovernedWriteBatch | None = None
-        self._savepoint_depth = 0
 
     @property
     def batch(self) -> GovernedWriteBatch | None:
@@ -207,43 +202,8 @@ class TenantUnitOfWork:
     def _finish(self) -> None:
         self._active = False
 
-    def _query(self, query: str, parameters: tuple[object, ...]) -> psycopg.Cursor[Row]:
-        self._require_active()
-        if type(query) is not str or _TRANSACTION_CONTROL.match(query):
-            raise ValueError("transaction control belongs to the UnitOfWork")
-        return self._connection.execute(query, parameters)
-
-    def execute(self, query: str, parameters: tuple[object, ...] = ()) -> int:
-        return self._query(query, parameters).rowcount
-
-    def fetch_one(
-        self,
-        query: str,
-        parameters: tuple[object, ...] = (),
-    ) -> Row | None:
-        return self._query(query, parameters).fetchone()
-
-    def fetch_all(
-        self,
-        query: str,
-        parameters: tuple[object, ...] = (),
-    ) -> list[Row]:
-        return self._query(query, parameters).fetchall()
-
-    @contextmanager
-    def savepoint(self) -> Iterator[None]:
-        self._require_active()
-        self._savepoint_depth += 1
-        try:
-            with self._connection.transaction():
-                yield
-        finally:
-            self._savepoint_depth -= 1
-
     def begin_batch(self, request: GovernedBatchRequest) -> GovernedWriteBatch:
         self._require_active()
-        if self._savepoint_depth:
-            raise RuntimeError("governed batch belongs to the outer transaction")
         if type(request) is not GovernedBatchRequest or self._batch is not None:
             raise RuntimeError("governed batch already exists")
         row = self._connection.execute(
@@ -302,20 +262,6 @@ class TenantUnitOfWork:
         return self._batch
 
 
-def create_tenant_connection_pool(dsn: str) -> ConnectionPool:
-    return ConnectionPool(
-        dsn,
-        kwargs={"autocommit": False},
-        min_size=_POOL_MIN_SIZE,
-        max_size=_POOL_MAX_SIZE,
-        open=False,
-        check=ConnectionPool.check_connection,
-        timeout=_POOL_WAIT_SECONDS,
-        max_waiting=_POOL_MAX_WAITING,
-        name="ofarm-tenant",
-    )
-
-
 def _idle(connection: Connection) -> bool:
     try:
         return connection.info.transaction_status == TransactionStatus.IDLE
@@ -335,6 +281,35 @@ def _rollback_or_discard(connection: Connection) -> None:
         _discard(connection)
     if not _idle(connection):
         _discard(connection)
+
+
+def _reset_tenant_connection(connection: Connection) -> None:
+    if not _idle(connection) or connection.autocommit is not False:
+        raise RuntimeError("tenant connection is not resettable")
+    connection.autocommit = True
+    try:
+        connection.execute("DISCARD ALL", prepare=False)
+    finally:
+        connection.autocommit = False
+    if not _idle(connection):
+        raise RuntimeError("tenant connection reset did not finish idle")
+
+
+def create_tenant_connection_pool(dsn: str) -> ConnectionPool:
+    return ConnectionPool(
+        dsn,
+        # DISCARD ALL invalidates every server-side prepared statement. Keep
+        # psycopg from retaining automatic-prepare bookkeeping across resets.
+        kwargs={"autocommit": False, "prepare_threshold": None},
+        min_size=_POOL_MIN_SIZE,
+        max_size=_POOL_MAX_SIZE,
+        open=False,
+        check=ConnectionPool.check_connection,
+        reset=_reset_tenant_connection,
+        timeout=_POOL_WAIT_SECONDS,
+        max_waiting=_POOL_MAX_WAITING,
+        name="ofarm-tenant",
+    )
 
 
 class TenantUnitOfWorkManager:

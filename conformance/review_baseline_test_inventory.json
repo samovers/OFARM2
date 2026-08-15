@@ -7071,12 +7071,32 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_hostile_sql_has_no_unit_of_work_ingress_and_batch_rolls_back",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_knowledge_positions_are_tenant_local",
       "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
       "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_real_pool_binds_allocates_rolls_back_and_reuses_idle_backend",
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_pool_discards_backend_when_reset_callback_refuses",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_pool_reset_cleans_session_before_same_backend_serves_second_tenant",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_real_pool_binds_allocates_and_rolls_back_atomically",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_reset_callback_clears_temporary_objects_and_session_advisory_locks",
       "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
       "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
     },
@@ -15046,7 +15066,27 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     },
     {
-      "nodeid": "kernel/tests/test_tenant_uow.py::test_repository_surface_cannot_issue_transaction_control",
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_pool_reset_discards_all_session_state_outside_a_transaction",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_pool_reset_failure_is_not_hidden_and_restores_client_mode",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_pool_reset_refuses_an_invalid_starting_state[autocommit-enabled]",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_pool_reset_refuses_an_invalid_starting_state[transaction-active]",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_sql_surface_is_absent_and_later_refusal_rolls_back",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     },
@@ -15086,8 +15126,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "91cbc820d9fa6f82d33f66707f44c0c56a71343b25ccb02ae9f9d11779a619ab",
-  "entryCount": 3017,
+  "entriesSha256": "01b6978710ec7bd6cfbbcdff31da6ae786738d3c6528526576f7f826dafe671f",
+  "entryCount": 3025,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
