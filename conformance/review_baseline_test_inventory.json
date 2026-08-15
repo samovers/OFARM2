@@ -4006,6 +4006,11 @@
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_conformance_workflow_authenticates_and_selects_exact_github_cli",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_authenticates_exact_runtime_child[linux/amd64]",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
@@ -14621,8 +14626,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "32244d50043c00dfe19bc4a1d310a9e53349c2739aff477cc9017fcedd366631",
-  "entryCount": 2924,
+  "entriesSha256": "4499dfba5cc225d3374c5d5c0e1aa7553a44616ab1c1ff0a8dc388564152ecb6",
+  "entryCount": 2925,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

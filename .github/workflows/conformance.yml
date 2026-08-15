@@ -17,6 +17,7 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Authenticate and install the exact Buildx client
         env:
           BUILDX_ASSET_SHA256: >-
@@ -73,10 +74,118 @@ jobs:
         run: .review-venv/bin/python -m deployment.postgresql.preflight_tenant_migrations
       - name: Authenticate security-audit migration release
         run: .review-venv/bin/python -m deployment.postgresql.preflight_security_audit_migrations
+      - name: Authenticate and install the exact GitHub CLI
+        shell: bash
+        env:
+          GITHUB_CLI_ARCHIVE_SHA256: >-
+            83d5c2ccad5498f58bf6368acb1ab32588cf43ab3a4b1c301bf36328b1c8bd60
+        run: |
+          set -euo pipefail
+
+          if test "${GH_TOKEN+x}" = x || test "${GITHUB_TOKEN+x}" = x
+          then
+            exit 1
+          fi
+          if git config --local --name-only --get-regexp \
+              '^http\..*\.extraheader$' >/dev/null
+          then
+            exit 1
+          else
+            credential_status="$?"
+            test "${credential_status}" -eq 1
+          fi
+
+          gh_install_root="$(mktemp --directory \
+            "${RUNNER_TEMP}/ofarm-gh-v2.96.0.XXXXXX")"
+          gh_archive="${gh_install_root}/gh_2.96.0_linux_amd64.tar.gz"
+          gh_extract="${gh_install_root}/extract"
+          gh_path_file="${gh_install_root}/canonical-path"
+          gh_stdout="${gh_install_root}/version.stdout"
+          gh_stderr="${gh_install_root}/version.stderr"
+          mkdir -- "${gh_extract}"
+
+          curl --fail --location --proto '=https' --proto-redir '=https' \
+            --tlsv1.2 --retry 3 --output "${gh_archive}" \
+            "https://github.com/cli/cli/releases/download/v2.96.0/gh_2.96.0_linux_amd64.tar.gz"
+          printf '%s  %s\n' \
+            "${GITHUB_CLI_ARCHIVE_SHA256}" "${gh_archive}" | \
+            sha256sum --check --strict
+          tar --extract --gzip --file "${gh_archive}" \
+            --directory "${gh_extract}" --strip-components=2 \
+            gh_2.96.0_linux_amd64/bin/gh
+
+          .review-venv/bin/python - \
+              "${gh_extract}/gh" "${gh_extract}" "${gh_path_file}" <<'PY'
+          import os
+          import stat
+          import sys
+          from pathlib import Path
+
+          candidate = Path(sys.argv[1]).resolve(strict=True)
+          expected_parent = Path(sys.argv[2]).resolve(strict=True)
+          file_stat = candidate.stat()
+          if (
+              candidate.parent != expected_parent
+              or not stat.S_ISREG(file_stat.st_mode)
+              or not os.access(candidate, os.X_OK)
+          ):
+              raise SystemExit(1)
+          Path(sys.argv[3]).write_text(str(candidate) + "\n", encoding="ascii")
+          PY
+          IFS= read -r gh_binary < "${gh_path_file}"
+          test -n "${gh_binary}"
+
+          gh_status=0
+          "${gh_binary}" version >"${gh_stdout}" 2>"${gh_stderr}" || \
+            gh_status="$?"
+          test "${gh_status}" -eq 0
+          test -f "${gh_stdout}"
+          test -f "${gh_stderr}"
+          test ! -s "${gh_stderr}"
+          .review-venv/bin/python - "${gh_stdout}" <<'PY'
+          import sys
+          from pathlib import Path
+
+          from deployment.postgresql.native_release_identity import (
+              NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT,
+          )
+
+          if Path(sys.argv[1]).read_bytes() != (
+              NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT
+          ):
+              raise SystemExit(1)
+          PY
+
+          printf 'OFARM_NATIVE_EVIDENCE_GITHUB_CLI=%s\n' \
+            "${gh_binary}" >> "${GITHUB_ENV}"
+          printf '%s\n' "${gh_binary%/*}" >> "${GITHUB_PATH}"
       - name: Cryptographically reverify retained native release evidence
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          .review-venv/bin/python - <<'PY'
+          import os
+          import shutil
+          import stat
+          from pathlib import Path
+
+          recorded_value = os.environ.get("OFARM_NATIVE_EVIDENCE_GITHUB_CLI")
+          selected_value = shutil.which("gh")
+          if recorded_value is None or selected_value is None:
+              raise SystemExit(1)
+          recorded = Path(recorded_value)
+          if not recorded.is_absolute():
+              raise SystemExit(1)
+          recorded = recorded.resolve(strict=True)
+          selected = Path(selected_value).resolve(strict=True)
+          file_stat = selected.stat()
+          if (
+              selected != recorded
+              or not stat.S_ISREG(file_stat.st_mode)
+              or not os.access(selected, os.X_OK)
+          ):
+              raise SystemExit(1)
+          PY
           .review-venv/bin/python deployment/postgresql/native_evidence.py \
             verify-frozen-evidence-receipt \
             --release-identity \

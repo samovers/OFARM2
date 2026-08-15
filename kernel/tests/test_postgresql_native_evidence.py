@@ -3834,6 +3834,105 @@ def test_native_workflow_has_no_buildx_discovery_or_download_fallback():
         assert "install" not in builder_step.lower()
 
 
+def test_conformance_workflow_authenticates_and_selects_exact_github_cli():
+    workflow = PACKAGE_ROOT.joinpath(".github/workflows/conformance.yml").read_text()
+    conformance_job = workflow.split("  conformance:\n", 1)[1].split(
+        "\n  native-verifier:", 1
+    )[0]
+    checkout_step = conformance_job.split(
+        "actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5",
+        1,
+    )[1].split("      - name:", 1)[0]
+    assert "fetch-depth: 0" in checkout_step
+    assert "persist-credentials: false" in checkout_step
+
+    install_step = conformance_job.split(
+        "- name: Authenticate and install the exact GitHub CLI", 1
+    )[1].split(
+        "- name: Cryptographically reverify retained native release evidence", 1
+    )[0]
+    assert "shell: bash" in install_step
+    assert "GH_TOKEN:" not in install_step
+    assert "GITHUB_TOKEN:" not in install_step
+    assert 'test "${GH_TOKEN+x}" = x' in install_step
+    assert 'test "${GITHUB_TOKEN+x}" = x' in install_step
+    assert "git config --local --name-only --get-regexp" in install_step
+    assert "'^http\\..*\\.extraheader$' >/dev/null" in install_step
+    assert 'test "${credential_status}" -eq 1' in install_step
+    assert "mktemp --directory" in install_step
+    assert "${RUNNER_TEMP}/ofarm-gh-v2.96.0.XXXXXX" in install_step
+    assert (
+        "https://github.com/cli/cli/releases/download/v2.96.0/"
+        "gh_2.96.0_linux_amd64.tar.gz"
+    ) in install_step
+    assert (
+        "83d5c2ccad5498f58bf6368acb1ab325"
+        "88cf43ab3a4b1c301bf36328b1c8bd60"
+    ) in install_step
+    assert "sha256sum --check --strict" in install_step
+    assert "tar --extract --gzip" in install_step
+    assert "--strip-components=2" in install_step
+    assert "gh_2.96.0_linux_amd64/bin/gh" in install_step
+    assert "resolve(strict=True)" in install_step
+    assert "stat.S_ISREG" in install_step
+    assert "os.access(candidate, os.X_OK)" in install_step
+    assert '"${gh_binary}" version >"${gh_stdout}" 2>"${gh_stderr}"' in (
+        install_step
+    )
+    assert 'test "${gh_status}" -eq 0' in install_step
+    assert 'test ! -s "${gh_stderr}"' in install_step
+    assert "NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT" in install_step
+    assert "read_bytes()" in install_step
+    assert "OFARM_NATIVE_EVIDENCE_GITHUB_CLI=%s" in install_step
+    assert '"${gh_binary}" >> "${GITHUB_ENV}"' in install_step
+    assert '"${gh_binary%/*}" >> "${GITHUB_PATH}"' in install_step
+    install_markers = (
+        "git config --local --name-only --get-regexp",
+        "curl --fail --location",
+        "sha256sum --check --strict",
+        "tar --extract --gzip",
+        "resolve(strict=True)",
+        '"${gh_binary}" version',
+        "NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT",
+        "OFARM_NATIVE_EVIDENCE_GITHUB_CLI=%s",
+        '"${gh_binary%/*}" >> "${GITHUB_PATH}"',
+    )
+    assert [install_step.index(marker) for marker in install_markers] == sorted(
+        install_step.index(marker) for marker in install_markers
+    )
+    forbidden_install_fragments = (
+        "gh auth",
+        "apt-get",
+        "brew ",
+        "setup-gh",
+        "which gh",
+        "command -v gh",
+    )
+    for fragment in forbidden_install_fragments:
+        assert fragment not in install_step
+
+    verification_step = conformance_job.split(
+        "- name: Cryptographically reverify retained native release evidence", 1
+    )[1].split("- name: Reject whitespace errors", 1)[0]
+    assert verification_step.count("GH_TOKEN: ${{ github.token }}") == 1
+    assert "GITHUB_TOKEN:" not in verification_step
+    verification_markers = (
+        'os.environ.get("OFARM_NATIVE_EVIDENCE_GITHUB_CLI")',
+        'shutil.which("gh")',
+        "resolve(strict=True)",
+        "selected != recorded",
+        "stat.S_ISREG",
+        "os.access(selected, os.X_OK)",
+        "deployment/postgresql/native_evidence.py",
+        "verify-frozen-evidence-receipt",
+    )
+    assert [
+        verification_step.index(marker) for marker in verification_markers
+    ] == sorted(verification_step.index(marker) for marker in verification_markers)
+    assert conformance_job.count("GH_TOKEN: ${{ github.token }}") == 1
+    assert "GITHUB_TOKEN:" not in conformance_job
+
+
 def test_native_build_sources_match_evidence_material_authority():
     containerfile = PACKAGE_ROOT.joinpath(
         "deployment/postgresql/ofarm_ed25519/Containerfile"
