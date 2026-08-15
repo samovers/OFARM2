@@ -4,10 +4,15 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 
 from .application_runtime import ApplicationRuntime, build_application_runtime
 from .problems import runtime_problem
 from .runtime_config import RuntimeConfig
+from .security_audit_health import SecurityAuditReadiness
+
+
+_READINESS_SCHEMA_VERSION = "ofarm.security-audit-readiness.v1"
 
 
 def create_app() -> FastAPI:
@@ -33,6 +38,20 @@ def _production_app(runtime: ApplicationRuntime) -> FastAPI:
     @app.get("/health")
     def health():
         return {"status": "ok", "runtime": runtime.metadata.as_dict()}
+
+    @app.get("/ready")
+    def ready():
+        readiness = runtime.security_audit_readiness
+        return JSONResponse(
+            status_code=(
+                200 if readiness is SecurityAuditReadiness.READY else 503
+            ),
+            content={
+                "schemaVersion": _READINESS_SCHEMA_VERSION,
+                "status": readiness.value,
+            },
+            headers={"Cache-Control": "no-store"},
+        )
 
     @app.get("/manifest")
     def manifest():

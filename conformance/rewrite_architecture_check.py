@@ -58,7 +58,7 @@ MODULE_BUDGETS = {
     "kernel/api.py": 120,
     "kernel/deployment_identity.py": 50,
     "kernel/runtime_config.py": 140,
-    "kernel/application_runtime.py": 220,
+    "kernel/application_runtime.py": 230,
     "kernel/legacy_m1/api.py": 370,
     "kernel/legacy_m1/runtime.py": 100,
     "kernel/security_audit.py": 130,
@@ -67,7 +67,8 @@ MODULE_BUDGETS = {
     "kernel/request_router_audit.py": 120,
     "kernel/google_kms_correlation_hmac.py": 220,
     "kernel/security_audit_hmac_posture.py": 260,
-    "kernel/security_audit_runtime.py": 210,
+    "kernel/security_audit_health.py": 170,
+    "kernel/security_audit_runtime.py": 230,
 }
 GROUP_BUDGETS = {
     "profile runtime": (
@@ -148,8 +149,12 @@ GROUP_BUDGETS = {
         260,
         ("kernel/security_audit_hmac_posture.py",),
     ),
+    "security audit health": (
+        170,
+        ("kernel/security_audit_health.py",),
+    ),
     "security audit runtime": (
-        210,
+        230,
         ("kernel/security_audit_runtime.py",),
     ),
 }
@@ -167,6 +172,7 @@ TEST_GLOBS = (
     "kernel/tests/*request_router_audit*.py",
     "kernel/tests/*google_kms_correlation_hmac*.py",
     "kernel/tests/*security_audit_hmac_posture*.py",
+    "kernel/tests/*security_audit_health*.py",
     "kernel/tests/*security_audit_runtime*.py",
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
@@ -217,6 +223,7 @@ PRODUCTION_COMPOSITION_MODULES = frozenset(
         "kernel.security_audit",
         "kernel.security_audit_client",
         "kernel.security_audit_hmac_posture",
+        "kernel.security_audit_health",
         "kernel.security_audit_runtime",
         "kernel.signing_authority",
         "kernel.signing_receipt",

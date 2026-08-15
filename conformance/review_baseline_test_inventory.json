@@ -31,6 +31,11 @@
       "sourcePath": "kernel/tests/test_application_runtime.py"
     },
     {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_not_ready_response_is_fixed_passive_and_not_app_state_controlled",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_application_runtime.py::test_pool_startup_failure_closes_the_complete_graph",
       "sourceModule": "kernel.tests.test_application_runtime",
       "sourcePath": "kernel/tests/test_application_runtime.py"
@@ -136,21 +141,6 @@
       "sourcePath": "kernel/tests/test_application_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_authentication_audit.py::test_append_failure_propagates_without_producer_retry[audit_error0]",
-      "sourceModule": "kernel.tests.test_authentication_audit",
-      "sourcePath": "kernel/tests/test_authentication_audit.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_authentication_audit.py::test_append_failure_propagates_without_producer_retry[audit_error1]",
-      "sourceModule": "kernel.tests.test_authentication_audit",
-      "sourcePath": "kernel/tests/test_authentication_audit.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_authentication_audit.py::test_append_failure_propagates_without_producer_retry[audit_error2]",
-      "sourceModule": "kernel.tests.test_authentication_audit",
-      "sourcePath": "kernel/tests/test_authentication_audit.py"
-    },
-    {
       "nodeid": "kernel/tests/test_authentication_audit.py::test_closed_failure_is_audited_before_original_denial[authentication-CREDENTIAL_MALFORMED-CREDENTIAL_MALFORMED]",
       "sourceModule": "kernel.tests.test_authentication_audit",
       "sourcePath": "kernel/tests/test_authentication_audit.py"
@@ -186,11 +176,6 @@
       "sourcePath": "kernel/tests/test_authentication_audit.py"
     },
     {
-      "nodeid": "kernel/tests/test_authentication_audit.py::test_hmac_failure_propagates_without_append_or_authorization",
-      "sourceModule": "kernel.tests.test_authentication_audit",
-      "sourcePath": "kernel/tests/test_authentication_audit.py"
-    },
-    {
       "nodeid": "kernel/tests/test_authentication_audit.py::test_live_postgresql_uses_exact_authentication_role_and_reason",
       "sourceModule": "kernel.tests.test_authentication_audit",
       "sourcePath": "kernel/tests/test_authentication_audit.py"
@@ -202,6 +187,21 @@
     },
     {
       "nodeid": "kernel/tests/test_authentication_audit.py::test_reason_cases_are_exact_and_exhaustive",
+      "sourceModule": "kernel.tests.test_authentication_audit",
+      "sourcePath": "kernel/tests/test_authentication_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_audit.py::test_sink_failure_propagates_without_authorization[audit_error0]",
+      "sourceModule": "kernel.tests.test_authentication_audit",
+      "sourcePath": "kernel/tests/test_authentication_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_audit.py::test_sink_failure_propagates_without_authorization[audit_error1]",
+      "sourceModule": "kernel.tests.test_authentication_audit",
+      "sourcePath": "kernel/tests/test_authentication_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_audit.py::test_sink_failure_propagates_without_authorization[audit_error2]",
       "sourceModule": "kernel.tests.test_authentication_audit",
       "sourcePath": "kernel/tests/test_authentication_audit.py"
     },
@@ -8661,21 +8661,6 @@
       "sourcePath": "profile_si_ffs/tests/d2_demo_fixture_refs_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_request_router_audit.py::test_append_failure_propagates_without_producer_retry[audit_error0]",
-      "sourceModule": "kernel.tests.test_request_router_audit",
-      "sourcePath": "kernel/tests/test_request_router_audit.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_request_router_audit.py::test_append_failure_propagates_without_producer_retry[audit_error1]",
-      "sourceModule": "kernel.tests.test_request_router_audit",
-      "sourcePath": "kernel/tests/test_request_router_audit.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_request_router_audit.py::test_append_failure_propagates_without_producer_retry[audit_error2]",
-      "sourceModule": "kernel.tests.test_request_router_audit",
-      "sourcePath": "kernel/tests/test_request_router_audit.py"
-    },
-    {
       "nodeid": "kernel/tests/test_request_router_audit.py::test_closed_entry_failure_is_audited_before_original_denial[BINDING_REFUSED-BINDER_REFUSED]",
       "sourceModule": "kernel.tests.test_request_router_audit",
       "sourcePath": "kernel/tests/test_request_router_audit.py"
@@ -8692,11 +8677,6 @@
     },
     {
       "nodeid": "kernel/tests/test_request_router_audit.py::test_finalization_outcome_on_entry_is_not_a_pretenant_reason",
-      "sourceModule": "kernel.tests.test_request_router_audit",
-      "sourcePath": "kernel/tests/test_request_router_audit.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_request_router_audit.py::test_hmac_failure_propagates_without_append_or_authorization",
       "sourceModule": "kernel.tests.test_request_router_audit",
       "sourcePath": "kernel/tests/test_request_router_audit.py"
     },
@@ -8722,6 +8702,21 @@
     },
     {
       "nodeid": "kernel/tests/test_request_router_audit.py::test_reason_cases_are_exact_and_exhaustive",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_sink_failure_propagates_without_tenant_entry[audit_error0]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_sink_failure_propagates_without_tenant_entry[audit_error1]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_sink_failure_propagates_without_tenant_entry[audit_error2]",
       "sourceModule": "kernel.tests.test_request_router_audit",
       "sourcePath": "kernel/tests/test_request_router_audit.py"
     },
@@ -11279,6 +11274,91 @@
       "nodeid": "kernel/tests/test_security_audit_client.py::test_wrong_session_user_refuses_before_append",
       "sourceModule": "kernel.tests.test_security_audit_client",
       "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_append_failure_is_preserved_without_sink_retry[error0]",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_append_failure_is_preserved_without_sink_retry[error1]",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_append_failure_is_preserved_without_sink_retry[error2]",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_base_exception_is_not_caught_or_completed",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_exact_stored_and_overflow_results_are_success[result0]",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_exact_stored_and_overflow_results_are_success[result1]",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_exact_stored_and_overflow_results_are_success[result2]",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_failed_lane_persists_without_later_same_lane_traffic",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_fixed_lanes_start_ready_and_use_exact_conjunction",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_foreign_or_subclassed_result_fails_closed[foreign0]",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_foreign_or_subclassed_result_fails_closed[foreign1]",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_hmac_failure_is_preserved_and_append_is_not_called",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_inflight_attempt_does_not_hide_last_completed_result",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_later_started_completion_owns_out_of_order_lane[first0-second0-READY]",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_later_started_completion_owns_out_of_order_lane[first1-second1-NOT_READY]",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_live_postgresql_overflow_is_a_healthy_delivery",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_health.py::test_phase_b_line_budgets_are_fixed",
+      "sourceModule": "kernel.tests.test_security_audit_health",
+      "sourcePath": "kernel/tests/test_security_audit_health.py"
     },
     {
       "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_absent_retention_deadline_is_reported_explicitly",
@@ -15086,8 +15166,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "91cbc820d9fa6f82d33f66707f44c0c56a71343b25ccb02ae9f9d11779a619ab",
-  "entryCount": 3017,
+  "entriesSha256": "f7079485e72e1270bbfbf98db205e697592e58aeb907f70c431082de6cc16ed3",
+  "entryCount": 3033,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

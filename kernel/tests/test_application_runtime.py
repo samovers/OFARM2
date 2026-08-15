@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import inspect
 import subprocess
 import sys
@@ -21,6 +22,7 @@ from kernel.runtime_config import (
     RuntimeConfigurationError,
     RuntimeMode,
 )
+from kernel.security_audit_health import SecurityAuditReadiness
 from kernel.tenant_uow import TenantUnitOfWorkStartupError
 
 
@@ -269,6 +271,11 @@ def _install_graph_fakes(monkeypatch, events, failures=None):
             events.append(("audit.unit-of-work", principal))
             return "unit-of-work"
 
+        @property
+        def readiness(self):
+            events.append("audit.readiness")
+            return SecurityAuditReadiness.READY
+
     class Pool:
         def open(self, *, wait, timeout):
             assert wait is True
@@ -436,10 +443,12 @@ def test_application_runtime_delegates_public_operations(monkeypatch):
         "identity", "authority", "challenge"
     ) == "capability"
     assert runtime.tenant_unit_of_work("principal") == "unit-of-work"
-    assert events[-3:] == [
+    assert runtime.security_audit_readiness is SecurityAuditReadiness.READY
+    assert events[-4:] == [
         ("audit.authenticate", "token"),
         "issuer.mint",
         ("audit.unit-of-work", "principal"),
+        "audit.readiness",
     ]
     runtime.close()
 
@@ -479,7 +488,10 @@ def test_production_import_excludes_the_legacy_runtime_closure():
 
 
 class _ClosedRuntime:
-    def __init__(self):
+    def __init__(
+        self,
+        readiness=SecurityAuditReadiness.READY,
+    ):
         self.metadata = RuntimeMetadata(
             mode=RuntimeMode.PRODUCTION,
             deployment_image_digest=IMAGE,
@@ -488,7 +500,14 @@ class _ClosedRuntime:
             binder_audience="binder-audience",
             tenant_capability_kid=KID,
         )
+        self.readiness = readiness
+        self.readiness_reads = []
         self.closed = False
+
+    @property
+    def security_audit_readiness(self):
+        self.readiness_reads.append(self.readiness)
+        return self.readiness
 
     def close(self):
         self.closed = True
@@ -504,6 +523,7 @@ def test_production_app_exposes_only_metadata_and_closes_shared_surface():
 
     with TestClient(app_instance) as client:
         health = client.get("/health")
+        ready = client.get("/ready")
         responses = [
             client.post("/commit", json={"not": "validated"}),
             client.post("/review/accept"),
@@ -512,11 +532,51 @@ def test_production_app_exposes_only_metadata_and_closes_shared_surface():
         ]
 
     assert health.json()["runtime"] == runtime.metadata.as_dict()
+    assert ready.status_code == 200
+    assert ready.headers["cache-control"] == "no-store"
+    assert ready.headers["content-type"] == "application/json"
+    assert ready.json() == {
+        "schemaVersion": "ofarm.security-audit-readiness.v1",
+        "status": "READY",
+    }
+    assert runtime.readiness_reads == [SecurityAuditReadiness.READY]
     assert runtime.closed
     assert {response.status_code for response in responses} == {503}
     assert {
         response.json()["detail"]["reasonCode"] for response in responses
     } == {"GOVERNED_SURFACE_BLOCKED"}
+
+
+def test_not_ready_response_is_fixed_passive_and_not_app_state_controlled():
+    runtime = _ClosedRuntime(SecurityAuditReadiness.NOT_READY)
+    app_instance = api._production_app(runtime)
+    app_instance.state.runtime_metadata = {
+        "status": "READY",
+        "lane": "AUTHENTICATION",
+        "exception": "secret-canary",
+    }
+
+    with TestClient(app_instance) as client:
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            responses = list(
+                executor.map(lambda _index: client.get("/ready"), range(9))
+            )
+
+    assert {response.status_code for response in responses} == {503}
+    assert {
+        response.headers["cache-control"] for response in responses
+    } == {"no-store"}
+    assert {
+        response.headers["content-type"] for response in responses
+    } == {"application/json"}
+    assert {tuple(response.json().items()) for response in responses} == {
+        (
+            ("schemaVersion", "ofarm.security-audit-readiness.v1"),
+            ("status", "NOT_READY"),
+        )
+    }
+    assert runtime.readiness_reads == [SecurityAuditReadiness.NOT_READY] * 9
+    assert runtime.closed
 
 
 def test_application_is_not_published_after_startup_failure(monkeypatch):
