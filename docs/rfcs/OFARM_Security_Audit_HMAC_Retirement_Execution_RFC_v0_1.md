@@ -3,8 +3,7 @@
 **Status:** proposed and unapproved; Phase B, deployment, and every Cloud KMS
 mutation remain unauthorized
 
-**Draft pull request:** this RFC will name the stable draft pull request after
-GitHub assigns it
+**Draft pull request:** `https://github.com/samovers/OFARM2/pull/316`
 
 **Contract identity:**
 `ofarm2.security-audit-hmac-retirement-execution.v0.1`
