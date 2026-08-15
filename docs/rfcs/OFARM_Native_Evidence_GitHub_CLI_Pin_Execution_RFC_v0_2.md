@@ -117,6 +117,8 @@ This pull request does not:
 - change release identity, release assets, attestations, build pins, candidate
   evidence, platform evidence, retained provider verification, preservation
   evidence, signature semantics, or provider-comparison semantics;
+- change or broaden the existing exact historical-v1 candidate finalization
+  migration exception;
 - add a runner-CLI fallback, package-manager fallback, receipt fallback,
   optional currentness capability, mutable registry, cache, environment
   selector, database selector, or network-selected authority;
@@ -287,6 +289,12 @@ A candidate or provisional receipt is not retained frozen evidence. Its
 `evidenceAuthorityInput` continues to be compared directly with current files
 when that lifecycle requests current validation. It cannot use the frozen
 sidecar to become a candidate, frozen receipt, or current checked authority.
+
+The existing finalization-only exception for the exact
+`HISTORICAL_V1_CANDIDATE_RECEIPT_DIGEST` remains unchanged. It is a closed
+historical migration replay, not currentness authority: it cannot select or
+replace the sidecar, cannot authorize another candidate, and cannot produce a
+production-reachable current frozen result without the exact bound sidecar.
 
 Freezing a future candidate records its then-current verification snapshot as
 historical receipt evidence. A separately generated sidecar must bind the new
@@ -498,6 +506,11 @@ current build-input validation applies and a frozen sidecar cannot authorize
 it. When a frozen receipt requests current validation, absence of an explicit
 or exact checked sidecar always refuses.
 
+Version 2 does not change or broaden the exact historical-v1 candidate
+finalization exception already enforced by `native_evidence.py`. That
+finalization-only exception never substitutes for frozen-receipt sidecar
+currentness.
+
 ### 9.4 Provide deterministic sidecar generation
 
 `deployment/postgresql/native_evidence.py` adds one bounded offline command
@@ -578,6 +591,8 @@ Security-audit-only use continues to load neither tenant receipt nor sidecar.
   wrong-identity refusal;
 - historical frozen receipt snapshot non-authority;
 - candidate/provisional versus frozen lifecycle separation;
+- preservation of the exact historical-v1 finalization exception without
+  broadening it or letting it authorize frozen currentness;
 - deterministic generation and refusal to replace an existing output;
 - unchanged receipt bytes and retained evidence; and
 - fresh provider equality through the exact selected CLI.
@@ -599,9 +614,12 @@ only for actual new or renamed test nodes.
 
 ### 9.9 No compatibility or fallback layer
 
-There is no accepted-receipt list, old/new currentness switch, environment
-selector, optional sidecar, database fallback, migration adapter, hard-coded
-replacement provisioning digest, mutable cache, or runtime registry.
+Version 2 adds no accepted-receipt list, old/new currentness switch,
+environment selector, optional sidecar, database fallback, migration adapter,
+hard-coded replacement provisioning digest, mutable cache, or runtime
+registry. The existing single historical-v1 candidate digest remains confined
+to its unchanged finalization migration exception and is not a currentness
+source.
 
 For frozen evidence there is one receipt path and one sidecar path. Both are
 required and exactly bound. The old receipt-refresh implementation is removed
