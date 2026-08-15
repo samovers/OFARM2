@@ -458,13 +458,17 @@ recomputation, review, and conformance—not from claiming its own digest.
 
 The schema has no timestamp, actor, PR number, branch, environment selector,
 optional field, signature claim, cached-success flag, or alternative receipt.
+Its canonical document must be greater than zero bytes and no larger than
+16 KiB. Phase B names that limit
+`MAX_VERIFICATION_CURRENTNESS_BYTES = 16 * 1024`; no caller may raise or bypass
+it.
 
 ### 9.3 Validate the sidecar in the existing current-authority loader
 
 `deployment/postgresql/native_release_identity.py` adds:
 
 - one exact checked-sidecar path constant;
-- one bounded maximum size and exact schema constant;
+- the exact 16 KiB maximum size and exact schema constant;
 - one frozen, slot-backed validated sidecar value type;
 - one canonical sidecar document constructor;
 - one complete sidecar validator and regular-file loader; and
