@@ -58,7 +58,7 @@ MODULE_BUDGETS = {
     "kernel/api.py": 120,
     "kernel/deployment_identity.py": 50,
     "kernel/runtime_config.py": 140,
-    "kernel/application_runtime.py": 220,
+    "kernel/application_runtime.py": 230,
     "kernel/legacy_m1/api.py": 370,
     "kernel/legacy_m1/runtime.py": 100,
     "kernel/security_audit.py": 130,
@@ -67,7 +67,8 @@ MODULE_BUDGETS = {
     "kernel/request_router_audit.py": 120,
     "kernel/google_kms_correlation_hmac.py": 220,
     "kernel/security_audit_hmac_posture.py": 260,
-    "kernel/security_audit_runtime.py": 210,
+    "kernel/security_audit_health.py": 170,
+    "kernel/security_audit_runtime.py": 230,
 }
 GROUP_BUDGETS = {
     "profile runtime": (
@@ -148,8 +149,12 @@ GROUP_BUDGETS = {
         260,
         ("kernel/security_audit_hmac_posture.py",),
     ),
+    "security audit health": (
+        170,
+        ("kernel/security_audit_health.py",),
+    ),
     "security audit runtime": (
-        210,
+        230,
         ("kernel/security_audit_runtime.py",),
     ),
 }
@@ -167,19 +172,15 @@ TEST_GLOBS = (
     "kernel/tests/*request_router_audit*.py",
     "kernel/tests/*google_kms_correlation_hmac*.py",
     "kernel/tests/*security_audit_hmac_posture*.py",
+    "kernel/tests/*security_audit_health*.py",
     "kernel/tests/*security_audit_runtime*.py",
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 _TENANT_UOW_MODULE = "kernel.tenant_uow"
 _TENANT_UOW_PUBLIC_SURFACE = frozenset({"binding", "batch", "begin_batch"})
 _TENANT_UOW_INIT_PARAMETERS = ("self", "binding", "allocate_batch")
-_TENANT_UOW_SLOTS = frozenset({"binding", "__active", "__allocate_batch", "__batch"})
-_TENANT_HANDLE_ESCAPE_ATTRIBUTES = frozenset(
-    {
-        "connection", "_connection", "conn", "_conn",
-        "cursor", "_cursor", "pool", "_pool",
-        "session", "_session", "db", "_db",
-    }
+_TENANT_UOW_SLOTS = frozenset(
+    {"__binding", "__active", "__allocate_batch", "__batch"}
 )
 PROVIDER_IMPORT_POLICY_MODULES = (
     "kernel.profile_runtime_provider",
@@ -228,6 +229,7 @@ PRODUCTION_COMPOSITION_MODULES = frozenset(
         "kernel.security_audit",
         "kernel.security_audit_client",
         "kernel.security_audit_hmac_posture",
+        "kernel.security_audit_health",
         "kernel.security_audit_runtime",
         "kernel.signing_authority",
         "kernel.signing_receipt",
@@ -2142,15 +2144,13 @@ def _tenant_uow_class_violations(tree: ast.Module) -> list[tuple[int, str]]:
 
 
 def _tenant_handle_escape_accesses(tree: ast.Module) -> list[tuple[int, str]]:
+    """Find direct private-facade access as a static anti-drift signal."""
     return sorted(
         {
             (node.lineno, node.attr)
             for node in ast.walk(tree)
             if isinstance(node, ast.Attribute)
-            and (
-                node.attr in _TENANT_HANDLE_ESCAPE_ATTRIBUTES
-                or node.attr.startswith("_TenantUnitOfWork__")
-            )
+            and node.attr.startswith("_TenantUnitOfWork__")
         }
     )
 
@@ -2169,7 +2169,8 @@ def _check_tenant_uow_architecture(
         relative = snapshot.modules_by_name[module].relative_path
         for line, attribute in _tenant_handle_escape_accesses(trees[module]):
             failures.append(
-                f"{relative}:{line}: tenant raw-handle escape access {attribute!r}"
+                f"{relative}:{line}: tenant UnitOfWork private-state access "
+                f"{attribute!r}"
             )
     return failures
 

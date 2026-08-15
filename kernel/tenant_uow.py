@@ -187,6 +187,10 @@ class GovernedWriteBatch:
 _BatchAllocator = Callable[[GovernedBatchRequest], GovernedWriteBatch]
 
 
+def _closed_batch_allocator(_request: GovernedBatchRequest) -> GovernedWriteBatch:
+    raise RuntimeError("tenant UnitOfWork is closed")
+
+
 def _allocate_governed_batch(
     connection: Connection,
     binding: TenantBinding,
@@ -248,17 +252,17 @@ def _allocate_governed_batch(
 
 
 class TenantUnitOfWork:
-    __slots__ = ("binding", "__active", "__allocate_batch", "__batch")
+    __slots__ = ("__binding", "__active", "__allocate_batch", "__batch")
 
-    def __init__(
-        self,
-        binding: TenantBinding,
-        allocate_batch: _BatchAllocator,
-    ) -> None:
-        self.binding = binding
+    def __init__(self, binding: TenantBinding, allocate_batch: _BatchAllocator) -> None:
+        self.__binding = binding
         self.__active = True
         self.__allocate_batch = allocate_batch
         self.__batch: GovernedWriteBatch | None = None
+
+    @property
+    def binding(self) -> TenantBinding:
+        return self.__binding
 
     @property
     def batch(self) -> GovernedWriteBatch | None:
@@ -270,6 +274,7 @@ class TenantUnitOfWork:
 
     def _finish(self) -> None:
         self.__active = False
+        self.__allocate_batch = _closed_batch_allocator
 
     def begin_batch(self, request: GovernedBatchRequest) -> GovernedWriteBatch:
         self._require_active()
@@ -307,10 +312,8 @@ def _reset_tenant_connection(connection: Connection) -> None:
     try:
         connection.execute("DISCARD ALL", prepare=False)
     except BaseException:
-        try:
+        with suppress(BaseException):
             connection.autocommit = False
-        except BaseException:
-            pass
         raise
     else:
         connection.autocommit = False

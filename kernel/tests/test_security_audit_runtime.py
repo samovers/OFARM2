@@ -17,6 +17,10 @@ from kernel import security_audit_runtime
 from kernel.runtime_config import RuntimeConfig, RuntimeMode
 from kernel.security_audit import CorrelationHmac, SecurityAuditOutcomeUnknown
 from kernel.security_audit_client import PreTenantAuditClient
+from kernel.security_audit_health import (
+    SecurityAuditHealth,
+    SecurityAuditReadiness,
+)
 from kernel.security_audit_hmac_posture import (
     CorrelationHmacLifecyclePosture,
     CorrelationHmacVersionDisposition,
@@ -553,6 +557,7 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
     with runtime.unit_of_work("principal") as unit:
         assert unit == "unit"
     assert "append" not in events
+    assert runtime.readiness is SecurityAuditReadiness.READY
 
 
 def test_live_postgresql_request_policy_enforces_statement_timeout(
@@ -591,6 +596,16 @@ def test_live_postgresql_request_policy_enforces_lock_timeout(
         connections.append(connection)
         return connection
 
+    class HmacFactory:
+        def create(self):
+            return _hmac()
+
+    health = SecurityAuditHealth()
+    sink = health.authentication_sink(
+        HmacFactory(),
+        PreTenantAuditClient(connect, producer),
+    )
+
     with psycopg.connect(
         migrated_audit_service["target_admin_dsn"]
     ) as blocker:
@@ -599,14 +614,12 @@ def test_live_postgresql_request_policy_enforces_lock_timeout(
             "IN ACCESS EXCLUSIVE MODE"
         )
         with pytest.raises(SecurityAuditOutcomeUnknown) as raised:
-            PreTenantAuditClient(
-                connect,
-                producer,
-            ).append("CREDENTIAL_MISSING", _hmac())
+            sink.append("CREDENTIAL_MISSING")
 
     assert len(connections) == 2
     assert all(connection.closed for connection in connections)
     assert isinstance(raised.value.__cause__, psycopg.errors.LockNotAvailable)
+    assert health.readiness is SecurityAuditReadiness.NOT_READY
 
 
 def test_active_hmac_resource_requires_one_observed_active_version():

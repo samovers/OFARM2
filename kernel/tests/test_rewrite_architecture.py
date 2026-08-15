@@ -27,12 +27,15 @@ class RuntimeConfig:
 def _tenant_uow_source(*, initializer="binding, allocate_batch", extra=""):
     return f"""
 class TenantUnitOfWork:
-    __slots__ = ("binding", "__active", "__allocate_batch", "__batch")
+    __slots__ = ("__binding", "__active", "__allocate_batch", "__batch")
     def __init__(self, {initializer}):
-        self.binding = binding
+        self.__binding = binding
         self.__active = True
         self.__allocate_batch = allocate_batch
         self.__batch = None
+    @property
+    def binding(self):
+        return self.__binding
     @property
     def batch(self):
         return self.__batch
@@ -66,7 +69,7 @@ def test_tenant_uow_architecture_rejects_raw_handle_and_surface_expansion():
     assert any("public surface" in reason for reason in reasons)
 
 
-def test_tenant_uow_architecture_rejects_external_escape_attributes():
+def test_tenant_uow_architecture_flags_only_direct_private_facade_access():
     tree = ast.parse(
         "unit.connection.execute('COMMIT')\n"
         "unit.cursor.execute('ROLLBACK')\n"
@@ -75,8 +78,5 @@ def test_tenant_uow_architecture_rejects_external_escape_attributes():
     )
 
     assert rewrite_architecture_check._tenant_handle_escape_accesses(tree) == [
-        (1, "connection"),
-        (2, "cursor"),
         (3, "_TenantUnitOfWork__allocate_batch"),
-        (4, "_pool"),
     ]

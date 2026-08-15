@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-import gc
+from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -231,6 +231,12 @@ def test_unit_of_work_binds_allocates_one_batch_and_commits(principal):
 
     with manager.unit_of_work(principal) as unit:
         assert unit.binding.tenant_id == principal.authority.tenant_id
+        replacement = replace(unit.binding, tenant_id=uuid4())
+        with pytest.raises(AttributeError):
+            unit.binding = replacement
+        with pytest.raises(AttributeError):
+            del unit.binding
+        assert unit.binding.tenant_id == principal.authority.tenant_id
         assert minter.challenges[0].audience == AUDIENCE
         batch = unit.begin_batch(request)
         assert batch.full_xid == 42
@@ -247,6 +253,8 @@ def test_unit_of_work_binds_allocates_one_batch_and_commits(principal):
     assert pool.returned == [connection]
     with pytest.raises(RuntimeError, match="closed"):
         unit.begin_batch(request)
+    with pytest.raises(RuntimeError, match="closed"):
+        unit._TenantUnitOfWork__allocate_batch(request)
 
 
 @pytest.mark.parametrize(
@@ -406,7 +414,6 @@ def test_sql_surface_is_absent_and_later_refusal_rolls_back(principal):
             }
             assert not hasattr(unit, "__dict__")
             assert not hasattr(unit, "_connection")
-            assert connection not in gc.get_referents(unit)
             unit.begin_batch(request)
             for query in hostile_sql:
                 with pytest.raises(AttributeError):

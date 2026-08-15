@@ -69,14 +69,30 @@ timeout options with a code-owned five-second connect timeout per host attempt,
 `statement_timeout=2000`, and `lock_timeout=250`. Failure never falls back to an
 unaudited tenant write.
 
+The two producers share one process-local security-audit health object with
+fixed `AUTHENTICATION` and `REQUEST_ROUTER` lanes. Each governed refusal is
+observed around its complete HMAC-and-append operation. One completed failure
+makes that lane not ready; only a later-started successful stored-or-overflow
+delivery on the same lane restores it. Stale completions cannot overwrite a
+newer-started result. Recovery is traffic-dependent, and restart resets only
+the in-memory observation without proving or reconciling the prior interval.
+
+`GET /ready` performs no dependency I/O and returns only a fixed overall
+security-audit status with HTTP 200 or 503 and `Cache-Control: no-store`. It is
+not a historical completeness, gap-free, deployment-readiness, or production-
+readiness claim. Deployment worker aggregation, eviction, traffic withdrawal,
+and restart policy remain separately governed.
+
 Production owns a bounded connection pool and one transaction-bound
 `TenantUnitOfWork` per verified tenant operation. The UnitOfWork creates and
 spends the database challenge on one backend, exposes the exact protected
 `TenantBinding` plus typed governed-batch allocation, and exposes no arbitrary
-SQL or connection handle. Its slotted facade stores only the binding, lifecycle
-state, batch result, and a narrow typed allocator; the raw connection remains in
-the module-private manager path. The architecture gate fixes that public surface
-and rejects raw-handle escape attributes in production consumers. Only the
+SQL or connection handle. Its slotted facade has no connection attribute; it
+stores a read-only binding, lifecycle state, batch result, and a narrow typed
+allocator that is replaced with a closed sentinel at finalization. The
+architecture gate fixes that public surface and statically rejects direct
+name-mangled private-state access in production consumers as an anti-drift
+check; it is not runtime enforcement against reflective Python code. Only the
 manager finalizes the transaction. Before reuse, the pool proves an idle
 transaction and discards all PostgreSQL session state; a reset failure discards
 the connection. Automatic statement preparation is disabled so client
@@ -176,6 +192,7 @@ configuration. HS256 exists only in the test runtime.
 | `GET /records/{id}` | record + payload + digests; default deny per request |
 | `GET /manifest` | the generated Capability Manifest |
 | `GET /health` | liveness + the reachability-invariant check |
+| `GET /ready` | passive process-local security-audit readiness only |
 
 The submission shape `POST /commit` accepts is the runtime boundary, not a
 contract; `kernel/demo.py:spray_submission()` is the canonical worked example
@@ -205,6 +222,7 @@ remain exact and continue to the existing normalization and contract checks.
 | `runtime_config.py` | the single immutable production environment snapshot |
 | `application_runtime.py` | ordered production graph construction and public runtime methods |
 | `security_audit_runtime.py` | pre-tenant audit composition, fixed database-role admission, and HMAC readiness |
+| `security_audit_health.py` | bounded two-lane audit-delivery observation and closed readiness |
 | `authentication_audit.py` / `request_router_audit.py` | synchronous fail-closed production of classified pre-tenant failure evidence |
 | `production_oidc.py` | production RS256/JWKS credential verification |
 | `principal_resolver.py` | exact database principal-authority resolution |
@@ -226,7 +244,7 @@ remain exact and continue to the existing normalization and contract checks.
 
 ## Deliberately not here (do not drift — M1_BRIEF.md)
 
-Dynamic audit health, gap, retention, and recovery operations · mobile app
-(M3) · registry adapter scheduling · dynamic packs · public query compiler ·
-AI/agent runtime · everything in
+Audit-gap, retention, durable recovery, and readiness-orchestration operations
+· mobile app (M3) · registry adapter scheduling · dynamic packs · public query
+compiler · AI/agent runtime · everything in
 `profile_si_ffs/UNSUPPORTED_SURFACES.md`.
