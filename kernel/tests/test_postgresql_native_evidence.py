@@ -32,12 +32,14 @@ from deployment.postgresql.native_evidence import (
     direct_oci_child_identity,
     docker_transport_child_identity,
     finalize_evidence_receipt,
+    generate_verification_currentness,
     prepare_release_identity,
     verify_frozen_evidence_receipt,
 )
 from deployment.postgresql.native_release_identity import (
     EVIDENCE_AUTHORITY_PATHS,
     EVIDENCE_RECEIPT_PATH,
+    MAX_VERIFICATION_CURRENTNESS_BYTES,
     NATIVE_SOURCE_PATHS,
     NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT,
     NATIVE_RELEASE_OWNER_ID,
@@ -48,16 +50,20 @@ from deployment.postgresql.native_release_identity import (
     NATIVE_RELEASE_REPOSITORY_URL,
     PACKAGE_ROOT as RELEASE_PACKAGE_ROOT,
     SOURCE_DIRECTORY,
+    VERIFICATION_CURRENTNESS_PATH,
     NativeEvidenceReceipt,
     NativeReleaseIdentity,
     NativeReleaseIdentityError,
     canonical_json_bytes as release_canonical_json_bytes,
     evidence_authority_input_manifest,
+    load_native_evidence_verification_currentness,
     load_native_release_identity,
     load_native_evidence_receipt,
     provisional_evidence_receipt_document,
     provisional_identity_document,
     validate_native_release_identity,
+    validate_native_evidence_verification_currentness,
+    verification_currentness_document,
 )
 
 
@@ -511,6 +517,28 @@ def _write_provisional_checked_authority(tmp_path: Path) -> tuple[Path, Path]:
     return identity_path, receipt_path
 
 
+def _write_verification_currentness(
+    tmp_path: Path,
+    *,
+    release_identity: NativeReleaseIdentity,
+    evidence_receipt_path: Path,
+    name: str = "verification-currentness.json",
+    repository_root: Path = RELEASE_PACKAGE_ROOT,
+) -> Path:
+    receipt = load_native_evidence_receipt(
+        evidence_receipt_path,
+        release_identity=release_identity,
+    )
+    document = verification_currentness_document(
+        release_identity=release_identity,
+        evidence_receipt=receipt,
+        repository_root=repository_root,
+    )
+    output = tmp_path / name
+    output.write_bytes(release_canonical_json_bytes(document))
+    return output
+
+
 def _prepare_candidate(
     tmp_path: Path,
     *,
@@ -518,6 +546,7 @@ def _prepare_candidate(
     runtime_octet: str = "stable",
     checked_identity_path: Path | None = None,
     checked_receipt_path: Path | None = None,
+    verification_currentness_path: Path | None = None,
 ) -> tuple[Path, Path, Path, Path, dict[str, object]]:
     reports: dict[str, dict[str, object]] = {}
     for architecture in ("amd64", "arm64"):
@@ -574,6 +603,7 @@ def _prepare_candidate(
     prepare_release_identity(
         checked_identity_path=checked_identity_path,
         checked_receipt_path=checked_receipt_path,
+        verification_currentness_path=verification_currentness_path,
         index_evidence_path=evidence_path,
         index_path=index_path,
         source_directory=SOURCE_DIRECTORY,
@@ -859,11 +889,17 @@ def _prepare_frozen_receipt(
         verify_current_sources=True,
         source_directory=SOURCE_DIRECTORY,
     )
+    currentness_path = _write_verification_currentness(
+        tmp_path,
+        release_identity=identity,
+        evidence_receipt_path=frozen_path,
+    )
     receipt = load_native_evidence_receipt(
         frozen_path,
         release_identity=identity,
         verify_current_authority=True,
         repository_root=RELEASE_PACKAGE_ROOT,
+        verification_currentness_path=currentness_path,
     )
     return identity, receipt, frozen_path
 
@@ -2192,6 +2228,10 @@ def test_checked_native_release_identity_matches_every_current_source() -> None:
 
 def test_checked_native_evidence_receipt_matches_current_authority() -> None:
     identity = load_native_release_identity(verify_current_sources=True)
+    retained_receipt = load_native_evidence_receipt(
+        EVIDENCE_RECEIPT_PATH,
+        release_identity=identity,
+    )
     receipt = load_native_evidence_receipt(
         EVIDENCE_RECEIPT_PATH,
         release_identity=identity,
@@ -2215,9 +2255,223 @@ def test_checked_native_evidence_receipt_matches_current_authority() -> None:
         assert receipt.document["preservation"] is None
     else:
         assert receipt.status == "frozen"
-        assert receipt.document["verificationAuthorityInput"] == (
+        currentness = load_native_evidence_verification_currentness(
+            VERIFICATION_CURRENTNESS_PATH,
+            release_identity=identity,
+            evidence_receipt=retained_receipt,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+        assert currentness.document["releaseIdentityDigest"] == identity.digest
+        assert currentness.document["evidenceReceiptDigest"] == receipt.digest
+        assert currentness.document["verificationAuthorityInput"] == (
             evidence_authority_input_manifest(RELEASE_PACKAGE_ROOT)
         )
+        assert receipt.document["verificationAuthorityInput"] != (
+            currentness.document["verificationAuthorityInput"]
+        )
+        assert (
+            "deployment/postgresql/ofarm_ed25519/"
+            "native_evidence_verification_currentness.json"
+            not in EVIDENCE_AUTHORITY_PATHS
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        (lambda value: value.update(unexpected=True), "fields are not exact"),
+        (
+            lambda value: value.update(schemaVersion="hostile.schema"),
+            "schema is not exact",
+        ),
+        (
+            lambda value: value.update(status="provisional"),
+            "status is not exact",
+        ),
+        (
+            lambda value: value.update(
+                releaseIdentityDigest="sha256:" + "0" * 64
+            ),
+            "not linked to the release identity",
+        ),
+        (
+            lambda value: value.update(
+                evidenceReceiptDigest="sha256:" + "0" * 64
+            ),
+            "not linked to the evidence receipt",
+        ),
+        (
+            lambda value: value.update(
+                verificationAuthorityInput=_different_authority_snapshot(
+                    value["verificationAuthorityInput"]
+                )
+            ),
+            "differs from current files",
+        ),
+    ),
+)
+def test_verification_currentness_refuses_schema_binding_and_authority_mutation(
+    tmp_path: Path,
+    mutation,
+    message: str,
+) -> None:
+    identity = load_native_release_identity(verify_current_sources=True)
+    receipt = load_native_evidence_receipt(
+        EVIDENCE_RECEIPT_PATH,
+        release_identity=identity,
+    )
+    document = verification_currentness_document(
+        release_identity=identity,
+        evidence_receipt=receipt,
+        repository_root=RELEASE_PACKAGE_ROOT,
+    )
+    mutation(document)
+    path = tmp_path / "mutated-currentness.json"
+    path.write_bytes(release_canonical_json_bytes(document))
+
+    with pytest.raises(NativeReleaseIdentityError, match=message):
+        load_native_evidence_verification_currentness(
+            path,
+            release_identity=identity,
+            evidence_receipt=receipt,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+
+
+def test_verification_currentness_refuses_noncanonical_and_oversized_bytes(
+    tmp_path: Path,
+) -> None:
+    identity = load_native_release_identity(verify_current_sources=True)
+    receipt = load_native_evidence_receipt(
+        EVIDENCE_RECEIPT_PATH,
+        release_identity=identity,
+    )
+    document = verification_currentness_document(
+        release_identity=identity,
+        evidence_receipt=receipt,
+        repository_root=RELEASE_PACKAGE_ROOT,
+    )
+    noncanonical = tmp_path / "noncanonical-currentness.json"
+    noncanonical.write_text(json.dumps(document, indent=2))
+    with pytest.raises(NativeReleaseIdentityError, match="not canonical"):
+        load_native_evidence_verification_currentness(
+            noncanonical,
+            release_identity=identity,
+            evidence_receipt=receipt,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+
+    malformed = tmp_path / "malformed-currentness.json"
+    malformed.write_bytes(b'{"status":')
+    with pytest.raises(NativeReleaseIdentityError, match="not valid UTF-8 JSON"):
+        load_native_evidence_verification_currentness(
+            malformed,
+            release_identity=identity,
+            evidence_receipt=receipt,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+
+    oversized = tmp_path / "oversized-currentness.json"
+    oversized.write_bytes(b"x" * (MAX_VERIFICATION_CURRENTNESS_BYTES + 1))
+    with pytest.raises(NativeReleaseIdentityError, match="invalid size"):
+        load_native_evidence_verification_currentness(
+            oversized,
+            release_identity=identity,
+            evidence_receipt=receipt,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+
+    with pytest.raises(NativeReleaseIdentityError, match="invalid size"):
+        validate_native_evidence_verification_currentness(
+            document,
+            canonical_bytes=b"x" * (MAX_VERIFICATION_CURRENTNESS_BYTES + 1),
+            release_identity=identity,
+            evidence_receipt=receipt,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+
+
+@pytest.mark.parametrize("kind", ("missing", "symlink", "directory"))
+def test_verification_currentness_refuses_unsafe_file_types(
+    tmp_path: Path,
+    kind: str,
+) -> None:
+    identity = load_native_release_identity(verify_current_sources=True)
+    path = tmp_path / "unsafe-currentness.json"
+    if kind == "symlink":
+        target = tmp_path / "target-currentness.json"
+        target.write_bytes(VERIFICATION_CURRENTNESS_PATH.read_bytes())
+        path.symlink_to(target)
+    elif kind == "directory":
+        path.mkdir()
+
+    with pytest.raises(NativeReleaseIdentityError):
+        load_native_evidence_receipt(
+            EVIDENCE_RECEIPT_PATH,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=RELEASE_PACKAGE_ROOT,
+            verification_currentness_path=path,
+        )
+
+
+def test_verification_currentness_generator_is_deterministic_and_no_clobber(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "generated-currentness.json"
+    result = generate_verification_currentness(
+        release_identity_path=native_release_identity.IDENTITY_PATH,
+        evidence_receipt_path=EVIDENCE_RECEIPT_PATH,
+        source_directory=SOURCE_DIRECTORY,
+        repository_root=RELEASE_PACKAGE_ROOT,
+        output=output,
+    )
+
+    assert output.read_bytes() == VERIFICATION_CURRENTNESS_PATH.read_bytes()
+    assert result == {
+        "evidence_receipt_digest": (
+            "sha256:5a13f99a5252828da01df0e2d2e5b8d"
+            "491b99ec795736e5becc2659616a575c3"
+        ),
+        "release_identity_digest": (
+            "sha256:7aae043c84013e8f05b1729e2de233584"
+            "86e57e661c170074d15d0b135225775"
+        ),
+        "status": "current",
+        "verification_authority_input_digest": (
+            json.loads(output.read_bytes())["verificationAuthorityInput"]["digest"]
+        ),
+    }
+    before = output.read_bytes()
+    with pytest.raises(NativeEvidenceError, match="output already exists"):
+        generate_verification_currentness(
+            release_identity_path=native_release_identity.IDENTITY_PATH,
+            evidence_receipt_path=EVIDENCE_RECEIPT_PATH,
+            source_directory=SOURCE_DIRECTORY,
+            repository_root=RELEASE_PACKAGE_ROOT,
+            output=output,
+        )
+    assert output.read_bytes() == before
+
+    cli_output = tmp_path / "cli-generated-currentness.json"
+    assert native_evidence.main(
+        [
+            "generate-verification-currentness",
+            "--release-identity",
+            str(native_release_identity.IDENTITY_PATH),
+            "--evidence-receipt",
+            str(EVIDENCE_RECEIPT_PATH),
+            "--source-directory",
+            str(SOURCE_DIRECTORY),
+            "--repository-root",
+            str(RELEASE_PACKAGE_ROOT),
+            "--output",
+            str(cli_output),
+        ]
+    ) == 0
+    assert cli_output.read_bytes() == before
+    assert json.loads(capsys.readouterr().out)["status"] == "current"
 
 
 def test_native_release_identity_refuses_source_drift(tmp_path: Path) -> None:
@@ -2272,6 +2526,35 @@ def test_native_evidence_receipt_refuses_authority_source_drift(
             release_identity=identity,
             verify_current_authority=True,
             repository_root=authority_root,
+            verification_currentness_path=VERIFICATION_CURRENTNESS_PATH,
+        )
+
+
+def test_candidate_cannot_borrow_frozen_verification_currentness(
+    tmp_path: Path,
+) -> None:
+    candidate_identity_path, candidate_receipt_path, _, _, _ = _prepare_candidate(
+        tmp_path
+    )
+    identity = load_native_release_identity(
+        candidate_identity_path,
+        verify_current_sources=True,
+        source_directory=SOURCE_DIRECTORY,
+    )
+    candidate = json.loads(candidate_receipt_path.read_bytes())
+    candidate["evidenceAuthorityInput"] = _different_authority_snapshot(
+        candidate["evidenceAuthorityInput"]
+    )
+    candidate_receipt_path.write_bytes(release_canonical_json_bytes(candidate))
+
+    with pytest.raises(NativeReleaseIdentityError, match="differs from current files"):
+        load_native_evidence_receipt(
+            candidate_receipt_path,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=RELEASE_PACKAGE_ROOT,
+            allow_candidate=True,
+            verification_currentness_path=VERIFICATION_CURRENTNESS_PATH,
         )
 
 
@@ -2520,11 +2803,17 @@ def test_immutable_github_release_freezes_durable_receipt_and_blocks_replacement
         verify_current_sources=True,
         source_directory=SOURCE_DIRECTORY,
     )
+    currentness_path = _write_verification_currentness(
+        tmp_path,
+        release_identity=identity,
+        evidence_receipt_path=frozen_receipt_path,
+    )
     frozen_receipt = load_native_evidence_receipt(
         frozen_receipt_path,
         release_identity=identity,
         verify_current_authority=True,
         repository_root=RELEASE_PACKAGE_ROOT,
+        verification_currentness_path=currentness_path,
     )
 
     assert result["status"] == "frozen"
@@ -2663,6 +2952,7 @@ def test_immutable_github_release_freezes_durable_receipt_and_blocks_replacement
         evidence_octet="b",
         checked_identity_path=candidate_identity_path,
         checked_receipt_path=frozen_receipt_path,
+        verification_currentness_path=currentness_path,
     )
     assert fresh_identity_path.read_bytes() == candidate_identity_path.read_bytes()
     fresh_receipt = load_native_evidence_receipt(
@@ -2671,6 +2961,7 @@ def test_immutable_github_release_freezes_durable_receipt_and_blocks_replacement
         verify_current_authority=True,
         repository_root=RELEASE_PACKAGE_ROOT,
         allow_candidate=True,
+        verification_currentness_path=currentness_path,
     )
     assert fresh_receipt.status == "frozen"
     assert fresh_receipt_path.read_bytes() == frozen_receipt_path.read_bytes()
@@ -2835,11 +3126,18 @@ def test_historical_receipt_refuses_snapshot_swap_even_with_recomputed_link(
         historical["candidateReceiptDigest"],
     )
 
+    historical_currentness = _write_verification_currentness(
+        tmp_path,
+        release_identity=identity,
+        evidence_receipt_path=historical_path,
+        name="historical-currentness.json",
+    )
     accepted = load_native_evidence_receipt(
         historical_path,
         release_identity=identity,
         verify_current_authority=True,
         repository_root=RELEASE_PACKAGE_ROOT,
+        verification_currentness_path=historical_currentness,
     )
     assert accepted.document["evidenceAuthorityInput"] != (
         accepted.document["verificationAuthorityInput"]
@@ -3366,6 +3664,37 @@ def test_frozen_receipt_refuses_recomputed_fake_dsse_signatures(
         )
 
 
+@pytest.mark.parametrize("mode", ("missing", "stale"))
+def test_frozen_provider_verification_requires_current_sidecar_before_github(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    sidecar = tmp_path / "verification-currentness.json"
+    if mode == "stale":
+        document = json.loads(VERIFICATION_CURRENTNESS_PATH.read_bytes())
+        document["verificationAuthorityInput"] = _different_authority_snapshot(
+            document["verificationAuthorityInput"]
+        )
+        sidecar.write_bytes(release_canonical_json_bytes(document))
+    monkeypatch.setattr(
+        native_evidence,
+        "_authenticate_github_release",
+        lambda **kwargs: pytest.fail(
+            f"provider verification ran before sidecar refusal: {kwargs}"
+        ),
+    )
+
+    with pytest.raises(NativeEvidenceError, match="verification currentness"):
+        verify_frozen_evidence_receipt(
+            release_identity_path=native_release_identity.IDENTITY_PATH,
+            evidence_receipt_path=EVIDENCE_RECEIPT_PATH,
+            verification_currentness_path=sidecar,
+            source_directory=SOURCE_DIRECTORY,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+
+
 def test_frozen_receipt_is_reverified_by_the_maintained_provider_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3382,6 +3711,7 @@ def test_frozen_receipt_is_reverified_by_the_maintained_provider_path(
     result = verify_frozen_evidence_receipt(
         release_identity_path=native_release_identity.IDENTITY_PATH,
         evidence_receipt_path=EVIDENCE_RECEIPT_PATH,
+        verification_currentness_path=VERIFICATION_CURRENTNESS_PATH,
         source_directory=SOURCE_DIRECTORY,
         repository_root=RELEASE_PACKAGE_ROOT,
     )
@@ -3473,6 +3803,12 @@ def test_frozen_conformance_environment_refuses_a_different_valid_archive(
         verify_current_sources=True,
         source_directory=SOURCE_DIRECTORY,
     )
+    currentness = _write_verification_currentness(
+        tmp_path,
+        release_identity=identity,
+        evidence_receipt_path=frozen_receipt,
+        name="frozen-conformance-currentness.json",
+    )
     expected = identity.document["platforms"][0]
     matching_archive, child_digest, config_digest = _direct_oci_fixture(
         tmp_path,
@@ -3488,6 +3824,7 @@ def test_frozen_conformance_environment_refuses_a_different_valid_archive(
     environment = conformance_environment(
         checked_identity_path=candidate_identity,
         checked_receipt_path=frozen_receipt,
+        verification_currentness_path=currentness,
         archive_path=matching_archive,
         source_directory=SOURCE_DIRECTORY,
         repository_root=RELEASE_PACKAGE_ROOT,
@@ -3513,6 +3850,7 @@ def test_frozen_conformance_environment_refuses_a_different_valid_archive(
         conformance_environment(
             checked_identity_path=candidate_identity,
             checked_receipt_path=frozen_receipt,
+            verification_currentness_path=currentness,
             archive_path=different_archive,
             source_directory=SOURCE_DIRECTORY,
             repository_root=RELEASE_PACKAGE_ROOT,
@@ -3832,6 +4170,110 @@ def test_native_workflow_has_no_buildx_discovery_or_download_fallback():
         assert "curl" not in builder_step
         assert "download" not in builder_step.lower()
         assert "install" not in builder_step.lower()
+
+
+def test_conformance_workflow_authenticates_and_selects_exact_github_cli():
+    workflow = PACKAGE_ROOT.joinpath(".github/workflows/conformance.yml").read_text()
+    conformance_job = workflow.split("  conformance:\n", 1)[1].split(
+        "\n  native-verifier:", 1
+    )[0]
+    checkout_step = conformance_job.split(
+        "actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5",
+        1,
+    )[1].split("      - name:", 1)[0]
+    assert "fetch-depth: 0" in checkout_step
+    assert "persist-credentials: false" in checkout_step
+
+    install_step = conformance_job.split(
+        "- name: Authenticate and install the exact GitHub CLI", 1
+    )[1].split(
+        "- name: Cryptographically reverify retained native release evidence", 1
+    )[0]
+    assert "shell: bash" in install_step
+    assert "GH_TOKEN:" not in install_step
+    assert "GITHUB_TOKEN:" not in install_step
+    assert 'test "${GH_TOKEN+x}" = x' in install_step
+    assert 'test "${GITHUB_TOKEN+x}" = x' in install_step
+    assert "git config --local --name-only --get-regexp" in install_step
+    assert "'^http\\..*\\.extraheader$' >/dev/null" in install_step
+    assert 'test "${credential_status}" -eq 1' in install_step
+    assert "mktemp --directory" in install_step
+    assert "${RUNNER_TEMP}/ofarm-gh-v2.96.0.XXXXXX" in install_step
+    assert (
+        "https://github.com/cli/cli/releases/download/v2.96.0/"
+        "gh_2.96.0_linux_amd64.tar.gz"
+    ) in install_step
+    assert (
+        "83d5c2ccad5498f58bf6368acb1ab325"
+        "88cf43ab3a4b1c301bf36328b1c8bd60"
+    ) in install_step
+    assert "sha256sum --check --strict" in install_step
+    assert "tar --extract --gzip" in install_step
+    assert "--strip-components=2" in install_step
+    assert "gh_2.96.0_linux_amd64/bin/gh" in install_step
+    assert "resolve(strict=True)" in install_step
+    assert "stat.S_ISREG" in install_step
+    assert "os.access(candidate, os.X_OK)" in install_step
+    assert '"${gh_binary}" version >"${gh_stdout}" 2>"${gh_stderr}"' in (
+        install_step
+    )
+    assert 'test "${gh_status}" -eq 0' in install_step
+    assert 'test ! -s "${gh_stderr}"' in install_step
+    assert "NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT" in install_step
+    assert "read_bytes()" in install_step
+    assert "OFARM_NATIVE_EVIDENCE_GITHUB_CLI=%s" in install_step
+    assert '"${gh_binary}" >> "${GITHUB_ENV}"' in install_step
+    assert '"${gh_binary%/*}" >> "${GITHUB_PATH}"' in install_step
+    install_markers = (
+        "git config --local --name-only --get-regexp",
+        "curl --fail --location",
+        "sha256sum --check --strict",
+        "tar --extract --gzip",
+        "resolve(strict=True)",
+        '"${gh_binary}" version',
+        "NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT",
+        "OFARM_NATIVE_EVIDENCE_GITHUB_CLI=%s",
+        '"${gh_binary%/*}" >> "${GITHUB_PATH}"',
+    )
+    assert [install_step.index(marker) for marker in install_markers] == sorted(
+        install_step.index(marker) for marker in install_markers
+    )
+    forbidden_install_fragments = (
+        "gh auth",
+        "apt-get",
+        "brew ",
+        "setup-gh",
+        "which gh",
+        "command -v gh",
+    )
+    for fragment in forbidden_install_fragments:
+        assert fragment not in install_step
+
+    verification_step = conformance_job.split(
+        "- name: Cryptographically reverify retained native release evidence", 1
+    )[1].split("- name: Reject whitespace errors", 1)[0]
+    assert verification_step.count("GH_TOKEN: ${{ github.token }}") == 1
+    assert "GITHUB_TOKEN:" not in verification_step
+    verification_markers = (
+        'os.environ.get("OFARM_NATIVE_EVIDENCE_GITHUB_CLI")',
+        'shutil.which("gh")',
+        "resolve(strict=True)",
+        "selected != recorded",
+        "stat.S_ISREG",
+        "os.access(selected, os.X_OK)",
+        "deployment/postgresql/native_evidence.py",
+        "verify-frozen-evidence-receipt",
+        "--verification-currentness",
+    )
+    assert [
+        verification_step.index(marker) for marker in verification_markers
+    ] == sorted(verification_step.index(marker) for marker in verification_markers)
+    assert conformance_job.count("GH_TOKEN: ${{ github.token }}") == 1
+    assert "GITHUB_TOKEN:" not in conformance_job
+    assert conformance_job.count(
+        "native_evidence_verification_currentness.json"
+    ) == 2
+    assert workflow.count("native_evidence_verification_currentness.json") == 3
 
 
 def test_native_build_sources_match_evidence_material_authority():

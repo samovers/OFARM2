@@ -3941,6 +3941,11 @@
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_candidate_cannot_borrow_frozen_verification_currentness",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_candidate_evidence_receipt_refuses_schema_and_claim_mutation[<lambda>-OCI archive size is invalid]",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
@@ -4002,6 +4007,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_conformance_environment_carries_release_status_and_exact_archive",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_conformance_workflow_authenticates_and_selects_exact_github_cli",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
@@ -4287,6 +4297,16 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_conformance_environment_refuses_a_different_valid_archive",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_provider_verification_requires_current_sidecar_before_github[missing]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_provider_verification_requires_current_sidecar_before_github[stale]",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
@@ -4816,6 +4836,61 @@
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_verification_currentness_generator_is_deterministic_and_no_clobber",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_verification_currentness_refuses_noncanonical_and_oversized_bytes",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_verification_currentness_refuses_schema_binding_and_authority_mutation[<lambda>-differs from current files]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_verification_currentness_refuses_schema_binding_and_authority_mutation[<lambda>-fields are not exact]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_verification_currentness_refuses_schema_binding_and_authority_mutation[<lambda>-not linked to the evidence receipt]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_verification_currentness_refuses_schema_binding_and_authority_mutation[<lambda>-not linked to the release identity]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_verification_currentness_refuses_schema_binding_and_authority_mutation[<lambda>-schema is not exact]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_verification_currentness_refuses_schema_binding_and_authority_mutation[<lambda>-status is not exact]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_verification_currentness_refuses_unsafe_file_types[directory]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_verification_currentness_refuses_unsafe_file_types[missing]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_verification_currentness_refuses_unsafe_file_types[symlink]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_physical_clone.py::test_promoted_physical_clone_yields_only_structural_compatibility",
       "sourceModule": "kernel.tests.test_postgresql_physical_clone",
       "sourcePath": "kernel/tests/test_postgresql_physical_clone.py"
@@ -5261,6 +5336,11 @@
       "sourcePath": "kernel/tests/test_postgresql_provisioning_native_authority.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_provisioning_native_authority.py::test_audit_only_manifest_never_loads_currentness_sidecar",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning_native_authority",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning_native_authority.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_provisioning_native_authority.py::test_audit_only_manifests_ignore_missing_or_stale_tenant_authority[_raise_stale-identity]",
       "sourceModule": "kernel.tests.test_postgresql_provisioning_native_authority",
       "sourcePath": "kernel/tests/test_postgresql_provisioning_native_authority.py"
@@ -5281,7 +5361,17 @@
       "sourcePath": "kernel/tests/test_postgresql_provisioning_native_authority.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_provisioning_native_authority.py::test_currentness_sidecar_preserves_exact_tenant_provisioning_identity",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning_native_authority",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning_native_authority.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_provisioning_native_authority.py::test_full_schema_rejects_digest_linked_but_incomplete_frozen_pair",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning_native_authority",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning_native_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning_native_authority.py::test_missing_currentness_refuses_tenant_entry_points_before_external_work",
       "sourceModule": "kernel.tests.test_postgresql_provisioning_native_authority",
       "sourcePath": "kernel/tests/test_postgresql_provisioning_native_authority.py"
     },
@@ -5297,6 +5387,16 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_provisioning_native_authority.py::test_tenant_manifest_fails_closed_on_missing_or_stale_authority[_raise_unavailable]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning_native_authority",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning_native_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning_native_authority.py::test_tenant_manifest_refuses_missing_or_stale_currentness_sidecar[missing]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning_native_authority",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning_native_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning_native_authority.py::test_tenant_manifest_refuses_missing_or_stale_currentness_sidecar[stale]",
       "sourceModule": "kernel.tests.test_postgresql_provisioning_native_authority",
       "sourcePath": "kernel/tests/test_postgresql_provisioning_native_authority.py"
     },
@@ -14986,8 +15086,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "cedd1cb08f223bd8d0ce0094b29b6d89633a486df3d20d695ecb63f90ae21cc4",
-  "entryCount": 2997,
+  "entriesSha256": "91cbc820d9fa6f82d33f66707f44c0c56a71343b25ccb02ae9f9d11779a619ab",
+  "entryCount": 3017,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
