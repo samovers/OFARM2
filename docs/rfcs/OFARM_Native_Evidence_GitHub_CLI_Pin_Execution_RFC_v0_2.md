@@ -894,3 +894,86 @@ expires authority.
 
 Task messages remain approval authority. Any later repository approval record
 is AI-attested evidence only and never deployment authority.
+
+## 16. Phase B execution evidence
+
+This section is an evidence-only record. It does not change the approved
+decision, authority map, trust boundary, invariants, path envelope,
+irreversible behavior, provisional posture, or merge posture above.
+
+### 16.1 Approval and cancellation record
+
+- **Codex task:** `019ff570-c253-7d02-bbda-1ad8f4143f00`.
+- **Live card:** the complete version 2 decision card in that task, directly
+  preceding the approval below.
+- **Exact later task-user approval:**
+  `I approve OFARM2 decision ISSUE174-NATIVE-EVIDENCE-GITHUB-CLI-PIN-EXECUTION-001 version 2.`
+- **AI validation before implementation:** the complete live card and exact
+  later approval were directly retrieved in order; the role, decision,
+  version, named draft PR #313, and ten-path envelope matched; no newer card
+  superseded them; and no later stop, cancel, withdraw, pause, or do-not-merge
+  message existed.
+- **Cancellation recheck after implementation-head review:** no later
+  cancellation or merge prohibition existed.
+
+This is AI-attested repository evidence only. The task messages remain the
+authority, and this record grants no deployment, release, production, or
+independent approval authority.
+
+### 16.2 Implemented scope and preserved identities
+
+Phase B implementation head
+`beaf374d637bba9c53cbb4c66f6867b5c019bf6c` changed exactly paths 3 through
+10 in section 11. The complete reviewed-base-to-implementation-head diff
+contained exactly the ten permitted paths when the two Phase A RFC records
+were included.
+
+- Path 1 remained byte-identical to Phase A head
+  `41b31ed0f41be2b8ba5c1e2cbc95a890a985cbf3`.
+- Path 9 changed only the existing `native_release_identity.py` byte-length
+  and SHA-256 literals.
+- Path 10 was regenerated mechanically from the collected test nodes.
+- `native_evidence_receipt.json` and `provisioning_specs.py` were unchanged
+  from reviewed base `9c12c115bd29d9889234edd9e4c84377d9e332f8`.
+- The checked receipt remained exactly 25,682 bytes at
+  `sha256:5a13f99a5252828da01df0e2d2e5b8d491b99ec795736e5becc2659616a575c3`.
+- `TENANT_PROVISIONING_SPEC.digest` remained exactly
+  `sha256:2ac8487b64d4fb09d7576ef1ee09ac1f2a3cc5b20558f0d2137620b897c7157c`.
+- The checked sidecar was 1,346 canonical bytes and exactly matched a fresh
+  deterministic offline generator output.
+
+No provisioning implementation, receipt, migration, schema, role, grant,
+catalog, accepted digest, security-audit implementation, release, deployment,
+production, PR #312, or cross-boundary authority changed. The primary trust
+boundary stayed native release-evidence verification currentness and exact
+GitHub CLI custody.
+
+### 16.3 Verification and review disposition
+
+- CPython 3.12.13 package and temporal contract: pass, zero failures.
+- Focused native-evidence, provisioning-authority, and temporal-governance
+  suites: 585 passed.
+- Ruff 0.15.5 on every changed Python path: pass.
+- `git diff --check`: pass.
+- Test inventory: 2,944 collected nodes; pinned inventory and warning
+  inventory matched exactly.
+- Exact workflow comparison with demonstrated PR #312 head
+  `0c55770739c96234a5b6456dced048263398b328`: only the three required
+  sidecar command arguments differed from the proven CLI custody block.
+- Hosted implementation-head run
+  [`31888764614`](https://github.com/samovers/OFARM2/actions/runs/31888764614):
+  conformance, amd64 native verifier, arm64 native verifier, and canonical
+  index all passed. The exact CLI installation, sidecar gate, retained
+  provider reverification, two complete Kernel baselines, clean-run
+  equivalence, and required artifact uploads all passed without a waiver.
+- Thread-aware PR review read after that run found no inline thread, no
+  `REQUEST_CHANGES`, and no new Blocker. The retained Phase A review remained
+  `COMMENTED` and already disposed.
+- Unconstrained AI exact-head technical review of implementation head
+  `beaf374d637bba9c53cbb4c66f6867b5c019bf6c` passed `GHCLI-001` through
+  `GHCLI-009`; no demonstrated in-scope Blocker remained.
+
+This evidence-only RFC update creates a later pull-request head. Complete
+hosted conformance, path audit, cancellation recheck, and exact-head technical
+review must pass again at that later head before readiness or merge. No result
+above waives that final-head requirement.
