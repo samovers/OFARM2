@@ -46,7 +46,8 @@ admission. Every governed pre-tenant audit attempt receives a monotonically
 ordered lane-local attempt number before HMAC work begins. A completed attempt
 has exactly one health result:
 
-- a validated `StoredAuditAppend` or `OverflowAuditAppend` is `SUCCEEDED`;
+- a client-validated `StoredAuditAppend` or `OverflowAuditAppend` is
+  `SUCCEEDED`;
 - every ordinary exception before such a result is `FAILED`.
 
 The most recently started completed attempt for each lane owns that lane's
@@ -126,7 +127,8 @@ This pull request does not change or add:
 - the accepted #172, #173, and #174 boundaries and merged #192 producer/runtime
   stack;
 - existing production startup admission in `kernel/security_audit_runtime.py`;
-- `PreTenantAuditClient` as the sole append/retry owner and source of validated
+- `PreTenantAuditClient`, including its existing `_map_result` mapping, as the
+  sole append/retry owner, result-value validation authority, and source of
   `StoredAuditAppend` or `OverflowAuditAppend` results;
 - the fixed `AuthenticationAuditProducer` and `RequestRouterAuditProducer`
   reason mappings;
@@ -135,9 +137,11 @@ This pull request does not change or add:
 - the production runtime's private route closures; and
 - FastAPI/Starlette HTTP status and JSON response handling.
 
-The readiness state trusts a normally returned validated append result to mean
-that the existing client completed its governed database protocol. It does not
-reinterpret database rows, KMS responses, or overflow policy.
+The readiness state trusts an exact accepted result returned normally by the
+production-composed `PreTenantAuditClient` to mean that the existing client
+completed its governed database protocol and result mapping. It does not
+reinterpret or revalidate database rows, mapped result fields, KMS responses,
+or overflow policy.
 
 ### 4.3 Untrusted actors and inputs
 
@@ -146,13 +150,22 @@ reinterpret database rows, KMS responses, or overflow policy.
 - hostile request volume and concurrent attempts;
 - the timing and completion order of HMAC, network, and database operations;
 - ordinary exceptions from the HMAC factory or append client;
-- a malformed result returned across the audit-appender protocol seam;
+- a foreign or unsupported result type returned across the audit-appender
+  protocol seam;
 - repeated and concurrent readiness requests;
 - mutation of public `app.state` values by application-adjacent code; and
 - process restarts and the absence of a prior process's in-memory state.
 
 Request values cannot choose a lane, readiness state, sequence, threshold,
 recovery rule, response shape, or HTTP status.
+
+An arbitrary caller-created instance of an accepted result class is not a
+production-reachable appender result in this boundary. Production composition
+binds each sink to `PreTenantAuditClient`; that client validates the database
+result before constructing either accepted class. Constructor-level fakes may
+return a foreign type to prove that the sink fails closed, but accepted-class
+field validation remains solely client-owned rather than duplicated in the
+health layer.
 
 ### 4.4 Explicitly excluded attacker capabilities
 
@@ -181,7 +194,7 @@ hostile volume, and readiness polling remain in scope.
 | Initial externally observable readiness | Existing complete production startup admission and application publication order |
 | Lane-local attempt order | Shared health object under one lock |
 | HMAC and append execution | One lane-bound health-observed sink using the existing HMAC factory and `PreTenantAuditClient` |
-| Successful delivery observation | Exact validated `StoredAuditAppend` or `OverflowAuditAppend` return |
+| Successful delivery observation | The existing client `_map_result` mapping validates the database result; the bound sink then accepts only an exact `StoredAuditAppend` or `OverflowAuditAppend` return |
 | Failed delivery observation | Any caught ordinary exception before a valid successful result |
 | Current lane result | Greatest completed lane-local attempt number |
 | Same-lane recovery | A successful completion whose attempt number is greater than the lane's current completed attempt |
@@ -252,21 +265,31 @@ same-event-ID retry owner.
 
 ### 6.3 Completion classification
 
-If the operation returns, the sink accepts success only when the result's exact
-type is `StoredAuditAppend` or `OverflowAuditAppend`. It records `SUCCEEDED` for
-the attempt and returns the same result. Any other returned type creates one
-closed `SecurityAuditUnavailable`, records `FAILED`, and raises that closed
-error; it cannot be treated as a successful protocol result.
+Production composition constructs each sink only with that lane's
+`PreTenantAuditClient`. Before returning, the client's existing `_map_result`
+mapping validates database row cardinality, stored event identity, aware
+timestamps, the exact `count_unknown` boolean form, and the
+stored-versus-overflow shape. The client is already constructed from a fixed
+registered `ProducerReasonSpec`, which supplies the governed
+producer/component identity for an overflow result.
+
+The sink does not duplicate that value validation. If the operation returns,
+it trusts the bound production client but accepts success only when the
+result's exact type is `StoredAuditAppend` or `OverflowAuditAppend`. It records
+`SUCCEEDED` for the attempt and returns the same result. Any foreign,
+subclassed, or otherwise unsupported returned type creates one closed
+`SecurityAuditUnavailable`, records `FAILED`, and raises that closed error; it
+cannot be treated as a successful protocol result.
 
 An `OverflowAuditAppend` is success whether `count_unknown` is true or false.
 The database has acknowledged its governed bounded aggregation posture; health
 must not reinterpret that result or let hostile volume alone manufacture a
 delivery failure.
 
-If HMAC creation, append, or result validation raises an `Exception`, the sink
-records `FAILED` for the attempt and re-raises the original exception with its
-identity and traceback preserved. It does not catch `BaseException`, translate
-the failure, inspect exception text, or expose it through readiness.
+If HMAC creation, append, or the client's result mapping raises an `Exception`,
+the sink records `FAILED` for the attempt and re-raises the original exception
+with its identity and traceback preserved. It does not catch `BaseException`,
+translate the failure, inspect exception text, or expose it through readiness.
 
 ### 6.4 Concurrent and stale completions
 
@@ -305,6 +328,12 @@ overall_ready = authentication_ready and request_router_ready
 There is no failure quorum, time window, decay, hysteresis, sampling, or manual
 override. A lane recovers only through a later-started successful operation on
 that same production lane.
+
+This recovery is traffic-dependent. After a lane fails, no elapsed time,
+dependency recovery by itself, readiness polling, or operator reset action can
+restore it in the running process. If no later governed refusal reaches that
+same lane and completes successfully, the lane and overall readiness remain
+`NOT_READY` indefinitely even when the instance is otherwise healthy.
 
 Recovery means only that the latest observed operation on that lane completed
 the existing governed delivery protocol. It does not assert that an earlier
@@ -348,6 +377,13 @@ exception, endpoint, role, key, tenant, principal, credential, request, or
 runtime-configuration field. The route captures the runtime privately and does
 not trust or publish a mutable health object through `app.state`.
 
+Unauthenticated disclosure of the fixed overall token is safe within this
+boundary because audit degradation can never widen authorization, produce a
+principal, enter a tenant, or expose protected data. It reports only that
+the service is in a stricter failure posture: audit degradation can preserve a
+denial and reduce availability, never create new authority. The token exposes
+neither the triggering denial nor which lane or dependency failed.
+
 This route reports only the security-audit boundary. HTTP 200 does not assert
 that governed product handlers are implemented, that another runtime boundary
 is ready, or that OFARM2 is production-ready. Existing governed routes remain
@@ -357,13 +393,20 @@ blocked.
 
 Health state is process-local and is not a durable audit record. Process death
 can lose it, exactly as ADR 0001 already acknowledges for a crash before audit
-append. A new process does not import, infer, or clear prior health. It becomes
-externally ready only after the complete existing startup admission succeeds.
+append. A new process does not import or infer prior health. Its lanes are
+initialized ready and become externally observable only after the complete
+existing startup admission succeeds, so restart is an implicit state reset.
 
 Restarting therefore does not prove that a previous interval was gap-free and
 must never be presented as gap reconciliation. Durable unavailable-interval
 recording, process-crash `COUNT_UNKNOWN`, and the authority to commit
 `AUDIT_GAP` require a separate #192 decision.
+
+`GET /ready` must not be wired to automated eviction or restart without the
+deployment authority explicitly accepting both properties: a failed lane may
+remain not ready indefinitely without later same-lane refusal traffic, and a
+restart resets the process-local token without proving or reconciling the lost
+interval. This repository slice does not authorize that deployment policy.
 
 ## 7. Invariants and acceptance criteria
 
@@ -395,9 +438,13 @@ TenantBinding, post-binding body/exit failure, and unmapped failure start none.
 
 ### `AUDHLTH-005` — exact result classification
 
-Only an exact `StoredAuditAppend` or `OverflowAuditAppend` return is success.
-Every caught ordinary HMAC, append, transport, database, KMS, result-shape, or
-other operation exception is failure and is re-raised unchanged.
+The production-bound `PreTenantAuditClient` is the sole value-validation
+authority and validates its database result before returning. The sink accepts
+an exact `StoredAuditAppend` or `OverflowAuditAppend` from that client, rejects
+every foreign or subclassed return, and does not duplicate field validation.
+Every caught ordinary HMAC, append, transport, database, KMS, client
+result-shape, or other operation exception is failure and is re-raised
+unchanged.
 
 ### `AUDHLTH-006` — latest-started completion owns lane state
 
@@ -463,9 +510,10 @@ module globals, or the readiness response.
 | `AUDHLTH-002` | Submit a malformed credential whose audit result contains UUIDs, times, and a correlation HMAC. | Health stores none of those values; only the authentication lane's counter/result changes. |
 | `AUDHLTH-003` | `create_app()` encounters a structural, role, HMAC, signing, or tenant-pool startup refusal. | FastAPI and `/ready` are never published. |
 | `AUDHLTH-004` | `ApplicationRuntime.authenticate()` receives a mapped verification failure and HMAC creation then fails. | One authentication attempt completes failed; no append occurs; the original HMAC exception propagates. |
-| `AUDHLTH-005` | A production-bound appender returns an unsupported object or raises `SecurityAuditOutcomeUnknown`. | The lane becomes not ready and the unsupported/unknown failure propagates; it cannot become success. |
+| `AUDHLTH-005` | A constructor-level appender fake returns a foreign result type; separately, the production-bound client raises `SecurityAuditOutcomeUnknown`. | The lane becomes not ready and the foreign/unknown failure propagates; neither can become success. The fake does not model injection of a malformed accepted-class value into production. |
 | `AUDHLTH-006` | Authentication attempt 2 starts after attempt 1, succeeds first, and attempt 1 fails later. | Attempt 1 is stale and cannot replace attempt 2's ready result. |
 | `AUDHLTH-007` | Authentication is not ready, then the request-router lane succeeds. | Overall remains not ready until a later authentication attempt succeeds. |
+| `AUDHLTH-007` | A lane fails and no later governed refusal reaches that lane, while dependency recovery and readiness polling occur. | `/ready` remains 503 `NOT_READY` indefinitely; neither elapsed time nor polling restores the lane. |
 | `AUDHLTH-008` | One lane is ready and one is not ready when `/ready` is called. | Overall is `NOT_READY`; no majority or grace policy exists. |
 | `AUDHLTH-009` | A hostile client polls `/ready` concurrently, tries to cache an earlier response, and mutates `app.state.runtime_metadata`. | Responses remain fixed no-store snapshots; no dependency call occurs and mutable `app.state` does not control readiness. |
 | `AUDHLTH-010` | A principal refusal is mapped, but the audit database is unavailable. | Audit failure propagates, authentication does not return a principal, and no tenant operation starts. |
@@ -648,7 +696,9 @@ Reviewers must not require this pull request to:
 - close overflow buckets or mark counts unknown;
 - destroy HMAC keys;
 - implement retention, reader/export, break-glass, or store-loss operations;
-- add production deployment or a complete #192 hostile matrix; or
+- add production deployment or a complete #192 hostile matrix;
+- define worker aggregation, traffic withdrawal, automated eviction, or
+  restart orchestration for `/ready`; or
 - close issue #192.
 
 Those requests change another trust boundary and must become a separate
@@ -661,7 +711,9 @@ Issue #192 continues to own separately governed work for:
 - operational gap recording and crash/unavailable-interval reconciliation;
 - destructive HMAC retirement and deadline enforcement;
 - dual-approved break-glass export and temporary-login lifecycle;
-- empty-recreate/store-loss operation; and
+- empty-recreate/store-loss operation;
+- deployment topology for worker aggregation, traffic withdrawal, eviction,
+  and restart policy before an orchestrator consumes `/ready`; and
 - remaining real-ASGI/PostgreSQL cross-slice hostile closure evidence.
 
 No new issue is required merely to repeat those existing parent blockers.
@@ -709,9 +761,9 @@ to settle orchestration policy, restart policy, or external clock health.
 | `AUDHLTH-002` | health module | rich result/exception does not enter state or output | state-shape and response test |
 | `AUDHLTH-003` | runtime/application builder | every existing startup failure publishes no app | affected startup tests |
 | `AUDHLTH-004` | both producer adapters and sinks | HMAC failure, successful path, post-binding path | focused producer tests |
-| `AUDHLTH-005` | health-observed sink | stored, overflow, invalid result, unavailable/refused/unknown | sink classification tests |
+| `AUDHLTH-005` | existing client mapping and health-observed sink | stored, overflow, foreign result type, unavailable/refused/unknown | client mapping and sink classification tests |
 | `AUDHLTH-006` | health module | controlled out-of-order success/failure completions | deterministic thread/barrier tests |
-| `AUDHLTH-007` | health module | cross-lane success and same-lane later success | state-transition tests |
+| `AUDHLTH-007` | health module | cross-lane success, no-traffic persistence, and same-lane later success | state-transition tests |
 | `AUDHLTH-008` | health module | all four two-lane combinations | table-driven threshold test |
 | `AUDHLTH-009` | API adapter | concurrent polling, no-store headers, `app.state` mutation, dependency call sentinels | ASGI route tests |
 | `AUDHLTH-010` | producers/runtime | audit failure during credential/principal/binder denial | producer and runtime tests |
@@ -767,7 +819,9 @@ None. Version 1 fixes:
 - two lanes;
 - process-local state;
 - start-order completion semantics;
+- existing client result-value validation plus exact sink type admission;
 - one-failure/one-later-same-lane-success recovery;
+- indefinite no-traffic persistence and restart as a non-evidentiary reset;
 - stored and overflow results as success;
 - passive fixed `/ready` output; and
 - no gap/completeness claim.
@@ -776,10 +830,20 @@ Changing any of these requires version 2.
 
 ### 14.2 Review disposition
 
-- **Blockers:** none known in this draft; independent Phase A review is pending.
+- **Blockers:** formal review `4944322806` found that the earlier wording
+  simultaneously required a validated accepted-class value and specified only
+  an exact-type sink check. This revision adopts the review's bounded option A:
+  the existing client `_map_result` mapping remains the sole value-validation
+  authority, the production sink trusts exact accepted results from that bound
+  client, and the sink rejects foreign or subclassed result types. Exact-head
+  re-review is pending.
+- **Findings:** the conversation review found that recovery can remain
+  traffic-dependent indefinitely and that restart silently creates new initial
+  state. Sections 6.5, 6.7, and 8 now state and test those claim limits.
 - **Follow-ups:** the separately governed remaining #192 boundaries in section
-  11.5.
-- **Preferences:** none recorded.
+  11.5, including deployment topology and automated readiness consumption.
+- **Preferences:** the public-token rationale is now explicit: degradation can
+  never widen authorization and the token exposes no triggering lane or data.
 
 Once Phase B acceptance criteria pass and no demonstrated Blocker remains,
 merge the approved pull request. New ideas, Preferences, and non-blocking
