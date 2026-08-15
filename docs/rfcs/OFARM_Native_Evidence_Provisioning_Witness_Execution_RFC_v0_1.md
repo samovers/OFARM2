@@ -1,7 +1,8 @@
 # OFARM Native-Evidence Provisioning Witness Execution — Phase A Contract v0.1
 
-**Status:** proposed; Phase A only; no implementation, database, release, or
-deployment authority
+**Status:** changes required after exact-head review; Phase A only; version 1
+is not approvable; no implementation, database, release, or deployment
+authority
 
 **Contract identity:**
 `ofarm2.native-evidence-provisioning-witness-execution.v0.1`
@@ -192,8 +193,9 @@ whether repository verification authority is current. The witness answers
 which already accepted receipt bytes are part of the durable provisioning
 identity. Both are mandatory; neither can substitute for the other.
 
-The witness at this reviewed base is exactly 25,682 bytes with SHA-256
-`9636997d7985153af627ee6764db31f67dba7604a64697a56ab74c970b875e82`.
+The witness at this reviewed base is exactly 25,682 bytes with canonical
+receipt digest
+`sha256:5a13f99a5252828da01df0e2d2e5b8d491b99ec795736e5becc2659616a575c3`.
 These are reviewer evidence, not values the task user must verify.
 
 ## 6. State machine and ordering
@@ -446,10 +448,21 @@ Reviewers must not require:
 - implementation from #312 or #311; or
 - deployment, release publication, or production evidence.
 
-This pull request is a prerequisite for #312. It merges first. #312 must then
-perform whatever exact-base amendment, reapproval, path audit, and hosted
-verification its own stronger contract requires. This contract supplies no
-authority for that later work.
+The intended sequencing was for this pull request to merge before #312.
+Exact-head hosted review demonstrated that the two pull requests cannot
+currently satisfy their exact-head gates independently:
+
+- #313 inherits the current workflow, whose retained-evidence step refuses the
+  runner-provided GitHub CLI because its version is not exact; and
+- #312 installs the exact CLI and refreshes the current receipt, but that
+  refresh changes the tenant provisioning digest until this witness split
+  exists.
+
+That bootstrap cycle is a Blocker under `NPW-008`. Version 1 must not be
+approved or implemented. Resolving it requires either a separately established
+green prerequisite that preserves both boundaries or an explicit
+cross-boundary exception in a new decision version. This contract supplies no
+authority for either action.
 
 ## 12. Provisional design record
 
@@ -513,26 +526,37 @@ Before merge:
 
 ## 14. Open decisions and review disposition
 
-There are no open architecture decisions in this proposed boundary.
+Version 1 is not approvable.
 
-- **Blockers:** the contract requires exact-head review after the draft PR URL
-  is bound. Any demonstrated violation of `NPW-001` through `NPW-008` is a
-  Blocker.
+- **Blocker:** hosted conformance run `31878258420` at exact head
+  `de33299ebe87e6a9ddf6f5a957cc5671cd9b1718` failed the supported
+  `Cryptographically reverify retained native release evidence` entry point
+  with `GitHub CLI version is not exact`. Pull request #312 owns the exact CLI
+  installation and current-receipt refresh, while this pull request owns the
+  provisioning split needed to keep that refresh from changing the accepted
+  provisioning digest. Neither exact head can become green first. The intended
+  separate merge ordering therefore violates `NPW-008`.
+- **Required decision:** preserve the one-boundary rule through a new
+  independently green prerequisite, or explicitly approve a documented
+  cross-boundary exception in a new decision version after its combined
+  authorities, audit risk, paths, and merge posture are stated.
 - **Follow-ups:** pull request #312 exact-base amendment and reapproval only as
   required by its own stronger contract; independently verifiable approval or
   signing before deployment.
 - **Preferences:** none.
 
-Once every invariant passes, the exact allowlist holds, complete hosted
-conformance is green, no demonstrated in-scope Blocker remains, and approval is
-still live, the approved workflow permits merging only the named pull request.
+Do not waive hosted conformance, change a migration or accepted digest, or
+append the other trust boundary merely to clear the failure.
 
 ## 15. Pre-deployment decision workflow
 
 This RFC grants no Phase B authority by authorship, commit, push, draft PR,
 review, GitHub activity, or the generic `go` that authorized Phase A drafting.
+Because section 14 records an unresolved Blocker, version 1 must not be shown
+as a live decision card and its approval sentence must not be recognized.
 
-The lawful sequence is:
+The following sequence is dormant until a new reviewed version resolves the
+Blocker:
 
 1. publish this RFC alone in one new draft pull request from reviewed base
    `9c12c115bd29d9889234edd9e4c84377d9e332f8`;
