@@ -3,8 +3,7 @@
 **Status:** Phase A draft under review; Phase B repository implementation,
 deployment, release, and production operation are not authorized
 
-**Draft pull request:** this contract will be updated with the stable draft
-pull-request URL immediately after that pull request is created
+**Draft pull request:** `https://github.com/samovers/OFARM2/pull/314`
 
 **Contract identity:**
 `ofarm2.security-audit-dynamic-health-readiness.v0.1`
