@@ -479,6 +479,68 @@ It is not a deployment-readiness or external clock-fence claim. It grants no
 production-access authorization or guarantee that authorized output cannot be
 copied after disclosure.
 
+## One-shot security-audit overflow closure
+
+The overflow-closure command observes and closes at most one database-selected
+oldest closeable overflow bucket and accepts no arguments:
+
+```bash
+export OFARM_SECURITY_AUDIT_CONTROL_PG_DSN='...'
+python -m deployment.postgresql.run_security_audit_overflow
+```
+
+The route must authenticate only as
+`ofarm_security_audit_control_login`. The command accepts no producer,
+component, bucket, timestamp, count posture, limit, role, mode, or retry
+selector. PostgreSQL's existing
+`observe_next_closeable_overflow_bucket()` function chooses the oldest bucket;
+the command may pass only that returned identity to the existing
+`close_overflow_bucket(...)` function.
+
+One process invocation makes one `psycopg.connect` call. Observation and the
+optional close occur on the same idle non-autocommit `READ COMMITTED`
+connection. The five-second connection timeout applies to each libpq host or
+address attempt, not to the total network or process lifetime. Code-owned
+statement, lock, idle-transaction, transaction, work-memory, time-zone,
+date-style, and synchronous-commit settings replace all DSN-provided startup
+options.
+`temp_file_limit=0` remains a provisioned database-role default.
+
+An empty observation is a successful bounded no-op: the command explicitly
+rolls back, submits no close, and emits `NO_CLOSEABLE_BUCKET`. A nonempty
+observation can submit the close function once, validate and pre-render its
+fixed non-sensitive report, and call `commit()` once. `ACKNOWLEDGED` means the
+selected bucket is closed under the reported `OVERFLOW_ENDED` identity; a
+concurrent closer may have created that event first, so `observedAt` can predate
+this invocation. The report deliberately contains no overflow count or
+`COUNT_UNKNOWN` claim.
+
+Closed terminal outcomes are:
+
+- exit `0`: a known no-bucket or acknowledged closure report was completely
+  written and flushed;
+- exit `1`: the returned route or transaction was refused before commit
+  ambiguity;
+- exit `2`: invalid arguments or conninfo configuration;
+- exit `3`: unavailable before `commit()` was sent;
+- exit `4`: the explicit closure commit outcome is unknown; and
+- exit `5`: a known terminal result existed but reporting failed.
+
+Operators and automation must not retry exit `4`, exit `5`, or an incomplete
+process protocol automatically. A later invocation observes the then-oldest
+bucket and is not reconciliation of an earlier result.
+
+Deployment or scheduling must ensure that every possibly ambiguous bucket is
+marked `COUNT_UNKNOWN` before operational closure, because closure makes the
+database-owned count posture immutable.
+This command does not invoke `mark_overflow_count_unknown`. It does not infer
+whether a count is exact.
+
+This command is not a scheduler, drain loop, gap recorder, readiness or clock
+fence, deployment action, or production-operation authorization. It changes no
+Kernel runtime, database object, role, grant, retention, reader/export,
+break-glass, recovery, HMAC-custody, issue #172, or issue #176 authority.
+
 ## One-shot security-audit logical retention
 
 The retention command performs exactly one database-owned logical-retention
