@@ -24,6 +24,7 @@ from .production_oidc import ProductionOidcVerifier
 from .request_router_audit import RequestRouterAuditProducer
 from .runtime_config import RuntimeConfig
 from .security_audit_client import PreTenantAuditClient
+from .security_audit_health import SecurityAuditHealth, SecurityAuditReadiness
 from . import security_audit_hmac_posture as hmac_posture
 from .tenant_uow import TenantUnitOfWork, TenantUnitOfWorkManager
 
@@ -66,9 +67,11 @@ class PreTenantAuditRuntime:
         self,
         authentication: AuthenticationAuditProducer,
         request_router: RequestRouterAuditProducer,
+        health: SecurityAuditHealth,
     ) -> None:
         self._authentication = authentication
         self._request_router = request_router
+        self._health = health
 
     def authenticate(self, token: str) -> AuthenticatedPrincipal:
         return self._authentication.authenticate(token)
@@ -78,6 +81,10 @@ class PreTenantAuditRuntime:
         principal: AuthenticatedPrincipal,
     ) -> AbstractContextManager[TenantUnitOfWork]:
         return self._request_router.unit_of_work(principal)
+
+    @property
+    def readiness(self) -> SecurityAuditReadiness:
+        return self._health.readiness
 
 
 def _audit_producer_connection_factory(dsn: str) -> Connect:
@@ -179,25 +186,26 @@ def build_pretenant_audit_runtime(
     resource = _active_resource(config, posture)
     correlation_hmac = GoogleKmsCorrelationHmac(kms_client, resource)
     correlation_hmac.initialize()
+    health = SecurityAuditHealth()
+    authentication_client = PreTenantAuditClient(
+        _audit_producer_connection_factory(
+            config.security_audit_authentication_pg_dsn
+        ),
+        _producer("AUTHENTICATION"),
+    )
     authentication = AuthenticationAuditProducer(
         verifier,
         resolver,
-        correlation_hmac,
-        PreTenantAuditClient(
-            _audit_producer_connection_factory(
-                config.security_audit_authentication_pg_dsn
-            ),
-            _producer("AUTHENTICATION"),
+        health.authentication_sink(correlation_hmac, authentication_client),
+    )
+    request_router_client = PreTenantAuditClient(
+        _audit_producer_connection_factory(
+            config.security_audit_request_router_pg_dsn
         ),
+        _producer("REQUEST_ROUTER"),
     )
     request_router = RequestRouterAuditProducer(
         tenant_boundary,
-        correlation_hmac,
-        PreTenantAuditClient(
-            _audit_producer_connection_factory(
-                config.security_audit_request_router_pg_dsn
-            ),
-            _producer("REQUEST_ROUTER"),
-        ),
+        health.request_router_sink(correlation_hmac, request_router_client),
     )
-    return PreTenantAuditRuntime(authentication, request_router)
+    return PreTenantAuditRuntime(authentication, request_router, health)

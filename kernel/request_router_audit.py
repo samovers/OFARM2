@@ -8,7 +8,7 @@ from types import MappingProxyType
 from typing import Protocol
 
 from .principal import AuthenticatedPrincipal
-from .security_audit import CorrelationHmac, SecurityAuditAppend
+from .security_audit import SecurityAuditAppend
 from .tenant_uow import (
     TenantBoundaryError,
     TenantBoundaryOutcome,
@@ -23,16 +23,8 @@ class TenantBoundary(Protocol):
     ) -> AbstractContextManager[TenantUnitOfWork]: ...
 
 
-class CorrelationHmacFactory(Protocol):
-    def create(self) -> CorrelationHmac: ...
-
-
-class AuditAppender(Protocol):
-    def append(
-        self,
-        reason: str,
-        correlation_hmac: CorrelationHmac,
-    ) -> SecurityAuditAppend: ...
+class AuditSink(Protocol):
+    def append(self, reason: str) -> SecurityAuditAppend: ...
 
 
 _REASONS = MappingProxyType(
@@ -48,12 +40,10 @@ class RequestRouterAuditProducer:
     def __init__(
         self,
         tenant_boundary: TenantBoundary,
-        correlation_hmac_factory: CorrelationHmacFactory,
-        audit_appender: AuditAppender,
+        audit_sink: AuditSink,
     ) -> None:
         self._tenant_boundary = tenant_boundary
-        self._correlation_hmac_factory = correlation_hmac_factory
-        self._audit_appender = audit_appender
+        self._audit_sink = audit_sink
 
     def unit_of_work(
         self,
@@ -75,10 +65,6 @@ class RequestRouterAuditProducer:
                 reason = _REASONS.get(error.outcome)
                 if reason is None:
                     raise
-                self._append(reason)
+                self._audit_sink.append(reason)
                 raise
             yield unit
-
-    def _append(self, reason: str) -> None:
-        correlation_hmac = self._correlation_hmac_factory.create()
-        self._audit_appender.append(reason, correlation_hmac)

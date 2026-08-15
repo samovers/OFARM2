@@ -36,6 +36,10 @@ from kernel.security_audit import (
     StoredAuditAppend,
 )
 from kernel.security_audit_client import PreTenantAuditClient
+from kernel.security_audit_health import (
+    SecurityAuditHealth,
+    SecurityAuditReadiness,
+)
 from kernel.tests.postgresql_audit_support import (
     audit_service_fixture,  # noqa: F401
     role_dsn,
@@ -136,34 +140,31 @@ class _Resolver:
 
 
 class _HmacFactory:
-    def __init__(self, error=None):
-        self.error = error
+    def __init__(self):
         self.calls = 0
 
     def create(self):
         self.calls += 1
-        if self.error is not None:
-            raise self.error
         return HMAC
 
 
-class _Appender:
+class _Sink:
     def __init__(self, result=STORED, error=None):
         self.result = result
         self.error = error
         self.calls = []
         self.completed = False
 
-    def append(self, reason, correlation_hmac):
-        self.calls.append((reason, correlation_hmac))
+    def append(self, reason):
+        self.calls.append(reason)
         if self.error is not None:
             raise self.error
         self.completed = True
         return self.result
 
 
-def _producer(verifier, resolver, hmac_factory, appender):
-    return AuthenticationAuditProducer(verifier, resolver, hmac_factory, appender)
+def _producer(verifier, resolver, sink):
+    return AuthenticationAuditProducer(verifier, resolver, sink)
 
 
 def test_reason_cases_are_exact_and_exhaustive():
@@ -192,40 +193,35 @@ def test_closed_failure_is_audited_before_original_denial(
     )
     verifier = _Verifier(denial if authentication_failure else None)
     resolver = _Resolver(None if authentication_failure else denial)
-    hmac_factory = _HmacFactory()
-    appender = _Appender()
+    sink = _Sink()
 
     with pytest.raises(type(denial)) as raised:
-        _producer(verifier, resolver, hmac_factory, appender).authenticate(
+        _producer(verifier, resolver, sink).authenticate(
             "raw-token-canary"
         )
 
     assert raised.value is denial
     assert resolver.calls == ([] if authentication_failure else [IDENTITY])
-    assert hmac_factory.calls == 1
-    assert appender.calls == [(reason, HMAC)]
-    assert appender.completed is True
-    assert "canary" not in repr(appender.calls)
+    assert sink.calls == [reason]
+    assert sink.completed is True
+    assert "canary" not in repr(sink.calls)
 
 
 def test_success_returns_exact_principal_without_audit_work():
     verifier = _Verifier()
     resolver = _Resolver()
-    hmac_factory = _HmacFactory()
-    appender = _Appender()
+    sink = _Sink()
 
     result = _producer(
         verifier,
         resolver,
-        hmac_factory,
-        appender,
+        sink,
     ).authenticate("token")
 
     assert result is PRINCIPAL
     assert verifier.calls == ["token"]
     assert resolver.calls == [IDENTITY]
-    assert hmac_factory.calls == 0
-    assert appender.calls == []
+    assert sink.calls == []
 
 
 @pytest.mark.parametrize(
@@ -247,39 +243,17 @@ def test_stored_and_overflow_results_complete_before_denial(result):
     denial = AuthenticationError(
         AuthenticationOutcome.NO_CREDENTIAL, internal_detail="missing"
     )
-    appender = _Appender(result)
+    sink = _Sink(result)
 
     with pytest.raises(AuthenticationError) as raised:
         _producer(
             _Verifier(denial),
             _Resolver(),
-            _HmacFactory(),
-            appender,
+            sink,
         ).authenticate(None)
 
     assert raised.value is denial
-    assert appender.completed is True
-
-
-def test_hmac_failure_propagates_without_append_or_authorization():
-    denial = AuthenticationError(
-        AuthenticationOutcome.NO_CREDENTIAL, internal_detail="missing"
-    )
-    audit_error = SecurityAuditUnavailable()
-    hmac_factory = _HmacFactory(audit_error)
-    appender = _Appender()
-
-    with pytest.raises(SecurityAuditUnavailable) as raised:
-        _producer(
-            _Verifier(denial),
-            _Resolver(),
-            hmac_factory,
-            appender,
-        ).authenticate(None)
-
-    assert raised.value is audit_error
-    assert hmac_factory.calls == 1
-    assert appender.calls == []
+    assert sink.completed is True
 
 
 @pytest.mark.parametrize(
@@ -290,20 +264,19 @@ def test_hmac_failure_propagates_without_append_or_authorization():
         SecurityAuditOutcomeUnknown(uuid4(), None),
     ),
 )
-def test_append_failure_propagates_without_producer_retry(audit_error):
+def test_sink_failure_propagates_without_authorization(audit_error):
     denial = PrincipalResolutionError(PrincipalResolutionOutcome.AUTHORITY_UNAVAILABLE)
-    appender = _Appender(error=audit_error)
+    sink = _Sink(error=audit_error)
 
     with pytest.raises(type(audit_error)) as raised:
         _producer(
             _Verifier(),
             _Resolver(denial),
-            _HmacFactory(),
-            appender,
+            sink,
         ).authenticate("token")
 
     assert raised.value is audit_error
-    assert appender.calls == [("AUTHORITY_UNAVAILABLE", HMAC)]
+    assert sink.calls == ["AUTHORITY_UNAVAILABLE"]
 
 
 @pytest.mark.parametrize("boundary", ("verifier", "resolver"))
@@ -311,20 +284,17 @@ def test_unexpected_failure_is_not_given_an_audit_classification(boundary):
     unexpected = LookupError("unexpected")
     verifier = _Verifier(unexpected if boundary == "verifier" else None)
     resolver = _Resolver(unexpected if boundary == "resolver" else None)
-    hmac_factory = _HmacFactory()
-    appender = _Appender()
+    sink = _Sink()
 
     with pytest.raises(LookupError) as raised:
         _producer(
             verifier,
             resolver,
-            hmac_factory,
-            appender,
+            sink,
         ).authenticate("token")
 
     assert raised.value is unexpected
-    assert hmac_factory.calls == 0
-    assert appender.calls == []
+    assert sink.calls == []
 
 
 class _RecordingAppender:
@@ -353,17 +323,19 @@ def test_live_postgresql_uses_exact_authentication_role_and_reason(
         AuthenticationOutcome.NO_CREDENTIAL, internal_detail="missing"
     )
     appender = _RecordingAppender(PreTenantAuditClient(connect, AUTHENTICATION_PRODUCER))
+    health = SecurityAuditHealth()
+    sink = health.authentication_sink(_HmacFactory(), appender)
 
     with pytest.raises(AuthenticationError) as raised:
         _producer(
             _Verifier(denial),
             _Resolver(),
-            _HmacFactory(),
-            appender,
+            sink,
         ).authenticate(None)
 
     assert raised.value is denial
     assert isinstance(appender.result, StoredAuditAppend)
+    assert health.readiness is SecurityAuditReadiness.READY
     with psycopg.connect(
         migrated_audit_service["target_admin_dsn"]
     ) as connection:

@@ -28,6 +28,10 @@ from kernel.security_audit import (
     StoredAuditAppend,
 )
 from kernel.security_audit_client import PreTenantAuditClient
+from kernel.security_audit_health import (
+    SecurityAuditHealth,
+    SecurityAuditReadiness,
+)
 from kernel.tenant_uow import TenantBoundaryError, TenantBoundaryOutcome
 from kernel.tests.postgresql_audit_support import (
     audit_service_fixture,  # noqa: F401
@@ -102,34 +106,31 @@ class _Boundary:
 
 
 class _HmacFactory:
-    def __init__(self, error=None):
-        self.error = error
+    def __init__(self):
         self.calls = 0
 
     def create(self):
         self.calls += 1
-        if self.error is not None:
-            raise self.error
         return HMAC
 
 
-class _Appender:
+class _Sink:
     def __init__(self, result=STORED, error=None):
         self.result = result
         self.error = error
         self.calls = []
         self.completed = False
 
-    def append(self, reason, correlation_hmac):
-        self.calls.append((reason, correlation_hmac))
+    def append(self, reason):
+        self.calls.append(reason)
         if self.error is not None:
             raise self.error
         self.completed = True
         return self.result
 
 
-def _producer(boundary, hmac_factory, appender):
-    return RequestRouterAuditProducer(boundary, hmac_factory, appender)
+def _producer(boundary, sink):
+    return RequestRouterAuditProducer(boundary, sink)
 
 
 def _enter(producer):
@@ -153,33 +154,29 @@ def test_closed_entry_failure_is_audited_before_original_denial(
 ):
     denial = TenantBoundaryError(outcome)
     boundary = _Boundary(enter_error=denial)
-    hmac_factory = _HmacFactory()
-    appender = _Appender()
+    sink = _Sink()
 
     with pytest.raises(TenantBoundaryError) as raised:
-        _enter(_producer(boundary, hmac_factory, appender))
+        _enter(_producer(boundary, sink))
 
     assert raised.value is denial
     assert boundary.calls == [PRINCIPAL]
-    assert hmac_factory.calls == 1
-    assert appender.calls == [(reason, HMAC)]
-    assert appender.completed is True
-    assert "canary" not in repr(appender.calls)
+    assert sink.calls == [reason]
+    assert sink.completed is True
+    assert "canary" not in repr(sink.calls)
 
 
 def test_success_yields_exact_unit_without_audit_work():
     boundary = _Boundary()
-    hmac_factory = _HmacFactory()
-    appender = _Appender()
+    sink = _Sink()
 
-    with _producer(boundary, hmac_factory, appender).unit_of_work(
+    with _producer(boundary, sink).unit_of_work(
         PRINCIPAL
     ) as unit:
         assert unit is UNIT
 
     assert boundary.calls == [PRINCIPAL]
-    assert hmac_factory.calls == 0
-    assert appender.calls == []
+    assert sink.calls == []
 
 
 @pytest.mark.parametrize(
@@ -199,28 +196,26 @@ def test_success_yields_exact_unit_without_audit_work():
 )
 def test_stored_and_overflow_results_complete_before_denial(result):
     denial = TenantBoundaryError(TenantBoundaryOutcome.UNAVAILABLE)
-    appender = _Appender(result)
+    sink = _Sink(result)
 
     with pytest.raises(TenantBoundaryError) as raised:
         _enter(
-            _producer(_Boundary(enter_error=denial), _HmacFactory(), appender)
+            _producer(_Boundary(enter_error=denial), sink)
         )
 
     assert raised.value is denial
-    assert appender.completed is True
+    assert sink.completed is True
 
 
 def test_finalization_outcome_on_entry_is_not_a_pretenant_reason():
     denial = TenantBoundaryError(TenantBoundaryOutcome.FINALIZATION_UNKNOWN)
-    hmac_factory = _HmacFactory()
-    appender = _Appender()
+    sink = _Sink()
 
     with pytest.raises(TenantBoundaryError) as raised:
-        _enter(_producer(_Boundary(enter_error=denial), hmac_factory, appender))
+        _enter(_producer(_Boundary(enter_error=denial), sink))
 
     assert raised.value is denial
-    assert hmac_factory.calls == 0
-    assert appender.calls == []
+    assert sink.calls == []
 
 
 @pytest.mark.parametrize(
@@ -233,50 +228,31 @@ def test_finalization_outcome_on_entry_is_not_a_pretenant_reason():
 def test_post_binding_failure_never_uses_isolated_audit(phase, outcome):
     denial = TenantBoundaryError(outcome)
     boundary = _Boundary(exit_error=denial if phase == "exit" else None)
-    hmac_factory = _HmacFactory()
-    appender = _Appender()
+    sink = _Sink()
 
     with pytest.raises(TenantBoundaryError) as raised:
         with _producer(
             boundary,
-            hmac_factory,
-            appender,
+            sink,
         ).unit_of_work(PRINCIPAL):
             if phase == "body":
                 raise denial
 
     assert raised.value is denial
-    assert hmac_factory.calls == 0
-    assert appender.calls == []
+    assert sink.calls == []
 
 
 def test_unexpected_entry_failure_gets_no_audit_classification():
     unexpected = LookupError("unexpected")
-    hmac_factory = _HmacFactory()
-    appender = _Appender()
+    sink = _Sink()
 
     with pytest.raises(LookupError) as raised:
         _enter(
-            _producer(_Boundary(enter_error=unexpected), hmac_factory, appender)
+            _producer(_Boundary(enter_error=unexpected), sink)
         )
 
     assert raised.value is unexpected
-    assert hmac_factory.calls == 0
-    assert appender.calls == []
-
-
-def test_hmac_failure_propagates_without_append_or_authorization():
-    denial = TenantBoundaryError(TenantBoundaryOutcome.UNAVAILABLE)
-    audit_error = SecurityAuditUnavailable()
-    hmac_factory = _HmacFactory(audit_error)
-    appender = _Appender()
-
-    with pytest.raises(SecurityAuditUnavailable) as raised:
-        _enter(_producer(_Boundary(enter_error=denial), hmac_factory, appender))
-
-    assert raised.value is audit_error
-    assert hmac_factory.calls == 1
-    assert appender.calls == []
+    assert sink.calls == []
 
 
 @pytest.mark.parametrize(
@@ -287,17 +263,15 @@ def test_hmac_failure_propagates_without_append_or_authorization():
         SecurityAuditOutcomeUnknown(uuid4(), None),
     ),
 )
-def test_append_failure_propagates_without_producer_retry(audit_error):
+def test_sink_failure_propagates_without_tenant_entry(audit_error):
     denial = TenantBoundaryError(TenantBoundaryOutcome.CAPABILITY_REFUSED)
-    appender = _Appender(error=audit_error)
+    sink = _Sink(error=audit_error)
 
     with pytest.raises(type(audit_error)) as raised:
-        _enter(
-            _producer(_Boundary(enter_error=denial), _HmacFactory(), appender)
-        )
+        _enter(_producer(_Boundary(enter_error=denial), sink))
 
     assert raised.value is audit_error
-    assert appender.calls == [("CAPABILITY_REFUSED", HMAC)]
+    assert sink.calls == ["CAPABILITY_REFUSED"]
 
 
 class _RecordingAppender:
@@ -324,14 +298,15 @@ def test_live_postgresql_uses_exact_router_role_and_reason(
 
     denial = TenantBoundaryError(TenantBoundaryOutcome.BINDING_REFUSED)
     appender = _RecordingAppender(PreTenantAuditClient(connect, ROUTER_PRODUCER))
+    health = SecurityAuditHealth()
+    sink = health.request_router_sink(_HmacFactory(), appender)
 
     with pytest.raises(TenantBoundaryError) as raised:
-        _enter(
-            _producer(_Boundary(enter_error=denial), _HmacFactory(), appender)
-        )
+        _enter(_producer(_Boundary(enter_error=denial), sink))
 
     assert raised.value is denial
     assert isinstance(appender.result, StoredAuditAppend)
+    assert health.readiness is SecurityAuditReadiness.READY
     with psycopg.connect(
         migrated_audit_service["target_admin_dsn"]
     ) as connection:

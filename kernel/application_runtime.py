@@ -25,6 +25,7 @@ from .security_audit_runtime import (
     PreTenantAuditRuntime,
     build_pretenant_audit_runtime,
 )
+from .security_audit_health import SecurityAuditReadiness
 from .signing_authority import SigningAuthorityReader
 from .signing_receipt import (
     SIGNING_EVIDENCE_MAX_BYTES,
@@ -100,6 +101,10 @@ class ApplicationRuntime:
         principal: AuthenticatedPrincipal,
     ) -> AbstractContextManager[TenantUnitOfWork]:
         return self._security_audit.unit_of_work(principal)
+
+    @property
+    def security_audit_readiness(self) -> SecurityAuditReadiness:
+        return self._security_audit.readiness
 
     def close(self) -> None:
         try:

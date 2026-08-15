@@ -15,7 +15,7 @@ from .principal import (
     PrincipalResolutionError,
     PrincipalResolutionOutcome,
 )
-from .security_audit import CorrelationHmac, SecurityAuditAppend
+from .security_audit import SecurityAuditAppend
 
 
 class CredentialVerifier(Protocol):
@@ -26,16 +26,8 @@ class PrincipalResolver(Protocol):
     def resolve(self, identity: VerifiedIdentity) -> AuthenticatedPrincipal: ...
 
 
-class CorrelationHmacFactory(Protocol):
-    def create(self) -> CorrelationHmac: ...
-
-
-class AuditAppender(Protocol):
-    def append(
-        self,
-        reason: str,
-        correlation_hmac: CorrelationHmac,
-    ) -> SecurityAuditAppend: ...
+class AuditSink(Protocol):
+    def append(self, reason: str) -> SecurityAuditAppend: ...
 
 
 _AUTHENTICATION_REASONS = MappingProxyType(
@@ -63,26 +55,20 @@ class AuthenticationAuditProducer:
         self,
         verifier: CredentialVerifier,
         resolver: PrincipalResolver,
-        correlation_hmac_factory: CorrelationHmacFactory,
-        audit_appender: AuditAppender,
+        audit_sink: AuditSink,
     ) -> None:
         self._verifier = verifier
         self._resolver = resolver
-        self._correlation_hmac_factory = correlation_hmac_factory
-        self._audit_appender = audit_appender
+        self._audit_sink = audit_sink
 
     def authenticate(self, token: object) -> AuthenticatedPrincipal:
         try:
             identity = self._verifier.verify(token)
         except AuthenticationError as error:
-            self._append(_AUTHENTICATION_REASONS[error.outcome])
+            self._audit_sink.append(_AUTHENTICATION_REASONS[error.outcome])
             raise
         try:
             return self._resolver.resolve(identity)
         except PrincipalResolutionError as error:
-            self._append(_PRINCIPAL_REASONS[error.outcome])
+            self._audit_sink.append(_PRINCIPAL_REASONS[error.outcome])
             raise
-
-    def _append(self, reason: str) -> None:
-        correlation_hmac = self._correlation_hmac_factory.create()
-        self._audit_appender.append(reason, correlation_hmac)

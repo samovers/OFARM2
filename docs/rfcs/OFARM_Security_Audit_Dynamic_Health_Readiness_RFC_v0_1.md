@@ -1,7 +1,8 @@
 # OFARM Security-Audit Dynamic Health and Readiness — Phase A Contract v0.1
 
-**Status:** Phase A draft under review; Phase B repository implementation,
-deployment, release, and production operation are not authorized
+**Status:** Phase A approved and Phase B repository implementation authorized
+by exact same-task approval; deployment, release, and production operation are
+not authorized
 
 **Draft pull request:** `https://github.com/samovers/OFARM2/pull/314`
 
@@ -512,8 +513,7 @@ module globals, or the readiness response.
 | `AUDHLTH-004` | `ApplicationRuntime.authenticate()` receives a mapped verification failure and HMAC creation then fails. | One authentication attempt completes failed; no append occurs; the original HMAC exception propagates. |
 | `AUDHLTH-005` | A constructor-level appender fake returns a foreign result type; separately, the production-bound client raises `SecurityAuditOutcomeUnknown`. | The lane becomes not ready and the foreign/unknown failure propagates; neither can become success. The fake does not model injection of a malformed accepted-class value into production. |
 | `AUDHLTH-006` | Authentication attempt 2 starts after attempt 1, succeeds first, and attempt 1 fails later. | Attempt 1 is stale and cannot replace attempt 2's ready result. |
-| `AUDHLTH-007` | Authentication is not ready, then the request-router lane succeeds. | Overall remains not ready until a later authentication attempt succeeds. |
-| `AUDHLTH-007` | A lane fails and no later governed refusal reaches that lane, while dependency recovery and readiness polling occur. | `/ready` remains 503 `NOT_READY` indefinitely; neither elapsed time nor polling restores the lane. |
+| `AUDHLTH-007` | Authentication is not ready; the request-router lane succeeds and dependency recovery plus readiness polling occur, but no later governed authentication refusal arrives. | `/ready` remains 503 `NOT_READY` indefinitely until a later authentication attempt succeeds; cross-lane activity, elapsed time, and polling do not restore it. |
 | `AUDHLTH-008` | One lane is ready and one is not ready when `/ready` is called. | Overall is `NOT_READY`; no majority or grace policy exists. |
 | `AUDHLTH-009` | A hostile client polls `/ready` concurrently, tries to cache an earlier response, and mutates `app.state.runtime_metadata`. | Responses remain fixed no-store snapshots; no dependency call occurs and mutable `app.state` does not control readiness. |
 | `AUDHLTH-010` | A principal refusal is mapped, but the audit database is unavailable. | Audit failure propagates, authentication does not return a principal, and no tenant operation starts. |
@@ -830,13 +830,12 @@ Changing any of these requires version 2.
 
 ### 14.2 Review disposition
 
-- **Blockers:** formal review `4944322806` found that the earlier wording
-  simultaneously required a validated accepted-class value and specified only
-  an exact-type sink check. This revision adopts the review's bounded option A:
-  the existing client `_map_result` mapping remains the sole value-validation
-  authority, the production sink trusts exact accepted results from that bound
-  client, and the sink rejects foreign or subclassed result types. Exact-head
-  re-review is pending.
+- **Blockers:** none. Exact-head Phase A re-review at
+  `1654cef7b734496e52abb47da716ac615faae5d8` closed formal review
+  `4944322806` after this revision adopted bounded option A: the existing client
+  `_map_result` mapping remains the sole value-validation authority, the
+  production sink trusts exact accepted results from that bound client, and the
+  sink rejects foreign or subclassed result types.
 - **Findings:** the conversation review found that recovery can remain
   traffic-dependent indefinitely and that restart silently creates new initial
   state. Sections 6.5, 6.7, and 8 now state and test those claim limits.
@@ -851,7 +850,8 @@ hardening become Follow-ups and do not reopen review.
 
 ## 15. Phase A approval boundary
 
-This RFC is not approval and does not authorize Phase B.
+This RFC is not itself approval. Phase B authority comes only from the later
+same-task approval recorded below.
 
 After the complete RFC is published in its named draft pull request and
 independent Phase A review reports no demonstrated Blocker, the assistant may
@@ -871,7 +871,23 @@ or a summary is not approval. A later stop-like user message pauses work. Any
 semantic card or contract change, path-envelope change, authority change, or
 named-pull-request change requires a new decision version.
 
-Approval would authorize repository implementation only within the named draft
-pull request and the exact path envelope. It would not authorize deployment,
+The approval authorizes repository implementation only within the named draft
+pull request and the exact path envelope. It does not authorize deployment,
 release, production access, production operation, current/default promotion,
 issue #192 closure, or a security waiver.
+
+### 15.1 Phase B authorization evidence
+
+The unique complete live card for this decision and version was presented in
+the same Codex task after exact-head Phase A review, named draft pull request
+#314, and retained the contract's exact path envelope. The immediately later
+task-user message, in the user role and without additional text, was:
+
+```text
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-DYNAMIC-HEALTH-READINESS-001 version 1.
+```
+
+The original task messages remain directly retrievable in order. This record
+is AI-attested evidence only; the task-user message remains the authority. The
+approval grants provisional repository-development authority for PR #314 and
+does not authorize deployment or any other production authority action.
