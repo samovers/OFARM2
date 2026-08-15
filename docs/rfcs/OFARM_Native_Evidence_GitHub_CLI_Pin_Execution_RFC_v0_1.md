@@ -14,9 +14,8 @@ maintenance of its retained native-evidence verification workflow
 
 **Reviewed base:** `9c12c115bd29d9889234edd9e4c84377d9e332f8`
 
-**Named draft pull request:** pending initial RFC-only publication; this field
-must name the created draft pull request before exact-head Phase A review or a
-live decision card
+**Named draft pull request:**
+[`samovers/OFARM2#312`](https://github.com/samovers/OFARM2/pull/312)
 
 **Primary trust boundary:** native release-evidence verifier toolchain
 selection and workflow custody
