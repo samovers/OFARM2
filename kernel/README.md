@@ -73,11 +73,15 @@ Production owns a bounded connection pool and one transaction-bound
 `TenantUnitOfWork` per verified tenant operation. The UnitOfWork creates and
 spends the database challenge on one backend, exposes the exact protected
 `TenantBinding` plus typed governed-batch allocation, and exposes no arbitrary
-SQL or connection handle. Only its manager finalizes the transaction. Before
-reuse, the pool proves an idle transaction and discards all PostgreSQL session
-state; a reset failure discards the connection. Automatic statement preparation
-is disabled so client bookkeeping cannot outlive that reset, while production
-provisioning keeps two-phase transactions disabled.
+SQL or connection handle. Its slotted facade stores only the binding, lifecycle
+state, batch result, and a narrow typed allocator; the raw connection remains in
+the module-private manager path. The architecture gate fixes that public surface
+and rejects raw-handle escape attributes in production consumers. Only the
+manager finalizes the transaction. Before reuse, the pool proves an idle
+transaction and discards all PostgreSQL session state; a reset failure discards
+the connection. Automatic statement preparation is disabled so client
+bookkeeping cannot outlive that reset, while production provisioning keeps
+two-phase transactions disabled.
 
 Governed production handlers are still downstream work, so protected endpoints
 return `GOVERNED_SURFACE_BLOCKED`. `/health` and `/manifest` expose immutable

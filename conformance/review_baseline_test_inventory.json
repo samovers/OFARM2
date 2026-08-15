@@ -7061,11 +7061,6 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_asgi_concurrency_keeps_two_actors_in_two_tenants",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
-    },
-    {
       "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_empty_unit_of_work_consumes_no_knowledge_position",
       "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
       "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
@@ -7106,9 +7101,14 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_same_tenant_allocation_blocks_until_prior_position_commits",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow_concurrency.py::test_asgi_concurrency_keeps_two_actors_on_two_backends",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_uow_concurrency",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_uow_concurrency.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow_concurrency.py::test_same_tenant_allocation_blocks_until_prior_position_commits",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_uow_concurrency",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_uow_concurrency.py"
     },
     {
       "nodeid": "kernel/tests/test_principal_authority.py::test_activation_maps_digest_and_transition_parameters_exactly",
@@ -9017,6 +9017,21 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture.py::test_runtime_config_from_env_is_the_only_environment_reader",
+      "sourceModule": "kernel.tests.test_rewrite_architecture",
+      "sourcePath": "kernel/tests/test_rewrite_architecture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture.py::test_tenant_uow_architecture_allows_only_the_narrow_facade",
+      "sourceModule": "kernel.tests.test_rewrite_architecture",
+      "sourcePath": "kernel/tests/test_rewrite_architecture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture.py::test_tenant_uow_architecture_rejects_external_escape_attributes",
+      "sourceModule": "kernel.tests.test_rewrite_architecture",
+      "sourcePath": "kernel/tests/test_rewrite_architecture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture.py::test_tenant_uow_architecture_rejects_raw_handle_and_surface_expansion",
       "sourceModule": "kernel.tests.test_rewrite_architecture",
       "sourcePath": "kernel/tests/test_rewrite_architecture.py"
     },
@@ -15076,6 +15091,11 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     },
     {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_pool_reset_preserves_failure_when_client_mode_restore_also_fails",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
       "nodeid": "kernel/tests/test_tenant_uow.py::test_pool_reset_refuses_an_invalid_starting_state[autocommit-enabled]",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
@@ -15126,8 +15146,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "01b6978710ec7bd6cfbbcdff31da6ae786738d3c6528526576f7f826dafe671f",
-  "entryCount": 3025,
+  "entriesSha256": "917c4a712d9347b52ec3538d798763a7d12112ffa9ced0caea9010207e993156",
+  "entryCount": 3029,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

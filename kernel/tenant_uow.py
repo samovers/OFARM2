@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime
@@ -184,82 +184,99 @@ class GovernedWriteBatch:
     created_at: datetime
 
 
-class TenantUnitOfWork:
-    def __init__(self, connection: Connection, binding: TenantBinding) -> None:
-        self._connection = connection
-        self.binding = binding
-        self._active = True
-        self._batch: GovernedWriteBatch | None = None
+_BatchAllocator = Callable[[GovernedBatchRequest], GovernedWriteBatch]
 
-    @property
-    def batch(self) -> GovernedWriteBatch | None:
-        return self._batch
 
-    def _require_active(self) -> None:
-        if not self._active:
-            raise RuntimeError("tenant UnitOfWork is closed")
-
-    def _finish(self) -> None:
-        self._active = False
-
-    def begin_batch(self, request: GovernedBatchRequest) -> GovernedWriteBatch:
-        self._require_active()
-        if type(request) is not GovernedBatchRequest or self._batch is not None:
-            raise RuntimeError("governed batch already exists")
-        row = self._connection.execute(
-            """
-            INSERT INTO ofarm.governed_write_batch (
-                tenant_id, batch_id, authenticated_principal_ref,
-                governed_operation, request_id, runtime_bundle_digest
-            ) VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING tenant_id, batch_id, full_xid::pg_catalog.text,
-                      authenticated_principal_ref, governed_operation,
-                      request_id, runtime_bundle_digest,
-                      knowledge_position, created_at
-            """,
-            (
-                self.binding.tenant_id,
-                request.batch_id,
-                self.binding.party_ref,
-                request.operation,
-                request.request_id,
-                request.runtime_bundle_digest,
-            ),
-        ).fetchone()
-        if row is None or len(row) != 9:
-            raise RuntimeError("governed batch allocation failed")
-        expected = (
-            self.binding.tenant_id,
+def _allocate_governed_batch(
+    connection: Connection,
+    binding: TenantBinding,
+    request: GovernedBatchRequest,
+) -> GovernedWriteBatch:
+    row = connection.execute(
+        """
+        INSERT INTO ofarm.governed_write_batch (
+            tenant_id, batch_id, authenticated_principal_ref,
+            governed_operation, request_id, runtime_bundle_digest
+        ) VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING tenant_id, batch_id, full_xid::pg_catalog.text,
+                  authenticated_principal_ref, governed_operation,
+                  request_id, runtime_bundle_digest,
+                  knowledge_position, created_at
+        """,
+        (
+            binding.tenant_id,
             request.batch_id,
-            self.binding.party_ref,
+            binding.party_ref,
             request.operation,
             request.request_id,
             request.runtime_bundle_digest,
-        )
-        if (row[0], row[1], *row[3:7]) != expected:
-            raise RuntimeError("governed batch authority differs")
-        full_xid = int(row[2])
-        if full_xid <= 0:
-            raise RuntimeError("governed batch transaction differs")
-        knowledge_position = row[7]
-        if (
-            type(knowledge_position) is not int
-            or knowledge_position < 1
-            or knowledge_position > _MAX_KNOWLEDGE_POSITION
-        ):
-            raise RuntimeError("governed batch knowledge position differs")
-        self._batch = GovernedWriteBatch(
-            tenant_id=_uuid(row[0], "batch tenant"),
-            batch_id=request.batch_id,
-            full_xid=full_xid,
-            authenticated_principal_ref=self.binding.party_ref,
-            operation=request.operation,
-            request_id=request.request_id,
-            runtime_bundle_digest=request.runtime_bundle_digest,
-            knowledge_position=knowledge_position,
-            created_at=_time(row[8], "batch creation time"),
-        )
-        return self._batch
+        ),
+    ).fetchone()
+    if row is None or len(row) != 9:
+        raise RuntimeError("governed batch allocation failed")
+    expected = (
+        binding.tenant_id,
+        request.batch_id,
+        binding.party_ref,
+        request.operation,
+        request.request_id,
+        request.runtime_bundle_digest,
+    )
+    if (row[0], row[1], *row[3:7]) != expected:
+        raise RuntimeError("governed batch authority differs")
+    full_xid = int(row[2])
+    if full_xid <= 0:
+        raise RuntimeError("governed batch transaction differs")
+    knowledge_position = row[7]
+    if (
+        type(knowledge_position) is not int
+        or knowledge_position < 1
+        or knowledge_position > _MAX_KNOWLEDGE_POSITION
+    ):
+        raise RuntimeError("governed batch knowledge position differs")
+    return GovernedWriteBatch(
+        tenant_id=_uuid(row[0], "batch tenant"),
+        batch_id=request.batch_id,
+        full_xid=full_xid,
+        authenticated_principal_ref=binding.party_ref,
+        operation=request.operation,
+        request_id=request.request_id,
+        runtime_bundle_digest=request.runtime_bundle_digest,
+        knowledge_position=knowledge_position,
+        created_at=_time(row[8], "batch creation time"),
+    )
+
+
+class TenantUnitOfWork:
+    __slots__ = ("binding", "__active", "__allocate_batch", "__batch")
+
+    def __init__(
+        self,
+        binding: TenantBinding,
+        allocate_batch: _BatchAllocator,
+    ) -> None:
+        self.binding = binding
+        self.__active = True
+        self.__allocate_batch = allocate_batch
+        self.__batch: GovernedWriteBatch | None = None
+
+    @property
+    def batch(self) -> GovernedWriteBatch | None:
+        return self.__batch
+
+    def _require_active(self) -> None:
+        if not self.__active:
+            raise RuntimeError("tenant UnitOfWork is closed")
+
+    def _finish(self) -> None:
+        self.__active = False
+
+    def begin_batch(self, request: GovernedBatchRequest) -> GovernedWriteBatch:
+        self._require_active()
+        if type(request) is not GovernedBatchRequest or self.__batch is not None:
+            raise RuntimeError("governed batch already exists")
+        self.__batch = self.__allocate_batch(request)
+        return self.__batch
 
 
 def _idle(connection: Connection) -> bool:
@@ -289,7 +306,13 @@ def _reset_tenant_connection(connection: Connection) -> None:
     connection.autocommit = True
     try:
         connection.execute("DISCARD ALL", prepare=False)
-    finally:
+    except BaseException:
+        try:
+            connection.autocommit = False
+        except BaseException:
+            pass
+        raise
+    else:
         connection.autocommit = False
     if not _idle(connection):
         raise RuntimeError("tenant connection reset did not finish idle")
@@ -395,7 +418,14 @@ class TenantUnitOfWorkManager:
             raise TenantBoundaryError(
                 TenantBoundaryOutcome.BINDING_REFUSED
             ) from None
-        unit = TenantUnitOfWork(connection, binding)
+        unit = TenantUnitOfWork(
+            binding,
+            lambda request: _allocate_governed_batch(
+                connection,
+                binding,
+                request,
+            ),
+        )
         try:
             yield unit
         except BaseException:

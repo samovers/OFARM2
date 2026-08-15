@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -154,11 +155,28 @@ class _Pool:
 
 
 class _ResetConnection:
-    def __init__(self, *, error=None):
+    def __init__(self, *, error=None, restore_error=None):
         self.info = _Info()
-        self.autocommit = False
+        self._autocommit = False
+        self.autocommit_assignments = []
         self.events = []
         self._error = error
+        self._restore_error = restore_error
+
+    @property
+    def autocommit(self):
+        return self._autocommit
+
+    @autocommit.setter
+    def autocommit(self, value):
+        self.autocommit_assignments.append(value)
+        if (
+            value is False
+            and self._autocommit is True
+            and self._restore_error is not None
+        ):
+            raise self._restore_error
+        self._autocommit = value
 
     def execute(self, query, *, prepare):
         self.events.append((query, prepare, self.autocommit))
@@ -381,6 +399,14 @@ def test_sql_surface_is_absent_and_later_refusal_rolls_back(principal):
 
     with pytest.raises(RuntimeError, match="later governed stage refused"):
         with manager.unit_of_work(principal) as unit:
+            assert {name for name in dir(unit) if not name.startswith("_")} == {
+                "batch",
+                "begin_batch",
+                "binding",
+            }
+            assert not hasattr(unit, "__dict__")
+            assert not hasattr(unit, "_connection")
+            assert connection not in gc.get_referents(unit)
             unit.begin_batch(request)
             for query in hostile_sql:
                 with pytest.raises(AttributeError):
@@ -412,6 +438,22 @@ def test_pool_reset_failure_is_not_hidden_and_restores_client_mode():
     assert raised.value is failure
     assert connection.events == [("DISCARD ALL", False, True)]
     assert connection.autocommit is False
+
+
+def test_pool_reset_preserves_failure_when_client_mode_restore_also_fails():
+    reset_failure = OSError("reset reply lost")
+    restore_failure = RuntimeError("client mode restore refused")
+    connection = _ResetConnection(
+        error=reset_failure,
+        restore_error=restore_failure,
+    )
+
+    with pytest.raises(OSError) as raised:
+        _reset_tenant_connection(connection)
+
+    assert raised.value is reset_failure
+    assert connection.autocommit_assignments == [True, False]
+    assert connection.autocommit is True
 
 
 @pytest.mark.parametrize(

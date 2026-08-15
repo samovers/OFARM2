@@ -1,15 +1,11 @@
-"""Real-role PostgreSQL and ASGI tests for the tenant UnitOfWork."""
+"""Real-role PostgreSQL tests for the tenant UnitOfWork."""
 from __future__ import annotations
 
 import time
-from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier, Event
 from uuid import uuid4
 
 import psycopg
 import pytest
-from fastapi import FastAPI, Header
-from fastapi.testclient import TestClient
 from psycopg.types.json import Jsonb
 
 from deployment.postgresql.tenant_contract import (
@@ -19,9 +15,7 @@ from deployment.postgresql.tenant_contract import (
 )
 from kernel import tenant_uow as tenant_uow_module
 from kernel.authentication import VerifiedIdentity
-from kernel.application_runtime import ApplicationRuntime, RuntimeMetadata
 from kernel.principal_resolver import PrincipalBindingResolver
-from kernel.runtime_config import RuntimeMode
 from kernel.tenant_uow import (
     GovernedBatchRequest,
     TenantUnitOfWorkManager,
@@ -449,6 +443,8 @@ def test_pool_reset_cleans_session_before_same_backend_serves_second_tenant(
     statement_name = f"uow_reset_{uuid4().hex}"
     channel_name = f"uow_reset_{uuid4().hex}"
     manager.initialize()
+    # Fixed size makes backend reuse evidence independent of elastic growth.
+    pool.resize(1, 1)
     try:
         with pool.connection(timeout=5.0) as connection:
             backend_pid = connection.execute(
@@ -547,6 +543,8 @@ def test_pool_discards_backend_when_reset_callback_refuses(
     )
     pool = create_tenant_connection_pool(target.role_dsn("ofarm_app"))
     pool.open(wait=True, timeout=5.0)
+    # The next checkout can only follow reset/discard, not normal pool growth.
+    pool.resize(1, 1)
     try:
         with pool.connection(timeout=5.0) as first_connection:
             first_pid = first_connection.execute(
@@ -635,165 +633,3 @@ def test_knowledge_positions_are_tenant_local(
             WHERE knowledge_position = 1
             """
         ).fetchone() == (2,)
-
-
-def test_same_tenant_allocation_blocks_until_prior_position_commits(
-    target: TenantTarget,
-    tenant_authority: TenantAuthority,
-    tenant_manager: TenantUnitOfWorkManager,
-) -> None:
-    principal = _principal(target, tenant_authority)
-    head_before = _knowledge_head(target, tenant_authority.tenant_id)
-    first_ready = Event()
-    second_attempting = Event()
-    release_first = Event()
-
-    def allocate_first() -> int:
-        with tenant_manager.unit_of_work(principal) as unit:
-            batch = unit.begin_batch(
-                GovernedBatchRequest(
-                    f"batch-ordered-a-{uuid4().hex}",
-                    "ORDERED_POSITION",
-                    f"request-ordered-a-{uuid4().hex}",
-                    tenant_authority.runtime_bundle_digest,
-                )
-            )
-            first_ready.set()
-            if not release_first.wait(timeout=10):
-                raise TimeoutError("first allocator was not released")
-            return batch.knowledge_position
-
-    def allocate_second() -> int:
-        if not first_ready.wait(timeout=10):
-            raise TimeoutError("first allocator did not start")
-        with tenant_manager.unit_of_work(principal) as unit:
-            second_attempting.set()
-            return unit.begin_batch(
-                GovernedBatchRequest(
-                    f"batch-ordered-b-{uuid4().hex}",
-                    "ORDERED_POSITION",
-                    f"request-ordered-b-{uuid4().hex}",
-                    tenant_authority.runtime_bundle_digest,
-                )
-            ).knowledge_position
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        first_future = executor.submit(allocate_first)
-        assert first_ready.wait(timeout=10)
-        second_future = executor.submit(allocate_second)
-        assert second_attempting.wait(timeout=10)
-        blocked = False
-        deadline = time.monotonic() + 5
-        try:
-            with psycopg.connect(target.target_admin_dsn) as admin:
-                while time.monotonic() < deadline:
-                    wait_state = admin.execute(
-                        """
-                        SELECT pg_catalog.count(*)
-                        FROM pg_catalog.pg_stat_activity
-                        WHERE usename = 'ofarm_app'
-                          AND wait_event_type = 'Lock'
-                          AND query ~ (
-                              'INSERT[[:space:]]+INTO[[:space:]]+' ||
-                              'ofarm[.]governed_write_batch'
-                          )
-                        """,
-                    ).fetchone()
-                    if wait_state is not None and wait_state[0] >= 1:
-                        blocked = True
-                        break
-                    time.sleep(0.02)
-        finally:
-            release_first.set()
-        first_position = first_future.result(timeout=10)
-        second_position = second_future.result(timeout=10)
-
-    assert blocked is True
-    assert first_position == head_before + 1
-    assert second_position == head_before + 2
-
-
-def test_asgi_concurrency_keeps_two_actors_in_two_tenants(
-    target: TenantTarget,
-    tenant_authority: TenantAuthority,
-    other_authority: TenantAuthority,
-    tenant_manager: TenantUnitOfWorkManager,
-) -> None:
-    principals = {
-        "actor-a": _principal(target, tenant_authority),
-        "actor-b": _principal(target, other_authority),
-    }
-    by_subject = {
-        principal.identity.subject: principal
-        for principal in principals.values()
-    }
-
-    class Verifier:
-        def verify(self, token):
-            return principals[token].identity
-
-    class Resolver:
-        def resolve(self, identity):
-            return by_subject[identity.subject]
-
-    verifier = Verifier()
-    resolver = Resolver()
-
-    class SecurityAudit:
-        def authenticate(self, token):
-            return resolver.resolve(verifier.verify(token))
-
-        def unit_of_work(self, principal):
-            return tenant_manager.unit_of_work(principal)
-
-    runtime = ApplicationRuntime(
-        SecurityAudit(),
-        object(),
-        RuntimeMetadata(
-            mode=RuntimeMode.PRODUCTION,
-            deployment_image_digest="sha256:" + "1" * 64,
-            oidc_issuer=ISSUER,
-            oidc_audience="external-api",
-            binder_audience="binder-audience",
-            tenant_capability_kid="k" * 43,
-        ),
-        object(),
-        object(),
-        tenant_manager,
-    )
-    barrier = Barrier(2)
-    app = FastAPI()
-
-    @app.get("/probe")
-    def probe(authorization: str = Header()):
-        principal = runtime.authenticate(
-            authorization.removeprefix("Bearer ")
-        )
-        with runtime.tenant_unit_of_work(principal) as unit:
-            barrier.wait(timeout=5)
-            return {
-                "tenant": str(unit.binding.tenant_id),
-                "party": unit.binding.party_ref,
-            }
-
-    with TestClient(app) as client, ThreadPoolExecutor(max_workers=2) as executor:
-        futures = [
-            executor.submit(
-                client.get,
-                "/probe",
-                headers={"Authorization": f"Bearer {actor}"},
-            )
-            for actor in principals
-        ]
-        responses = [future.result(timeout=10) for future in futures]
-
-    assert {response.status_code for response in responses} == {200}
-    bodies = [response.json() for response in responses]
-    assert {body["tenant"] for body in bodies} == {
-        str(tenant_authority.tenant_id),
-        str(other_authority.tenant_id),
-    }
-    assert {body["party"] for body in bodies} == {
-        tenant_authority.party_ref,
-        other_authority.party_ref,
-    }
