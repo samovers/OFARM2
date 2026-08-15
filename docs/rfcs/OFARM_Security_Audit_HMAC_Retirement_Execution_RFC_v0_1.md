@@ -1,7 +1,7 @@
 # OFARM Security-Audit HMAC Retirement Execution — Phase A Contract v0.1
 
-**Status:** proposed and unapproved; Phase B, deployment, and every Cloud KMS
-mutation remain unauthorized
+**Status:** Phase A reviewed and proposed for explicit approval; Phase B,
+deployment, and every Cloud KMS mutation remain unauthorized
 
 **Draft pull request:** `https://github.com/samovers/OFARM2/pull/316`
 
@@ -976,9 +976,16 @@ Changing any of those choices after a live card requires decision version `2`.
 
 ### 14.2 Review disposition
 
-- **Blockers:** Phase A exact-head review pending.
-- **Follow-ups:** the separate issue #192 boundaries in section 11.5.
-- **Preferences:** none recorded.
+- **Review evidence:** the full Phase A review of exact head
+  `274c32795e1ad060b13b1a10a5737a8dba34443e` completed with no Blockers in
+  [PR #316 comment 5304005172](https://github.com/samovers/OFARM2/pull/316#issuecomment-5304005172).
+- **Blockers:** zero.
+- **Follow-ups:** four already-external boundaries: IAM provisioning and
+  verification, a clock-health fence, disable-before-destroy organization-policy
+  compatibility, and durable retirement receipts. Sections 11.5 and 12 keep
+  them outside this pull request.
+- **Preferences:** one non-blocking wording clarification about absent destroy
+  times; no contract change required.
 - **Phase B:** unauthorized.
 - **Deployment:** unauthorized.
 
