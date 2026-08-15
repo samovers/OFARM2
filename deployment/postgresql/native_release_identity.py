@@ -30,9 +30,17 @@ EVIDENCE_RECEIPT_PATH = (
     / "ofarm_ed25519"
     / "native_evidence_receipt.json"
 )
+VERIFICATION_CURRENTNESS_PATH = (
+    PACKAGE_ROOT
+    / "deployment"
+    / "postgresql"
+    / "ofarm_ed25519"
+    / "native_evidence_verification_currentness.json"
+)
 SOURCE_DIRECTORY = IDENTITY_PATH.parent
 MAX_IDENTITY_BYTES = 256 * 1024
 MAX_EVIDENCE_RECEIPT_BYTES = 768 * 1024
+MAX_VERIFICATION_CURRENTNESS_BYTES = 16 * 1024
 MAX_INDEX_BYTES = 64 * 1024
 MAX_EVIDENCE_AUTHORITY_FILE_BYTES = 2 * 1024 * 1024
 MAX_PROVIDER_VERIFICATION_BYTES = 64 * 1024
@@ -63,6 +71,9 @@ GITHUB_PROVIDER_VERIFICATION_SCHEMA = (
 )
 EVIDENCE_RECEIPT_SCHEMA_V1 = "ofarm.native-verifier-evidence-receipt.v1"
 EVIDENCE_RECEIPT_SCHEMA_V2 = "ofarm.native-verifier-evidence-receipt.v2"
+VERIFICATION_CURRENTNESS_SCHEMA_V1 = (
+    "ofarm.native-verifier-verification-currentness.v1"
+)
 HISTORICAL_V1_CANDIDATE_RECEIPT_DIGEST = (
     "sha256:ddb70333297aeda15961fe4ab8d045e918a1f5d6e44645fe51940db1e4d13fa2"
 )
@@ -1482,7 +1493,7 @@ def validate_native_evidence_receipt(
     if status_value == "frozen":
         _validate_evidence_authority_input(
             document.get("verificationAuthorityInput"),
-            repository_root=repository_root,
+            repository_root=None,
         )
     if status_value == "provisional":
         if release_identity.status != "provisional" or (
@@ -1561,6 +1572,139 @@ def validate_native_evidence_receipt(
     return NativeEvidenceReceipt(document, canonical_bytes, _digest(canonical_bytes))
 
 
+@dataclass(frozen=True, slots=True)
+class NativeEvidenceVerificationCurrentness:
+    """Validated live verifier authority bound to one frozen receipt."""
+
+    document: dict[str, Any]
+    canonical_bytes: bytes
+    digest: str
+
+    def manifest(self) -> dict[str, Any]:
+        return json.loads(self.canonical_bytes)
+
+
+def validate_native_evidence_verification_currentness(
+    document: Any,
+    *,
+    canonical_bytes: bytes,
+    release_identity: NativeReleaseIdentity,
+    evidence_receipt: NativeEvidenceReceipt,
+    repository_root: Path,
+) -> NativeEvidenceVerificationCurrentness:
+    """Validate one canonical currentness gate against freshly read authority."""
+
+    if release_identity.status != "frozen" or evidence_receipt.status != "frozen":
+        raise NativeReleaseIdentityError(
+            "verification currentness requires frozen release evidence"
+        )
+    if not isinstance(document, dict) or set(document) != {
+        "evidenceReceiptDigest",
+        "releaseIdentityDigest",
+        "schemaVersion",
+        "status",
+        "verificationAuthorityInput",
+    }:
+        raise NativeReleaseIdentityError(
+            "verification-currentness fields are not exact"
+        )
+    if not 0 < len(canonical_bytes) <= MAX_VERIFICATION_CURRENTNESS_BYTES:
+        raise NativeReleaseIdentityError(
+            "verification-currentness canonical bytes have an invalid size"
+        )
+    if canonical_json_bytes(document) != canonical_bytes:
+        raise NativeReleaseIdentityError(
+            "verification-currentness JSON is not canonical"
+        )
+    if document.get("schemaVersion") != VERIFICATION_CURRENTNESS_SCHEMA_V1:
+        raise NativeReleaseIdentityError(
+            "verification-currentness schema is not exact"
+        )
+    if document.get("status") != "current":
+        raise NativeReleaseIdentityError(
+            "verification-currentness status is not exact"
+        )
+    if _require_digest(
+        document.get("releaseIdentityDigest"),
+        "verification-currentness release identity link",
+    ) != release_identity.digest:
+        raise NativeReleaseIdentityError(
+            "verification currentness is not linked to the release identity"
+        )
+    if _require_digest(
+        document.get("evidenceReceiptDigest"),
+        "verification-currentness evidence receipt link",
+    ) != evidence_receipt.digest:
+        raise NativeReleaseIdentityError(
+            "verification currentness is not linked to the evidence receipt"
+        )
+    try:
+        _validate_evidence_authority_input(
+            document.get("verificationAuthorityInput"),
+            repository_root=repository_root,
+        )
+    except NativeReleaseIdentityError as exc:
+        raise NativeReleaseIdentityError(
+            f"verification currentness is invalid: {exc}"
+        ) from exc
+    return NativeEvidenceVerificationCurrentness(
+        document,
+        canonical_bytes,
+        _digest(canonical_bytes),
+    )
+
+
+def verification_currentness_document(
+    *,
+    release_identity: NativeReleaseIdentity,
+    evidence_receipt: NativeEvidenceReceipt,
+    repository_root: Path = PACKAGE_ROOT,
+) -> dict[str, Any]:
+    """Construct and validate current authority for one frozen receipt."""
+
+    document = {
+        "evidenceReceiptDigest": evidence_receipt.digest,
+        "releaseIdentityDigest": release_identity.digest,
+        "schemaVersion": VERIFICATION_CURRENTNESS_SCHEMA_V1,
+        "status": "current",
+        "verificationAuthorityInput": evidence_authority_input_manifest(
+            repository_root
+        ),
+    }
+    validate_native_evidence_verification_currentness(
+        document,
+        canonical_bytes=canonical_json_bytes(document),
+        release_identity=release_identity,
+        evidence_receipt=evidence_receipt,
+        repository_root=repository_root,
+    )
+    return document
+
+
+def load_native_evidence_verification_currentness(
+    path: Path = VERIFICATION_CURRENTNESS_PATH,
+    *,
+    release_identity: NativeReleaseIdentity,
+    evidence_receipt: NativeEvidenceReceipt,
+    repository_root: Path = PACKAGE_ROOT,
+) -> NativeEvidenceVerificationCurrentness:
+    """Load the bounded checked currentness gate without following symlinks."""
+
+    data = _read_regular(
+        path,
+        MAX_VERIFICATION_CURRENTNESS_BYTES,
+        "native evidence verification currentness",
+    )
+    document = _load_json_bytes(data, "native evidence verification currentness")
+    return validate_native_evidence_verification_currentness(
+        document,
+        canonical_bytes=data,
+        release_identity=release_identity,
+        evidence_receipt=evidence_receipt,
+        repository_root=repository_root,
+    )
+
+
 def load_native_evidence_receipt(
     path: Path = EVIDENCE_RECEIPT_PATH,
     *,
@@ -1568,18 +1712,36 @@ def load_native_evidence_receipt(
     verify_current_authority: bool = False,
     repository_root: Path | None = None,
     allow_candidate: bool = False,
+    verification_currentness_path: Path | None = None,
 ) -> NativeEvidenceReceipt:
     data = _read_regular(path, MAX_EVIDENCE_RECEIPT_BYTES, "native evidence receipt")
     document = _load_json_bytes(data, "native evidence receipt")
-    return validate_native_evidence_receipt(
+    authority_root = (
+        repository_root or PACKAGE_ROOT if verify_current_authority else None
+    )
+    receipt = validate_native_evidence_receipt(
         document,
         canonical_bytes=data,
         release_identity=release_identity,
-        repository_root=(
-            repository_root or PACKAGE_ROOT if verify_current_authority else None
-        ),
+        repository_root=authority_root,
         allow_candidate=allow_candidate,
     )
+    if verify_current_authority and receipt.status == "frozen":
+        load_native_evidence_verification_currentness(
+            (
+                VERIFICATION_CURRENTNESS_PATH
+                if verification_currentness_path is None
+                else verification_currentness_path
+            ),
+            release_identity=release_identity,
+            evidence_receipt=receipt,
+            repository_root=authority_root or PACKAGE_ROOT,
+        )
+    elif verification_currentness_path is not None and not verify_current_authority:
+        raise NativeReleaseIdentityError(
+            "verification currentness requires current-authority validation"
+        )
+    return receipt
 
 
 def provisional_identity_document(
