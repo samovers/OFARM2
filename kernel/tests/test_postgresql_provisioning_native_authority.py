@@ -16,13 +16,16 @@ import pytest
 from deployment.postgresql import migration_cli
 from deployment.postgresql import migration_runner
 from deployment.postgresql import migration_sets
+from deployment.postgresql import native_release_identity
 from deployment.postgresql import provisioning
 from deployment.postgresql import provisioning_specs
 from deployment.postgresql import readiness
 from deployment.postgresql.migration_sets import TENANT_SERVICE
 from deployment.postgresql.native_release_identity import (
+    EVIDENCE_RECEIPT_PATH,
     IDENTITY_PATH,
     SOURCE_DIRECTORY,
+    VERIFICATION_CURRENTNESS_PATH,
     NativeReleaseIdentityError,
     canonical_json_bytes,
     load_native_evidence_receipt,
@@ -195,6 +198,54 @@ def test_tenant_provisioning_manifest_lazily_binds_complete_current_documents(
     assert (identity_calls, receipt_calls) == (4, 4)
 
 
+def test_currentness_sidecar_preserves_exact_tenant_provisioning_identity() -> None:
+    receipt_bytes = EVIDENCE_RECEIPT_PATH.read_bytes()
+    assert len(receipt_bytes) == 25_682
+    assert "sha256:" + hashlib.sha256(receipt_bytes).hexdigest() == (
+        "sha256:5a13f99a5252828da01df0e2d2e5b8d"
+        "491b99ec795736e5becc2659616a575c3"
+    )
+    assert TENANT_PROVISIONING_SPEC.digest == (
+        "sha256:2ac8487b64d4fb09d7576ef1ee09ac1f"
+        "2a3cc5b20558f0d2137620b897c7157c"
+    )
+    manifest_bytes = TENANT_PROVISIONING_SPEC.canonical_manifest_bytes()
+    assert b"native_evidence_verification_currentness" not in manifest_bytes
+    assert VERIFICATION_CURRENTNESS_PATH.read_bytes() not in manifest_bytes
+
+
+@pytest.mark.parametrize("mode", ("missing", "stale"))
+def test_tenant_manifest_refuses_missing_or_stale_currentness_sidecar(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    sidecar = tmp_path / "verification-currentness.json"
+    if mode == "stale":
+        document = json.loads(VERIFICATION_CURRENTNESS_PATH.read_bytes())
+        authority = document["verificationAuthorityInput"]
+        authority["files"][0]["sha256"] = "sha256:" + "0" * 64
+        authority_body = {
+            "algorithm": authority["algorithm"],
+            "files": authority["files"],
+        }
+        authority["digest"] = "sha256:" + hashlib.sha256(
+            canonical_json_bytes(authority_body)
+        ).hexdigest()
+        sidecar.write_bytes(canonical_json_bytes(document))
+    monkeypatch.setattr(
+        native_release_identity,
+        "VERIFICATION_CURRENTNESS_PATH",
+        sidecar,
+    )
+
+    with pytest.raises(ProvisioningSpecError, match="invalid or stale") as raised:
+        TENANT_PROVISIONING_SPEC.manifest()
+
+    assert isinstance(raised.value.__cause__, NativeReleaseIdentityError)
+    assert "verification currentness" in str(raised.value.__cause__)
+
+
 @pytest.mark.parametrize("failed_loader", ("identity", "receipt"))
 @pytest.mark.parametrize("failure", (_raise_unavailable, _raise_stale))
 def test_audit_only_manifests_ignore_missing_or_stale_tenant_authority(
@@ -215,6 +266,22 @@ def test_audit_only_manifests_ignore_missing_or_stale_tenant_authority(
     assert json.loads(
         SECURITY_AUDIT_PROVISIONING_SPEC.canonical_manifest_bytes()
     )["identity"] == SECURITY_AUDIT_PROVISIONING_SPEC.identity
+
+
+def test_audit_only_manifest_never_loads_currentness_sidecar(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        native_release_identity,
+        "VERIFICATION_CURRENTNESS_PATH",
+        tmp_path / "missing-currentness.json",
+    )
+
+    manifest = SECURITY_AUDIT_PROVISIONING_SPEC.manifest()
+    assert manifest["identity"] == SECURITY_AUDIT_PROVISIONING_SPEC.identity
+    assert "nativeVerifier" not in manifest["preLedgerBootstrap"]
+    assert SECURITY_AUDIT_PROVISIONING_SPEC.digest.startswith("sha256:")
 
 
 @pytest.mark.parametrize("failure", (_raise_unavailable, _raise_stale))
@@ -345,6 +412,73 @@ def test_normal_tenant_entry_points_refuse_before_external_work(
         readiness.verify_tenant_structural_compatibility(
             tenant_structural_dsn="hostile-route"
         )
+
+
+def test_missing_currentness_refuses_tenant_entry_points_before_external_work(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        native_release_identity,
+        "VERIFICATION_CURRENTNESS_PATH",
+        tmp_path / "missing-currentness.json",
+    )
+
+    with pytest.raises(
+        provisioning.ProvisioningTargetError,
+        match="invalid or stale",
+    ):
+        provisioning._require_fixed_spec(TENANT_PROVISIONING_SPEC)
+
+    with pytest.raises(
+        migration_runner.MigrationInputError,
+        match="invalid or stale",
+    ):
+        migration_runner._require_fixed_pair(TENANT_PROVISIONING_SPEC, object())
+
+    monkeypatch.setattr(
+        readiness.psycopg,
+        "connect",
+        lambda *args, **kwargs: pytest.fail("tenant readiness connected"),
+    )
+    with pytest.raises(
+        readiness.PostgreSQLVerificationError,
+        match="invalid or stale",
+    ):
+        readiness.verify_tenant_structural_compatibility(
+            tenant_structural_dsn="hostile-route"
+        )
+
+    monkeypatch.delenv("HOSTILE_ADMIN_DSN", raising=False)
+    monkeypatch.delenv("HOSTILE_MIGRATOR_DSN", raising=False)
+    monkeypatch.setattr(
+        migration_cli,
+        "load_authoritative_migration_set",
+        lambda *args, **kwargs: pytest.fail("migration files were loaded"),
+    )
+    with pytest.raises(SystemExit) as migration_exit:
+        migration_cli.run_fixed_migration_cli(
+            service=TENANT_SERVICE,
+            spec=TENANT_PROVISIONING_SPEC,
+            admin_dsn_environment="HOSTILE_ADMIN_DSN",
+            migrator_dsn_environment="HOSTILE_MIGRATOR_DSN",
+            argv=(
+                "--release-identity",
+                "ofarm-release/174",
+                "--execution-id",
+                str(_EXECUTION_ID),
+            ),
+        )
+    assert migration_exit.value.code == 1
+
+    monkeypatch.setattr(
+        migration_sets,
+        "load_authoritative_migration_set",
+        lambda *args, **kwargs: pytest.fail("migration sources were loaded"),
+    )
+    with pytest.raises(SystemExit) as preflight_exit:
+        migration_sets.preflight_main(TENANT_SERVICE, ())
+    assert preflight_exit.value.code == 1
 
 
 def test_tenant_migration_cli_refuses_provisional_authority_before_routes(

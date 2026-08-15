@@ -594,8 +594,8 @@ SELECTION_STORAGE_SOURCE_PINS = (
     (
         "deployment/postgresql/native_release_identity.py",
         "deployment.postgresql.native_release_identity",
-        73_323,
-        "sha256:1c09e7be38453543f49a1b789b357926f23f2527a9412a640ddc9a7b0e2f4f08",
+        79_101,
+        "sha256:507a30c20960d6981f15de7f48def51a727093e0beaecdd647e3474baf706193",
     ),
     (
         "deployment/postgresql/tenant_contract.py",

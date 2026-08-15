@@ -50,6 +50,7 @@ try:
         load_native_release_identity,
         validate_github_release_command_document,
         validate_native_release_identity,
+        verification_currentness_document,
     )
 except ModuleNotFoundError:  # Direct execution from this source directory.
     from native_release_identity import (  # type: ignore[no-redef]
@@ -76,6 +77,7 @@ except ModuleNotFoundError:  # Direct execution from this source directory.
         load_native_release_identity,
         validate_github_release_command_document,
         validate_native_release_identity,
+        verification_currentness_document,
     )
 
 
@@ -514,6 +516,39 @@ def _write_regular(path: Path, data: bytes) -> None:
     if path.is_symlink() or (path.exists() and not path.is_file()):
         raise NativeEvidenceError("evidence output path is not a regular file")
     path.write_bytes(data)
+
+
+def _publish_regular_fresh(path: Path, data: bytes, label: str) -> None:
+    """Atomically publish one fresh file and refuse every existing path."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=path.parent,
+            prefix=f".{path.name}.",
+        )
+    except OSError as exc:
+        raise NativeEvidenceError(f"{label} cannot be staged") from exc
+    temporary_path = Path(temporary_name)
+    try:
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+        except OSError as exc:
+            raise NativeEvidenceError(f"{label} cannot be staged") from exc
+        try:
+            os.link(temporary_path, path, follow_symlinks=False)
+        except FileExistsError as exc:
+            raise NativeEvidenceError(f"{label} output already exists") from exc
+        except OSError as exc:
+            raise NativeEvidenceError(f"{label} cannot be published") from exc
+    finally:
+        try:
+            temporary_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _publish_regular_no_clobber(path: Path, data: bytes, label: str) -> None:
@@ -1753,10 +1788,54 @@ def compose_multi_platform_index(
     return evidence
 
 
+def generate_verification_currentness(
+    *,
+    release_identity_path: Path,
+    evidence_receipt_path: Path,
+    source_directory: Path,
+    repository_root: Path,
+    output: Path,
+) -> dict[str, Any]:
+    """Emit one fresh offline currentness sidecar for frozen checked evidence."""
+
+    try:
+        identity = load_native_release_identity(
+            release_identity_path,
+            verify_current_sources=True,
+            source_directory=source_directory,
+        )
+        receipt = load_native_evidence_receipt(
+            evidence_receipt_path,
+            release_identity=identity,
+        )
+        document = verification_currentness_document(
+            release_identity=identity,
+            evidence_receipt=receipt,
+            repository_root=repository_root,
+        )
+    except NativeReleaseIdentityError as exc:
+        raise NativeEvidenceError(str(exc)) from exc
+    canonical = release_canonical_json_bytes(document)
+    _publish_regular_fresh(
+        output,
+        canonical,
+        "native evidence verification currentness",
+    )
+    return {
+        "evidence_receipt_digest": receipt.digest,
+        "release_identity_digest": identity.digest,
+        "status": document["status"],
+        "verification_authority_input_digest": document[
+            "verificationAuthorityInput"
+        ]["digest"],
+    }
+
+
 def prepare_release_identity(
     *,
     checked_identity_path: Path,
     checked_receipt_path: Path,
+    verification_currentness_path: Path | None = None,
     index_evidence_path: Path,
     index_path: Path,
     source_directory: Path,
@@ -1777,6 +1856,7 @@ def prepare_release_identity(
             release_identity=checked,
             verify_current_authority=True,
             repository_root=repository_root,
+            verification_currentness_path=verification_currentness_path,
         )
         index_evidence = _require_object(
             _load_json_file(
@@ -2383,6 +2463,7 @@ def verify_frozen_evidence_receipt(
     *,
     release_identity_path: Path,
     evidence_receipt_path: Path,
+    verification_currentness_path: Path | None = None,
     source_directory: Path,
     repository_root: Path,
 ) -> dict[str, Any]:
@@ -2399,6 +2480,7 @@ def verify_frozen_evidence_receipt(
             release_identity=identity,
             verify_current_authority=True,
             repository_root=repository_root,
+            verification_currentness_path=verification_currentness_path,
         )
     except NativeReleaseIdentityError as exc:
         raise NativeEvidenceError(str(exc)) from exc
@@ -2434,6 +2516,7 @@ def conformance_environment(
     *,
     checked_identity_path: Path,
     checked_receipt_path: Path,
+    verification_currentness_path: Path | None = None,
     archive_path: Path,
     source_directory: Path,
     repository_root: Path,
@@ -2463,6 +2546,7 @@ def conformance_environment(
             release_identity=identity,
             verify_current_authority=True,
             repository_root=repository_root,
+            verification_currentness_path=verification_currentness_path,
         )
     except NativeReleaseIdentityError as exc:
         raise NativeEvidenceError(str(exc)) from exc
@@ -2524,9 +2608,19 @@ def _parser() -> argparse.ArgumentParser:
     compose.add_argument("--index-output", type=Path, required=True)
     compose.add_argument("--evidence-output", type=Path, required=True)
 
+    currentness = subparsers.add_parser("generate-verification-currentness")
+    currentness.add_argument("--release-identity", type=Path, required=True)
+    currentness.add_argument("--evidence-receipt", type=Path, required=True)
+    currentness.add_argument("--source-directory", type=Path, required=True)
+    currentness.add_argument("--repository-root", type=Path, required=True)
+    currentness.add_argument("--output", type=Path, required=True)
+
     release = subparsers.add_parser("prepare-release-identity")
     release.add_argument("--checked-identity", type=Path, required=True)
     release.add_argument("--checked-receipt", type=Path, required=True)
+    release.add_argument(
+        "--verification-currentness", type=Path, required=True
+    )
     release.add_argument("--index-evidence", type=Path, required=True)
     release.add_argument("--index", type=Path, required=True)
     release.add_argument("--source-directory", type=Path, required=True)
@@ -2544,12 +2638,18 @@ def _parser() -> argparse.ArgumentParser:
     reverify = subparsers.add_parser("verify-frozen-evidence-receipt")
     reverify.add_argument("--release-identity", type=Path, required=True)
     reverify.add_argument("--evidence-receipt", type=Path, required=True)
+    reverify.add_argument(
+        "--verification-currentness", type=Path, required=True
+    )
     reverify.add_argument("--source-directory", type=Path, required=True)
     reverify.add_argument("--repository-root", type=Path, required=True)
 
     environment = subparsers.add_parser("conformance-environment")
     environment.add_argument("--checked-identity", type=Path, required=True)
     environment.add_argument("--checked-receipt", type=Path, required=True)
+    environment.add_argument(
+        "--verification-currentness", type=Path, required=True
+    )
     environment.add_argument("--archive", type=Path, required=True)
     environment.add_argument("--source-directory", type=Path, required=True)
     environment.add_argument("--repository-root", type=Path, required=True)
@@ -2589,10 +2689,26 @@ def main(argv: list[str] | None = None) -> int:
                 index_output=args.index_output,
                 evidence_output=args.evidence_output,
             )
+        elif args.command == "generate-verification-currentness":
+            print(
+                json.dumps(
+                    generate_verification_currentness(
+                        release_identity_path=args.release_identity,
+                        evidence_receipt_path=args.evidence_receipt,
+                        source_directory=args.source_directory,
+                        repository_root=args.repository_root,
+                        output=args.output,
+                    ),
+                    ensure_ascii=True,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            )
         elif args.command == "prepare-release-identity":
             prepare_release_identity(
                 checked_identity_path=args.checked_identity,
                 checked_receipt_path=args.checked_receipt,
+                verification_currentness_path=args.verification_currentness,
                 index_evidence_path=args.index_evidence,
                 index_path=args.index,
                 source_directory=args.source_directory,
@@ -2614,6 +2730,9 @@ def main(argv: list[str] | None = None) -> int:
                     verify_frozen_evidence_receipt(
                         release_identity_path=args.release_identity,
                         evidence_receipt_path=args.evidence_receipt,
+                        verification_currentness_path=(
+                            args.verification_currentness
+                        ),
                         source_directory=args.source_directory,
                         repository_root=args.repository_root,
                     ),
@@ -2627,6 +2746,9 @@ def main(argv: list[str] | None = None) -> int:
                 conformance_environment(
                     checked_identity_path=args.checked_identity,
                     checked_receipt_path=args.checked_receipt,
+                    verification_currentness_path=(
+                        args.verification_currentness
+                    ),
                     archive_path=args.archive,
                     source_directory=args.source_directory,
                     repository_root=args.repository_root,
