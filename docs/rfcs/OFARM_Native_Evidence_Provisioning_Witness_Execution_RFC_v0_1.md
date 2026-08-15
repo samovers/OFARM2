@@ -16,8 +16,8 @@ post-closure repair of a newly demonstrated provisioning-authority coupling
 **Demonstrating pull request:**
 `https://github.com/samovers/OFARM2/pull/312`
 
-**Implementation pull request:** to be bound after the RFC-only branch is
-published as one draft pull request
+**Implementation pull request:**
+`https://github.com/samovers/OFARM2/pull/313`
 
 **Reviewed base:** `9c12c115bd29d9889234edd9e4c84377d9e332f8`
 
