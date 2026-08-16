@@ -1,7 +1,8 @@
 # OFARM Security-Audit HMAC Retirement Execution — Phase A Contract v0.2
 
-**Status:** proposed decision version 2; Phase A only; Phase B, deployment, and
-every Cloud KMS mutation remain unauthorized
+**Status:** decision version 2 semantics reviewed with zero Blockers and
+proposed for explicit Phase A approval; Phase B, deployment, and every Cloud
+KMS mutation remain unauthorized
 
 **Draft pull request:** `https://github.com/samovers/OFARM2/pull/316`
 
@@ -1244,8 +1245,15 @@ version `3`.
 - **Version-2 correction:** sections 4–9 now freeze the final sanitizer, runner
   phases, exact clock/acceptance inequality, lossless nanoseconds, two-sided
   time windows, equality behavior, evidence requirements, and refusal posture.
-- **Blockers:** exact-head re-review of `HRET-005`, `HRET-007`, `HRET-008`, and
-  `HRET-012` pending.
+- **Version-2 review evidence:** owner review
+  [`4945993429`](https://github.com/samovers/OFARM2/pull/316#pullrequestreview-4945993429)
+  at exact semantic head `6976732dc1488daed6463380b095a99faccedfa6`
+  passed `HRET-005`, `HRET-007`, `HRET-008`, and `HRET-012`, confirmed the
+  one-RFC Phase A boundary, and found no remaining Blocker.
+- **Blockers:** zero at the exact reviewed semantic head. This
+  review-record-only update changes status and disposition metadata only; it
+  changes no decision semantic, invariant, authority, effect, non-effect,
+  output protocol, path envelope, or Phase B gate.
 - **Follow-ups:** four already-external boundaries: IAM provisioning and
   verification, a timing-evidence gate, disable-before-destroy
   organization-policy compatibility, and durable retirement receipts. Sections
