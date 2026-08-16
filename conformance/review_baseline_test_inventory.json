@@ -7066,6 +7066,11 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_governed_batch_request_has_no_knowledge_position_input",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_hostile_sql_has_no_unit_of_work_ingress_and_batch_rolls_back",
       "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
       "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
@@ -7096,7 +7101,7 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_runtime_cannot_supply_a_knowledge_position",
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_runtime_database_refuses_explicit_knowledge_position",
       "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
       "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
     },
@@ -15226,8 +15231,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "dd5ceabe948cd0b480e35fe4c4b1b98e3cff60d3c57a940b85885799ec6f6d48",
-  "entryCount": 3045,
+  "entriesSha256": "763f478cd7a7ec5a735b807c54dce8305c18bf2e503c13fd43d1f4d9f2c80384",
+  "entryCount": 3046,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

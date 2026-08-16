@@ -33,6 +33,7 @@ from kernel.tests.test_postgresql_tenant_migration import (
     _compute_act_digest,
     _compute_binding_digest,
     _sha256_id,
+    _signed_capability_for_new_challenge,
     _transition,
     authority,  # noqa: F401 - imported fixture
     capability_key,  # noqa: F401 - imported fixture
@@ -562,7 +563,7 @@ def test_pool_discards_backend_when_reset_callback_refuses(
         pool.close(timeout=5.0)
 
 
-def test_runtime_cannot_supply_a_knowledge_position(
+def test_governed_batch_request_has_no_knowledge_position_input(
     target: TenantTarget,
     tenant_authority: TenantAuthority,
     tenant_manager: TenantUnitOfWorkManager,
@@ -589,6 +590,67 @@ def test_runtime_cannot_supply_a_knowledge_position(
         )
 
     assert accepted.knowledge_position == head_before + 1
+
+
+def test_runtime_database_refuses_explicit_knowledge_position(
+    target: TenantTarget,
+    tenant_authority: TenantAuthority,
+    key_authority: CapabilityKeyAuthority,
+) -> None:
+    head_before = _knowledge_head(target, tenant_authority.tenant_id)
+    batch_id = f"batch-explicit-{uuid4().hex}"
+
+    with psycopg.connect(target.role_dsn("ofarm_app")) as application:
+        application.execute("BEGIN ISOLATION LEVEL READ COMMITTED")
+        capability = _signed_capability_for_new_challenge(
+            application,
+            authority=tenant_authority,
+            key=key_authority,
+        )
+        application.execute(
+            "SELECT ofarm.bind_tenant_capability(%s)",
+            (capability,),
+        )
+        context = application.execute(
+            "SELECT * FROM ofarm.current_tenant_context()"
+        ).fetchone()
+        assert context is not None
+        assert context[7] == tenant_authority.tenant_id
+
+        with pytest.raises(
+            psycopg.errors.InvalidParameterValue,
+            match="runtime knowledge position is database assigned",
+        ):
+            application.execute(
+                """
+                INSERT INTO ofarm.governed_write_batch (
+                    tenant_id, batch_id, authenticated_principal_ref,
+                    governed_operation, request_id, runtime_bundle_digest,
+                    knowledge_position
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    tenant_authority.tenant_id,
+                    batch_id,
+                    tenant_authority.party_ref,
+                    "EXPLICIT_POSITION",
+                    f"request-explicit-{uuid4().hex}",
+                    tenant_authority.runtime_bundle_digest,
+                    head_before + 1,
+                ),
+            )
+        application.rollback()
+
+    with psycopg.connect(target.target_admin_dsn) as admin:
+        assert admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm.governed_write_batch
+            WHERE tenant_id = %s AND batch_id = %s
+            """,
+            (tenant_authority.tenant_id, batch_id),
+        ).fetchone() == (0,)
+    assert _knowledge_head(target, tenant_authority.tenant_id) == head_before
 
 
 def test_knowledge_positions_are_tenant_local(
