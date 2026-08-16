@@ -11356,6 +11356,306 @@
       "sourcePath": "kernel/tests/test_security_audit_client.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_base_exception_is_propagated_without_becoming_a_closed_outcome[commit]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_base_exception_is_propagated_without_becoming_a_closed_outcome[control]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_base_exception_is_propagated_without_becoming_a_closed_outcome[export]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_base_exception_is_propagated_without_becoming_a_closed_outcome[fetch]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_base_exception_is_propagated_without_becoming_a_closed_outcome[intent]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_canonical_export_page_uses_the_normal_readers_exact_event_document",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_complete_route_preflight_refuses_before_every_factory_call[control-blank]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_complete_route_preflight_refuses_before_every_factory_call[control-malformed]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_complete_route_preflight_refuses_before_every_factory_call[control-non-string]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_complete_route_preflight_refuses_before_every_factory_call[cursor-unvalidated]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_complete_route_preflight_refuses_before_every_factory_call[export-blank]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_complete_route_preflight_refuses_before_every_factory_call[export-malformed]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_complete_route_preflight_refuses_before_every_factory_call[export-non-string]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_control_factory_failure_is_unavailable_without_retry",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_documentation_is_library_only_and_claim_limited",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_every_outward_failure_is_fresh_and_unlinked_from_preflight_dependency",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_explicit_commit_exception_is_unknown_and_never_opens_export",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_export_accepts_every_shared_maintenance_event_shape[AUDIT_ACCESS]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_export_accepts_every_shared_maintenance_event_shape[AUDIT_GAP]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_export_accepts_every_shared_maintenance_event_shape[AUDIT_RETENTION]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_export_accepts_every_shared_maintenance_event_shape[OVERFLOW_ENDED]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_export_accepts_every_shared_maintenance_event_shape[OVERFLOW_STARTED]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_export_error_classes_are_one_exact_closed_family",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_export_factory_failure_occurs_only_after_acknowledged_intent",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_export_refuses_the_2049th_row_without_fetch_loop_or_continuation",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_invalid_intent_result_refuses_before_commit_or_export[missing]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_invalid_intent_result_refuses_before_commit_or_export[nil-id]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_invalid_intent_result_refuses_before_commit_or_export[second-row]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_invalid_intent_result_refuses_before_commit_or_export[wrong-duration]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_live_database_exercises_equal_replay_mismatch_and_widening",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_live_database_role_separation_remains_authoritative",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_live_expired_export_intent_is_refused_and_clock_is_restored",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_live_export_runner_uses_fixed_options_and_returns_one_page",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_malformed_shared_carrier_never_returns_an_export_page[naive-time]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_malformed_shared_carrier_never_returns_an_export_page[nil-id]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_malformed_shared_carrier_never_returns_an_export_page[non-tuple]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_malformed_shared_carrier_never_returns_an_export_page[short-carrier]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_malformed_shared_carrier_never_returns_an_export_page[short-fingerprint]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_malformed_shared_carrier_never_returns_an_export_page[short-hmac]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_malformed_shared_carrier_never_returns_an_export_page[unexpected-extension]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_malformed_shared_carrier_never_returns_an_export_page[unknown-kind]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_malformed_shared_carrier_never_returns_an_export_page[wrong-retention]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_modules_have_no_executable_adapter_or_protected_error_collector",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_order_cut_and_expiry_violations_fail_after_acknowledged_intent[after-cut]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_order_cut_and_expiry_violations_fail_after_acknowledged_intent[ascending]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_order_cut_and_expiry_violations_fail_after_acknowledged_intent[not-live-through-expiry]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_post_acknowledgement_close_failures_cannot_downgrade_the_page",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_post_intent_export_failure_closes_without_retry[active]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_post_intent_export_failure_closes_without_retry[closed]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_post_intent_export_failure_closes_without_retry[execute]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_post_intent_export_failure_closes_without_retry[fetch]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_precommit_control_failure_rolls_back_closes_and_never_opens_export[active]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_precommit_control_failure_rolls_back_closes_and_never_opens_export[closed]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_precommit_control_failure_rolls_back_closes_and_never_opens_export[execute]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_precommit_control_failure_rolls_back_closes_and_never_opens_export[isolation]",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_render_failure_is_detached_and_never_returns_a_partial_page",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_retired_closed_history_is_preserved_but_unknown_read_sets_are_refused",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_row_at_the_input_cursor_is_refused",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_runner_api_has_no_protocol_limit_role_or_access_id_inputs",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_export.py::test_runner_passes_original_routes_and_one_cursor_to_exact_fixed_calls",
+      "sourceModule": "kernel.tests.test_security_audit_export",
+      "sourcePath": "kernel/tests/test_security_audit_export.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_gap.py::test_base_exception_is_not_caught_or_recorded",
       "sourceModule": "kernel.tests.test_security_audit_gap",
       "sourcePath": "kernel/tests/test_security_audit_gap.py"
@@ -12787,6 +13087,11 @@
     },
     {
       "nodeid": "kernel/tests/test_security_audit_query.py::test_reader_factory_failure_occurs_only_after_acknowledged_intent",
+      "sourceModule": "kernel.tests.test_security_audit_query",
+      "sourcePath": "kernel/tests/test_security_audit_query.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_query.py::test_reader_public_values_are_direct_shared_access_exports",
       "sourceModule": "kernel.tests.test_security_audit_query",
       "sourcePath": "kernel/tests/test_security_audit_query.py"
     },
@@ -15716,8 +16021,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "bbeb2cf3a09bd2027af51197cf26dfdaac2f1ca27d6ab56b852cca03e9041b59",
-  "entryCount": 3143,
+  "entriesSha256": "a651565bf3aa04cd5f45c1c8244fe356e240b0cb8ce89708260d2beb5e690fc8",
+  "entryCount": 3204,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

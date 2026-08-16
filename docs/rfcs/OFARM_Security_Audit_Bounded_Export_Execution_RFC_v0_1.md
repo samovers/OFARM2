@@ -1,6 +1,6 @@
 # OFARM Security-Audit Bounded Export Execution — Phase A Contract v0.1
 
-**Status:** proposed; Phase B repository implementation is unauthorized
+**Status:** approved version 1; Phase B implementation is in exact-head verification
 
 **Draft implementation pull request:**
 `https://github.com/samovers/OFARM2/pull/318`
@@ -9,11 +9,13 @@
 `ofarm2.security-audit-bounded-export-execution.v0.1`
 
 **Decision identity:**
-`ISSUE192-SECURITY-AUDIT-BOUNDED-EXPORT-EXECUTION-001`, proposed version `1`
+`ISSUE192-SECURITY-AUDIT-BOUNDED-EXPORT-EXECUTION-001`, approved version `1`
 
 **Issue:** #192
 
 **Reviewed base:** `e65569fd82045607ec7eb8971834a340d82c5b2d`
+
+**Approved Phase A head:** `7cbc37db12521699c091bfb1165a94cf5da0540d`
 
 **Primary trust boundary:** isolated security-audit bounded export disclosure
 execution after one acknowledged fixed export access intent
@@ -341,11 +343,13 @@ TimeZone=UTC
 DateStyle=ISO,MDY
 ```
 
-The control route additionally fixes `synchronous_commit=on`. Code-supplied
-keyword values replace conflicting conninfo values. The control connection
-must be open, non-autocommit, idle, and set to `READ COMMITTED`. The export
-connection must be open, autocommit, and idle. Any unequal posture refuses or
-fails according to the current state; there is no alternate route.
+The control route additionally fixes `synchronous_commit=on`. A code-owned
+keyword replaces, and never merges with, a conflicting conninfo value; any
+`options` present in a supplied route is therefore dropped in full. The
+control connection must be open, non-autocommit, idle, and set to
+`READ COMMITTED`. The export connection must be open, autocommit, and idle.
+Any unequal posture refuses or fails according to the current state; there is
+no alternate route.
 
 Provisioning remains the authority for role/database settings such as
 `temp_file_limit=0`. This primitive does not issue `SET`, inspect HBA rules, or
@@ -969,8 +973,15 @@ answered by Phase B implementation:
   post-preflight raw conninfo factory calls required by sections 6.1 and 6.2.
   This revision restricts the stop to a factory call before both complete raw
   strings pass exact-type, nonblank, libpq parsing and carries the section 6.1
-  invocation posture into `BEX-008`. Corrected exact-head re-review is pending;
-  Phase B remains unauthorized.
+  invocation posture into `BEX-008`. The corrected exact-head [automated
+  review](https://github.com/samovers/OFARM2/pull/318#issuecomment-5309515388),
+  [review
+  4947285696](https://github.com/samovers/OFARM2/pull/318#pullrequestreview-4947285696),
+  and [independent review
+  comment](https://github.com/samovers/OFARM2/pull/318#issuecomment-5309627643)
+  reported zero demonstrated Blockers. Review 4947285696 also recorded the
+  now-adopted meaning-preserving preference that a code-owned `options`
+  keyword replaces the complete conflicting conninfo value.
 - **Adopted corrections:** route preflight, lawful-token test wording,
   cumulative-known historical acceptance, database-limit wording,
   refused/replay precision, fixed-error test attribution, and enforcement-level
@@ -982,6 +993,13 @@ answered by Phase B implementation:
 - **Preferences:** explicit credential residency and honest client-memory
   posture are incorporated without widening the trust boundary or path
   envelope.
+- **Authorized Phase B disposition:** the implementation uses the shared
+  protocol-neutral validator, preserves the normal reader's fixed protocol,
+  adds only the library export runner, keeps all lifecycle authority absent,
+  and houses shared/export evidence in the two allowlisted test files. Local
+  focused PostgreSQL 17.10, package-checker, deterministic-inventory,
+  architecture/conformance, Ruff, and diff gates are recorded in pull request
+  #318; hosted exact-head checks and implementation review remain merge gates.
 
 Once every `BEX-001` through `BEX-013` invariant passes and no demonstrated
 in-scope Blocker remains, the approved workflow permits Phase B implementation
@@ -1001,19 +1019,32 @@ card's approval sentence can authorize Phase B. Generic approval, GitHub
 activity, repository credentials, an AI message, delegation, another task, or
 a summary of lost task items does not authorize implementation.
 
-The eventual exact approval form is:
+The exact approval form was:
 
 ```text
 I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-BOUNDED-EXPORT-EXECUTION-001 version 1.
 ```
 
-Approval will authorize only in-envelope repository implementation, tests,
+Approval authorizes only in-envelope repository implementation, tests,
 documentation, mechanical inventory regeneration, review handling, commits,
 pushes, and merge in the one named draft pull request after every gate passes.
-It will authorize no temporary LOGIN, credential, role grant/revoke/drop,
+It authorizes no temporary LOGIN, credential, role grant/revoke/drop,
 dual-approval operation, database operation outside isolated test fixtures,
 deployment, production export, release, current/default promotion, issue #192
 closure, or production security waiver.
 
-AI-attested approval evidence remains empty until a complete live card and a
-later exact task-user approval exist in the required order.
+After the complete live decision card named draft pull request #318, reviewed
+base `e65569fd82045607ec7eb8971834a340d82c5b2d`, approved Phase A head
+`7cbc37db12521699c091bfb1165a94cf5da0540d`, the exact eight-path envelope,
+all invariants and gates, and the exact approval form, the task user supplied
+this exact entire later message on 2026-08-16:
+
+```text
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-BOUNDED-EXPORT-EXECUTION-001 version 1.
+```
+
+This is the AI-attested Phase B authorization for the in-envelope repository
+implementation, tests, documentation, mechanical inventory, review handling,
+commits, pushes, and eventual merge in pull request #318 after all gates pass.
+It grants none of the production, temporary-role, approval-system, deployment,
+release, waiver, or issue-closure authority excluded above.
