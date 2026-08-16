@@ -1004,7 +1004,14 @@ def test_documentation_is_library_only_and_claim_limited():
 
     assert "bounded export-page library primitive" in documentation
     assert "at most 2,048 event rows" in documentation
-    assert "does not create or receive the temporary export credential" in documentation
+    assert (
+        "does not create or receive a separate temporary export credential parameter"
+        in documentation
+    )
+    assert (
+        "credential may be present inside the supplied export conninfo"
+        in documentation
+    )
     assert "no standalone export command" in documentation
     assert "does not prove dual approval" in documentation
 

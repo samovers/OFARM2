@@ -495,10 +495,12 @@ The control route still must authenticate exactly as
 `ofarm_security_audit_control_login`. The future lifecycle must supply an
 already-created exact `ofarm_security_audit_export_login` route with the
 existing export-capability membership. This library does not create or receive
-the temporary export credential, create or change a role, grant membership,
-verify approval, choose an operator or output destination, revoke or drop the
-temporary login, or terminate a session. Normal provisioning deliberately
-keeps that login absent.
+a separate temporary export credential parameter, create or change a role,
+grant membership, verify approval, choose an operator or output destination,
+revoke or drop the temporary login, or terminate a session. A lifecycle-owned
+credential may be present inside the supplied export conninfo and remains
+resident for the runner call; the library neither extracts nor returns that
+route. Normal provisioning deliberately keeps the login absent.
 
 Code-owned startup values replace conflicting conninfo keywords. In
 particular, a code-owned keyword never merges with a conflicting conninfo
