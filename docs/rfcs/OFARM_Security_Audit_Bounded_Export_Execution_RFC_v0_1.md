@@ -299,7 +299,11 @@ values as exact strings, rejects blank values, and parses each with
 I/O; the returned parse mappings are not retained. A validation failure
 produces the fixed refused outcome with zero connection-factory calls and zero
 access intent. Earlier lifecycle validation does not replace this runner-owned
-preflight.
+preflight. After both values pass, each connection factory receives the same
+original preflighted string as its positional conninfo argument plus the
+code-owned keyword settings in section 6.2. The runner does not canonicalize,
+reconstruct, expand, or substitute either route from the temporary parse
+mapping.
 
 The runner accepts no approval document, separate password parameter, role
 name, purpose string, function name, limit, access-event ID, SQL, or output
@@ -482,17 +486,19 @@ The primitive exposes only these exact ordinary outcomes:
 The four failure classes are exact direct subclasses of
 `SecurityAuditExportError`, itself a `RuntimeError`. Every outward failure is a
 fresh exact instance constructed with no arguments: `error.args == ()` and
-`str(error) == ""`. Its `__cause__` and `__context__` are both `None`.
+`str(error) == ""`. Given the supported section 6.1 invocation posture, its
+`__cause__` and `__context__` are both `None`.
 
 An ordinary dependency exception is classified inside its handler by retaining
 only the trusted fixed outward class identity. The caught object, its message,
 arguments, cause, context, and traceback are discarded. Only after the handler
 has exited does the runner construct and raise the fresh fixed error. Its
-exception chain links no dependency exception or prior traceback. Normal
-formatted diagnostics produced with
+exception chain links no dependency exception or prior traceback. Focused test
+evidence formats the error with
 `traceback.TracebackException.from_exception(error, capture_locals=False)`
-contain no runtime-injected conninfo, credential, access-event, event, page, or
-dependency-exception canary.
+and requires that output to contain no runtime-injected conninfo, credential,
+access-event, event, page, or dependency-exception canary. The production
+export and shared-access modules do not import `traceback` or format errors.
 
 Like every raised Python exception, the fresh fixed error has its own active
 traceback. Its frames, and upstream caller frames, may expose application
@@ -524,6 +530,7 @@ The runner receives either no cursor or one already validated immutable
 timestamp/UUID cursor. The same two values are used for intent and export.
 Both exact conninfo strings pass nonblank libpq parsing before either
 connection factory is called; one malformed route cannot persist an intent.
+Successful factory calls receive the unchanged original preflighted strings.
 
 ### `BEX-003` — acknowledged intent precedes export access
 
@@ -563,9 +570,10 @@ Pre-connection unavailability, pre-commit refusal, explicit-commit ambiguity,
 and post-intent export failure remain distinct. No ordinary exception becomes
 success, leaks its content through the fixed fields, linked prior exception
 graph, or normal formatting with local capture disabled, or triggers a retry.
-The fresh fixed error has exact empty arguments/message, cause/context `None`,
-and no linked dependency traceback; no structural claim is made about its own
-active traceback frame locals.
+Given the supported section 6.1 invocation posture outside every active
+exception handler, the fresh fixed error has exact empty arguments/message,
+cause/context `None`, and no linked dependency traceback. No structural claim
+is made about its own active traceback frame locals.
 
 ### `BEX-009` — no automatic retry, resume, or access-ID input
 
@@ -607,13 +615,13 @@ state and call that production evidence.
 | Invariant | Counterexample | Required result |
 | --- | --- | --- |
 | `BEX-001` | A future caller attempts to pass the normal purpose, query function, 2,049 rows, or 8,388,609 bytes. | No such runner parameters exist; captured SQL contains only export constants. |
-| `BEX-002` | The request attempts a timestamp without UUID, uppercase UUID, non-UTC timestamp, changes cursor values between calls, or supplies a valid control conninfo with a blank/malformed export conninfo. | Construction or runner preflight refuses before external I/O; both factory call counts remain zero; otherwise the immutable normalized cursor pair remains identical in both SQL calls. |
+| `BEX-002` | The request attempts a timestamp without UUID, uppercase UUID, non-UTC timestamp, changes cursor values between calls, or supplies a valid control conninfo with a blank/malformed export conninfo. | Construction or runner preflight refuses before external I/O; both factory call counts remain zero; otherwise the immutable normalized cursor pair remains identical in both SQL calls and the captured factory positional values equal the original preflighted strings. |
 | `BEX-003` | Control commit raises after submission may have reached PostgreSQL. | Intent outcome is unknown; export factory and function call counts remain zero; no retry. |
 | `BEX-004` | Control and export conninfo values point at swapped roles or an export role lacking exact membership. | Existing database session-user/grant checks refuse; no direct table or alternate-role path. |
 | `BEX-005` | A hostile seam exposes a 2,049th row or fails after the first export statement. | No successful page; exactly one intent and at most one export statement; no continuation. |
 | `BEX-006` | Return a retired closed reason under a cumulatively known producer/component pair and HMAC version; then separately return an unknown pair/version, zero UUID, unknown event kind, wrong digest length, malformed maintenance extension, ascending row, row after the cut, or row at/above the cursor. | The lawful retained row is preserved; each unknown-set, malformed, or out-of-bound case fails after intent with no page. |
 | `BEX-007` | Render a valid golden fixture; separately return a reason containing a quote or control character, which cannot be a lawful closed token. | Valid canonical bytes remain exact and ASCII; the unlawful token is refused before any page is returned. |
-| `BEX-008` | Inject runtime-generated conninfo, credential, access-event, event, page, and dependency-exception canaries; fail control preflight/connect, intent execute, control commit, export connect/execute, fetch, and render in separate calls; format each fixed error with local capture disabled. | Exact class, empty message/arguments, cause/context `None`, and state outcome follow; no prior exception/traceback is linked and normal formatting contains no canary; the test makes no structural claim about fresh traceback frame locals. |
+| `BEX-008` | From the supported section 6.1 posture outside every active exception handler, inject runtime-generated conninfo, credential, access-event, event, page, and dependency-exception canaries; fail control preflight/connect, intent execute, control commit, export connect/execute, fetch, and render in separate calls; format each fixed error with local capture disabled. | Exact class, empty message/arguments, cause/context `None`, and state outcome follow; no prior exception/traceback is linked and normal formatting contains no canary; the test makes no structural claim about fresh traceback frame locals. |
 | `BEX-009` | Attempt to rerun after ambiguous commit or pass the prior access UUID as a new request. | No automatic retry and no access-ID input surface; a new caller invocation is outside this primitive's authority. |
 | `BEX-010` | Run `python -m deployment.postgresql.security_audit_export` or search deployment docs for a standalone export command. | No executable entry point or operator command exists; documentation names the later lifecycle requirement. |
 | `BEX-011` | Run the complete accepted normal-reader unit/live suite and compare canonical fixtures before and after extraction. | Public behavior and exact report bytes remain unchanged. |
@@ -801,7 +809,20 @@ Issue #192 continues to own:
 - empty-recreate/store-loss handling; and
 - final real-ASGI/PostgreSQL hostile and cross-slice closure evidence.
 
-No new issue is required merely to duplicate those open parent criteria.
+Review additionally records, without making them gates or effects of this
+decision:
+
+- a separately reviewed normal-reader fixed-error detachment change if the
+  accepted reader's retained dependency exception through `__context__` is to
+  be removed; `BEX-011` preserves that reader behavior in this decision; and
+- optional gap-style architecture-checker registration for the export/access
+  modules under a separate path-envelope decision; this slice instead uses
+  the focused test enforcement fixed in section 13.
+
+No new issue is required merely to duplicate the open parent criteria. Either
+additional implementation-quality improvement requires its own later decision
+and path envelope before repository work; this RFC records but does not
+authorize it.
 
 ### 11.6 Stop and reapproval conditions
 
@@ -815,8 +836,8 @@ Stop immediately if implementation requires:
 - a caller-selected purpose, function, SQL statement, limit, role, or access
   event ID;
 - a normal-reader public behavior or report-byte change;
-- either raw conninfo reaching a connection factory, or any connection factory
-  call occurring before both complete routes pass runner-owned preflight;
+- any connection-factory call occurring before both complete raw conninfo
+  strings pass runner-owned exact-type, nonblank, libpq parsing;
 - an error collector, logger, formatter, or diagnostic hook that captures
   frame locals or protected runtime values;
 - direct relation access, `COPY`, generic SQL, a file/spool/queue/cache, or
@@ -852,13 +873,13 @@ this runner.
 | Invariant | Owning code | Negative evidence | Acceptance evidence | Smallest verification |
 | --- | --- | --- | --- | --- |
 | `BEX-001` | Export constants and SQL | Attempt caller-selected protocol values | Captured exact parameters | Focused unit test plus contract assertions |
-| `BEX-002` | Shared immutable cursor and export route preflight | Partial/noncanonical/mutated cursor or malformed second route | Same pair in both statements; zero I/O until both routes parse | Existing cursor tests plus export preflight/capture tests |
+| `BEX-002` | Shared immutable cursor and export route preflight | Partial/noncanonical/mutated cursor or malformed second route | Same pair in both statements; zero I/O until both routes parse; unchanged original strings reach the factories only afterward | Existing cursor tests plus export preflight/capture tests |
 | `BEX-003` | Export runner state machine | Commit raises | Zero export connections/calls | Deterministic state-seam test |
 | `BEX-004` | Existing database functions | Swapped/missing roles | Session-user/grant refusal | Live PostgreSQL role test |
 | `BEX-005` | Export runner | 2,049th row/fetch failure | One intent and at most one export | Focused call-count tests plus live page |
 | `BEX-006` | Shared access validator | Retired reason under cumulative known sets; unknown-set and malformed carriers | Lawful retained acceptance; unknown/malformed refusal | Shared normal/export parametrized cases in the two allowlisted test files |
 | `BEX-007` | Export renderer/result | Valid golden fixture and unlawful quote/control-bearing token | Exact canonical ASCII bytes; unlawful-token refusal | Golden-byte and carrier tests |
-| `BEX-008` | Closed exceptions/state mapping | Runtime canaries and failure at every external seam | Exact fields/state; no linked prior exception or canary in normal formatting | Focused transition, exception-chain, and formatting matrix |
+| `BEX-008` | Closed exceptions/state mapping | Supported-posture runtime canaries and failure at every external seam | Exact fields/state; no linked prior exception or canary in normal formatting | Focused transition, exception-chain, formatting, and static-surface matrix in the two allowlisted test files |
 | `BEX-009` | Runner API and call graph | Prior access ID/retry attempt | No input or second call surface | Signature/static and call-count tests |
 | `BEX-010` | Module/docs boundary | Module execution/doc search | No entry point or standalone command | Import/static/documentation tests |
 | `BEX-011` | Shared extraction/query imports | Full reader regression corpus | Exact prior public behavior/bytes | Complete reader unit/live suite |
@@ -899,6 +920,14 @@ passing live evidence. Exact-head review must exercise each `BEX` invariant,
 the shared-validator regression risk, and the absence of lifecycle/approval
 authority.
 
+For `BEX-008`, absence of a production frame-local collector, formatter, or
+`traceback` import is enforced by focused runtime and static-source assertions
+inside the two allowlisted test files. The existing gap-style architecture
+checker is hard-coded to the separately accepted live-gap module and is not
+claimed as enforcement for this export slice. Registering the export/access
+modules there would require a separate path-envelope decision and is not a
+Phase B gate for this contract.
+
 ## 14. Open decisions and review disposition
 
 ### 14.1 Open material decisions
@@ -929,14 +958,30 @@ answered by Phase B implementation:
   demonstrated an internal contradiction between the eight-path allowlist and
   the shared-validator test gate. This revision adopts the executable fixed
   error boundary used by the accepted live-gap slice and explicitly houses all
-  shared-validator cases in the two allowlisted test files. Corrected exact-
-  head re-review is pending; Phase B remains unauthorized.
+  shared-validator cases in the two allowlisted test files. The first
+  correction-focused [automated
+  re-review](https://github.com/samovers/OFARM2/pull/318#issuecomment-5309421653)
+  reported zero Blockers, but later [review
+  4947232777](https://github.com/samovers/OFARM2/pull/318#pullrequestreview-4947232777)
+  and [review comment
+  5309490378](https://github.com/samovers/OFARM2/pull/318#issuecomment-5309490378)
+  demonstrated that the new stop condition accidentally forbade the
+  post-preflight raw conninfo factory calls required by sections 6.1 and 6.2.
+  This revision restricts the stop to a factory call before both complete raw
+  strings pass exact-type, nonblank, libpq parsing and carries the section 6.1
+  invocation posture into `BEX-008`. Corrected exact-head re-review is pending;
+  Phase B remains unauthorized.
+- **Adopted corrections:** route preflight, lawful-token test wording,
+  cumulative-known historical acceptance, database-limit wording,
+  refused/replay precision, fixed-error test attribution, and enforcement-level
+  clarity are incorporated without widening the trust boundary or path
+  envelope.
 - **Follow-ups:** the issue #192 lifecycle, store-loss, and final hostile
-  evidence boundaries listed above.
-- **Preferences:** route preflight, lawful-token test wording, cumulative-known
-  historical acceptance, database-limit/refused/replay precision, explicit
-  credential residency, and client-memory posture are incorporated without
-  widening the trust boundary or path envelope.
+  evidence boundaries, accepted-reader context detachment, and optional
+  gap-style architecture registration listed above.
+- **Preferences:** explicit credential residency and honest client-memory
+  posture are incorporated without widening the trust boundary or path
+  envelope.
 
 Once every `BEX-001` through `BEX-013` invariant passes and no demonstrated
 in-scope Blocker remains, the approved workflow permits Phase B implementation
