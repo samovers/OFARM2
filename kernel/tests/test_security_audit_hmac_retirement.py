@@ -59,20 +59,20 @@ DESTROY_DURATION_NS = 86_400 * NANOSECONDS
 CLOCK_SKEW_NS = NANOSECONDS
 STATES = kms_v1.CryptoKeyVersion.CryptoKeyVersionState
 ALGORITHMS = kms_v1.CryptoKeyVersion.CryptoKeyVersionAlgorithm
-
 def _datetime_ns(value: datetime) -> int:
     delta = value.astimezone(timezone.utc) - EPOCH
     return (
         (delta.days * 86_400 + delta.seconds) * NANOSECONDS
         + delta.microseconds * 1_000
     )
-
 DATABASE_NS = _datetime_ns(DATABASE_TIME)
-
 def _timestamp(value_ns: int) -> timestamp_pb2.Timestamp:
     seconds, nanos = divmod(value_ns, NANOSECONDS)
     return timestamp_pb2.Timestamp(seconds=seconds, nanos=nanos)
-
+IMPORT_EVIDENCE = (
+    {"reimport_eligible": True}, {"import_job": f"{PARENT}/importJobs/1"},
+    {"import_time": _timestamp(DATABASE_NS)},
+)
 def _version(
     number: int,
     *,
@@ -93,7 +93,6 @@ def _version(
     if event_ns is not None:
         values["destroy_event_time"] = _timestamp(event_ns)
     return kms_v1.CryptoKeyVersion(**values)
-
 def _parent_key(**changes) -> kms_v1.CryptoKey:
     values = {
         "name": PARENT,
@@ -161,12 +160,7 @@ class _ConnectionFactory:
     def __call__(self, conninfo, **options):
         self.calls.append((conninfo, options))
         mode = "posture" if not self.connections else "clock"
-        connection = _Connection(
-            mode,
-            self.deadline,
-            self.database_time,
-            self.session_user,
-        )
+        connection = _Connection(mode, self.deadline, self.database_time, self.session_user)
         self.connections.append(connection)
         return connection
 class _Pager:
@@ -191,8 +185,7 @@ class _KmsClient:
         self.fresh_target = fresh_target or self.observer_target
         self.key = _parent_key() if key is None else key
         self.response = response or _version(
-            1,
-            state=STATES.DESTROY_SCHEDULED,
+            1, state=STATES.DESTROY_SCHEDULED,
             destroy_ns=DATABASE_NS + DESTROY_DURATION_NS + 7,
         )
         self.destroy_error = destroy_error
@@ -202,11 +195,10 @@ class _KmsClient:
         if self.factory is not None:
             assert self.factory.connections[0].closed
         self.calls.append(("list", request, retry, timeout))
-        return _Pager(
-            kms_v1.ListCryptoKeyVersionsResponse(
-                crypto_key_versions=[self.observer_target, _version(2)]
-            )
+        response = kms_v1.ListCryptoKeyVersionsResponse(
+            crypto_key_versions=[self.observer_target, _version(2)]
         )
+        return _Pager(response)
     def get_crypto_key_version(self, *, request, retry, timeout):
         self.calls.append(("get-version", request, retry, timeout))
         number = int(request.name.rsplit("/", 1)[1])
@@ -228,7 +220,6 @@ class _KmsClient:
         if self.destroy_error is not None:
             raise self.destroy_error
         return self.response
-
 def _runner(
     *,
     deadline=DATABASE_TIME + timedelta(days=2),
@@ -457,6 +448,11 @@ def test_new_response_one_nanosecond_outside_window_is_outcome_unknown(
             destroy_ns=DATABASE_NS + DESTROY_DURATION_NS,
             algorithm=ALGORITHMS.RSA_SIGN_PSS_2048_SHA256,
         ),
+        *[
+            _version(1, state=STATES.DESTROY_SCHEDULED,
+                     destroy_ns=DATABASE_NS + DESTROY_DURATION_NS, **evidence)
+            for evidence in IMPORT_EVIDENCE
+        ],
     ],
 )
 def test_malformed_destroy_response_is_unknown_and_never_retried(response):
@@ -472,7 +468,7 @@ def test_destroy_exception_is_unknown_without_retry():
     assert phase.phase is SecurityAuditHmacRetirementPhase.SUBMITTED
     assert len([call for call in client.calls if call[0] == "destroy"]) == 1
 @pytest.mark.parametrize(
-    "key",
+    "configuration",
     [
         _parent_key(purpose=kms_v1.CryptoKey.CryptoKeyPurpose.ENCRYPT_DECRYPT),
         _parent_key(destroy_scheduled_duration=duration_pb2.Duration(seconds=30)),
@@ -483,14 +479,19 @@ def test_destroy_exception_is_unknown_without_retry():
             )
         ),
         _parent_key(import_only=True),
+        *[
+            _version(1, state=state, **evidence)
+            for state in (STATES.ENABLED, STATES.DISABLED) for evidence in IMPORT_EVIDENCE
+        ],
     ],
 )
-def test_wrong_parent_policy_refuses_before_fresh_target_or_mutation(key):
-    runner, phase, _, client = _runner(key=key)
+def test_parent_or_version_import_policy_refuses_before_mutation(configuration):
+    is_version = isinstance(configuration, kms_v1.CryptoKeyVersion)
+    runner, phase, _, client = _runner(key=None if is_version else configuration, target=configuration if is_version else None)
     with pytest.raises(SecurityAuditHmacRetirementRefused):
         runner.run(CONNINFO)
     assert phase.phase is SecurityAuditHmacRetirementPhase.PRE_SUBMISSION
-    assert client.version_one_reads == 1
+    assert client.version_one_reads == 1 + is_version
     assert not [call for call in client.calls if call[0] == "destroy"]
 @pytest.mark.parametrize(
     ("session_user", "database_time", "error"),
