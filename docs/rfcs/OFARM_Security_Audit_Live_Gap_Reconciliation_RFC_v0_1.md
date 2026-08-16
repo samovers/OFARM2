@@ -1,7 +1,8 @@
 # OFARM Security-Audit Live Gap Reconciliation — Phase A Contract v0.1
 
-**Status:** Phase A draft; not approved; Phase B, deployment, release, and
-production operation are unauthorized
+**Status:** Phase A corrected after Review 4946525305; focused exact-head
+re-review pending; not approved; Phase B, deployment, release, and production
+operation are unauthorized
 
 **Draft pull request:** `https://github.com/samovers/OFARM2/pull/317`
 
@@ -16,16 +17,18 @@ production operation are unauthorized
 **Reviewed base:** `6c061c4b9c12ac0c1141cf97fd6cf569f64ead00`
 
 **Primary trust boundary:** bounded process-local observation of failed
-pre-tenant security-audit attempts and audit-control-authorized durable
-`AUDIT_GAP` reconciliation after live-process recovery
+pre-tenant security-audit attempts, audit-control-authorized durable
+`AUDIT_GAP` reconciliation after live-process recovery, and context-detached
+propagation of its two fixed errors through the accepted producer adapters
 
 **Phase A review-head boundary:** this RFC only
 
 **Maximum final pull request boundary:** this RFC; one bounded live-gap
 controller and audit-control client; mechanical production-runtime composition;
-focused unit, live PostgreSQL, and runtime tests; minimal Kernel documentation;
-architecture-budget registration; and the mechanically regenerated
-review-baseline test inventory only
+narrow fixed-error deferral in the two accepted producer adapters; focused
+unit, live PostgreSQL, producer-adapter, and runtime tests; minimal Kernel
+documentation; architecture-budget registration; and the mechanically
+regenerated review-baseline test inventory only
 
 ## 1. Problem and goal
 
@@ -84,6 +87,14 @@ while committing produces permanent `OUTCOME_UNKNOWN` for that controller
 instance and is never retried automatically because the accepted function
 generates a new event identity on every invocation.
 
+Both supported producer call sites invoke their audit sink from inside a
+handler for the original authentication, principal-resolution, or tenant-
+boundary denial. If a fixed gap error is created or raised there, Python keeps
+the original denial and its traceback in `__context__`; `raise ... from None`
+only suppresses display and does not detach that object graph. The two producer
+adapters must therefore retain only a closed gap-error kind, leave the original
+denial handler, and create a fresh fixed gap error outside that handler.
+
 This slice covers intervals observed and recovered inside one still-running
 process. Process death can erase an uncommitted interval and is not disguised
 as solved. Restart, empty-recreate store recovery, and externally witnessed
@@ -103,6 +114,10 @@ audit delivery but leaves its known live-process evidence uncertainty entirely
 undocumented. It also establishes the exact ambiguity rule required before
 store-loss and process-crash work can safely add independent unknown-count
 intervals.
+
+It additionally proves that the fixed failure surface does not retain the
+original denial, traceback, token, principal, tenant, Party, credential, or
+other attacker-controlled object graph through Python exception context.
 
 ## 3. Non-goals
 
@@ -129,7 +144,10 @@ This pull request does not change or add:
 - retention, normal reader, export, break-glass, temporary login, credential
   creation or revocation, or cumulative disclosure authority;
 - authentication, principal, capability, binder, TenantBinding, tenant
-  UnitOfWork, post-binding tenant-batched refusal, or ordinary 404 behavior;
+  UnitOfWork, post-binding tenant-batched refusal, ordinary 404 behavior, or
+  any existing denial type, result, reason mapping, catch boundary, or
+  authority; the two producer adapters may only defer the closed fixed gap
+  error kind until after the original denial handler exits;
 - a scheduler, periodic probe, timer-driven retry, maintenance loop, web
   endpoint, operator command, or deployment orchestrator;
 - a claim that the database or host clock cannot regress, or that deployment
@@ -159,6 +177,9 @@ This pull request does not change or add:
 - absence of tenant, Party, farm, actor, issuer, subject, request, route,
   credential, token, secret, reason, exception, event identity, HMAC, and
   attacker-controlled identity data from controller state and gap input;
+- absence of the original denial object, its cause/context/traceback graph, and
+  any token, principal, tenant, Party, credential, or internal-detail canary
+  reachable from either fixed gap error;
 - the accepted dynamic-health/readiness semantics without a silent threshold
   change; and
 - the accepted post-binding switch forbidding this lane after trusted binding.
@@ -256,8 +277,10 @@ gap evidence.
 | Gap end | Fresh `clock_timestamp()` in the exact close transaction | Process clock, last event time supplied by caller, deployment timestamp |
 | Durable gap insertion | Existing `ofarm_security.append_audit_gap` | Table DML, generic SQL, new function, producer append function |
 | Callable identity | Exact `session_user = ofarm_security_audit_control_login` plus database function check | `current_user`, role membership alone, DSN label, self-attestation |
+| Control-session durability | Client-supplied keyword options pin `synchronous_commit=on`, and the client verifies the effective setting before mutation | Provisioned role default alone, DSN option, caller selection, asynchronous commit |
 | Commit outcome | Runner-owned `PRE_COMMIT`, `COMMIT_IN_FLIGHT`, and `COMMIT_ACKNOWLEDGED` phase around one explicit PostgreSQL `commit()` | Valid result row alone, connection close, exception class alone |
 | Retry eligibility | Exact runner phase before `commit()` began | Timer, generic retry library, caller retry flag, cleanup error after acknowledgement |
+| Fixed gap-error propagation | Exact producer adapter records only one of the two trusted fixed class identities, exits the original denial handler, and creates a fresh instance | Reusing the caught object, `raise ... from None` alone, generic exception interception |
 | Current readiness | Existing two-lane `SecurityAuditHealth` contract | Gap-controller state, gap event presence, operator input |
 | Post-binding use | Existing request-router/TenantBinding boundary | Gap state, caller flag, fallback to pre-tenant lane |
 
@@ -271,14 +294,25 @@ table write, or producer-credential path.
 
 The runtime constructs one `SecurityAuditGapClient` and one
 `SecurityAuditGapController` before constructing either lane wrapper. The client
-uses only the existing control DSN with fixed connection and statement bounds.
+uses only the existing control DSN. Every initialization and close connection
+supplies these exact driver keyword arguments rather than relying on DSN or
+provisioned-role defaults:
+
+```text
+connect_timeout=5
+options="-c statement_timeout=2000 -c lock_timeout=250 -c synchronous_commit=on"
+```
+
+The client exposes no override for any of those settings. A conflicting DSN
+attempt cannot weaken the keyword-supplied session settings.
 
 Initialization performs one read-only control transaction:
 
 1. require `autocommit = false` and `READ COMMITTED`;
-2. read exactly one `(session_user, clock_timestamp())` row;
-3. require the exact control login, one finite timezone-aware timestamp, and no
-   second row;
+2. read exactly one `(session_user, current_setting('synchronous_commit'),
+   clock_timestamp())` row;
+3. require the exact control login, exact setting `on`, one finite timezone-
+   aware timestamp, and no second row;
 4. end the transaction without a maintenance write; and
 5. install that timestamp as the controller's initial database anchor.
 
@@ -430,9 +464,10 @@ gap transaction per successful producer call.
 ### 6.6 Audit-control transaction and ambiguity
 
 The gap client receives only one controller-created immutable snapshot. It
-opens one exact control connection with fixed timeouts, requires
-`autocommit = false`, sets `READ COMMITTED`, and verifies the exact
-`session_user` before any maintenance call.
+opens one exact control connection with the keyword settings fixed in section
+6.1, requires `autocommit = false`, sets `READ COMMITTED`, and verifies the
+exact `session_user` and effective `synchronous_commit = on` before any
+maintenance call.
 
 The client owns a closed transaction phase initialized to `PRE_COMMIT`. It does
 not use a connection or transaction context manager that can add an implicit
@@ -487,12 +522,29 @@ If a known-precommit failure must be merged with a concurrent open accumulator,
 the controller keeps the earlier interval start, unions affected lanes, and
 adds exact counts with the same saturation rule. For a lane not affected by the
 newer concurrent accumulator, it retains the closing snapshot's failure and
-recovery bounds. For a lane affected by the newer accumulator, it keeps the
-greatest failure bound from both values but uses only the newer accumulator's
-recovery marker; the older closing recovery cannot cross a failure recorded
-after snapshot detachment. Unknown in either input makes the merged count
-unknown. The merge performs no I/O and cannot discard a failure or manufacture
-recovery from numeric maxima alone.
+recovery bounds. For a lane affected only by the newer accumulator, it retains
+that accumulator's failure and recovery bounds, which already satisfy its
+failure-epoch invariant. For every lane affected by both accumulators, the
+merge applies exactly:
+
+```text
+merged_failure = max(closing_failure, concurrent_failure)
+merged_recovery = (
+    concurrent_recovery
+    if concurrent_recovery is not None
+    and concurrent_recovery > merged_failure
+    else None
+)
+```
+
+The concurrent recovery is eligible for that formula only if it was processed
+after the concurrent accumulator's most recently recorded failure epoch. The
+older closing recovery can never cross a failure recorded after snapshot
+detachment. Thus closing failure `10`, concurrent failure `5`, and concurrent
+recovery `6` merge to failure `10` with no recovery; concurrent recovery `12`
+instead remains recovery for merged failure `10`. Unknown in either input makes
+the merged count unknown. The merge performs no I/O and cannot discard a
+failure or manufacture recovery from numeric maxima alone.
 
 ### 6.7 Error and disclosure protocol
 
@@ -504,17 +556,38 @@ stored in a public response by this boundary.
 The client never attaches an underlying exception to a fixed gap error. It
 classifies the runner phase, discards the caught exception, completes bounded
 cleanup, leaves the exception handler, and only then constructs and raises the
-fixed error. The raised value has no cause, context, underlying traceback
-reference, connection, cursor, or arbitrary payload; its own fixed-error stack
-is the only traceback a generic handler can render. A post-acknowledgement
-cleanup error is likewise discarded after its phase is classified and cannot
-replace the acknowledged result.
+fixed error. That removes the client dependency error, connection, cursor, and
+arbitrary payload from the signal's cause/context graph, but it does not defeat
+Python attaching an exception already active in a caller's handler. A post-
+acknowledgement cleanup error is likewise discarded after its phase is
+classified and cannot replace the acknowledged result.
 
 On an inner producer failure, the exact inner error remains primary after the
 controller records its bounded state. On an inner producer success followed by
 a gap-control failure, the fixed gap error becomes primary. In both cases the
 original action remains denied. A successful gap acknowledgement returns the
 unchanged exact inner `SecurityAuditAppend`.
+
+The two producer adapters need a second, mechanical detachment because they
+call that sink while handling the original denial. Each adapter catches exactly
+`SecurityAuditGapUnavailable` and `SecurityAuditGapOutcomeUnknown` from its
+audit-sink call and records only the exact trusted class identity
+`SecurityAuditGapUnavailable` or `SecurityAuditGapOutcomeUnknown`. It does not
+retain the caught object, its traceback, or any value from the original denial.
+It then exits the original denial handler and, only outside every exception
+handler, constructs and raises a new instance of that recorded fixed class. The
+fresh value must have both `__cause__` and `__context__` equal to `None`; its
+own fixed-error stack is the only traceback reachable by a generic handler.
+
+When the audit/gap operation succeeds, the adapter re-raises the exact original
+authentication, principal-resolution, or tenant-boundary denial from its
+existing handler. The adapters do not catch or translate any other audit,
+HMAC, producer, authentication, principal, or tenant exception. Their existing
+reason maps, denial outcomes, and authority remain byte-for-byte unchanged
+except for the minimal control flow needed to defer the two fixed gap-error
+kinds. Tests traverse every reachable exception and traceback edge, rather than
+checking display suppression, and reject token, internal-detail, tenant,
+Party, principal, and credential canaries anywhere in that graph.
 
 This contract adds no logger, metric, trace, crash report, output document,
 endpoint, or mutable public status object. Tests may inspect closed controller
@@ -577,6 +650,11 @@ exception, event identity, correlation value, request, credential, principal,
 tenant, Party, route, key, DSN, SQL, or attacker-controlled identity.
 Both lane sequences and the exact event count stop at signed-bigint maximum;
 neither grows as an unbounded Python integer.
+The gap client and both producer adapters discard each caught exception before
+leaving their respective active handler. The final outward fixed error is newly
+constructed only after the producer's original denial handler exits, with no
+cause, context, original-denial object, or reachable attacker-controlled
+traceback graph.
 
 ### `AUDGAP-005` — conservative database-owned interval
 
@@ -610,17 +688,20 @@ retry or caller-selected operation.
 ### `AUDGAP-009` — commit acknowledgement is the only success
 
 A validated function result without an acknowledged explicit commit is not
-success. Known-precommit failure restores the interval. A commit exception is
-permanent outcome unknown and never permits resubmission in that process. Once
-the explicit commit returns, later cleanup failure cannot revoke success,
-restore the interval, or cause a duplicate append.
+success. The client pins and verifies `synchronous_commit=on` before mutation.
+Known-precommit failure restores the interval. A commit exception is permanent
+outcome unknown and never permits resubmission in that process. Once the
+explicit commit returns, later cleanup failure cannot revoke success, restore
+the interval, or cause a duplicate append.
 
 ### `AUDGAP-010` — concurrency cannot duplicate or drop an interval
 
 At most one thread owns the closing snapshot. Concurrent failures use one
 separate bounded accumulator. A precommit merge preserves the earlier start,
-all affected lanes, greatest failure bounds, the newer accumulator's per-lane
-recovery epoch, and conservative count posture.
+all affected lanes, greatest failure bounds, and conservative count posture.
+For a lane present in both accumulators it preserves the concurrent
+accumulator's recovery only when the recovery was processed after its last
+failure epoch and its ticket is greater than the merged maximum failure bound.
 
 ### `AUDGAP-011` — current delivery semantics remain unchanged
 
@@ -640,7 +721,9 @@ ordinary logs, or change a denial into access.
 
 Only the exact audit-control session may call the existing function. No
 producer, reader, retention, export, tenant, application, migrator, or owner
-credential is added, granted, assumed, or reused.
+credential is added, granted, assumed, or reused. Every control connection
+pins fixed statement, lock, connection, and synchronous-commit settings through
+client-owned keyword arguments and verifies the effective durability setting.
 
 ### `AUDGAP-014` — restart is not reconciliation
 
@@ -661,16 +744,16 @@ stores gap-controller state or evidence.
 | `AUDGAP-001` | Build the production runtime with the fixed two producers; attempt to supply a third lane through environment or request data. | No selectable lane surface exists; startup graph remains exactly two wrappers. |
 | `AUDGAP-002` | Start with the control DSN resolving to the reader login, a duplicate clock row, a naive/infinite time, or an unavailable service. | Startup refuses before runtime publication and performs no gap append. |
 | `AUDGAP-003` | A producer append loses its first commit acknowledgement and performs the accepted same-ID retry. | The wrapper records one logical success or failure, never two attempts. |
-| `AUDGAP-004` | Cause a failure whose message, argument, cause, context, and traceback contain credential/tenant canaries; inspect controller state and every fixed error; exhaust a lane sequence and the exact count at signed-bigint maximum. | Canaries, exception chains, and rich values are absent; both numeric fields refuse unbounded growth; state size remains fixed. |
+| `AUDGAP-004` | Through both `AuthenticationAuditProducer.authenticate()` and `RequestRouterAuditProducer._audited_unit_of_work()`, put token, internal-detail, tenant, Party, principal, and credential canaries in the original denial graph, then cause each fixed gap error; also exhaust a lane sequence and the exact count at signed-bigint maximum. | Each adapter exits the original handler and raises a fresh fixed error whose cause and context are `None`; full exception/traceback graph traversal finds no canary or original denial; both numeric fields refuse unbounded growth; state size remains fixed. |
 | `AUDGAP-005` | Allocate an older ticket, let a later attempt advance the shared database anchor, then complete the older attempt as a failure; also recover with a fresh end equal to or before the frozen anchor, or supply a request timestamp. | The interval starts at the older ticket's pre-attempt anchor; the later anchor cannot narrow it; an invalid end prevents the function call; request time is unused. |
 | `AUDGAP-006` | Produce one `SecurityAuditOutcomeUnknown`, one unexpected ordinary exception, or one increment beyond bigint maximum. | Whole interval becomes unknown; no estimate or wrapped count is written. |
 | `AUDGAP-007` | Fail authentication, then succeed only on request-router; or process a later-ticket auth success before an older in-flight auth failure is recorded. | The cross-lane success is ignored; the later failure record clears the prior auth recovery; the interval remains open until a further greater-ticket auth success is processed. |
 | `AUDGAP-008` | Make two lanes recover concurrently for one interval. | Exactly one thread claims one snapshot and at most one function call occurs per successful wrapper call. |
-| `AUDGAP-009` | Return a valid maintenance row and raise from explicit commit; separately let commit return and then raise from connection close. | Commit exception produces fixed outcome unknown with zero automatic retry; post-acknowledgement cleanup failure preserves success and never restores or duplicates the gap. |
-| `AUDGAP-010` | Block one close transaction; in the same lane record an older in-flight failure after the closing recovery, with and without a further success; then make the close fail before commit. | The merge uses the concurrent lane epoch: no further success leaves it unrecovered, a further greater-ticket success recovers it, no failure is lost, and no duplicate closing owner exists. |
+| `AUDGAP-009` | Attempt to set `synchronous_commit=off` in the DSN; return a valid maintenance row and raise from explicit commit; separately let commit return and then raise from connection close. | Keyword-supplied options and effective-setting verification require `on`; commit exception produces fixed outcome unknown with zero automatic retry; post-acknowledgement cleanup failure preserves success and never restores or duplicates the gap. |
+| `AUDGAP-010` | On a known-precommit merge, supply closing failure `10`, concurrent failure `5`, and concurrent recovery `6`; repeat with concurrent recovery `12`, each processed after the concurrent failure epoch. | The first merge has failure `10` and no recovery; the second has failure `10` and recovery `12`; no failure is lost, numeric maxima do not manufacture recovery, and no duplicate closing owner exists. |
 | `AUDGAP-011` | Return a valid `OverflowAuditAppend(count_unknown=true)` with no existing failed interval. | Producer remains successful; no `AUDIT_GAP` call; current health behavior is unchanged. |
 | `AUDGAP-012` | Make gap closure unavailable during missing-credential or binder-refusal handling. | The request remains denied; no principal, tenant UnitOfWork, tenant write, or ordinary-log fallback occurs. |
-| `AUDGAP-013` | Point the control route at a producer/reader login or alter `current_user` through role state. | Exact `session_user` check refuses before maintenance mutation. |
+| `AUDGAP-013` | Point the control route at a producer/reader login, alter `current_user` through role state, or supply conflicting DSN session options. | Exact `session_user` and effective `synchronous_commit=on` checks refuse before maintenance mutation; client-owned keyword bounds cannot be weakened. |
 | `AUDGAP-014` | Kill a process after it records a failure but before a close; construct a fresh runtime. | New controller has only a new anchor and makes no claim about the prior interval. |
 | `AUDGAP-015` | Search the final diff and runtime writes for a migration, local spool, file, tenant table, metrics path, or alternate SQL. | Exact path and import gates reject the change. |
 
@@ -699,7 +782,12 @@ One new `kernel/security_audit_gap.py` owns:
 
 `kernel/security_audit_runtime.py` constructs the client/controller after the
 existing startup authorities are validated, initializes the database anchor,
-and wraps the two existing health-observed sinks. No producer adapter,
+and wraps the two existing health-observed sinks.
+`kernel/authentication_audit.py` and `kernel/request_router_audit.py` each add
+one mechanical branch that catches only the two fixed gap errors, retains only
+their exact trusted class identity until the active original-denial handler has
+exited, and raises a fresh fixed error. No producer reason map, denial type,
+denial result,
 `PreTenantAuditClient`, health state, API route, application state, or runtime
 configuration field is changed.
 
@@ -718,8 +806,10 @@ supported AuthenticationError or PrincipalResolutionError
        -> no eligible gap: return unchanged result
        -> eligible gap: one control transaction
             -> acknowledged: return unchanged result
-            -> known precommit failure: restore; fixed unavailable
-            -> commit ambiguity: terminal fixed outcome unknown
+            -> known precommit failure: restore; fixed unavailable kind
+            -> commit ambiguity: terminal fixed outcome-unknown kind
+  -> audit/gap success: re-raise exact original denial in its handler
+  -> fixed gap kind: leave original handler; create and raise fresh fixed error
 ```
 
 Request-router pre-binding failure uses the same flow with the fixed
@@ -741,6 +831,15 @@ authority. One shared controller can combine overlapping lane intervals while
 retaining only fixed-size non-sensitive state. The existing database function
 already owns the durable event shape and role check, so no migration or new SQL
 authority is justified.
+
+The outer wrapper cannot detach the original denial that Python automatically
+adds as context when the wrapper raises from inside a producer's denial
+handler. A runtime wrapper or `raise ... from None` would only hide display, not
+remove the retained object graph. The two existing call sites are therefore the
+smallest coherent place to record a closed gap-error kind, exit the handler,
+and raise a fresh fixed error. Those mechanical branches do not decide whether
+authentication, principal resolution, or tenant binding succeeds and do not
+change any denial authority.
 
 A background reconciler is not smaller: it requires lifecycle, wakeup,
 shutdown, retry, and deployment policy and would need another channel to learn
@@ -768,6 +867,8 @@ isolated database did not supply.
 - **Closing owners:** at most one immutable snapshot.
 - **Concurrent accumulation owners:** at most one bounded accumulator.
 - **Compatibility surfaces introduced:** none.
+- **Producer-adapter changes:** two mechanical fixed-error deferral sites; no
+  denial mapping or authority change.
 - **Configurable policy introduced:** none.
 - **Generic SQL/function selectors introduced:** none.
 - **Background abstractions introduced:** none.
@@ -790,11 +891,15 @@ The final implementation may change only these paths:
 1. `docs/rfcs/OFARM_Security_Audit_Live_Gap_Reconciliation_RFC_v0_1.md`
 2. `kernel/security_audit_gap.py`
 3. `kernel/security_audit_runtime.py`
-4. `kernel/README.md`
-5. `kernel/tests/test_security_audit_gap.py`
-6. `kernel/tests/test_security_audit_runtime.py`
-7. `conformance/rewrite_architecture_check.py`
-8. `conformance/review_baseline_test_inventory.json`
+4. `kernel/authentication_audit.py`
+5. `kernel/request_router_audit.py`
+6. `kernel/README.md`
+7. `kernel/tests/test_security_audit_gap.py`
+8. `kernel/tests/test_security_audit_runtime.py`
+9. `kernel/tests/test_authentication_audit.py`
+10. `kernel/tests/test_request_router_audit.py`
+11. `conformance/rewrite_architecture_check.py`
+12. `conformance/review_baseline_test_inventory.json`
 
 The Phase A review head changes only path 1. Phase B may use a strict subset of
 the remaining paths. The inventory is a required mechanical change only when
@@ -808,7 +913,6 @@ Every unlisted path is immutable for this decision, especially:
 - all `deployment/postgresql/**` production and test paths;
 - `kernel/security_audit.py`, `kernel/security_audit_client.py`, and
   `kernel/security_audit_health.py`;
-- `kernel/authentication_audit.py` and `kernel/request_router_audit.py`;
 - `kernel/application_runtime.py`, `kernel/api.py`, and every HTTP route;
 - correlation-HMAC generation, posture, retirement, and KMS modules;
 - authentication, principal, capability, binder, tenant, signing, and
@@ -816,6 +920,13 @@ Every unlisted path is immutable for this decision, especially:
 - retention, overflow, reader, export, recovery, and store-loss modules;
 - `docs/adr/**`, `reference/**`, workflow, dependency, provisioning, deployment,
   and issue #176 paths.
+
+Within the two listed producer adapters, existing reason maps, handled denial
+classes, return values, authorization decisions, `TenantBinding` behavior, and
+all non-gap exception behavior are immutable. The only permitted edits are the
+exact two-class deferral branches described in section 6.7. Catching a generic
+exception, changing a denial mapping or type, or retaining a denial/gap
+exception object stops Phase B and requires re-review and a new approval.
 
 No accepted numbered migration may be edited. No database authority defect is
 asserted by this contract. A demonstrated defect would require a separately
@@ -882,6 +993,9 @@ would:
 - automatically retry after commit ambiguity;
 - add persistent state outside the accepted audit event;
 - change current-health/readiness state, threshold, ordering, or output;
+- catch anything other than the two exact fixed gap errors in either producer
+  adapter, change an existing denial map/type/outcome, or raise a fixed gap
+  error before the original denial handler has exited;
 - add process-crash, store-loss, overflow, export, break-glass, retention, KMS,
   IAM, tenant, authorization, deployment, or issue #176 authority;
 - edit a migration, role, grant, function, provisioning path, or any unlisted
@@ -922,18 +1036,18 @@ evidence requires a new decision and cannot be patched into this version.
 | Invariant | Owning implementation | Negative test/evidence | Smallest verification |
 | --- | --- | --- | --- |
 | `AUDGAP-001` | gap controller and runtime composition | configured/third lane has no constructor path | exact factory and architecture test |
-| `AUDGAP-002` | gap client initialization and runtime builder | wrong user, malformed clock, connection failure | focused client plus runtime publication tests |
+| `AUDGAP-002` | gap client initialization and runtime builder | wrong user, malformed clock, wrong effective synchronous-commit setting, connection failure | focused client plus runtime publication tests |
 | `AUDGAP-003` | lane wrapper | accepted ambiguous producer retry | one-ticket/one-count deterministic test |
-| `AUDGAP-004` | controller state and fixed error values | canary-rich exception graph; lane-sequence and count saturation | state-shape, detached-error, and bounded-field tests |
+| `AUDGAP-004` | controller state, gap client, and both producer adapters | canary-rich original denials and dependency exceptions through both supported producer entry points; lane-sequence and count saturation | complete exception/traceback graph traversal, state-shape, detached-error, and bounded-field tests |
 | `AUDGAP-005` | ticket anchor, controller merge, and gap-client clock validation | older in-flight failure after a later anchor advance; equal/regressing end; request-time injection | deterministic barrier and no-function-call clock tests |
 | `AUDGAP-006` | failure classifier and count merge | unavailable, refused, outcome unknown, foreign exception, bigint edge | table-driven count tests |
 | `AUDGAP-007` | per-lane failure-cleared recovery epoch | cross-lane recovery and later-ticket success processed before an older failure | deterministic barrier tests |
 | `AUDGAP-008` | close claim and gap client | simultaneous recovery | exact function-call count test |
-| `AUDGAP-009` | explicit three-phase transaction runner | valid result then commit error; acknowledged commit then close error | outcome-unknown/no-retry and post-ack cleanup tests |
-| `AUDGAP-010` | closing/open slots and ordered epoch merge | older in-flight same-lane failure after snapshot detachment, with and without a further recovery, then precommit failure | deterministic merge/concurrency tests |
+| `AUDGAP-009` | exact connection options and explicit three-phase transaction runner | DSN requests `synchronous_commit=off`; valid result then commit error; acknowledged commit then close error | effective-setting, outcome-unknown/no-retry, and post-ack cleanup tests |
+| `AUDGAP-010` | closing/open slots and ordered epoch merge | exact closing/concurrent failure/recovery tickets `10/5/6` and `10/5/12` after the concurrent failure epoch | deterministic negative and positive merge/concurrency tests |
 | `AUDGAP-011` | outer wrapper and unchanged health sink | stored/overflow success, gap failure, readiness snapshot | focused health/runtime regression tests |
 | `AUDGAP-012` | producer composition | credential/binder denial plus gap failure | runtime denial/no-tenant-path tests |
-| `AUDGAP-013` | gap client and existing SQL function | producer/reader session and role-state substitution | unit and live PostgreSQL role tests |
+| `AUDGAP-013` | fixed connection options, gap client, and existing SQL function | producer/reader session, role-state substitution, and conflicting DSN options | unit and live PostgreSQL role/session-setting tests |
 | `AUDGAP-014` | runtime construction and docs | discard controller, construct fresh runtime | restart non-claim test |
 | `AUDGAP-015` | architecture/path gate | alternate store/import/SQL or migration edit | exact diff and import-budget checks |
 
@@ -956,9 +1070,17 @@ After exact approval, implementation must pass:
 - focused controller/client/wrapper tests for every `AUDGAP-*` invariant;
 - deterministic concurrent and out-of-order completion tests using supported
   constructors and barriers, without private-state mutation;
-- exact canary tests proving failure content never enters state or fixed errors;
+- exact authentication and request-router producer-entry tests proving that
+  successful audit/gap handling preserves the original denial and that each
+  fixed gap failure is freshly raised only after its original handler exits;
+- full exception/traceback graph traversal proving failure content never enters
+  state or either fixed error, including token, internal-detail, tenant, Party,
+  principal, and credential canaries;
+- exact negative `10/5/6 => unrecovered` and positive `10/5/12 => recovered`
+  merge tests after the concurrent failure epoch;
 - live PostgreSQL tests for the exact control login, wrong-login refusal,
-  acknowledged gap fields, rollback, and commit-ambiguity posture;
+  keyword-pinned and effective `synchronous_commit=on`, conflicting DSN
+  options, acknowledged gap fields, rollback, and commit-ambiguity posture;
 - production runtime tests proving startup initialization, two fixed wrappers,
   denial preservation, post-binding exclusion, and unchanged readiness;
 - existing security-audit client, health, producer, runtime, overflow,
@@ -996,6 +1118,10 @@ None. Version 1 fixes:
 - at most one gap transaction per successful producer attempt;
 - known-precommit restoration, permanent no-retry commit ambiguity, and
   post-acknowledgement cleanup that cannot revoke success;
+- merged recovery revalidation against the greatest failure bound;
+- keyword-pinned and verified synchronous commit;
+- context-detached propagation of the two fixed gap errors through the two
+  accepted producer adapters without changing their denial authority;
 - no current-health/readiness change; and
 - live-process scope with an explicit restart/crash non-claim.
 
@@ -1003,10 +1129,15 @@ Changing any of these requires version 2.
 
 ### 14.2 Review disposition
 
-- **Blockers:** independent Phase A review pending.
+- **Blockers:** [Review
+  4946525305](https://github.com/samovers/OFARM2/pull/317#pullrequestreview-4946525305)
+  reported context retention at the two producer call sites and recovery below
+  a merged failure bound. Both contracts are corrected in this RFC revision;
+  focused exact-head re-review is pending.
 - **Follow-ups:** the separately governed remaining #192 boundaries in section
   11.5.
-- **Preferences:** none recorded.
+- **Preferences:** the review's explicit keyword-level
+  `synchronous_commit=on` pin is incorporated and verified before mutation.
 
 Phase B must not begin until the reviewed Phase A contract is published in its
 named draft pull request, a complete live decision card is shown, and the exact
