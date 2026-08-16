@@ -51,27 +51,32 @@ lanes:
 Before the production runtime is published, the controller obtains one
 database-owned timestamp through the existing audit-control credential. That
 timestamp is the initial conservative evidence anchor. Every governed producer
-attempt receives a lane-local sequence number before the existing
-health-observed sink begins HMAC work.
+attempt receives a lane-local sequence number and an immutable snapshot of the
+latest trusted database anchor before the existing health-observed sink begins
+HMAC work.
 
 When the inner sink raises an ordinary `Exception`, the controller records one
 failed logical audit attempt without retaining its reason, exception, event
 identity, correlation value, request, principal, tenant, or other event data.
-The first failure freezes the latest database-owned anchor as the start of a
-potential evidence-gap interval. Exact pre-submission or rolled-back failures
+The first failure freezes that attempt ticket's pre-attempt database anchor as
+the start of a potential evidence-gap interval. Every later failure preserves
+the earliest ticket anchor. Exact pre-submission or rolled-back failures
 increase a bounded count. An ambiguous or unclassified failure changes the
 whole interval to `COUNT_UNKNOWN`.
 
 A lane is recovered for this interval only after a later-started successful
-inner producer attempt completes on that same lane. When every affected lane
-has such a recovery, that successful request may attempt one audit-control
-transaction. The transaction observes a fresh database clock, calls the
-existing `append_audit_gap` function once, validates the returned maintenance
-identity, and explicitly commits. The durable interval is deliberately
-conservative: it starts at the last trusted database anchor before the first
-observed failure and ends at the fresh database clock immediately before the
-gap append. It may begin earlier than the failed attempt, but it never claims a
-narrower interval from an untrusted process wall clock.
+inner producer attempt is processed on that same lane after the lane's most
+recently recorded failure. Every newly recorded failure clears that lane's
+prior recovery marker even when its older ticket completes out of order. When
+every affected lane has such a recovery, that successful request may attempt
+one audit-control transaction. The transaction observes a fresh database
+clock, calls the existing `append_audit_gap` function once, validates the
+returned maintenance identity, and explicitly commits. The durable interval is
+deliberately conservative: it starts at the earliest pre-attempt database
+anchor carried by any recorded failure and ends at the fresh database clock
+immediately before the gap append. It may begin earlier than a failed attempt,
+but it never claims a narrower interval from an anchor observed after that
+attempt began or from an untrusted process wall clock.
 
 Only an acknowledged commit clears the frozen interval. A failure known to be
 before commit restores the interval for a later successful request. An error
@@ -144,8 +149,9 @@ This pull request does not change or add:
 - exact separation between acknowledged, known-uncommitted, and
   commit-ambiguous gap attempts;
 - no duplicate automatic append after an ambiguous commit;
-- conservative interval bounds from database-owned timestamps rather than an
-  untrusted request or process wall-clock value;
+- conservative interval bounds from a pre-attempt database-anchor snapshot and
+  a fresh database close time rather than an untrusted request or process
+  wall-clock value;
 - exact same-lane recovery before an affected lane is treated as recovered;
 - bounded process memory and bounded work per governed producer attempt;
 - continued separation of the audit-control credential from both producer
@@ -239,19 +245,19 @@ gap evidence.
 | Decision | Sole authority | Rejected alternatives |
 | --- | --- | --- |
 | Production lanes | Runtime-owned fixed authentication and request-router composition | Request input, configuration registry, plugin, dynamic map |
-| Logical attempt identity | Controller-issued lane-local sequence before entering the inner sink | Event UUID, request ID, database transaction ID, object identity |
+| Logical attempt identity and lower-bound anchor | Controller-issued lane-local sequence plus the latest trusted database timestamp copied atomically before entering the inner sink | Event UUID, request ID, database transaction ID, object identity, anchor read after the attempt began |
 | Producer success or failure | Return or ordinary exception from the already bound health-observed sink | Exception text, readiness polling, synthetic probe, caller report |
 | Exact accepted producer result | Existing health-observed sink and `PreTenantAuditClient` result mapping | Duck type, subclass, mapping, caller-created carrier |
 | Initial and later conservative anchors | Validated database-owned timestamps from the exact control route or accepted producer result | Request time, process wall clock, HTTP time, file time |
-| Gap start | Last trusted database anchor frozen at the first recorded failure | First-failure local time, caller-selected time, retrospective narrowing |
+| Gap start | Earliest pre-attempt database anchor carried by any recorded failed ticket in the interval | Shared anchor observed after a failed attempt began, first-failure local time, caller-selected time, retrospective narrowing |
 | Affected lanes | Fixed lane of each failed controller attempt | Error message, reason, producer payload, caller selection |
-| Same-lane recovery | Later-started successful controller attempt on each affected lane | Cross-lane success, readiness read, elapsed time, operator reset |
+| Same-lane recovery | Greater-ticket success processed after the most recently recorded failure on each affected lane | Numeric maximum from a success processed before a later failure record, cross-lane success, readiness read, elapsed time, operator reset |
 | Count posture | Controller classification and signed 64-bit saturation rule | Operator estimate, event query, log count, metrics count |
 | Gap end | Fresh `clock_timestamp()` in the exact close transaction | Process clock, last event time supplied by caller, deployment timestamp |
 | Durable gap insertion | Existing `ofarm_security.append_audit_gap` | Table DML, generic SQL, new function, producer append function |
 | Callable identity | Exact `session_user = ofarm_security_audit_control_login` plus database function check | `current_user`, role membership alone, DSN label, self-attestation |
-| Commit outcome | Explicit PostgreSQL commit acknowledgement | Valid result row alone, connection close, exception class alone |
-| Retry eligibility | Controller phase before commit began | Timer, generic retry library, caller retry flag |
+| Commit outcome | Runner-owned `PRE_COMMIT`, `COMMIT_IN_FLIGHT`, and `COMMIT_ACKNOWLEDGED` phase around one explicit PostgreSQL `commit()` | Valid result row alone, connection close, exception class alone |
+| Retry eligibility | Exact runner phase before `commit()` began | Timer, generic retry library, caller retry flag, cleanup error after acknowledgement |
 | Current readiness | Existing two-lane `SecurityAuditHealth` contract | Gap-controller state, gap event presence, operator input |
 | Post-binding use | Existing request-router/TenantBinding boundary | Gap state, caller flag, fallback to pre-tenant lane |
 
@@ -287,10 +293,20 @@ accepted from a request.
 ### 6.2 Attempt tickets and outer composition
 
 Each lane wrapper allocates an immutable ticket before calling the complete
-existing health-observed sink. A ticket contains only its fixed lane and a
-positive lane-local sequence number. Sequence allocation is synchronized and
-checked before increment; exhaustion changes the controller to unknown posture
-and performs no maintenance mutation.
+existing health-observed sink. Under one short-held state lock, the controller
+increments the fixed lane's positive sequence and copies the current latest
+trusted database anchor into that ticket. A ticket contains only its fixed
+lane, sequence, and finite aware database-anchor snapshot. It remains on that
+wrapper call's stack; the controller keeps no in-flight ticket registry.
+Sequence allocation is synchronized and checked before increment; exhaustion
+at signed-bigint maximum `9,223,372,036,854,775,807` changes the controller to
+fixed `OUTCOME_UNKNOWN`, raises only the closed gap-outcome error, does not
+enter the inner sink, and performs no maintenance mutation.
+
+Capturing the anchor before entering the inner sink is mandatory. A different
+attempt may commit and advance the shared latest anchor while this attempt is
+in flight. That later shared value cannot replace the immutable ticket anchor
+if this attempt subsequently fails.
 
 The call order is fixed:
 
@@ -319,16 +335,20 @@ original audit-delivery error with a reconciliation error.
 
 The first recorded failure creates one open accumulator with:
 
-- `interval_start` equal to the latest trusted database anchor;
+- `interval_start` equal to that failed ticket's pre-attempt database anchor;
 - one affected-lane bit;
 - the lane's failed ticket number;
 - an exact count of one or unknown posture; and
 - no event, request, reason, exception, or correlation field.
 
-Later failures update the same bounded accumulator. For each lane it keeps only
-the greatest failed ticket number. The logical failed-attempt count increases
-once per wrapper call, not once per `PreTenantAuditClient` database attempt, so
-the existing same-event-ID retry remains one logical event.
+Later failures update the same bounded accumulator. The interval start becomes
+the earlier of its existing start and each failed ticket's immutable anchor.
+For each lane it keeps the greatest failed ticket number and one optional
+recovery ticket. Recording any failure clears that lane's recovery ticket
+unconditionally, including when an older in-flight ticket completes after a
+newer success was processed. The logical failed-attempt count increases once
+per wrapper call, not once per `PreTenantAuditClient` database attempt, so the
+existing same-event-ID retry remains one logical event.
 
 `SecurityAuditUnavailable` and `SecurityAuditRefused` are exact known-missing
 logical attempts because their accepted client paths have no durable producer
@@ -358,13 +378,19 @@ An exact successful inner result is processed under the short-held state lock:
 - no event identity, purge timestamp, bucket identity, or correlation field is
   retained after the transition.
 
+An anchor advanced by this success is available only to tickets allocated
+after the advance. It never retimes an already allocated in-flight ticket or
+an existing accumulator.
+
 For an open interval, the successful ticket is a recovery only for its own lane
-and only when its number is greater than that lane's greatest failed ticket.
-Cross-lane success never recovers another lane. A success that was already
-processed before an older in-flight failure is later recorded does not trigger
-database reconciliation from that failure path; a further later-started
-success is required. This conservative rule avoids maintenance I/O while
-propagating the original failure and cannot falsely close an interval.
+and only when its number is greater than that lane's greatest failed ticket and
+the success is processed after the failure that most recently cleared the
+lane's recovery marker. Cross-lane success never recovers another lane. A
+success that was already processed before an older in-flight failure is later
+recorded cannot survive that failure record as recovery; a further
+later-started success is required. This conservative rule avoids maintenance
+I/O while propagating the original failure and cannot falsely close an
+interval.
 
 An interval is close-eligible only when every affected lane has a recorded
 later-started success. Readiness polling, elapsed time, dependency recovery,
@@ -381,9 +407,14 @@ Controller memory contains at most:
 - one immutable closing snapshot;
 - one new open accumulator for failures that complete while the close is in
   flight;
-- two lane sequence counters and greatest failure/success numbers;
+- two lane sequence counters plus each accumulator's fixed per-lane greatest
+  failure bound and optional recovery ticket;
 - one latest database anchor; and
 - one closed controller phase.
+
+Each concurrent wrapper call additionally holds one fixed-size immutable
+ticket on its own stack. This is bounded per admitted call and does not create
+controller-owned state proportional to request history.
 
 No database or network call occurs while the state lock is held. Concurrent
 producer calls therefore may finish their existing bounded work while a gap
@@ -403,6 +434,13 @@ opens one exact control connection with fixed timeouts, requires
 `autocommit = false`, sets `READ COMMITTED`, and verifies the exact
 `session_user` before any maintenance call.
 
+The client owns a closed transaction phase initialized to `PRE_COMMIT`. It does
+not use a connection or transaction context manager that can add an implicit
+commit. Immediately before entering the one explicit `commit()` method it sets
+`COMMIT_IN_FLIGHT`; immediately after that method returns it sets
+`COMMIT_ACKNOWLEDGED`. No dependency callback or validation occurs between the
+return and the phase advance.
+
 Inside that transaction it:
 
 1. reads exactly one fresh finite aware `clock_timestamp()` as `interval_end`;
@@ -419,31 +457,42 @@ The client exposes no generic statement, function, interval, count, retry, or
 transaction option. It performs no table read, event query, retention,
 overflow, reader, export, role, KMS, or tenant operation.
 
-Failure before `commit()` begins is known not durable: the transaction is
-rolled back or abandoned, the closing snapshot is merged back into the open
+Failure while the phase is `PRE_COMMIT` is known not durable: the transaction
+is rolled back or abandoned, the closing snapshot is merged back into the open
 accumulator, and the successful producer call raises one fixed
-`SecurityAuditGapUnavailable`. No automatic retry occurs in that call. A later
-successful producer attempt may try the restored interval again.
+`SecurityAuditGapUnavailable`. A rollback or close failure in this phase does
+not change durability because this private connection has no path that can
+later commit the abandoned transaction. No automatic retry occurs in that
+call. A later successful producer attempt may try the restored interval again.
 
-Any ordinary exception from `commit()` changes the controller permanently to
-`OUTCOME_UNKNOWN`. The closing snapshot is not restored, merged, cleared, or
-resubmitted. The current producer call raises one fixed
-`SecurityAuditGapOutcomeUnknown`. Every later producer append may still use its
-existing HMAC-and-audit path, but the wrapper never performs another gap
-mutation in that controller instance and returns the same closed unknown error
-after an inner success. This is an accepted availability loss, not an
+Any ordinary exception while the phase is `COMMIT_IN_FLIGHT` changes the
+controller permanently to `OUTCOME_UNKNOWN`. The closing snapshot is not
+restored, merged, cleared, or resubmitted. The current producer call raises one
+fixed `SecurityAuditGapOutcomeUnknown`. Every later producer append may still
+use its existing HMAC-and-audit path, but the wrapper never performs another
+gap mutation in that controller instance and returns the same closed unknown
+error after an inner success. This is an accepted availability loss, not an
 authorization bypass.
 
-Only an acknowledged commit clears the closing snapshot. Its validated
-`observed_at` may advance the database anchor. A concurrently opened interval
-remains independent and may overlap the acknowledged conservative interval;
-overlap is honest and preferable to narrowing or dropping uncertainty.
+Only `COMMIT_ACKNOWLEDGED` clears the closing snapshot. Its validated
+`observed_at` may advance the database anchor. An ordinary connection-close or
+final-cleanup exception observed after that phase cannot restore the snapshot
+or change the acknowledged result to unknown; cleanup is attempted once, the
+fixed client exposes no connection handle, and the wrapper returns the exact
+inner producer result. A concurrently opened interval remains independent and
+may overlap the acknowledged conservative interval; overlap is honest and
+preferable to narrowing or dropping uncertainty.
 
 If a known-precommit failure must be merged with a concurrent open accumulator,
-the controller keeps the earlier interval start, unions affected lanes, keeps
-the greatest per-lane failure and success ticket numbers, and adds exact counts
-with the same saturation rule. Unknown in either input makes the merged count
-unknown. The merge performs no I/O and cannot discard a failure.
+the controller keeps the earlier interval start, unions affected lanes, and
+adds exact counts with the same saturation rule. For a lane not affected by the
+newer concurrent accumulator, it retains the closing snapshot's failure and
+recovery bounds. For a lane affected by the newer accumulator, it keeps the
+greatest failure bound from both values but uses only the newer accumulator's
+recovery marker; the older closing recovery cannot cross a failure recorded
+after snapshot detachment. Unknown in either input makes the merged count
+unknown. The merge performs no I/O and cannot discard a failure or manufacture
+recovery from numeric maxima alone.
 
 ### 6.7 Error and disclosure protocol
 
@@ -451,6 +500,15 @@ Gap-control errors have fixed classes and fixed messages. No exception message,
 argument, cause, context, traceback, DSN, SQL, role, timestamp, count, lane,
 event identity, request value, credential, or correlation value is rendered or
 stored in a public response by this boundary.
+
+The client never attaches an underlying exception to a fixed gap error. It
+classifies the runner phase, discards the caught exception, completes bounded
+cleanup, leaves the exception handler, and only then constructs and raises the
+fixed error. The raised value has no cause, context, underlying traceback
+reference, connection, cursor, or arbitrary payload; its own fixed-error stack
+is the only traceback a generic handler can render. A post-acknowledgement
+cleanup error is likewise discarded after its phase is classified and cannot
+replace the acknowledged result.
 
 On an inner producer failure, the exact inner error remains primary after the
 controller records its bounded state. On an inner producer success followed by
@@ -504,23 +562,29 @@ no maintenance mutation.
 ### `AUDGAP-003` — every governed live attempt is observed once
 
 Each supported pre-binding producer attempt receives exactly one controller
-ticket before the existing complete health-observed sink begins. A logical
-client retry remains one controller attempt. The successful post-binding path
-never enters either wrapper.
+ticket, including its immutable pre-attempt database anchor, before the
+existing complete health-observed sink begins. A logical client retry remains
+one controller attempt. The successful post-binding path never enters either
+wrapper.
 
 ### `AUDGAP-004` — bounded non-sensitive state
 
 Controller memory has only fixed lane counters, fixed lane masks, one database
 anchor, at most one closing snapshot, at most one open accumulator, bounded
-count posture, and a closed phase. It stores no producer reason, exception,
-event identity, correlation value, request, credential, principal, tenant,
-Party, route, key, DSN, SQL, or attacker-controlled identity.
+count posture, and a closed phase. Each admitted call holds only one fixed-size
+ticket outside controller history. Neither stores a producer reason,
+exception, event identity, correlation value, request, credential, principal,
+tenant, Party, route, key, DSN, SQL, or attacker-controlled identity.
+Both lane sequences and the exact event count stop at signed-bigint maximum;
+neither grows as an unbounded Python integer.
 
 ### `AUDGAP-005` — conservative database-owned interval
 
-The first failure freezes the latest trusted database anchor. The close end is
-a fresh database clock in the same transaction as the gap append. No request or
-process wall-clock timestamp can narrow or select the interval, and
+Every failure contributes the trusted database anchor copied before that
+attempt entered the inner sink, and the interval preserves the earliest such
+anchor. A later success cannot retime an older in-flight failure. The close end
+is a fresh database clock in the same transaction as the gap append. No request
+or process wall-clock timestamp can narrow or select the interval, and
 `end <= start` refuses before mutation.
 
 ### `AUDGAP-006` — exact count becomes unknown conservatively
@@ -529,11 +593,13 @@ Known unavailable/refused logical attempts increment one exact signed-bigint
 count. Ambiguous, unclassified, or overflowed count posture becomes unknown
 irreversibly and is written only as `(event_count=0, count_unknown=true)`.
 
-### `AUDGAP-007` — recovery is same-lane and later-started
+### `AUDGAP-007` — recovery is same-lane, later-started, and later-observed
 
 Every affected lane requires a successful ticket greater than its greatest
-failed ticket. Cross-lane success, prior out-of-order success, readiness,
-elapsed time, and operator action cannot close the interval.
+failed ticket and processed after its most recently recorded failure. Every
+failure record clears that lane's previous recovery marker. Cross-lane success,
+prior out-of-order success, numeric maximum alone, readiness, elapsed time, and
+operator action cannot close the interval.
 
 ### `AUDGAP-008` — at most one fixed gap call per successful attempt
 
@@ -545,13 +611,16 @@ retry or caller-selected operation.
 
 A validated function result without an acknowledged explicit commit is not
 success. Known-precommit failure restores the interval. A commit exception is
-permanent outcome unknown and never permits resubmission in that process.
+permanent outcome unknown and never permits resubmission in that process. Once
+the explicit commit returns, later cleanup failure cannot revoke success,
+restore the interval, or cause a duplicate append.
 
 ### `AUDGAP-010` — concurrency cannot duplicate or drop an interval
 
 At most one thread owns the closing snapshot. Concurrent failures use one
 separate bounded accumulator. A precommit merge preserves the earlier start,
-all affected lanes, greatest ticket bounds, and conservative count posture.
+all affected lanes, greatest failure bounds, the newer accumulator's per-lane
+recovery epoch, and conservative count posture.
 
 ### `AUDGAP-011` — current delivery semantics remain unchanged
 
@@ -592,13 +661,13 @@ stores gap-controller state or evidence.
 | `AUDGAP-001` | Build the production runtime with the fixed two producers; attempt to supply a third lane through environment or request data. | No selectable lane surface exists; startup graph remains exactly two wrappers. |
 | `AUDGAP-002` | Start with the control DSN resolving to the reader login, a duplicate clock row, a naive/infinite time, or an unavailable service. | Startup refuses before runtime publication and performs no gap append. |
 | `AUDGAP-003` | A producer append loses its first commit acknowledgement and performs the accepted same-ID retry. | The wrapper records one logical success or failure, never two attempts. |
-| `AUDGAP-004` | Cause a failure whose message and cause contain a credential/tenant canary; inspect controller state and every fixed error. | Canary and rich values are absent; state size remains fixed. |
-| `AUDGAP-005` | Recover when the fresh database end equals or precedes the frozen anchor, or supply a request timestamp. | The function is not called; request time is unused. |
+| `AUDGAP-004` | Cause a failure whose message, argument, cause, context, and traceback contain credential/tenant canaries; inspect controller state and every fixed error; exhaust a lane sequence and the exact count at signed-bigint maximum. | Canaries, exception chains, and rich values are absent; both numeric fields refuse unbounded growth; state size remains fixed. |
+| `AUDGAP-005` | Allocate an older ticket, let a later attempt advance the shared database anchor, then complete the older attempt as a failure; also recover with a fresh end equal to or before the frozen anchor, or supply a request timestamp. | The interval starts at the older ticket's pre-attempt anchor; the later anchor cannot narrow it; an invalid end prevents the function call; request time is unused. |
 | `AUDGAP-006` | Produce one `SecurityAuditOutcomeUnknown`, one unexpected ordinary exception, or one increment beyond bigint maximum. | Whole interval becomes unknown; no estimate or wrapped count is written. |
-| `AUDGAP-007` | Fail authentication, then succeed only on request-router; or complete a later-started auth success before an older auth failure is recorded. | Interval remains open until a further later-started auth success completes. |
+| `AUDGAP-007` | Fail authentication, then succeed only on request-router; or process a later-ticket auth success before an older in-flight auth failure is recorded. | The cross-lane success is ignored; the later failure record clears the prior auth recovery; the interval remains open until a further greater-ticket auth success is processed. |
 | `AUDGAP-008` | Make two lanes recover concurrently for one interval. | Exactly one thread claims one snapshot and at most one function call occurs per successful wrapper call. |
-| `AUDGAP-009` | Return a valid maintenance row, then raise from explicit commit. | Fixed outcome unknown; zero automatic retry; every later inner success performs no gap mutation. |
-| `AUDGAP-010` | Block one close transaction while another lane fails and recovers; then make the first close fail before commit. | Concurrent interval remains, restored interval merges without loss, and no duplicate closing owner exists. |
+| `AUDGAP-009` | Return a valid maintenance row and raise from explicit commit; separately let commit return and then raise from connection close. | Commit exception produces fixed outcome unknown with zero automatic retry; post-acknowledgement cleanup failure preserves success and never restores or duplicates the gap. |
+| `AUDGAP-010` | Block one close transaction; in the same lane record an older in-flight failure after the closing recovery, with and without a further success; then make the close fail before commit. | The merge uses the concurrent lane epoch: no further success leaves it unrecovered, a further greater-ticket success recovers it, no failure is lost, and no duplicate closing owner exists. |
 | `AUDGAP-011` | Return a valid `OverflowAuditAppend(count_unknown=true)` with no existing failed interval. | Producer remains successful; no `AUDIT_GAP` call; current health behavior is unchanged. |
 | `AUDGAP-012` | Make gap closure unavailable during missing-credential or binder-refusal handling. | The request remains denied; no principal, tenant UnitOfWork, tenant write, or ordinary-log fallback occurs. |
 | `AUDGAP-013` | Point the control route at a producer/reader login or alter `current_user` through role state. | Exact `session_user` check refuses before maintenance mutation. |
@@ -620,7 +689,8 @@ One new `kernel/security_audit_gap.py` owns:
 - `SecurityAuditGapController` — one fixed-size shared state machine;
 - two controller-created `LiveGapObservedAuditSink` instances bound to fixed
   lanes and existing inner health-observed sinks;
-- immutable private attempt, accumulator, and closing-snapshot values;
+- immutable private attempt-with-anchor, accumulator, and closing-snapshot
+  values;
 - one `SecurityAuditGapClient` bound to the exact control DSN route;
 - closed `SecurityAuditGapState`, `SecurityAuditGapUnavailable`, and
   `SecurityAuditGapOutcomeUnknown` values; and
@@ -678,11 +748,11 @@ process-local failures. A local spool would contradict the accepted V1
 boundary. Synchronous reconciliation on an actual later producer success gives
 one bounded trigger and one supported denial path without inventing either.
 
-The conservative last-database-anchor interval is preferable to a process wall
-clock. It can overstate the possible interval after quiet traffic, but its
-exact or unknown count states how many logical failures were observed. It never
-pretends to know a narrower failure timestamp that the isolated database did
-not supply.
+The conservative earliest pre-attempt ticket-anchor interval is preferable to
+a process wall clock. It can overstate the possible interval after quiet
+traffic, but its exact or unknown count states how many logical failures were
+observed. It never pretends to know a narrower failure timestamp that the
+isolated database did not supply.
 
 ## 10. Elegance audit
 
@@ -692,7 +762,9 @@ not supply.
 - **Live-gap sources of truth:** one shared controller.
 - **Durable gap write paths:** one accepted database function.
 - **Wall-clock authorities:** one audit-database clock.
-- **Attempt-order authorities:** two fixed lane-local controller counters.
+- **Attempt-order authorities:** two fixed lane-local controller counters, with
+  one latest trusted database-anchor snapshot copied into each admitted ticket
+  and one failure-cleared recovery marker per affected lane.
 - **Closing owners:** at most one immutable snapshot.
 - **Concurrent accumulation owners:** at most one bounded accumulator.
 - **Compatibility surfaces introduced:** none.
@@ -852,13 +924,13 @@ evidence requires a new decision and cannot be patched into this version.
 | `AUDGAP-001` | gap controller and runtime composition | configured/third lane has no constructor path | exact factory and architecture test |
 | `AUDGAP-002` | gap client initialization and runtime builder | wrong user, malformed clock, connection failure | focused client plus runtime publication tests |
 | `AUDGAP-003` | lane wrapper | accepted ambiguous producer retry | one-ticket/one-count deterministic test |
-| `AUDGAP-004` | controller state values | canary-rich reason/error/result; count saturation | state-shape, canary, and bounded-field tests |
-| `AUDGAP-005` | controller anchor and gap client clock validation | equal/regressing end and request-time injection | no-function-call clock tests |
+| `AUDGAP-004` | controller state and fixed error values | canary-rich exception graph; lane-sequence and count saturation | state-shape, detached-error, and bounded-field tests |
+| `AUDGAP-005` | ticket anchor, controller merge, and gap-client clock validation | older in-flight failure after a later anchor advance; equal/regressing end; request-time injection | deterministic barrier and no-function-call clock tests |
 | `AUDGAP-006` | failure classifier and count merge | unavailable, refused, outcome unknown, foreign exception, bigint edge | table-driven count tests |
-| `AUDGAP-007` | per-lane ticket bounds | cross-lane recovery and out-of-order completion | deterministic barrier tests |
+| `AUDGAP-007` | per-lane failure-cleared recovery epoch | cross-lane recovery and later-ticket success processed before an older failure | deterministic barrier tests |
 | `AUDGAP-008` | close claim and gap client | simultaneous recovery | exact function-call count test |
-| `AUDGAP-009` | explicit transaction phase | valid result then commit error | outcome-unknown/no-retry test |
-| `AUDGAP-010` | closing/open slots and merge | concurrent failure during blocked close, then precommit failure | deterministic merge/concurrency test |
+| `AUDGAP-009` | explicit three-phase transaction runner | valid result then commit error; acknowledged commit then close error | outcome-unknown/no-retry and post-ack cleanup tests |
+| `AUDGAP-010` | closing/open slots and ordered epoch merge | older in-flight same-lane failure after snapshot detachment, with and without a further recovery, then precommit failure | deterministic merge/concurrency tests |
 | `AUDGAP-011` | outer wrapper and unchanged health sink | stored/overflow success, gap failure, readiness snapshot | focused health/runtime regression tests |
 | `AUDGAP-012` | producer composition | credential/binder denial plus gap failure | runtime denial/no-tenant-path tests |
 | `AUDGAP-013` | gap client and existing SQL function | producer/reader session and role-state substitution | unit and live PostgreSQL role tests |
@@ -916,13 +988,14 @@ None. Version 1 fixes:
 
 - two fixed outer lane wrappers;
 - one database anchor before runtime publication;
-- conservative last-anchor-to-close-clock intervals;
+- conservative earliest pre-attempt ticket-anchor-to-close-clock intervals;
 - one logical count per wrapper attempt;
 - exact known versus unknown failure classification and bigint saturation;
-- later-started same-lane recovery for every affected lane;
+- later-started and later-observed same-lane recovery for every affected lane;
 - at most one closing snapshot plus one concurrent accumulator;
 - at most one gap transaction per successful producer attempt;
-- known-precommit restoration and permanent no-retry commit ambiguity;
+- known-precommit restoration, permanent no-retry commit ambiguity, and
+  post-acknowledgement cleanup that cannot revoke success;
 - no current-health/readiness change; and
 - live-process scope with an explicit restart/crash non-claim.
 
