@@ -1,15 +1,15 @@
 # OFARM Security-Audit Live Gap Reconciliation — Phase A Contract v0.1
 
-**Status:** Phase A corrected after Reviews 4946525305 and 4946639753; focused
-exact-head re-review pending; not approved; Phase B, deployment, release, and
-production operation are unauthorized
+**Status:** Phase A approved after zero-Blocker exact-head Review 4946752582;
+Phase B repository implementation is authorized only in draft PR #317;
+deployment, release, and production operation remain unauthorized
 
 **Draft pull request:** `https://github.com/samovers/OFARM2/pull/317`
 
 **Contract identity:**
 `ofarm2.security-audit-live-gap-reconciliation.v0.1`
 
-**Proposed decision identity:**
+**Approved decision identity:**
 `ISSUE192-SECURITY-AUDIT-LIVE-GAP-RECONCILIATION-001`, version `1`
 
 **Issue:** #192
@@ -1177,16 +1177,19 @@ Changing any of these requires version 2.
   found that the RFC overclaimed structural secrecy from the fresh exception's
   own traceback frame locals. This revision narrows `AUDGAP-004` to exact fixed
   fields, no cause/context or linked prior exception, and safe normal formatting
-  while explicitly governing frame-local capture separately. Focused exact-head
-  re-review is pending.
+  while explicitly governing frame-local capture separately. [Review
+  4946752582](https://github.com/samovers/OFARM2/pull/317#pullrequestreview-4946752582)
+  accepted the corrected exact head with zero remaining Phase A Blockers. Its
+  two Phase B test interpretations require exact fixed-class identity and
+  runtime-injected formatting canaries; both are binding implementation gates.
 - **Follow-ups:** the separately governed remaining #192 boundaries in section
   11.5.
 - **Preferences:** the review's explicit keyword-level
   `synchronous_commit=on` pin is incorporated and verified before mutation.
 
-Phase B must not begin until the reviewed Phase A contract is published in its
-named draft pull request, a complete live decision card is shown, and the exact
-later same-task approval sentence is received.
+Those Phase B prerequisites were satisfied by the evidence recorded in section
+16. Repository implementation remains bounded to the named pull request and
+exact path allowlist.
 
 Once prospective Phase B acceptance criteria pass and no demonstrated Blocker
 remains, merge the approved pull request. New ideas, Preferences, and
@@ -1218,3 +1221,20 @@ A valid approval authorizes repository implementation only within the named
 draft pull request and exact path envelope. It does not authorize deployment,
 release, production access or operation, issue #192 closure, current/default
 promotion, a database migration, credential change, or security waiver.
+
+## 16. Approval evidence
+
+- **Decision:** `ISSUE192-SECURITY-AUDIT-LIVE-GAP-RECONCILIATION-001`,
+  version `1`.
+- **Codex task:** `019ff570-c253-7d02-bbda-1ad8f4143f00`.
+- **Complete live card:** stable reference `item-1743` in that task.
+- **Task-user approval:** stable reference `item-1744`, observed as the later
+  task-user message in the same task.
+- **Exact approval sentence:** `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-LIVE-GAP-RECONCILIATION-001 version 1.`
+- **Implementation PR:** `https://github.com/samovers/OFARM2/pull/317`.
+- **Observed role and order:** the assistant displayed the complete card first;
+  the task user then supplied the exact sentence as the entire visible message.
+- **Evidence posture:** these task references and role/order observations are
+  provisional AI-attested evidence of the task user's decision. The task-user
+  message remains authority. This record is not deployment authority,
+  production authority, or an independently verifiable identity claim.

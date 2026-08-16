@@ -222,6 +222,7 @@ remain exact and continue to the existing normalization and contract checks.
 | `runtime_config.py` | the single immutable production environment snapshot |
 | `application_runtime.py` | ordered production graph construction and public runtime methods |
 | `security_audit_runtime.py` | pre-tenant audit composition, fixed database-role admission, and HMAC readiness |
+| `security_audit_gap.py` | bounded live-process observation and audit-control reconciliation of recovered pre-tenant evidence gaps; no restart or store-loss claim |
 | `security_audit_health.py` | bounded two-lane audit-delivery observation and closed readiness |
 | `authentication_audit.py` / `request_router_audit.py` | synchronous fail-closed production of classified pre-tenant failure evidence |
 | `production_oidc.py` | production RS256/JWKS credential verification |
@@ -244,7 +245,7 @@ remain exact and continue to the existing normalization and contract checks.
 
 ## Deliberately not here (do not drift — M1_BRIEF.md)
 
-Audit-gap, retention, durable recovery, and readiness-orchestration operations
-· mobile app (M3) · registry adapter scheduling · dynamic packs · public query
-compiler · AI/agent runtime · everything in
+Crash/store-loss audit-gap recovery, retention orchestration, and readiness
+orchestration · mobile app (M3) · registry adapter scheduling · dynamic packs ·
+public query compiler · AI/agent runtime · everything in
 `profile_si_ffs/UNSUPPORTED_SURFACES.md`.
