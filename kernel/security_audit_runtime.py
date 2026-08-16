@@ -24,6 +24,11 @@ from .production_oidc import ProductionOidcVerifier
 from .request_router_audit import RequestRouterAuditProducer
 from .runtime_config import RuntimeConfig
 from .security_audit_client import PreTenantAuditClient
+from .security_audit_gap import (
+    SecurityAuditGapClient,
+    SecurityAuditGapController,
+    SecurityAuditGapUnavailable,
+)
 from .security_audit_health import SecurityAuditHealth, SecurityAuditReadiness
 from . import security_audit_hmac_posture as hmac_posture
 from .tenant_uow import TenantUnitOfWork, TenantUnitOfWorkManager
@@ -91,6 +96,18 @@ def _audit_producer_connection_factory(dsn: str) -> Connect:
     def connect() -> Connection:
         return psycopg.connect(dsn, **_AUDIT_PRODUCER_CONNECTION_PARAMETERS)
     return connect
+
+
+def _live_gap_controller(dsn: str) -> SecurityAuditGapController:
+    unavailable = False
+    controller = None
+    try:
+        controller = SecurityAuditGapController(SecurityAuditGapClient(dsn))
+    except SecurityAuditGapUnavailable:
+        unavailable = True
+    if unavailable or controller is None:
+        raise PreTenantAuditRuntimeUnavailable()
+    return controller
 
 
 def _startup_connection_factory(dsn: str) -> Connect:
@@ -193,10 +210,9 @@ def build_pretenant_audit_runtime(
         ),
         _producer("AUTHENTICATION"),
     )
-    authentication = AuthenticationAuditProducer(
-        verifier,
-        resolver,
-        health.authentication_sink(correlation_hmac, authentication_client),
+    authentication_sink = health.authentication_sink(
+        correlation_hmac,
+        authentication_client,
     )
     request_router_client = PreTenantAuditClient(
         _audit_producer_connection_factory(
@@ -204,8 +220,18 @@ def build_pretenant_audit_runtime(
         ),
         _producer("REQUEST_ROUTER"),
     )
+    request_router_sink = health.request_router_sink(
+        correlation_hmac,
+        request_router_client,
+    )
+    gap = _live_gap_controller(config.security_audit_control_pg_dsn)
+    authentication = AuthenticationAuditProducer(
+        verifier,
+        resolver,
+        gap.authentication_sink(authentication_sink),
+    )
     request_router = RequestRouterAuditProducer(
         tenant_boundary,
-        health.request_router_sink(correlation_hmac, request_router_client),
+        gap.request_router_sink(request_router_sink),
     )
     return PreTenantAuditRuntime(authentication, request_router, health)

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from uuid import uuid4
 
 import psycopg
 import pytest
@@ -15,8 +17,18 @@ from deployment.postgresql.provisioning_specs import (
 )
 from kernel import security_audit_runtime
 from kernel.runtime_config import RuntimeConfig, RuntimeMode
-from kernel.security_audit import CorrelationHmac, SecurityAuditOutcomeUnknown
+from kernel.security_audit import (
+    CorrelationHmac,
+    SecurityAuditOutcomeUnknown,
+    SecurityAuditUnavailable,
+    StoredAuditAppend,
+)
 from kernel.security_audit_client import PreTenantAuditClient
+from kernel.security_audit_gap import (
+    SecurityAuditGapClient,
+    SecurityAuditGapController,
+    SecurityAuditGapUnavailable,
+)
 from kernel.security_audit_health import (
     SecurityAuditHealth,
     SecurityAuditReadiness,
@@ -494,6 +506,35 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
         AuditClient,
     )
 
+    class GapClient:
+        def __init__(self, dsn):
+            assert dsn == _DSNS["security_audit_control_pg_dsn"]
+            events.append("gap.client")
+
+    class GapController:
+        def __init__(self, client):
+            assert isinstance(client, GapClient)
+            events.append("gap.controller")
+
+        def authentication_sink(self, inner):
+            events.append("gap.AUTHENTICATION")
+            return inner
+
+        def request_router_sink(self, inner):
+            events.append("gap.REQUEST_ROUTER")
+            return inner
+
+    monkeypatch.setattr(
+        security_audit_runtime,
+        "SecurityAuditGapClient",
+        GapClient,
+    )
+    monkeypatch.setattr(
+        security_audit_runtime,
+        "SecurityAuditGapController",
+        GapController,
+    )
+
     class Verifier:
         def verify(self, token):
             events.append(("verify", token))
@@ -526,6 +567,10 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
         "hmac.initialize",
         "client.AUTHENTICATION",
         "client.REQUEST_ROUTER",
+        "gap.client",
+        "gap.controller",
+        "gap.AUTHENTICATION",
+        "gap.REQUEST_ROUTER",
     ]
     assert [spec.session_user for spec in producer_specs] == [
         "ofarm_security_authentication_producer_login",
@@ -558,6 +603,37 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
         assert unit == "unit"
     assert "append" not in events
     assert runtime.readiness is SecurityAuditReadiness.READY
+
+
+def test_gap_initialization_failure_prevents_runtime_publication(monkeypatch):
+    class GapClient:
+        def __init__(self, dsn):
+            assert dsn == _DSNS["security_audit_control_pg_dsn"]
+
+    class GapController:
+        def __init__(self, _client):
+            raise SecurityAuditGapUnavailable()
+
+    monkeypatch.setattr(
+        security_audit_runtime,
+        "SecurityAuditGapClient",
+        GapClient,
+    )
+    monkeypatch.setattr(
+        security_audit_runtime,
+        "SecurityAuditGapController",
+        GapController,
+    )
+
+    with pytest.raises(
+        security_audit_runtime.PreTenantAuditRuntimeUnavailable
+    ) as raised:
+        security_audit_runtime._live_gap_controller(
+            _DSNS["security_audit_control_pg_dsn"]
+        )
+
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
 
 
 def test_live_postgresql_request_policy_enforces_statement_timeout(
@@ -620,6 +696,62 @@ def test_live_postgresql_request_policy_enforces_lock_timeout(
     assert all(connection.closed for connection in connections)
     assert isinstance(raised.value.__cause__, psycopg.errors.LockNotAvailable)
     assert health.readiness is SecurityAuditReadiness.NOT_READY
+
+
+def test_live_postgresql_gap_route_uses_control_role_and_fixed_fields(
+    migrated_audit_service,
+):
+    class Inner:
+        calls = 0
+
+        def append(self, _reason):
+            self.calls += 1
+            if self.calls == 1:
+                raise SecurityAuditUnavailable()
+            observed = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
+            return StoredAuditAppend(
+                uuid4(),
+                observed,
+                observed + timedelta(days=30),
+            )
+
+    control_dsn = role_dsn(
+        migrated_audit_service,
+        "ofarm_security_audit_control_login",
+    )
+    controller = SecurityAuditGapController(SecurityAuditGapClient(control_dsn))
+    sink = controller.authentication_sink(Inner())
+    with pytest.raises(SecurityAuditUnavailable):
+        sink.append("CREDENTIAL_MISSING")
+    sink.append("CREDENTIAL_MISSING")
+
+    with psycopg.connect(
+        migrated_audit_service["target_admin_dsn"]
+    ) as connection:
+        rows = connection.execute(
+            """
+            SELECT producer, component, interval_start, interval_end,
+                   interval_event_count, interval_count_unknown
+            FROM ofarm_security.operational_security_event
+            WHERE event_kind = 'AUDIT_GAP'
+            """
+        ).fetchall()
+    assert len(rows) == 1
+    producer, component, start, end, count, unknown = rows[0]
+    assert (producer, component, count, unknown) == (
+        "SECURITY_OPERATIONS_V1",
+        "AUDIT_CONTROL",
+        1,
+        False,
+    )
+    assert start < end
+
+    wrong_dsn = role_dsn(
+        migrated_audit_service,
+        "ofarm_security_audit_readiness_login",
+    )
+    with pytest.raises(SecurityAuditGapUnavailable):
+        SecurityAuditGapController(SecurityAuditGapClient(wrong_dsn))
 
 
 def test_active_hmac_resource_requires_one_observed_active_version():

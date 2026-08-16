@@ -176,6 +176,31 @@
       "sourcePath": "kernel/tests/test_authentication_audit.py"
     },
     {
+      "nodeid": "kernel/tests/test_authentication_audit.py::test_gap_error_is_freshly_raised_after_original_handler[authentication-SecurityAuditGapOutcomeUnknown]",
+      "sourceModule": "kernel.tests.test_authentication_audit",
+      "sourcePath": "kernel/tests/test_authentication_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_audit.py::test_gap_error_is_freshly_raised_after_original_handler[authentication-SecurityAuditGapUnavailable]",
+      "sourceModule": "kernel.tests.test_authentication_audit",
+      "sourcePath": "kernel/tests/test_authentication_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_audit.py::test_gap_error_is_freshly_raised_after_original_handler[principal-SecurityAuditGapOutcomeUnknown]",
+      "sourceModule": "kernel.tests.test_authentication_audit",
+      "sourcePath": "kernel/tests/test_authentication_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_audit.py::test_gap_error_is_freshly_raised_after_original_handler[principal-SecurityAuditGapUnavailable]",
+      "sourceModule": "kernel.tests.test_authentication_audit",
+      "sourcePath": "kernel/tests/test_authentication_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_audit.py::test_gap_error_subclass_is_not_accepted_as_fixed_identity",
+      "sourceModule": "kernel.tests.test_authentication_audit",
+      "sourcePath": "kernel/tests/test_authentication_audit.py"
+    },
+    {
       "nodeid": "kernel/tests/test_authentication_audit.py::test_live_postgresql_uses_exact_authentication_role_and_reason",
       "sourceModule": "kernel.tests.test_authentication_audit",
       "sourcePath": "kernel/tests/test_authentication_audit.py"
@@ -8706,6 +8731,21 @@
       "sourcePath": "kernel/tests/test_request_router_audit.py"
     },
     {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_gap_error_is_freshly_raised_after_tenant_denial_handler[SecurityAuditGapOutcomeUnknown]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_gap_error_is_freshly_raised_after_tenant_denial_handler[SecurityAuditGapUnavailable]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_gap_error_subclass_is_not_accepted_as_fixed_identity",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
       "nodeid": "kernel/tests/test_request_router_audit.py::test_live_postgresql_uses_exact_router_role_and_reason",
       "sourceModule": "kernel.tests.test_request_router_audit",
       "sourcePath": "kernel/tests/test_request_router_audit.py"
@@ -11316,6 +11356,171 @@
       "sourcePath": "kernel/tests/test_security_audit_client.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_base_exception_is_not_caught_or_recorded",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_client_calls_exact_gap_function_and_commits_once",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_client_commit_exception_is_terminal_and_never_rolls_back",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_client_initialization_refuses_wrong_authority_or_durability[ofarm_security_audit_control_login-off]",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_client_initialization_refuses_wrong_authority_or_durability[ofarm_security_audit_reader_login-on]",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_client_pins_connection_options_over_conflicting_dsn",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_client_post_acknowledgement_close_failure_cannot_revoke_success",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_client_precommit_failure_rolls_back_and_restores",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_client_refuses_non_increasing_end_before_gap_call[interval_end0]",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_client_refuses_non_increasing_end_before_gap_call[interval_end1]",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_combined_lane_count_saturation_closes_as_unknown",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_commit_ambiguity_is_terminal_but_inner_delivery_continues",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_cross_lane_success_cannot_close_authentication_failure",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_failure_count_classification_is_exact[failure0-1-False]",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_failure_count_classification_is_exact[failure1-1-False]",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_failure_count_classification_is_exact[failure2-0-True]",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_failure_count_classification_is_exact[failure3-0-True]",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_failure_count_classification_is_exact[failure4-0-True]",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_fixed_errors_have_exact_non_sensitive_surface[SecurityAuditGapOutcomeUnknown-security audit gap reconciliation outcome is unknown]",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_fixed_errors_have_exact_non_sensitive_surface[SecurityAuditGapUnavailable-security audit gap reconciliation is unavailable]",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_fresh_controller_does_not_reconcile_prior_process_state",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_inner_failure_remains_primary_after_terminal_ambiguity",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_known_failure_closes_after_later_same_lane_success",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_lane_binding_is_fixed_and_non_repeatable",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_lane_sequence_exhaustion_stops_before_inner_sink",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_one_closing_snapshot_and_one_concurrent_accumulator",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_precommit_failure_restores_and_later_success_retries_once",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_precommit_merge_revalidates_concurrent_recovery[12-12]",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_precommit_merge_revalidates_concurrent_recovery[6-None]",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_processed_success_before_older_failure_is_not_recovery",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_signed_bigint_helpers_saturate_without_unbounded_growth",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_simultaneous_two_lane_recovery_claims_one_close",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_gap.py::test_success_anchor_advances_only_future_ticket_lower_bounds",
+      "sourceModule": "kernel.tests.test_security_audit_gap",
+      "sourcePath": "kernel/tests/test_security_audit_gap.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_health.py::test_append_failure_is_preserved_without_sink_retry[error0]",
       "sourceModule": "kernel.tests.test_security_audit_health",
       "sourcePath": "kernel/tests/test_security_audit_health.py"
@@ -12897,6 +13102,16 @@
     },
     {
       "nodeid": "kernel/tests/test_security_audit_runtime.py::test_five_bounded_connections_reuse_control_for_observation",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_gap_initialization_failure_prevents_runtime_publication",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_live_postgresql_gap_route_uses_control_role_and_fixed_fields",
       "sourceModule": "kernel.tests.test_security_audit_runtime",
       "sourcePath": "kernel/tests/test_security_audit_runtime.py"
     },
@@ -15501,8 +15716,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "6a84515da7a235094e3dba85010f3623872e1dd30d0190ddfa1465409312f2ea",
-  "entryCount": 3100,
+  "entriesSha256": "bbeb2cf3a09bd2027af51197cf26dfdaac2f1ca27d6ab56b852cca03e9041b59",
+  "entryCount": 3143,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

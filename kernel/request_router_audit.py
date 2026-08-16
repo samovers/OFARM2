@@ -9,6 +9,10 @@ from typing import Protocol
 
 from .principal import AuthenticatedPrincipal
 from .security_audit import SecurityAuditAppend
+from .security_audit_gap import (
+    SecurityAuditGapOutcomeUnknown,
+    SecurityAuditGapUnavailable,
+)
 from .tenant_uow import (
     TenantBoundaryError,
     TenantBoundaryOutcome,
@@ -25,6 +29,30 @@ class TenantBoundary(Protocol):
 
 class AuditSink(Protocol):
     def append(self, reason: str) -> SecurityAuditAppend: ...
+
+
+_GapErrorType = (
+    type[SecurityAuditGapUnavailable]
+    | type[SecurityAuditGapOutcomeUnknown]
+)
+
+
+def _append_or_defer_gap_error(
+    audit_sink: AuditSink,
+    reason: str,
+) -> _GapErrorType | None:
+    try:
+        audit_sink.append(reason)
+    except (
+        SecurityAuditGapUnavailable,
+        SecurityAuditGapOutcomeUnknown,
+    ) as error:
+        if type(error) is SecurityAuditGapUnavailable:
+            return SecurityAuditGapUnavailable
+        if type(error) is SecurityAuditGapOutcomeUnknown:
+            return SecurityAuditGapOutcomeUnknown
+        raise
+    return None
 
 
 _REASONS = MappingProxyType(
@@ -56,6 +84,7 @@ class RequestRouterAuditProducer:
         self,
         principal: AuthenticatedPrincipal,
     ) -> Iterator[TenantUnitOfWork]:
+        gap_error: _GapErrorType | None = None
         with ExitStack() as stack:
             try:
                 unit = stack.enter_context(
@@ -65,6 +94,12 @@ class RequestRouterAuditProducer:
                 reason = _REASONS.get(error.outcome)
                 if reason is None:
                     raise
-                self._audit_sink.append(reason)
-                raise
+                gap_error = _append_or_defer_gap_error(
+                    self._audit_sink,
+                    reason,
+                )
+                if gap_error is None:
+                    raise
+            if gap_error is not None:
+                raise gap_error()
             yield unit

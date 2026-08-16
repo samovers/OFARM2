@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import traceback
 from uuid import uuid4
 
 import psycopg
@@ -39,6 +40,10 @@ from kernel.security_audit_client import PreTenantAuditClient
 from kernel.security_audit_health import (
     SecurityAuditHealth,
     SecurityAuditReadiness,
+)
+from kernel.security_audit_gap import (
+    SecurityAuditGapOutcomeUnknown,
+    SecurityAuditGapUnavailable,
 )
 from kernel.tests.postgresql_audit_support import (
     audit_service_fixture,  # noqa: F401
@@ -116,15 +121,16 @@ STORED = StoredAuditAppend(uuid4(), NOW, NOW + timedelta(days=30))
 
 
 class _Verifier:
-    def __init__(self, error=None):
+    def __init__(self, error=None, identity=IDENTITY):
         self.error = error
+        self.identity = identity
         self.calls = []
 
     def verify(self, token):
         self.calls.append(token)
         if self.error is not None:
             raise self.error
-        return IDENTITY
+        return self.identity
 
 
 class _Resolver:
@@ -161,6 +167,22 @@ class _Sink:
             raise self.error
         self.completed = True
         return self.result
+
+
+class _ChainedGapSink(_Sink):
+    def __init__(self, error_type, dependency_error):
+        super().__init__()
+        self.error_type = error_type
+        self.dependency_error = dependency_error
+        self.prior = None
+
+    def append(self, reason):
+        self.calls.append(reason)
+        try:
+            raise self.dependency_error
+        except RuntimeError:
+            self.prior = self.error_type()
+            raise self.prior
 
 
 def _producer(verifier, resolver, sink):
@@ -279,6 +301,101 @@ def test_sink_failure_propagates_without_authorization(audit_error):
     assert sink.calls == ["AUTHORITY_UNAVAILABLE"]
 
 
+@pytest.mark.parametrize(
+    "error_type",
+    (SecurityAuditGapUnavailable, SecurityAuditGapOutcomeUnknown),
+)
+@pytest.mark.parametrize("boundary", ("authentication", "principal"))
+def test_gap_error_is_freshly_raised_after_original_handler(
+    error_type,
+    boundary,
+):
+    runtime_suffix = str(uuid4())
+    token = "".join(("token-", runtime_suffix))
+    detail = "".join(("detail-", runtime_suffix))
+    dependency = "".join(("dependency-", runtime_suffix))
+    credential = "".join(("credential-", runtime_suffix))
+    control_dsn = "".join(("postgresql://control/", runtime_suffix))
+    issuer = "".join(("https://issuer.example/", runtime_suffix))
+    subject = "".join(("subject-", runtime_suffix))
+    identity = VerifiedIdentity(
+        equality_policy=OIDC_ISSUER_EQUALITY_POLICY,
+        issuer=issuer,
+        subject=subject,
+    )
+    authentication_failure = boundary == "authentication"
+    denial = (
+        AuthenticationError(
+            AuthenticationOutcome.VERIFICATION_REFUSED,
+            internal_detail=detail,
+        )
+        if authentication_failure
+        else PrincipalResolutionError(
+            PrincipalResolutionOutcome.AUTHORITY_UNAVAILABLE
+        )
+    )
+    dependency_error = RuntimeError(dependency)
+    dependency_error.credential = credential
+    dependency_error.control_dsn = control_dsn
+    sink = _ChainedGapSink(error_type, dependency_error)
+
+    with pytest.raises(error_type) as raised:
+        _producer(
+            _Verifier(
+                denial if authentication_failure else None,
+                identity,
+            ),
+            _Resolver(None if authentication_failure else denial),
+            sink,
+        ).authenticate(token)
+
+    error = raised.value
+    assert type(error) is error_type
+    assert error is not sink.prior
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert error.args == (str(error),)
+    rendered = "".join(
+        traceback.TracebackException.from_exception(
+            error,
+            capture_locals=False,
+        ).format()
+    )
+    assert all(
+        value not in rendered
+        for value in (
+            token,
+            detail,
+            dependency,
+            credential,
+            control_dsn,
+            issuer,
+            subject,
+        )
+    )
+
+
+def test_gap_error_subclass_is_not_accepted_as_fixed_identity():
+    class Subclass(SecurityAuditGapUnavailable):
+        pass
+
+    denial = AuthenticationError(
+        AuthenticationOutcome.NO_CREDENTIAL,
+        internal_detail="missing",
+    )
+    subclass = Subclass()
+
+    with pytest.raises(Subclass) as raised:
+        _producer(
+            _Verifier(denial),
+            _Resolver(),
+            _Sink(error=subclass),
+        ).authenticate(None)
+
+    assert raised.value is subclass
+    assert raised.value.__context__ is denial
+
+
 @pytest.mark.parametrize("boundary", ("verifier", "resolver"))
 def test_unexpected_failure_is_not_given_an_audit_classification(boundary):
     unexpected = LookupError("unexpected")
@@ -358,4 +475,4 @@ def test_phase_a_line_budgets_are_fixed():
     root = Path(__file__).resolve().parents[2]
     production = root / "kernel/authentication_audit.py"
     assert len(production.read_text().splitlines()) <= 140
-    assert len(Path(__file__).read_text().splitlines()) <= 400
+    assert len(Path(__file__).read_text().splitlines()) <= 520

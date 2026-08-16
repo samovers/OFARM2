@@ -68,7 +68,8 @@ MODULE_BUDGETS = {
     "kernel/google_kms_correlation_hmac.py": 220,
     "kernel/security_audit_hmac_posture.py": 260,
     "kernel/security_audit_health.py": 170,
-    "kernel/security_audit_runtime.py": 230,
+    "kernel/security_audit_gap.py": 720,
+    "kernel/security_audit_runtime.py": 250,
     "deployment/postgresql/security_audit_hmac_retirement.py": 450,
 }
 COMMAND_MODULE_BUDGETS = {
@@ -157,8 +158,12 @@ GROUP_BUDGETS = {
         170,
         ("kernel/security_audit_health.py",),
     ),
+    "security audit live gap": (
+        720,
+        ("kernel/security_audit_gap.py",),
+    ),
     "security audit runtime": (
-        230,
+        250,
         ("kernel/security_audit_runtime.py",),
     ),
     "security audit HMAC retirement": (
@@ -184,10 +189,17 @@ TEST_GLOBS = (
     "kernel/tests/*google_kms_correlation_hmac*.py",
     "kernel/tests/*security_audit_hmac_posture*.py",
     "kernel/tests/*security_audit_health*.py",
+    "kernel/tests/*security_audit_gap*.py",
     "kernel/tests/*security_audit_runtime*.py",
     "kernel/tests/*security_audit_hmac_retirement*.py",
 )
 DIRECT_IMPORT_BOUNDS = {
+    "kernel/security_audit_gap.py": frozenset(
+        {
+            "deployment.postgresql.audit_contract",
+            "kernel.security_audit",
+        }
+    ),
     "deployment/postgresql/security_audit_hmac_retirement.py": frozenset(
         {
             "deployment.postgresql.audit_contract",
@@ -198,6 +210,28 @@ DIRECT_IMPORT_BOUNDS = {
         {"deployment.postgresql.security_audit_hmac_retirement"}
     ),
 }
+SECURITY_AUDIT_GAP_FORBIDDEN_IMPORTS = frozenset(
+    {
+        "inspect",
+        "logging",
+        "pathlib",
+        "prometheus_client",
+        "queue",
+        "socket",
+        "sqlite3",
+        "tempfile",
+        "traceback",
+    }
+)
+SECURITY_AUDIT_GAP_FORBIDDEN_NAMES = frozenset(
+    {
+        "capture_locals",
+        "format_exception",
+        "mark_overflow_count_unknown",
+        "open",
+        "print",
+    }
+)
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 _TENANT_UOW_MODULE = "kernel.tenant_uow"
 _TENANT_UOW_PUBLIC_SURFACE = frozenset({"binding", "batch", "begin_batch"})
@@ -2251,6 +2285,46 @@ def _check_direct_import_bounds(snapshot: PythonSourceSnapshotV1) -> list[str]:
     return failures
 
 
+def _check_security_audit_gap_surface(
+    snapshot: PythonSourceSnapshotV1,
+    trees: collections.abc.Mapping[str, ast.Module],
+) -> list[str]:
+    relative = "kernel/security_audit_gap.py"
+    module = snapshot.modules_by_relative_path[relative].module_name
+    failures = []
+    for node in ast.walk(trees[module]):
+        imported = None
+        if isinstance(node, ast.Import):
+            imported = tuple(alias.name.split(".", 1)[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            imported = (node.module.split(".", 1)[0],)
+        if imported is not None:
+            for name in imported:
+                if name in SECURITY_AUDIT_GAP_FORBIDDEN_IMPORTS:
+                    failures.append(
+                        f"{relative}:{node.lineno}: prohibited import {name!r}"
+                    )
+        name = None
+        if isinstance(node, ast.Name):
+            name = node.id
+        elif isinstance(node, ast.Attribute):
+            name = node.attr
+        if name in SECURITY_AUDIT_GAP_FORBIDDEN_NAMES:
+            failures.append(
+                f"{relative}:{node.lineno}: prohibited gap surface {name!r}"
+            )
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and "ofarm_security." in node.value
+            and "ofarm_security.append_audit_gap" not in node.value
+        ):
+            failures.append(
+                f"{relative}:{node.lineno}: alternate audit SQL surface"
+            )
+    return failures
+
+
 def main() -> int:
     try:
         snapshot = build_python_source_snapshot(ROOT)
@@ -2263,6 +2337,7 @@ def main() -> int:
     failures.extend(_check_provider_import_policy(snapshot, trees))
     failures.extend(_check_tenant_uow_architecture(snapshot, trees))
     failures.extend(_check_direct_import_bounds(snapshot))
+    failures.extend(_check_security_audit_gap_surface(snapshot, trees))
     for relative, budget in MODULE_BUDGETS.items():
         failures.extend(_check_production(snapshot, trees, relative, budget))
     for relative, budget in COMMAND_MODULE_BUDGETS.items():

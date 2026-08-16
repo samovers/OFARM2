@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import traceback
 from uuid import uuid4
 
 import psycopg
@@ -31,6 +33,10 @@ from kernel.security_audit_client import PreTenantAuditClient
 from kernel.security_audit_health import (
     SecurityAuditHealth,
     SecurityAuditReadiness,
+)
+from kernel.security_audit_gap import (
+    SecurityAuditGapOutcomeUnknown,
+    SecurityAuditGapUnavailable,
 )
 from kernel.tenant_uow import TenantBoundaryError, TenantBoundaryOutcome
 from kernel.tests.postgresql_audit_support import (
@@ -129,12 +135,28 @@ class _Sink:
         return self.result
 
 
+class _ChainedGapSink(_Sink):
+    def __init__(self, error_type, dependency_error):
+        super().__init__()
+        self.error_type = error_type
+        self.dependency_error = dependency_error
+        self.prior = None
+
+    def append(self, reason):
+        self.calls.append(reason)
+        try:
+            raise self.dependency_error
+        except RuntimeError:
+            self.prior = self.error_type()
+            raise self.prior
+
+
 def _producer(boundary, sink):
     return RequestRouterAuditProducer(boundary, sink)
 
 
-def _enter(producer):
-    with producer.unit_of_work(PRINCIPAL):
+def _enter(producer, principal=PRINCIPAL):
+    with producer.unit_of_work(principal):
         raise AssertionError("tenant UnitOfWork must not be yielded")
 
 
@@ -274,6 +296,76 @@ def test_sink_failure_propagates_without_tenant_entry(audit_error):
     assert sink.calls == ["CAPABILITY_REFUSED"]
 
 
+@pytest.mark.parametrize(
+    "error_type",
+    (SecurityAuditGapUnavailable, SecurityAuditGapOutcomeUnknown),
+)
+def test_gap_error_is_freshly_raised_after_tenant_denial_handler(error_type):
+    runtime_suffix = str(uuid4())
+    tenant_canary = uuid4()
+    party_canary = "".join(("party-", runtime_suffix))
+    dependency = "".join(("dependency-", runtime_suffix))
+    credential = "".join(("credential-", runtime_suffix))
+    control_dsn = "".join(("postgresql://control/", runtime_suffix))
+    denial = TenantBoundaryError(TenantBoundaryOutcome.BINDING_REFUSED)
+    dependency_error = RuntimeError(dependency)
+    dependency_error.credential = credential
+    dependency_error.control_dsn = control_dsn
+    sink = _ChainedGapSink(error_type, dependency_error)
+    authority = replace(
+        PRINCIPAL.authority,
+        tenant_id=tenant_canary,
+        party_ref=party_canary,
+        party_record_id=party_canary,
+    )
+    principal = AuthenticatedPrincipal(PRINCIPAL.identity, authority)
+
+    with pytest.raises(error_type) as raised:
+        _enter(_producer(_Boundary(enter_error=denial), sink), principal)
+
+    error = raised.value
+    assert type(error) is error_type
+    assert error is not sink.prior
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert error.args == (str(error),)
+    rendered = "".join(
+        traceback.TracebackException.from_exception(
+            error,
+            capture_locals=False,
+        ).format()
+    )
+    assert all(
+        value not in rendered
+        for value in (
+            str(tenant_canary),
+            party_canary,
+            dependency,
+            credential,
+            control_dsn,
+        )
+    )
+
+
+def test_gap_error_subclass_is_not_accepted_as_fixed_identity():
+    class Subclass(SecurityAuditGapOutcomeUnknown):
+        pass
+
+    denial = TenantBoundaryError(TenantBoundaryOutcome.CAPABILITY_REFUSED)
+    subclass = Subclass()
+
+    with pytest.raises(Subclass) as raised:
+        _enter(
+            _producer(
+                _Boundary(enter_error=denial),
+                _Sink(error=subclass),
+            )
+        )
+
+    assert raised.value is subclass
+    assert raised.value.__context__ is denial
+
+
 class _RecordingAppender:
     def __init__(self, client):
         self.client = client
@@ -329,4 +421,4 @@ def test_phase_a_line_budgets_are_fixed():
     root = Path(__file__).resolve().parents[2]
     production = root / "kernel/request_router_audit.py"
     assert len(production.read_text().splitlines()) <= 120
-    assert len(Path(__file__).read_text().splitlines()) <= 360
+    assert len(Path(__file__).read_text().splitlines()) <= 460
