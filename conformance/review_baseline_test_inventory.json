@@ -11596,6 +11596,276 @@
       "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_cli_sanitizes_failure_by_phase_without_canary[refused-1-security-audit HMAC retirement refused/n]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_cli_sanitizes_failure_by_phase_without_canary[submitted-4-security-audit HMAC retirement outcome unknown; do not retry automatically/n]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_cli_sanitizes_failure_by_phase_without_canary[unexpected-3-security-audit HMAC retirement unavailable before submission/n]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_cli_sanitizes_failure_by_phase_without_canary[unphased-3-security-audit HMAC retirement unavailable before submission/n]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_cli_static_invalid_never_constructs_runner[argv0-environ0]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_cli_static_invalid_never_constructs_runner[argv1-environ1]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_cli_static_invalid_never_constructs_runner[argv2-environ2]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_cli_static_invalid_never_constructs_runner[argv3-environ3]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_cli_success_is_one_canonical_line_and_zero_stderr",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_conforming_terminal_observation_is_a_mutation_free_result[3-1893456001000000000-SecurityAuditHmacRetirementOutcome.ALREADY_DESTROYED]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_conforming_terminal_observation_is_a_mutation_free_result[4-1893456001000000001-SecurityAuditHmacRetirementOutcome.ALREADY_SCHEDULED]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_conforming_terminal_observation_is_a_mutation_free_result[4-1893542401000000000-SecurityAuditHmacRetirementOutcome.ALREADY_SCHEDULED]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_database_clock_requires_exact_control_role_and_aware_time[ofarm_security_audit_control_login-database_time1-SecurityAuditHmacRetirementUnavailable]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_database_clock_requires_exact_control_role_and_aware_time[ofarm_security_audit_reader_login-database_time0-SecurityAuditHmacRetirementRefused]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_deadline_one_microsecond_inside_fixed_lead_refuses_without_mutation",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_destroy_exception_is_unknown_without_retry",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_elapsed_exactly_five_seconds_refuses_before_destroy_method",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_exact_lead_schedules_one_fixed_target_with_conservative_timeout[1]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_exact_lead_schedules_one_fixed_target_with_conservative_timeout[2]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_impossible_terminal_provider_time_is_unavailable_without_mutation[3-None-1893456001000000001]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_impossible_terminal_provider_time_is_unavailable_without_mutation[4-1893456001000000000-None]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_impossible_terminal_provider_time_is_unavailable_without_mutation[4-1893542401000000001-None]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_kms_protocol_exposes_only_fixed_reads_and_destroy",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_known_result_reporting_failure_is_exit_five[flush]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_known_result_reporting_failure_is_exit_five[short]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_known_result_reporting_failure_is_exit_five[write]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_live_control_route_clock_is_observed_without_real_kms_mutation",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_malformed_destroy_response_is_unknown_and_never_retried[response0]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_malformed_destroy_response_is_unknown_and_never_retried[response1]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_malformed_destroy_response_is_unknown_and_never_retried[response2]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_malformed_destroy_response_is_unknown_and_never_retried[response3]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_malformed_destroy_response_is_unknown_and_never_retried[response4]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_malformed_destroy_response_is_unknown_and_never_retried[response5]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_malformed_destroy_response_is_unknown_and_never_retried[response6]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_new_response_exact_two_sided_boundaries_are_admitted[1893542399000000000]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_new_response_exact_two_sided_boundaries_are_admitted[1893542406000000000]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_new_response_one_nanosecond_outside_window_is_outcome_unknown[1893542398999999999]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_new_response_one_nanosecond_outside_window_is_outcome_unknown[1893542406000000001]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_operator_contract_keeps_iam_and_timing_evidence_external",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_parent_or_version_import_policy_refuses_before_mutation[configuration0]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_parent_or_version_import_policy_refuses_before_mutation[configuration1]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_parent_or_version_import_policy_refuses_before_mutation[configuration2]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_parent_or_version_import_policy_refuses_before_mutation[configuration3]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_parent_or_version_import_policy_refuses_before_mutation[configuration4]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_parent_or_version_import_policy_refuses_before_mutation[configuration5]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_parent_or_version_import_policy_refuses_before_mutation[configuration6]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_parent_or_version_import_policy_refuses_before_mutation[configuration7]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_parent_or_version_import_policy_refuses_before_mutation[configuration8]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_parent_or_version_import_policy_refuses_before_mutation[configuration9]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_stderr_failure_is_swallowed_after_numeric_exit_is_fixed",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_subprocess_unexpected_canary_never_reaches_excepthook[pre-3-security-audit HMAC retirement unavailable before submission/n]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_subprocess_unexpected_canary_never_reaches_excepthook[result-5-security-audit HMAC retirement report delivery failed; do not retry automatically/n]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_subprocess_unexpected_canary_never_reaches_excepthook[submitted-4-security-audit HMAC retirement outcome unknown; do not retry automatically/n]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_retirement.py::test_valid_terminal_provider_time_after_live_deadline_is_refused",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_retirement",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_overflow.py::test_acknowledged_report_has_only_the_fixed_non_count_fields",
       "sourceModule": "kernel.tests.test_security_audit_overflow",
       "sourcePath": "kernel/tests/test_security_audit_overflow.py"
@@ -15231,8 +15501,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "763f478cd7a7ec5a735b807c54dce8305c18bf2e503c13fd43d1f4d9f2c80384",
-  "entryCount": 3046,
+  "entriesSha256": "6a84515da7a235094e3dba85010f3623872e1dd30d0190ddfa1465409312f2ea",
+  "entryCount": 3100,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -582,6 +582,77 @@ This command is not a scheduler or drain loop. It makes no deployment,
 readiness, continuity, lossless-retention, legal-hold, backup, replica, WAL,
 vacuum, media-sanitization, or physical-erasure claim.
 
+## One-shot correlation-HMAC version-1 retirement
+
+The correlation-HMAC retirement command is a fixed technical primitive for
+the accepted version-1 to version-2 rotation:
+
+```bash
+export OFARM_SECURITY_AUDIT_CONTROL_PG_DSN='...'
+export OFARM_CORRELATION_HMAC_KMS_KEY_RESOURCE='projects/.../cryptoKeys/...'
+python -m deployment.postgresql.run_security_audit_hmac_retirement
+```
+
+It accepts no arguments and no caller-selected version, state, deadline,
+duration, timeout, retry, or action. It requires known versions `(1, 2)`,
+active version `2`, and retirement target version `1`. It reuses the existing
+read-only lifecycle observer, validates the exact MAC/HSM/HMAC-SHA-256 parent
+and its 86,400-second destruction delay, reads the live version-1 deadline and
+fresh clock only through `ofarm_security_audit_control_login`, and closes the
+database transaction before any mutation can be submitted.
+
+An enabled or disabled target with a live deadline must have at least 172,800
+seconds of database-observed lead. The process then enters the Cloud KMS
+destroy method at most once, with `retry=None` and only the positive remaining
+part of its fixed five-second monotonic admission budget. The only request is
+`DestroyCryptoKeyVersion` for version `1`. A conforming pre-existing
+`DESTROY_SCHEDULED` or `DESTROYED` state is reported without mutation. The
+canonical result is point-in-time evidence only. A null `greatestPurgeAfter`
+means no currently retained version-1 event was observed; it does not prove
+that version `1` was never used or that every historical deadline was met.
+
+The dedicated retirement principal must be independently provisioned and
+verified with only these permissions on the exact configured CryptoKey:
+
+- `cloudkms.cryptoKeys.get`;
+- `cloudkms.cryptoKeyVersions.get`;
+- `cloudkms.cryptoKeyVersions.list`; and
+- `cloudkms.cryptoKeyVersions.destroy`.
+
+It must have no `macSign`, restore, update, create, delete, import, reimport, or
+IAM-management permission. The production audit runtime identity must never
+receive `destroy`. Repository code neither provisions nor self-attests IAM.
+
+This primitive is intentionally non-deployable until a separate deployment
+gate has current, independently controlled, verifiable evidence for both
+timing premises. Clock evidence must bind the exact PostgreSQL route and Cloud
+KMS endpoint to an authenticated common time reference, prove absolute skew no
+greater than one second, be measured within 60 seconds before invocation, and
+remain valid through the operation. Provider-acceptance evidence must bind the
+exact endpoint, service, method, client and transport versions, and transmitted
+deadline semantics, and prove that no state change can be accepted more than
+five seconds after admission starts, including timeout and cancellation paths
+with ambiguous completion. The GAPIC timeout and historical latency samples
+are not that proof. This repository supplies neither artifact; the external
+gate must refuse before launching the process when either is absent, expired,
+or incomplete.
+
+Closed terminal outcomes are:
+
+- exit `0`: one complete known scheduled or destroyed report was flushed;
+- exit `1`: a prerequisite or deadline policy refused before mutation;
+- exit `2`: command or static configuration was invalid;
+- exit `3`: unavailable before destroy submission;
+- exit `4`: destroy was submitted but its exact outcome is unknown; and
+- exit `5`: a known result existed but complete report delivery failed.
+
+Operators and automation must not retry exit `4`, exit `5`, or an incomplete
+process protocol automatically. This command does not authorize deployment,
+IAM changes, a real Cloud KMS invocation, release, production readiness,
+physical-media erasure, historical compliance, or issue #192 closure. It is
+not a scheduler, rotation controller, readiness check, continuous monitor, or
+runtime integration.
+
 ## Accepted limits
 
 The checked-in conformance workflow exercises three disposable PostgreSQL
