@@ -2,8 +2,8 @@
 
 **Status:** proposed; Phase B repository implementation is unauthorized
 
-**Draft implementation pull request:** pending binding to the draft pull
-request created from this RFC-only branch
+**Draft implementation pull request:**
+`https://github.com/samovers/OFARM2/pull/318`
 
 **Contract identity:**
 `ofarm2.security-audit-bounded-export-execution.v0.1`
