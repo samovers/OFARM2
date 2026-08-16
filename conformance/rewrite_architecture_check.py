@@ -69,6 +69,10 @@ MODULE_BUDGETS = {
     "kernel/security_audit_hmac_posture.py": 260,
     "kernel/security_audit_health.py": 170,
     "kernel/security_audit_runtime.py": 230,
+    "deployment/postgresql/security_audit_hmac_retirement.py": 450,
+}
+COMMAND_MODULE_BUDGETS = {
+    "deployment/postgresql/run_security_audit_hmac_retirement.py": 160,
 }
 GROUP_BUDGETS = {
     "profile runtime": (
@@ -157,6 +161,13 @@ GROUP_BUDGETS = {
         230,
         ("kernel/security_audit_runtime.py",),
     ),
+    "security audit HMAC retirement": (
+        610,
+        (
+            "deployment/postgresql/security_audit_hmac_retirement.py",
+            "deployment/postgresql/run_security_audit_hmac_retirement.py",
+        ),
+    ),
 }
 TEST_GLOBS = (
     "kernel/tests/*profile_runtime*.py",
@@ -174,7 +185,19 @@ TEST_GLOBS = (
     "kernel/tests/*security_audit_hmac_posture*.py",
     "kernel/tests/*security_audit_health*.py",
     "kernel/tests/*security_audit_runtime*.py",
+    "kernel/tests/*security_audit_hmac_retirement*.py",
 )
+DIRECT_IMPORT_BOUNDS = {
+    "deployment/postgresql/security_audit_hmac_retirement.py": frozenset(
+        {
+            "deployment.postgresql.audit_contract",
+            "kernel.security_audit_hmac_posture",
+        }
+    ),
+    "deployment/postgresql/run_security_audit_hmac_retirement.py": frozenset(
+        {"deployment.postgresql.security_audit_hmac_retirement"}
+    ),
+}
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 PROVIDER_IMPORT_POLICY_MODULES = (
     "kernel.profile_runtime_provider",
@@ -2063,6 +2086,8 @@ def _check_production(
     trees: collections.abc.Mapping[str, ast.Module],
     relative: str,
     budget: int,
+    *,
+    allow_environment: bool = False,
 ) -> list[str]:
     unit = snapshot.modules_by_relative_path[relative]
     tree = trees[unit.module_name]
@@ -2088,8 +2113,24 @@ def _check_production(
             )
     for line in _trust_interface_uses_any(tree):
         failures.append(f"{relative}:{line}: Any appears at a trust interface")
-    for line in _environment_reads(tree):
-        failures.append(f"{relative}:{line}: domain module reads the environment")
+    if not allow_environment:
+        for line in _environment_reads(tree):
+            failures.append(
+                f"{relative}:{line}: domain module reads the environment"
+            )
+    return failures
+
+
+def _check_direct_import_bounds(snapshot: PythonSourceSnapshotV1) -> list[str]:
+    failures = []
+    for relative, expected in DIRECT_IMPORT_BOUNDS.items():
+        module = snapshot.modules_by_relative_path[relative].module_name
+        actual = frozenset(edge.target for edge in snapshot.import_graph[module])
+        if actual != expected:
+            failures.append(
+                f"{relative}: direct repository imports {sorted(actual)!r} "
+                f"do not equal fixed bound {sorted(expected)!r}"
+            )
     return failures
 
 
@@ -2103,8 +2144,19 @@ def main() -> int:
         return 1
     failures = _check_import_firewall(snapshot, trees)
     failures.extend(_check_provider_import_policy(snapshot, trees))
+    failures.extend(_check_direct_import_bounds(snapshot))
     for relative, budget in MODULE_BUDGETS.items():
         failures.extend(_check_production(snapshot, trees, relative, budget))
+    for relative, budget in COMMAND_MODULE_BUDGETS.items():
+        failures.extend(
+            _check_production(
+                snapshot,
+                trees,
+                relative,
+                budget,
+                allow_environment=True,
+            )
+        )
     for name, (budget, relatives) in GROUP_BUDGETS.items():
         total = sum(
             _line_count(snapshot.modules_by_relative_path[relative])

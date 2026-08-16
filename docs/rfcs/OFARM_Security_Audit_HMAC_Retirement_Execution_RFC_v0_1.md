@@ -1,8 +1,8 @@
 # OFARM Security-Audit HMAC Retirement Execution — Phase A Contract v0.2
 
-**Status:** decision version 2 semantics reviewed with zero Blockers and
-proposed for explicit Phase A approval; Phase B, deployment, and every Cloud
-KMS mutation remain unauthorized
+**Status:** decision version 2 approved for Phase B repository implementation
+in draft pull request #316; deployment and every real Cloud KMS mutation
+remain unauthorized
 
 **Draft pull request:** `https://github.com/samovers/OFARM2/pull/316`
 
@@ -13,8 +13,8 @@ The RFC filename remains `v0_1` because the already-published exact path
 envelope does not authorize a rename. Contract version `v0.2` and decision
 version `2` record the semantic replacement of the withdrawn version-1 card.
 
-**Proposed decision identity:**
-`ISSUE192-SECURITY-AUDIT-HMAC-RETIREMENT-EXECUTION-001`, version `2`
+**Decision identity:**
+`ISSUE192-SECURITY-AUDIT-HMAC-RETIREMENT-EXECUTION-001`, approved version `2`
 
 Version `1` is historical evidence only and grants no authority. Owner review
 [`4945455733`](https://github.com/samovers/OFARM2/pull/316#pullrequestreview-4945455733)
@@ -321,7 +321,7 @@ the closed protocol; arbitrary in-process code execution remains excluded.
 | --- | --- |
 | Known correlation-HMAC versions | Checked-in security-audit contract; must equal `(1, 2)` |
 | Active version | Checked-in contract plus database observer; must equal `2` |
-| Retirement target | This proposed decision; fixed to version `1` |
+| Retirement target | This approved decision; fixed to version `1` |
 | Greatest currently retained version-1 deadline | `observe_correlation_hmac_key_retention(1)` |
 | Fresh operation time | PostgreSQL `clock_timestamp()` over the exact audit-control route |
 | Configured KMS parent | `OFARM_CORRELATION_HMAC_KMS_KEY_RESOURCE`, validated as one exact parent |
@@ -857,7 +857,7 @@ only at the explicit PostgreSQL, KMS, and binary-output protocol seams.
 
 ### 9.1 Components
 
-Phase B, if approved, adds:
+Approved Phase B adds:
 
 1. `deployment.postgresql.security_audit_hmac_retirement`
    - immutable result carriers and closed exceptions;
@@ -1178,14 +1178,14 @@ documentation-only.
 
 ### 13.2 Phase B verification gates
 
-If later approved, the exact implementation head must pass at least:
+The approved exact implementation head must pass at least:
 
 ```text
 .venv/bin/pytest -q kernel/tests/test_security_audit_hmac_retirement.py
 .venv/bin/pytest -q kernel/tests/test_security_audit_hmac_posture.py
 .venv/bin/pytest -q kernel/tests/test_google_kms_correlation_hmac.py
 .venv/bin/pytest -q kernel/tests/test_security_audit_runtime.py
-.venv/bin/pytest -q kernel/tests/test_postgresql_audit_migration.py -k hmac
+.venv/bin/pytest -q kernel/tests/test_postgresql_audit_migration.py
 .venv/bin/pytest -q kernel/tests/test_rewrite_architecture.py
 .venv/bin/ruff check deployment/postgresql/security_audit_hmac_retirement.py deployment/postgresql/run_security_audit_hmac_retirement.py kernel/tests/test_security_audit_hmac_retirement.py
 python3 conformance/ofarm_pkg_contract_check.py
@@ -1260,12 +1260,15 @@ version `3`.
   11.5 and 12 keep them outside this pull request.
 - **Preferences:** the equality wording defect is corrected; no open preference
   is carried as approval authority.
-- **Phase B:** unauthorized.
+- **Phase B approval:** the owner explicitly approved OFARM2 decision
+  `ISSUE192-SECURITY-AUDIT-HMAC-RETIREMENT-EXECUTION-001` version `2` in the
+  live task on 2026-08-16 for repository implementation in named draft pull
+  request #316.
 - **Deployment:** unauthorized.
 
-Once Phase B is explicitly approved, implemented, and verified, only a
-demonstrated in-scope Blocker may delay merge. New ideas, Preferences, and
-non-blocking hardening become Follow-ups and do not reopen review.
+With Phase B explicitly approved, only a demonstrated in-scope Blocker may
+delay merge after implementation and verification. New ideas, Preferences,
+and non-blocking hardening become Follow-ups and do not reopen review.
 
 ## 15. External semantics fixed by this contract
 
