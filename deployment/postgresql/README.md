@@ -479,6 +479,52 @@ It is not a deployment-readiness or external clock-fence claim. It grants no
 production-access authorization or guarantee that authorized output cannot be
 copied after disclosure.
 
+## Library-only security-audit bounded export page
+
+`security_audit_export.py` is a bounded export-page library primitive for a
+later, separately approved break-glass lifecycle. It has no standalone export
+command, module entry point, scheduler, endpoint, output sink, or documented
+operator invocation. The library accepts only two complete raw conninfo
+strings and either no cursor or one already validated immutable cursor. It
+preflights both routes before external I/O, commits one fixed export
+`AUDIT_ACCESS` intent, opens the export route only after that commit is
+acknowledged, and requests exactly one descending page with at most 2,048
+event rows and an 8,388,608-byte database-encoded event ceiling.
+
+The control route still must authenticate exactly as
+`ofarm_security_audit_control_login`. The future lifecycle must supply an
+already-created exact `ofarm_security_audit_export_login` route with the
+existing export-capability membership. This library does not create or receive
+a separate temporary export credential parameter, create or change a role,
+grant membership, verify approval, choose an operator or output destination,
+revoke or drop the temporary login, or terminate a session. A lifecycle-owned
+credential may be present inside the supplied export conninfo and remains
+resident for the runner call; the library neither extracts nor returns that
+route. Normal provisioning deliberately keeps the login absent.
+
+Code-owned startup values replace conflicting conninfo keywords. In
+particular, a code-owned keyword never merges with a conflicting conninfo
+value: an `options` value present in either supplied route is dropped in full
+and replaced by the fixed option string. Both connections fix statement,
+lock, idle-transaction, transaction, work-memory, bytea, time-zone, and
+date-style settings; the control route also fixes
+`synchronous_commit=on`. PostgreSQL remains authoritative for session-user
+authorization, the data cut, snapshot membership, five-minute expiry,
+request equality, row membership and ordering, and encoded-byte accounting.
+
+Success is one immutable acknowledged intent, validated event tuple, derived
+next cursor, and completely buffered canonical ASCII JSON line. The library
+does not write that page anywhere and does not consume the next cursor. An
+unknown commit outcome or any failure after acknowledged intent must not be
+retried automatically. A repeated invocation is a new caller action outside
+this primitive, not a resume or reconciliation.
+
+This primitive proves only one bounded export page. It does not prove dual
+approval, approval currentness or single use, temporary-login expiry or
+cleanup, structural closure, runtime health, protected output delivery,
+external clock fencing, deployment readiness, or completion of issue #192.
+Those remain prerequisites for a future operator-facing lifecycle.
+
 ## One-shot security-audit overflow closure
 
 The overflow-closure command observes and closes at most one database-selected

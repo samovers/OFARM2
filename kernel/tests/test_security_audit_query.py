@@ -31,6 +31,11 @@ from deployment.postgresql.run_security_audit_query import (
     READER_DSN_ENVIRONMENT,
     run_fixed_security_audit_query_cli,
 )
+from deployment.postgresql.security_audit_access import (
+    SecurityAuditAccessCursor,
+    SecurityAuditAccessIntent as SharedSecurityAuditAccessIntent,
+    SecurityAuditEventReport as SharedSecurityAuditEventReport,
+)
 from deployment.postgresql.security_audit_query import (
     ACCESS_INTENT_SQL,
     AcknowledgedSecurityAuditQuery,
@@ -40,6 +45,7 @@ from deployment.postgresql.security_audit_query import (
     QUERY_READER_CONNECTION_OPTIONS,
     QUERY_REPORT_SCHEMA,
     SecurityAuditAccessIntent,
+    SecurityAuditEventReport,
     SecurityAuditQueryControlUnavailable,
     SecurityAuditQueryCursor,
     SecurityAuditQueryFailed,
@@ -61,6 +67,12 @@ EVENT_ID = UUID("11111111-1111-4111-8111-111111111111")
 EVENT_AT = DATA_CUT - timedelta(seconds=10)
 PURGE_AFTER = EVENT_AT + timedelta(seconds=RETENTION_SECONDS)
 REPORT_BYTES = b'{"acknowledged":true}\n'
+
+
+def test_reader_public_values_are_direct_shared_access_exports():
+    assert SecurityAuditQueryCursor is SecurityAuditAccessCursor
+    assert SecurityAuditAccessIntent is SharedSecurityAuditAccessIntent
+    assert SecurityAuditEventReport is SharedSecurityAuditEventReport
 
 
 def _intent_row() -> tuple[object, ...]:
