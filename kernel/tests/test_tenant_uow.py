@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -14,7 +14,9 @@ from kernel.tenant_uow import (
     GovernedBatchRequest,
     TenantBoundaryError,
     TenantBoundaryOutcome,
+    TenantUnitOfWork,
     TenantUnitOfWorkManager,
+    _reset_tenant_connection,
 )
 from kernel.tenant_capability_issuer import CapabilityMintError
 from kernel.tests._signing_support import (
@@ -132,17 +134,6 @@ class _Connection:
         self.closed = True
         self.info.transaction_status = TransactionStatus.UNKNOWN
 
-    @contextmanager
-    def transaction(self):
-        self.events.append(("SAVEPOINT", ()))
-        try:
-            yield
-        except BaseException:
-            self.events.append(("ROLLBACK TO SAVEPOINT", ()))
-            raise
-        else:
-            self.events.append(("RELEASE SAVEPOINT", ()))
-
 
 class _Pool:
     def __init__(self, connection):
@@ -161,6 +152,37 @@ class _Pool:
 
     def close(self, *, timeout=5.0):
         assert timeout == 5.0
+
+
+class _ResetConnection:
+    def __init__(self, *, error=None, restore_error=None):
+        self.info = _Info()
+        self._autocommit = False
+        self.autocommit_assignments = []
+        self.events = []
+        self._error = error
+        self._restore_error = restore_error
+
+    @property
+    def autocommit(self):
+        return self._autocommit
+
+    @autocommit.setter
+    def autocommit(self, value):
+        self.autocommit_assignments.append(value)
+        if (
+            value is False
+            and self._autocommit is True
+            and self._restore_error is not None
+        ):
+            raise self._restore_error
+        self._autocommit = value
+
+    def execute(self, query, *, prepare):
+        self.events.append((query, prepare, self.autocommit))
+        if self._error is not None:
+            raise self._error
+        return _Cursor()
 
 
 class _Minter:
@@ -209,20 +231,19 @@ def test_unit_of_work_binds_allocates_one_batch_and_commits(principal):
 
     with manager.unit_of_work(principal) as unit:
         assert unit.binding.tenant_id == principal.authority.tenant_id
+        replacement = replace(unit.binding, tenant_id=uuid4())
+        with pytest.raises(AttributeError):
+            unit.binding = replacement
+        with pytest.raises(AttributeError):
+            del unit.binding
+        assert unit.binding.tenant_id == principal.authority.tenant_id
         assert minter.challenges[0].audience == AUDIENCE
-        with unit.savepoint():
-            with pytest.raises(RuntimeError, match="outer transaction"):
-                unit.begin_batch(request)
         batch = unit.begin_batch(request)
         assert batch.full_xid == 42
         assert batch.knowledge_position == 1
         assert batch.authenticated_principal_ref == principal.authority.party_ref
         with pytest.raises(RuntimeError, match="already exists"):
             unit.begin_batch(request)
-        with unit.savepoint():
-            assert unit.fetch_one("SELECT tenant") == (
-                principal.authority.tenant_id,
-            )
 
     assert connection.events[-1] == ("COMMIT", ())
     assert not any(
@@ -231,7 +252,9 @@ def test_unit_of_work_binds_allocates_one_batch_and_commits(principal):
     )
     assert pool.returned == [connection]
     with pytest.raises(RuntimeError, match="closed"):
-        unit.fetch_one("SELECT tenant")
+        unit.begin_batch(request)
+    with pytest.raises(RuntimeError, match="closed"):
+        unit._TenantUnitOfWork__allocate_batch(request)
 
 
 @pytest.mark.parametrize(
@@ -358,12 +381,105 @@ def test_non_idle_checkout_is_discarded_without_binding(principal):
     assert pool.returned == [connection]
 
 
-def test_repository_surface_cannot_issue_transaction_control(principal):
+def test_sql_surface_is_absent_and_later_refusal_rolls_back(principal):
     connection = _Connection(principal)
     manager = TenantUnitOfWorkManager(_Pool(connection), _Minter())
+    request = GovernedBatchRequest(
+        "batch-hostile-sql",
+        "TEST_OPERATION",
+        "request-hostile-sql",
+        "sha256:" + "7" * 64,
+    )
+    hostile_sql = (
+        "/* repository operation */ COMMIT",
+        "-- repository operation\nROLLBACK",
+        "PREPARE TRANSACTION 'uow_escape'",
+        "SET SESSION statement_timeout = 0",
+        "SELECT pg_advisory_lock(42)",
+    )
 
-    with pytest.raises(ValueError, match="belongs to the UnitOfWork"):
+    assert {
+        "execute",
+        "fetch_one",
+        "fetch_all",
+        "savepoint",
+    }.isdisjoint(TenantUnitOfWork.__dict__)
+
+    with pytest.raises(RuntimeError, match="later governed stage refused"):
         with manager.unit_of_work(principal) as unit:
-            unit.execute("COMMIT")
+            assert {name for name in dir(unit) if not name.startswith("_")} == {
+                "batch",
+                "begin_batch",
+                "binding",
+            }
+            assert not hasattr(unit, "__dict__")
+            assert not hasattr(unit, "_connection")
+            unit.begin_batch(request)
+            for query in hostile_sql:
+                with pytest.raises(AttributeError):
+                    getattr(unit, "execute")(query)
+            raise RuntimeError("later governed stage refused")
 
+    executed = tuple(query for query, _parameters in connection.events)
+    assert all(query not in executed for query in hostile_sql)
     assert connection.events[-1] == ("ROLLBACK", ())
+
+
+def test_pool_reset_discards_all_session_state_outside_a_transaction():
+    connection = _ResetConnection()
+
+    _reset_tenant_connection(connection)
+
+    assert connection.events == [("DISCARD ALL", False, True)]
+    assert connection.autocommit is False
+    assert connection.info.transaction_status == TransactionStatus.IDLE
+
+
+def test_pool_reset_failure_is_not_hidden_and_restores_client_mode():
+    failure = OSError("reset reply lost")
+    connection = _ResetConnection(error=failure)
+
+    with pytest.raises(OSError) as raised:
+        _reset_tenant_connection(connection)
+
+    assert raised.value is failure
+    assert connection.events == [("DISCARD ALL", False, True)]
+    assert connection.autocommit is False
+
+
+def test_pool_reset_preserves_failure_when_client_mode_restore_also_fails():
+    reset_failure = OSError("reset reply lost")
+    restore_failure = RuntimeError("client mode restore refused")
+    connection = _ResetConnection(
+        error=reset_failure,
+        restore_error=restore_failure,
+    )
+
+    with pytest.raises(OSError) as raised:
+        _reset_tenant_connection(connection)
+
+    assert raised.value is reset_failure
+    assert connection.autocommit_assignments == [True, False]
+    assert connection.autocommit is True
+
+
+@pytest.mark.parametrize(
+    ("transaction_status", "autocommit"),
+    (
+        (TransactionStatus.INTRANS, False),
+        (TransactionStatus.IDLE, True),
+    ),
+    ids=("transaction-active", "autocommit-enabled"),
+)
+def test_pool_reset_refuses_an_invalid_starting_state(
+    transaction_status,
+    autocommit,
+):
+    connection = _ResetConnection()
+    connection.info.transaction_status = transaction_status
+    connection.autocommit = autocommit
+
+    with pytest.raises(RuntimeError, match="not resettable"):
+        _reset_tenant_connection(connection)
+
+    assert connection.events == []

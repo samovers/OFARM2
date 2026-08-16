@@ -199,6 +199,12 @@ DIRECT_IMPORT_BOUNDS = {
     ),
 }
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
+_TENANT_UOW_MODULE = "kernel.tenant_uow"
+_TENANT_UOW_PUBLIC_SURFACE = frozenset({"binding", "batch", "begin_batch"})
+_TENANT_UOW_INIT_PARAMETERS = ("self", "binding", "allocate_batch")
+_TENANT_UOW_SLOTS = frozenset(
+    {"__binding", "__active", "__allocate_batch", "__batch"}
+)
 PROVIDER_IMPORT_POLICY_MODULES = (
     "kernel.profile_runtime_provider",
     "kernel.provider_import_policy",
@@ -2081,6 +2087,117 @@ def _environment_reads(tree: ast.Module) -> list[int]:
     return visitor.lines
 
 
+def _tenant_uow_class_violations(tree: ast.Module) -> list[tuple[int, str]]:
+    classes = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "TenantUnitOfWork"
+    ]
+    if len(classes) != 1:
+        return [(1, "TenantUnitOfWork class count differs")]
+    unit = classes[0]
+    public_surface = {
+        member.name
+        for member in unit.body
+        if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and not member.name.startswith("_")
+    }
+    for node in ast.walk(unit):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "self"
+            and not node.attr.startswith("_")
+        ):
+            public_surface.add(node.attr)
+    violations = []
+    if public_surface != _TENANT_UOW_PUBLIC_SURFACE:
+        violations.append(
+            (
+                unit.lineno,
+                f"TenantUnitOfWork public surface is {sorted(public_surface)!r}",
+            )
+        )
+    initializers = [
+        member
+        for member in unit.body
+        if isinstance(member, ast.FunctionDef) and member.name == "__init__"
+    ]
+    if len(initializers) != 1:
+        violations.append((unit.lineno, "TenantUnitOfWork initializer count differs"))
+    else:
+        initializer = initializers[0]
+        arguments = initializer.args
+        positional = (*arguments.posonlyargs, *arguments.args)
+        parameter_names = tuple(argument.arg for argument in positional)
+        if (
+            parameter_names != _TENANT_UOW_INIT_PARAMETERS
+            or arguments.vararg is not None
+            or arguments.kwarg is not None
+            or arguments.kwonlyargs
+        ):
+            violations.append(
+                (initializer.lineno, "TenantUnitOfWork accepts a non-facade dependency")
+            )
+    slots = None
+    for member in unit.body:
+        if not isinstance(member, ast.Assign) or not any(
+            isinstance(target, ast.Name) and target.id == "__slots__"
+            for target in member.targets
+        ):
+            continue
+        if isinstance(member.value, (ast.Tuple, ast.List)) and all(
+            isinstance(element, ast.Constant) and type(element.value) is str
+            for element in member.value.elts
+        ):
+            slots = frozenset(element.value for element in member.value.elts)
+    if slots != _TENANT_UOW_SLOTS:
+        violations.append((unit.lineno, "TenantUnitOfWork slots differ"))
+    for node in ast.walk(unit):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "self"
+            and any(
+                token in node.attr.lower() for token in ("connection", "cursor", "pool")
+            )
+        ):
+            violations.append((node.lineno, "TenantUnitOfWork stores a raw handle"))
+    return sorted(set(violations))
+
+
+def _tenant_handle_escape_accesses(tree: ast.Module) -> list[tuple[int, str]]:
+    """Find direct private-facade access as a static anti-drift signal."""
+    return sorted(
+        {
+            (node.lineno, node.attr)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute)
+            and node.attr.startswith("_TenantUnitOfWork__")
+        }
+    )
+
+
+def _check_tenant_uow_architecture(
+    snapshot: PythonSourceSnapshotV1,
+    trees: collections.abc.Mapping[str, ast.Module],
+) -> list[str]:
+    failures = [
+        f"kernel/tenant_uow.py:{line}: {reason}"
+        for line, reason in _tenant_uow_class_violations(trees[_TENANT_UOW_MODULE])
+    ]
+    for module in sorted(snapshot.production_reachability):
+        if module == _TENANT_UOW_MODULE or not module.startswith("kernel."):
+            continue
+        relative = snapshot.modules_by_name[module].relative_path
+        for line, attribute in _tenant_handle_escape_accesses(trees[module]):
+            failures.append(
+                f"{relative}:{line}: tenant UnitOfWork private-state access "
+                f"{attribute!r}"
+            )
+    return failures
+
+
 def _check_production(
     snapshot: PythonSourceSnapshotV1,
     trees: collections.abc.Mapping[str, ast.Module],
@@ -2144,6 +2261,7 @@ def main() -> int:
         return 1
     failures = _check_import_firewall(snapshot, trees)
     failures.extend(_check_provider_import_policy(snapshot, trees))
+    failures.extend(_check_tenant_uow_architecture(snapshot, trees))
     failures.extend(_check_direct_import_bounds(snapshot))
     for relative, budget in MODULE_BUDGETS.items():
         failures.extend(_check_production(snapshot, trees, relative, budget))

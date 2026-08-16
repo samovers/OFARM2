@@ -24,6 +24,12 @@ demonstrated that its exception boundary and timing premise were incomplete.
 
 **Reviewed base:** `b876736360313736d8da01802521ac2d9e2a37f0`
 
+**Current Phase B integration base:**
+`6e54fa77cff09ddc27be9e280ea27a2b94e1bb60`. That later `main` commit is the
+already-merged tenant-UOW PR #315. Integrating it changes no decision semantic
+or authority here; relative to the current base, this pull request still
+changes exactly section 11.1's seven approved paths.
+
 **Primary trust boundary:** deployment-owned scheduling of irreversible Cloud
 KMS destruction for the one retired pre-tenant correlation-HMAC key version
 
