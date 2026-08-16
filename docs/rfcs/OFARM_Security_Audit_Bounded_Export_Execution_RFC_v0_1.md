@@ -139,6 +139,10 @@ This pull request does not change or add:
 - HMAC generation, key custody, retirement, KMS/IAM, retention, gap/overflow,
   store-loss, empty recreation, backup, replica, CDC, or legal hold;
 - a claim that an authorized caller cannot copy the returned page;
+- structural non-reachability of lifecycle arguments or trusted values from a
+  fresh outward exception's own active traceback frame locals; any diagnostic
+  integration that captures frame locals requires a separate reviewed
+  disclosure, custody, access, and retention decision;
 - deployment activation, production access, production approval, credential
   issuance, release, current/default promotion, issue #192 closure, production
   readiness, or a security waiver.
@@ -161,7 +165,9 @@ establish approval before it creates that LOGIN and calls this primitive.
   row ceiling, and encoded-byte ceiling;
 - normal-reader behavior and its existing 256-row/1,048,576-byte authority;
 - the absence of direct table, `COPY`, generic-query, and tenant-data access;
-- bounded process memory, validation work, and database calls for one page;
+- structurally bounded row count, field count, validation work, database
+  calls, and client containers for one page, without misrepresenting the
+  database byte ceiling as an exact Python process-memory ceiling;
 - honest distinction between pre-commit refusal, commit ambiguity, and
   post-intent export failure;
 - fixed diagnostics at the future lifecycle boundary, which this primitive
@@ -176,6 +182,10 @@ establish approval before it creates that LOGIN and calls this primitive.
 - `SECURITY_AUDIT_CONTRACT` and its fixed export purpose, function identity,
   row ceiling, byte ceiling, event kinds, producer/component pairs, HMAC
   versions, policy identities, retention duration, and access expiry;
+- the contract's cumulative known producer/component and correlation-HMAC
+  key-version read sets, which remain append-only for retained historical
+  events; retiring a reason or key version does not remove its pair or version
+  from read acceptance;
 - the normal reader merged through pull requests #309 and #310 as the accepted
   client-side event-carrier and canonical-cursor behavior;
 - PostgreSQL transaction semantics and the explicit control commit
@@ -251,7 +261,7 @@ LOGIN. Such additions remain outside this decision.
 | Intent durability | Explicit control transaction `commit()` acknowledgement |
 | Permission to open export route | Runner state reached only after acknowledged intent commit |
 | Page membership/order/encoded-byte accounting | Existing bounded export function |
-| Historical event carrier acceptance | One shared client validator derived from `SECURITY_AUDIT_CONTRACT` and trusted database constraints |
+| Historical event carrier acceptance | One shared client validator bounded by the contract's cumulative known producer/component and HMAC-version sets, closed-token shape, and trusted database constraints |
 | Export page schema | Fixed `ofarm.security-audit-bounded-export-page.v1` runner constant |
 | Next cursor | Last validated row's normalized `(observed_at, event_id)` pair |
 | Endpoint and credential selection | Future approved lifecycle; not this primitive |
@@ -281,11 +291,34 @@ The future lifecycle constructs either:
   microsecond timestamp and canonical lowercase nonzero UUID.
 
 The primitive receives the object, never separate mutable cursor fields and
-never raw command tokens. It accepts exactly two non-empty conninfo strings:
-one control route and one temporary export route. Conninfo parsing and future
-lifecycle validation must finish before the runner is called. The runner does
-not accept approval documents, passwords, role names, purpose strings,
-function names, limits, access-event IDs, SQL, or output sinks.
+never raw command tokens. It accepts exactly two raw conninfo strings: one
+control route and one temporary export route. Before deriving request values
+or calling either connection factory, the runner validates both complete
+values as exact strings, rejects blank values, and parses each with
+`psycopg.conninfo.conninfo_to_dict`. Both values must pass before any external
+I/O; the returned parse mappings are not retained. A validation failure
+produces the fixed refused outcome with zero connection-factory calls and zero
+access intent. Earlier lifecycle validation does not replace this runner-owned
+preflight.
+
+The runner accepts no approval document, separate password parameter, role
+name, purpose string, function name, limit, access-event ID, SQL, or output
+sink. A credential may exist only inside a lifecycle-supplied conninfo value.
+Because both routes are preflighted before control I/O, both values are
+resident in the process for the whole runner call. The ordering guarantee is
+that the export route is not opened before acknowledged intent; it is not a
+claim of deferred credential materialization. The separately governed future
+lifecycle owns that custody window. This primitive never logs, renders,
+stores, or returns either route.
+
+The supported future lifecycle calls this runner outside every active
+exception handler. That invocation posture is required for a fresh outward
+error to have `__context__ is None`; Python can otherwise attach an unrelated
+exception already active in the caller. A later lifecycle adapter that needs
+to call or propagate this runner while handling another exception must first
+exit that handler and then perform the call or fixed propagation. Direct use
+from inside an active handler is outside the supported production entry and
+cannot claim the fixed-error detachment guarantee.
 
 ### 6.2 Fixed connection posture
 
@@ -372,10 +405,11 @@ The runner then:
 7. renders the entire canonical page in memory; and
 8. closes the export connection before returning the immutable result.
 
-The database function's `LIMIT 2048` and encoded-row accounting are the
-authoritative bounds. Client `fetchmany(2049)` is hostile-seam validation, not
-a transport bound. The primitive performs no second statement, cursor loop,
-page continuation, retry, output write, or close-window action.
+The database function's `LIMIT p_max_rows`, fixed at 2,048 by the runner and
+equality-checked against the committed intent, and its encoded-row accounting
+are the authoritative bounds. Client `fetchmany(2049)` is hostile-seam
+validation, not a transport bound. The primitive performs no second statement,
+cursor loop, page continuation, retry, output write, or close-window action.
 
 An ordinary exception after acknowledged intent and before `PAGE_READY`
 produces a fixed export-failed outcome. The access intent remains durable, no
@@ -411,11 +445,22 @@ The top-level document contains exactly:
 | `nextCursor` | derived canonical cursor or JSON `null` |
 | `events` | validated event documents in database order |
 
-Event documents retain the accepted normal reader's exact keys and
-encodings. Historical closed reason tokens remain database-authoritative; the
-client does not incorrectly restrict immutable old events to current producer
-append allowlists. JSON uses sorted keys, compact separators, ASCII escaping,
-no NaN, and exactly one trailing LF byte.
+Event documents retain the accepted normal reader's exact keys and encodings.
+Historical closed reason tokens remain accepted by closed-token shape.
+Producer/component pairs and correlation-HMAC key versions remain bounded by
+the contract's cumulative known read sets, which are append-only for retained
+history. The client therefore preserves a retired lawful reason under a known
+pair/version without accepting an unknown pair or version. JSON uses sorted
+keys, compact separators, ASCII escaping, no NaN, and exactly one trailing LF
+byte.
+
+The 8,388,608-byte ceiling is a database-encoded disclosure bound, not an exact
+Python RSS limit. At peak the runner may retain fetched typed carriers,
+normalized immutable values, event documents, and the canonical ASCII page at
+the same time. Expected payload memory is therefore several multiples of the
+database ceiling plus fixed overhead for at most 2,048 carriers of exactly 30
+fields. The fixed row/field counts and absence of loops or retained prior pages
+provide the process bound; this contract makes no platform-specific RSS claim.
 
 The page contains no conninfo, password, role-creation data, approval evidence,
 operator identity, exception text, traceback, or output destination. The later
@@ -426,16 +471,38 @@ not reinterpret this page as proof that approval or closure occurred.
 
 The primitive exposes only these exact ordinary outcomes:
 
-| Outcome | Meaning |
-| --- | --- |
-| acknowledged page | Intent commit acknowledged and one complete page validated/rendered |
-| control unavailable | Control connection factory failed before a connection returned |
-| refused | Control route returned, but intent was not submitted to an ambiguous commit |
-| intent outcome unknown | Explicit intent commit raised; export was not attempted; never retry automatically |
-| export failed | Intent acknowledged, but no complete validated page is available; never retry automatically |
+| Outcome | Exact outward value | Meaning |
+| --- | --- | --- |
+| acknowledged page | `AcknowledgedSecurityAuditExport` | Intent commit acknowledged and one complete page validated/rendered |
+| control unavailable | `SecurityAuditExportControlUnavailable` | Control connection factory failed before a connection returned |
+| refused | `SecurityAuditExportRefused` | Either route failed preflight before I/O, or the control route returned, but no commit became ambiguous |
+| intent outcome unknown | `SecurityAuditExportOutcomeUnknown` | Explicit intent commit raised; export was not attempted; never retry automatically |
+| export failed | `SecurityAuditExportFailed` | Intent acknowledged, but no complete validated page is available; never retry automatically |
 
-Ordinary dependency exceptions are converted according to state without
-retaining or rendering their message, arguments, cause, context, or traceback.
+The four failure classes are exact direct subclasses of
+`SecurityAuditExportError`, itself a `RuntimeError`. Every outward failure is a
+fresh exact instance constructed with no arguments: `error.args == ()` and
+`str(error) == ""`. Its `__cause__` and `__context__` are both `None`.
+
+An ordinary dependency exception is classified inside its handler by retaining
+only the trusted fixed outward class identity. The caught object, its message,
+arguments, cause, context, and traceback are discarded. Only after the handler
+has exited does the runner construct and raise the fresh fixed error. Its
+exception chain links no dependency exception or prior traceback. Normal
+formatted diagnostics produced with
+`traceback.TracebackException.from_exception(error, capture_locals=False)`
+contain no runtime-injected conninfo, credential, access-event, event, page, or
+dependency-exception canary.
+
+Like every raised Python exception, the fresh fixed error has its own active
+traceback. Its frames, and upstream caller frames, may expose application
+arguments or trusted values through `traceback.tb_frame.f_locals`; this
+contract does not claim structural non-reachability from that fresh call
+stack. This decision adds no logger, collector, formatter, or diagnostic hook
+that captures frame locals. A future lifecycle must not enable such capture
+for this path without a separate reviewed decision governing disclosure,
+custody, access, and retention.
+
 `KeyboardInterrupt`, `SystemExit`, and other `BaseException` subclasses remain
 outside this closed ordinary-exception protocol and are never converted into
 success or retried.
@@ -451,10 +518,12 @@ its own complete approval, credential, cleanup, output, and terminal protocol.
 Every runner call uses the accepted export purpose, exact export function,
 2,048-row ceiling, and 8,388,608-byte ceiling. None is a caller input.
 
-### `BEX-002` — immutable all-or-none cursor
+### `BEX-002` — immutable request and complete route preflight
 
 The runner receives either no cursor or one already validated immutable
 timestamp/UUID cursor. The same two values are used for intent and export.
+Both exact conninfo strings pass nonblank libpq parsing before either
+connection factory is called; one malformed route cannot persist an intent.
 
 ### `BEX-003` — acknowledged intent precedes export access
 
@@ -476,23 +545,29 @@ No loop, continuation, or second intent exists inside one runner call.
 ### `BEX-006` — carrier validation is shared, bounded, and historical
 
 The normal reader and export runner use one shared event-carrier validator.
-The validator accepts every lawful historical event the database may return,
-including retired closed reasons, and refuses malformed, excessive,
-misordered, expired-at-intent, out-of-cut, or cursor-violating rows.
+The validator accepts lawful retained history under the contract's cumulative
+known producer/component and HMAC-version sets, including retired closed
+reasons, and refuses unknown-set, malformed, excessive, misordered,
+expired-at-intent, out-of-cut, or cursor-violating rows.
 
 ### `BEX-007` — canonical page is exact and buffered
 
 Success returns one immutable result with one canonical ASCII JSON line and no
 partial or streaming result. The page has the fixed export schema and contains
-no credential, approval, operator, route, or dependency-exception data.
+no credential, approval, operator, route, or dependency-exception data. An
+unlawful quote/control-bearing closed token is refused before rendering.
 
 ### `BEX-008` — honest state-classified outcomes
 
 Pre-connection unavailability, pre-commit refusal, explicit-commit ambiguity,
 and post-intent export failure remain distinct. No ordinary exception becomes
-success, leaks its content, or triggers a retry.
+success, leaks its content through the fixed fields, linked prior exception
+graph, or normal formatting with local capture disabled, or triggers a retry.
+The fresh fixed error has exact empty arguments/message, cause/context `None`,
+and no linked dependency traceback; no structural claim is made about its own
+active traceback frame locals.
 
-### `BEX-009` — no retry, replay, resume, or access-ID input
+### `BEX-009` — no automatic retry, resume, or access-ID input
 
 Each permitted connection and SQL statement is attempted at most once. The
 caller cannot supply or reuse an access-event ID. The primitive does not
@@ -532,13 +607,13 @@ state and call that production evidence.
 | Invariant | Counterexample | Required result |
 | --- | --- | --- |
 | `BEX-001` | A future caller attempts to pass the normal purpose, query function, 2,049 rows, or 8,388,609 bytes. | No such runner parameters exist; captured SQL contains only export constants. |
-| `BEX-002` | The request attempts a timestamp without UUID, uppercase UUID, non-UTC timestamp, or changes cursor values between calls. | Construction refuses before runner I/O, or the immutable normalized pair remains identical in both SQL calls. |
+| `BEX-002` | The request attempts a timestamp without UUID, uppercase UUID, non-UTC timestamp, changes cursor values between calls, or supplies a valid control conninfo with a blank/malformed export conninfo. | Construction or runner preflight refuses before external I/O; both factory call counts remain zero; otherwise the immutable normalized cursor pair remains identical in both SQL calls. |
 | `BEX-003` | Control commit raises after submission may have reached PostgreSQL. | Intent outcome is unknown; export factory and function call counts remain zero; no retry. |
 | `BEX-004` | Control and export conninfo values point at swapped roles or an export role lacking exact membership. | Existing database session-user/grant checks refuse; no direct table or alternate-role path. |
 | `BEX-005` | A hostile seam exposes a 2,049th row or fails after the first export statement. | No successful page; exactly one intent and at most one export statement; no continuation. |
-| `BEX-006` | Return a lawful retired reason, then separately a zero UUID, unknown event kind, wrong digest length, malformed maintenance extension, ascending row, row after the cut, or row at/above the cursor. | Lawful historical row is preserved; each malformed/out-of-bound case fails after intent with no page. |
-| `BEX-007` | Return quote/control characters in a lawful closed token or attempt to place a DSN/canary in an exception. | Canonical ASCII escaping is deterministic; exception canary is absent from result and retained error objects. |
-| `BEX-008` | Fail control connect, intent execute, control commit, export connect, export execute, fetch, and render in separate calls. | Exact outcome follows state; no raw exception content, fallback, or false success. |
+| `BEX-006` | Return a retired closed reason under a cumulatively known producer/component pair and HMAC version; then separately return an unknown pair/version, zero UUID, unknown event kind, wrong digest length, malformed maintenance extension, ascending row, row after the cut, or row at/above the cursor. | The lawful retained row is preserved; each unknown-set, malformed, or out-of-bound case fails after intent with no page. |
+| `BEX-007` | Render a valid golden fixture; separately return a reason containing a quote or control character, which cannot be a lawful closed token. | Valid canonical bytes remain exact and ASCII; the unlawful token is refused before any page is returned. |
+| `BEX-008` | Inject runtime-generated conninfo, credential, access-event, event, page, and dependency-exception canaries; fail control preflight/connect, intent execute, control commit, export connect/execute, fetch, and render in separate calls; format each fixed error with local capture disabled. | Exact class, empty message/arguments, cause/context `None`, and state outcome follow; no prior exception/traceback is linked and normal formatting contains no canary; the test makes no structural claim about fresh traceback frame locals. |
 | `BEX-009` | Attempt to rerun after ambiguous commit or pass the prior access UUID as a new request. | No automatic retry and no access-ID input surface; a new caller invocation is outside this primitive's authority. |
 | `BEX-010` | Run `python -m deployment.postgresql.security_audit_export` or search deployment docs for a standalone export command. | No executable entry point or operator command exists; documentation names the later lifecycle requirement. |
 | `BEX-011` | Run the complete accepted normal-reader unit/live suite and compare canonical fixtures before and after extraction. | Public behavior and exact report bytes remain unchanged. |
@@ -578,9 +653,11 @@ implementation.
 
 `deployment/postgresql/security_audit_export.py` will own:
 
+- complete two-route conninfo preflight before external I/O;
 - fixed export intent and function SQL;
 - fixed connection settings;
-- export-specific closed exception classes and state machine;
+- export-specific closed exception classes, dependency detachment, and state
+  machine;
 - immutable acknowledged export-page result;
 - export-page rendering; and
 - one `SecurityAuditExportRunner` with an injected connection-factory seam.
@@ -633,9 +710,12 @@ separate decisions or a prominently approved cross-boundary exception.
 - access-intent transitions per call: one;
 - export-function transitions per call: at most one;
 - control/export connection attempts per call: at most one each;
+- complete conninfo preflight operations before external I/O: exactly two;
 - automatic retries, resumes, loops, or page continuations: zero;
 - caller-supplied access IDs, purposes, functions, SQL, or limits: zero;
 - new operator entry points: zero;
+- error collectors, loggers, formatters, or hooks that capture frame locals:
+  zero;
 - new roles, grants, migrations, or runtime constructors: zero; and
 - new generic framework or optional capability bags: zero.
 
@@ -670,6 +750,12 @@ change requires a new decision version.
 
 The inventory is a mechanical Phase B change because the focused export tests
 necessarily add collected nodes.
+
+Focused shared-validator cases must live inside the two allowlisted test paths
+`kernel/tests/test_security_audit_query.py` and
+`kernel/tests/test_security_audit_export.py`. The phrase "shared-access tests"
+names cases exercising the shared production module through those two suites;
+it does not authorize a third test file or a ninth path.
 
 ### 11.2 Explicitly unchanged paths and authorities
 
@@ -729,6 +815,10 @@ Stop immediately if implementation requires:
 - a caller-selected purpose, function, SQL statement, limit, role, or access
   event ID;
 - a normal-reader public behavior or report-byte change;
+- either raw conninfo reaching a connection factory, or any connection factory
+  call occurring before both complete routes pass runner-owned preflight;
+- an error collector, logger, formatter, or diagnostic hook that captures
+  frame locals or protected runtime values;
 - direct relation access, `COPY`, generic SQL, a file/spool/queue/cache, or
   automatic retry;
 - any path outside the exact allowlist; or
@@ -762,13 +852,13 @@ this runner.
 | Invariant | Owning code | Negative evidence | Acceptance evidence | Smallest verification |
 | --- | --- | --- | --- | --- |
 | `BEX-001` | Export constants and SQL | Attempt caller-selected protocol values | Captured exact parameters | Focused unit test plus contract assertions |
-| `BEX-002` | Shared immutable cursor | Partial/noncanonical/mutated cursor | Same pair in both statements | Existing cursor tests plus export capture test |
+| `BEX-002` | Shared immutable cursor and export route preflight | Partial/noncanonical/mutated cursor or malformed second route | Same pair in both statements; zero I/O until both routes parse | Existing cursor tests plus export preflight/capture tests |
 | `BEX-003` | Export runner state machine | Commit raises | Zero export connections/calls | Deterministic state-seam test |
 | `BEX-004` | Existing database functions | Swapped/missing roles | Session-user/grant refusal | Live PostgreSQL role test |
 | `BEX-005` | Export runner | 2,049th row/fetch failure | One intent and at most one export | Focused call-count tests plus live page |
-| `BEX-006` | Shared access validator | Retired reason and malformed carriers | Historical acceptance; malformed refusal | Shared normal/export parametrized tests |
-| `BEX-007` | Export renderer/result | Exception canary and control characters | Exact canonical ASCII bytes | Golden-byte and canary tests |
-| `BEX-008` | Closed exceptions/state mapping | Failure at every external seam | Exact state outcome; no retained canary | Focused transition matrix |
+| `BEX-006` | Shared access validator | Retired reason under cumulative known sets; unknown-set and malformed carriers | Lawful retained acceptance; unknown/malformed refusal | Shared normal/export parametrized cases in the two allowlisted test files |
+| `BEX-007` | Export renderer/result | Valid golden fixture and unlawful quote/control-bearing token | Exact canonical ASCII bytes; unlawful-token refusal | Golden-byte and carrier tests |
+| `BEX-008` | Closed exceptions/state mapping | Runtime canaries and failure at every external seam | Exact fields/state; no linked prior exception or canary in normal formatting | Focused transition, exception-chain, and formatting matrix |
 | `BEX-009` | Runner API and call graph | Prior access ID/retry attempt | No input or second call surface | Signature/static and call-count tests |
 | `BEX-010` | Module/docs boundary | Module execution/doc search | No entry point or standalone command | Import/static/documentation tests |
 | `BEX-011` | Shared extraction/query imports | Full reader regression corpus | Exact prior public behavior/bytes | Complete reader unit/live suite |
@@ -791,7 +881,10 @@ Before Phase A review:
 After explicit approval and before implementation review:
 
 1. reproduce this invariant traceability table;
-2. run focused shared-access, normal-query, and export tests;
+2. run the shared-validator cases housed in
+   `kernel/tests/test_security_audit_query.py` and
+   `kernel/tests/test_security_audit_export.py`, plus both complete focused
+   normal-query and export suites;
 3. run live PostgreSQL export role, mismatch, replay, expiry, widening, and
    post-test structural-closure cases on PostgreSQL 17;
 4. run Ruff on every changed Python path;
@@ -825,11 +918,25 @@ answered by Phase B implementation:
 
 ### 14.2 Review disposition
 
-- **Blockers:** independent Phase A review of the exact RFC-only head is
-  pending.
+- **Blockers:** the first exact-head [Phase A
+  review](https://github.com/samovers/OFARM2/pull/318#issuecomment-5309069795)
+  reported zero demonstrated Blockers. Later [review
+  4947132962](https://github.com/samovers/OFARM2/pull/318#pullrequestreview-4947132962)
+  demonstrated that the original retained-error wording made an impossible
+  secrecy claim about the fresh exception's own traceback frame locals. Later
+  [review comment
+  5309267998](https://github.com/samovers/OFARM2/pull/318#issuecomment-5309267998)
+  demonstrated an internal contradiction between the eight-path allowlist and
+  the shared-validator test gate. This revision adopts the executable fixed
+  error boundary used by the accepted live-gap slice and explicitly houses all
+  shared-validator cases in the two allowlisted test files. Corrected exact-
+  head re-review is pending; Phase B remains unauthorized.
 - **Follow-ups:** the issue #192 lifecycle, store-loss, and final hostile
   evidence boundaries listed above.
-- **Preferences:** none recorded.
+- **Preferences:** route preflight, lawful-token test wording, cumulative-known
+  historical acceptance, database-limit/refused/replay precision, explicit
+  credential residency, and client-memory posture are incorporated without
+  widening the trust boundary or path envelope.
 
 Once every `BEX-001` through `BEX-013` invariant passes and no demonstrated
 in-scope Blocker remains, the approved workflow permits Phase B implementation
