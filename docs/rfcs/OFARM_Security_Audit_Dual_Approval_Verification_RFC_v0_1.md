@@ -758,7 +758,7 @@ private-field mutation or monkeypatching establishes the failure.
 | `DAV-008` | A key absent from the presented receipt refuses; a key in an older still-valid receipt remains accepted only until that receipt expires. |
 | `DAV-009` | Changing one cursor, timestamp, operation-ID, identity, key, order, or signature byte after signing refuses. |
 | `DAV-010` | Invalid root bytes, JSON, base64url, key, or signature produces the exact empty unlinked refusal; `KeyboardInterrupt` propagates. |
-| `DAV-011` | Runtime and AST canaries prove zero external calls, alternate clocks, random UUID generation, logging, output, or persistence. |
+| `DAV-011` | Runtime and AST canaries prove zero external calls, alternate clocks, random UUID generation, logging, output, persistence, or direct `open`/`print`/`input`/`breakpoint` use. |
 | `DAV-012` | Equal bytes may verify twice, but the result has no consumption claim; a simulated later caller-supplied result is explicitly insufficient. |
 | `DAV-013` | Deterministic fakes record `0/0`, `1/0`, `1/1`, `1/2`, and success `1/2` at the selected failure points without retry. |
 
@@ -827,6 +827,10 @@ __import__
 eval
 exec
 compile
+open
+print
+input
+breakpoint
 uuid1
 uuid4
 getnode
@@ -842,8 +846,9 @@ perf_counter
 Focused AST evidence must prove that only `UUID` is imported from `uuid`, only
 `SecurityAuditAccessCursor` is imported from the shared access module, only the
 four fixed constants are imported from the audit contract, no dynamic import
-or clock-producing call exists, `now_us` is not overwritten, and every
-authority/request freshness comparison uses that parameter.
+or clock-producing call exists, every `ast.Name` or call target named `open`,
+`print`, `input`, or `breakpoint` is rejected, `now_us` is not overwritten, and
+every authority/request freshness comparison uses that parameter.
 
 Within the supported non-reflective source model, `now_us` is therefore the
 sole currentness authority. Arbitrary reflective traversal remains explicitly
@@ -1039,7 +1044,7 @@ separate reviewed boundaries.
 | `DAV-008` | presented-receipt validator | absent key and older-receipt expiry | bounded-latency time matrix |
 | `DAV-009` | complete validation pipeline | mutate every bound field/byte/order | hostile substitution matrix |
 | `DAV-010` | public constructor/verifier refusal mapping | dependency canaries and active-handler posture | exact error/trace formatting tests |
-| `DAV-011` | module source and architecture guard | forbidden imports/names/calls and runtime canaries | AST plus runtime tests |
+| `DAV-011` | module source and architecture guard | forbidden imports/names/calls, including direct `open`/`print`/`input`/`breakpoint`, and runtime canaries | AST plus runtime tests |
 | `DAV-012` | private result and documentation | supplied fake result and repeated verification | public-surface/type/docs tests |
 | `DAV-013` | ordered signature state machine | each deterministic failure point | exact call-count tests |
 
@@ -1105,14 +1110,20 @@ are deliberately deferred and must not be answered by implementation:
   `bbb9425cbb54035568b303f07703b59f80aea202`
   [closed that Blocker](https://github.com/samovers/OFARM2/pull/319#issuecomment-5316331254)
   and identified a residual group-guard word, missing key-ID equality
-  evidence, checker path scoping, and review-record accuracy. This revision
-  adopts those remaining corrections; focused exact-head re-review is pending.
+  evidence, checker path scoping, and review-record accuracy. Exact-head review
+  at `993bd16cc3e639715f7c835f8b5455d4bf8f09a8`
+  [accepted those corrections but demonstrated](https://github.com/samovers/OFARM2/pull/319#pullrequestreview-4952157865)
+  that direct builtin `open` and `print` effects remained possible without an
+  import. This revision closes that `DAV-011` gap with the exact
+  `open`/`print`/`input`/`breakpoint` prohibition and matching AST evidence;
+  focused exact-head re-review is pending.
 - **Adopted corrections:** mechanically derive the exact production budget
   under a 700-line ceiling; omit the redundant group and shared test-cap
   registrations; remove the residual group-guard requirement; pin local key-ID
   derivation to the existing helper with one exact test vector; scope the new
-  checker logic to the approval module only; and preserve the review history
-  above. The five-minute operational sequencing risk remains explicit redesign
+  checker logic to the approval module only; prohibit direct builtin file,
+  output, input, and debugger effects; and preserve the review history above.
+  The five-minute operational sequencing risk remains explicit redesign
   evidence in section 12 and required no protocol change.
 - **Follow-ups:** section 11.4 only.
 - **Preferences:** none unresolved from the recorded review rounds; the latest
