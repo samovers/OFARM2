@@ -1,14 +1,15 @@
 # OFARM Security-Audit Authority-Receipt Issuance — Phase A Contract v0.1
 
-**Status:** Phase A design draft; Phase B repository implementation,
-deployment, and production operation are not authorized
+**Status:** Phase B repository implementation authorized; merge awaits
+exact-head implementation review; deployment and production operation are not
+authorized
 
 **Draft pull request:** `https://github.com/samovers/OFARM2/pull/320`
 
 **Contract identity:**
 `ofarm2.security-audit-authority-receipt-issuance.v0.1`
 
-**Proposed decision identity:**
+**Decision identity:**
 `ISSUE192-SECURITY-AUDIT-AUTHORITY-RECEIPT-ISSUANCE-001`, version `1`
 
 **Issue:** #192
@@ -525,6 +526,11 @@ test-side only. Both must submit the same `name`, raw `data`, and `data_crc32c`,
 leave `digest` and `digest_crc32c` unset, pass `retry=None`, and use timeout
 `5.0`. Different public failure types and the tenant signer's production
 authority dependencies are not compatibility inputs.
+
+The focused comparison asserts proto-plus field presence rather than decoded
+default values: `"digest" not in request`, `"digest_crc32c" not in request`,
+and `"data_crc32c" in request`. This distinguishes an unset message or wrapper
+field from the empty value returned when some absent fields are read.
 
 ### 6.8 Exact KMS response acceptance
 
@@ -1196,8 +1202,16 @@ following are deliberately deferred and must not be answered by Phase B:
   sources without making them production dependencies; raises only the stop
   ceiling to 520 while retaining an exact finished budget; names the zero-slack
   five-minute coupling; and records the two-domain production-readiness gate.
-- **Current-head posture:** focused exact-head re-review is required after
-  these changes. No prior review authorizes a later unreviewed head.
+- **Focused exact-head re-review:** review comment
+  [5319687343](https://github.com/samovers/OFARM2/pull/320#issuecomment-5319687343)
+  at `6ca2de5e0b830157f2c531523c797c18c2bf1861` reported zero demonstrated
+  Blockers, closed both prior should-fix items, verified the shared resource and
+  KMS protocol matrices, and stated that nothing blocked the decision card. It
+  identified one non-blocking precision note: assertions for unset proto-plus
+  request fields must use field presence rather than decoded default values.
+- **Phase A gate posture:** the exact-head review and live-card gates are
+  satisfied at the named head. Phase B adopts the field-presence assertion as
+  test precision without changing the approved protocol or authority.
 - **Preferences:** none intentionally left unresolved from the recorded
   reviews.
 - **Follow-ups:** section 11.4 only.
@@ -1244,8 +1258,14 @@ security waiver.
 - **Decision:**
   `ISSUE192-SECURITY-AUDIT-AUTHORITY-RECEIPT-ISSUANCE-001`, version `1`.
 - **Draft pull request:** `https://github.com/samovers/OFARM2/pull/320`.
-- **Complete live card:** none.
-- **Task-user Phase B approval:** none.
-- **Evidence posture:** Phase B remains unauthorized. The task user's generic
-  `go` authorized continuation of the Phase A workflow only and is not the
-  exact prospective approval sentence in section 15.
+- **Complete live card:** displayed in the current Codex task after exact-head
+  review, bound to reviewed base
+  `3c24de33c27c0bbdaafe783769ed81d83f2c6bba`, exact reviewed head
+  `6ca2de5e0b830157f2c531523c797c18c2bf1861`, and draft PR #320.
+- **Task-user Phase B approval:** the exact entire section 15 approval sentence
+  was supplied in the same Codex task on 2026-08-17 after the live card.
+- **Evidence posture:** Phase B is authorized only for the exact six-path
+  repository envelope and its required review handling. Production key/IAM,
+  manifest deployment, trusted-clock/runtime composition, admission,
+  credentials, export, delivery, deployment, release, security waiver, and
+  issue #192 closure remain unauthorized.

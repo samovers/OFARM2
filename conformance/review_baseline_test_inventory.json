@@ -11551,6 +11551,201 @@
       "sourcePath": "kernel/tests/test_security_audit_approval.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_architecture_surface_accepts_exact_module_and_rejects_mutations",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_baseexception_propagates_unchanged_after_one_attempt",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_common_response_mutations_match_existing_signer_refusal[data-unverified]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_common_response_mutations_match_existing_signer_refusal[digest-verified]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_common_response_mutations_match_existing_signer_refusal[short-signature]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_common_response_mutations_match_existing_signer_refusal[sibling-name]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_common_response_mutations_match_existing_signer_refusal[software]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_common_response_mutations_match_existing_signer_refusal[wrong-crc]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_common_response_mutations_match_existing_signer_refusal[wrong-key-material]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_constructor_refuses_client_and_observer_key_shape_before_kms",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_dependency_exception_is_empty_unlinked_and_one_attempt",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_exact_five_minute_receipt_accepts_and_one_microsecond_more_refuses",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_invalid_time_refuses_before_kms[bytes]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_invalid_time_refuses_before_kms[false]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_invalid_time_refuses_before_kms[float]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_invalid_time_refuses_before_kms[negative]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_invalid_time_refuses_before_kms[overflow]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_invalid_time_refuses_before_kms[text]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_invalid_time_refuses_before_kms[true]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_issuer_only_response_type_crc_bounds_and_other_key_refuse",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_key_id_crc32c_and_real_signing_bytes_match_existing_oracles",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_manifest_carrier_and_canonical_failures_refuse_before_kms",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_manifest_member_type_identity_order_and_uniqueness_fail_closed",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_maximum_manifest_stays_inside_every_constructed_bound",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_maximum_nonoverflowing_time_is_accepted_exactly",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_real_ed25519_success_returns_exact_canonical_receipt",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_request_is_raw_data_crc_no_retry_fixed_timeout_and_one_attempt",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_request_matches_existing_google_kms_signer_test_side_only",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_resource_matrix_matches_existing_oracle[False-projects/a123z/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_resource_matrix_matches_existing_oracle[False-projects/example/locations/GLOBAL/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_resource_matrix_matches_existing_oracle[False-projects/example/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/01]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_resource_matrix_matches_existing_oracle[False-projects/example/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/0]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_resource_matrix_matches_existing_oracle[False-projects/example/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1/trailing]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_resource_matrix_matches_existing_oracle[False-projects/example/locations/global/keyRings/r/cryptoKeys/k]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_resource_matrix_matches_existing_oracle[True-projects/a1234z/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/999]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_resource_matrix_matches_existing_oracle[True-projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/security-audit-observer/cryptoKeyVersions/1]",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_returned_receipt_passes_public_verifier_unchanged",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_source_pins_strict_crc_types_and_contains_no_repository_imports",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_authority.py::test_valid_issuance_uses_no_direct_effect_builtins",
+      "sourceModule": "kernel.tests.test_security_audit_authority",
+      "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_client.py::test_ambiguous_commit_retries_once_with_identical_parameters",
       "sourceModule": "kernel.tests.test_security_audit_client",
       "sourcePath": "kernel/tests/test_security_audit_client.py"
@@ -16351,8 +16546,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "6285a9f54df899a128bf7a27a7eed284d8f53c34af3b0ab8acb242b7557d090b",
-  "entryCount": 3270,
+  "entriesSha256": "eea796be7eeee19f89553de1bcfc3a9701f4b0fa5c9a22a287ebe9172f407b88",
+  "entryCount": 3309,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

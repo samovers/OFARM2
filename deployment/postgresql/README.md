@@ -555,6 +555,28 @@ revocation, production observer-root composition, durable admission,
 temporary-login lifecycle, protected delivery, deployment readiness, and
 issue #192 closure remain separate trust boundaries.
 
+## Library-only security-audit authority-receipt issuance
+
+`security_audit_authority.py` is the stateless issuance counterpart to the
+dual-approval verifier. Trusted composition constructs one issuer with an
+exact Google Cloud KMS HSM Ed25519 key-version resource, its matching raw
+observer public key, one bounded canonical approver manifest, and an injected
+KMS client. Each call supplies trusted current Unix time in microseconds. The
+issuer derives every approver key ID locally, emits the verifier's exact
+five-minute payload, makes one raw-data `asymmetric_sign` call with CRC32C,
+`retry=None`, and a five-second timeout, validates the complete HSM response,
+and independently verifies the signature before returning a canonical bounded
+receipt.
+
+The module has no repository production imports and performs no clock,
+database, filesystem, environment, logging, random, process, credential,
+export, delivery, or persistence work. It cannot provision or observe the KMS
+key, load a manifest, choose production time, issue an approval, admit or
+consume an operation, create a login, export data, or deliver output. Those
+composition, custody, and lifecycle authorities remain separate decisions;
+this library alone does not establish deployment readiness or complete issue
+#192.
+
 ## One-shot security-audit overflow closure
 
 The overflow-closure command observes and closes at most one database-selected

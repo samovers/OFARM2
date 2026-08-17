@@ -72,6 +72,7 @@ MODULE_BUDGETS = {
     "kernel/security_audit_runtime.py": 250,
     "deployment/postgresql/security_audit_hmac_retirement.py": 450,
     "deployment/postgresql/security_audit_approval.py": 623,
+    "deployment/postgresql/security_audit_authority.py": 388,
 }
 COMMAND_MODULE_BUDGETS = {
     "deployment/postgresql/run_security_audit_hmac_retirement.py": 160,
@@ -216,6 +217,7 @@ DIRECT_IMPORT_BOUNDS = {
             "deployment.postgresql.security_audit_access",
         }
     ),
+    "deployment/postgresql/security_audit_authority.py": frozenset(),
 }
 SECURITY_AUDIT_GAP_FORBIDDEN_IMPORTS = frozenset(
     {
@@ -296,6 +298,58 @@ SECURITY_AUDIT_APPROVAL_FORBIDDEN_NAMES = frozenset(
         "time_ns",
         "monotonic",
         "perf_counter",
+    }
+)
+SECURITY_AUDIT_AUTHORITY_IMPORT_STATEMENTS = frozenset(
+    {
+        ("__future__", 0, (("annotations", None),)),
+        (
+            "base64",
+            0,
+            (("urlsafe_b64decode", None), ("urlsafe_b64encode", None)),
+        ),
+        ("binascii", 0, (("Error", "BinasciiError"),)),
+        ("dataclasses", 0, (("dataclass", None),)),
+        ("hashlib", 0, (("sha256", None),)),
+        ("json", 0, (("dumps", None), ("loads", None))),
+        ("re", 0, (("fullmatch", None),)),
+        ("typing", 0, (("Protocol", None),)),
+        (
+            "cryptography.hazmat.primitives.asymmetric.ed25519",
+            0,
+            (("Ed25519PublicKey", None),),
+        ),
+        ("google.cloud", 0, (("kms_v1", None),)),
+    }
+)
+SECURITY_AUDIT_AUTHORITY_FORBIDDEN_NAMES = frozenset(
+    {
+        "__import__",
+        "eval",
+        "exec",
+        "compile",
+        "open",
+        "print",
+        "input",
+        "breakpoint",
+        "getenv",
+        "environ",
+        "system",
+        "popen",
+        "run",
+        "sleep",
+        "uuid1",
+        "uuid4",
+        "getnode",
+        "now",
+        "utcnow",
+        "today",
+        "time",
+        "time_ns",
+        "monotonic",
+        "perf_counter",
+        "token_bytes",
+        "randbytes",
     }
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
@@ -2496,6 +2550,196 @@ def _check_security_audit_approval_surface(
     ]
 
 
+def _authority_time_payload_is_exact(tree: ast.Module) -> bool:
+    functions = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_authority_payload"
+    ]
+    if len(functions) != 1:
+        return False
+    for node in ast.walk(functions[0]):
+        if not isinstance(node, ast.Dict):
+            continue
+        members = {
+            key.value: value
+            for key, value in zip(node.keys, node.values, strict=True)
+            if isinstance(key, ast.Constant) and isinstance(key.value, str)
+        }
+        observed = members.get("observedAtUnixMicroseconds")
+        expires = members.get("expiresAtUnixMicroseconds")
+        if (
+            isinstance(observed, ast.Name)
+            and observed.id == "now_us"
+            and isinstance(expires, ast.BinOp)
+            and isinstance(expires.op, ast.Add)
+            and isinstance(expires.left, ast.Name)
+            and expires.left.id == "now_us"
+            and isinstance(expires.right, ast.Name)
+            and expires.right.id == "_RECEIPT_LIFETIME_MICROSECONDS"
+        ):
+            return True
+    return False
+
+
+def _authority_kms_call_violations(tree: ast.Module) -> list[str]:
+    violations = []
+    client_method_calls = []
+    signing_calls = []
+    request_calls = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if (
+            isinstance(node.func, ast.Attribute)
+            and (
+                (
+                    isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "client"
+                )
+                or (
+                    isinstance(node.func.value, ast.Attribute)
+                    and isinstance(node.func.value.value, ast.Name)
+                    and node.func.value.value.id == "self"
+                    and node.func.value.attr == "_client"
+                )
+            )
+        ):
+            client_method_calls.append(node)
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "asymmetric_sign":
+            signing_calls.append(node)
+        if (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "kms_v1"
+            and node.func.attr == "AsymmetricSignRequest"
+        ):
+            request_calls.append(node)
+    if any(call.func.attr != "asymmetric_sign" for call in client_method_calls):
+        violations.append("constructor client calls a method other than asymmetric_sign")
+    if len(signing_calls) != 1 or signing_calls[0] not in client_method_calls:
+        violations.append("exactly one direct client asymmetric_sign call is required")
+    else:
+        call = signing_calls[0]
+        keywords = {keyword.arg: keyword.value for keyword in call.keywords}
+        if call.args or set(keywords) != {"request", "retry", "timeout"}:
+            violations.append("asymmetric_sign call shape differs")
+        elif (
+            not isinstance(keywords["request"], ast.Name)
+            or keywords["request"].id != "request"
+            or not isinstance(keywords["retry"], ast.Constant)
+            or keywords["retry"].value is not None
+            or not isinstance(keywords["timeout"], ast.Name)
+            or keywords["timeout"].id != "_KMS_RPC_TIMEOUT_SECONDS"
+        ):
+            violations.append("asymmetric_sign retry or timeout differs")
+    if len(request_calls) != 1:
+        violations.append("exactly one AsymmetricSignRequest constructor is required")
+    else:
+        request = request_calls[0]
+        keywords = {keyword.arg: keyword.value for keyword in request.keywords}
+        if request.args or set(keywords) != {"name", "data", "data_crc32c"}:
+            violations.append("AsymmetricSignRequest field set differs")
+        elif (
+            not isinstance(keywords["name"], ast.Name)
+            or keywords["name"].id != "resource"
+            or not isinstance(keywords["data"], ast.Name)
+            or keywords["data"].id != "signing_input"
+            or not isinstance(keywords["data_crc32c"], ast.Call)
+            or not isinstance(keywords["data_crc32c"].func, ast.Name)
+            or keywords["data_crc32c"].func.id != "_crc32c"
+            or len(keywords["data_crc32c"].args) != 1
+            or not isinstance(keywords["data_crc32c"].args[0], ast.Name)
+            or keywords["data_crc32c"].args[0].id != "signing_input"
+            or keywords["data_crc32c"].keywords
+        ):
+            violations.append("AsymmetricSignRequest value authority differs")
+    timeout_assignments = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "_KMS_RPC_TIMEOUT_SECONDS"
+    ]
+    if (
+        len(timeout_assignments) != 1
+        or not isinstance(timeout_assignments[0].value, ast.Constant)
+        or type(timeout_assignments[0].value.value) is not float
+        or timeout_assignments[0].value.value != 5.0
+    ):
+        violations.append("KMS RPC timeout constant differs")
+    return violations
+
+
+def _security_audit_authority_surface_violations(
+    tree: ast.Module,
+) -> list[str]:
+    violations = []
+    import_statements = []
+    refusal_calls = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            violations.append(f"{node.lineno}: whole-module import is prohibited")
+        elif isinstance(node, ast.ImportFrom):
+            statement = _normalized_import_statement(node)
+            import_statements.append(statement)
+            if statement not in SECURITY_AUDIT_AUTHORITY_IMPORT_STATEMENTS:
+                violations.append(
+                    f"{node.lineno}: import statement is outside exact allowlist"
+                )
+        name = None
+        if isinstance(node, ast.Name):
+            name = node.id
+        elif isinstance(node, ast.Attribute):
+            name = node.attr
+        if name in SECURITY_AUDIT_AUTHORITY_FORBIDDEN_NAMES:
+            violations.append(
+                f"{node.lineno}: prohibited authority surface {name!r}"
+            )
+        if (
+            isinstance(node, ast.Name)
+            and node.id == "now_us"
+            and isinstance(node.ctx, (ast.Store, ast.Del))
+        ):
+            violations.append(f"{node.lineno}: caller-owned now_us is overwritten")
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "SecurityAuditAuthorityReceiptRefused"
+        ):
+            refusal_calls.append(node)
+    if (
+        len(import_statements) != len(SECURITY_AUDIT_AUTHORITY_IMPORT_STATEMENTS)
+        or frozenset(import_statements)
+        != SECURITY_AUDIT_AUTHORITY_IMPORT_STATEMENTS
+    ):
+        violations.append("exact import statement set is incomplete or duplicated")
+    if len(refusal_calls) != 2 or any(
+        call.args or call.keywords for call in refusal_calls
+    ):
+        violations.append("fixed refusal construction differs")
+    if not _authority_time_payload_is_exact(tree):
+        violations.append("authority payload does not use exact caller-owned time")
+    violations.extend(_authority_kms_call_violations(tree))
+    return sorted(set(violations))
+
+
+def _check_security_audit_authority_surface(
+    snapshot: PythonSourceSnapshotV1,
+    trees: collections.abc.Mapping[str, ast.Module],
+) -> list[str]:
+    relative = "deployment/postgresql/security_audit_authority.py"
+    module = snapshot.modules_by_relative_path[relative].module_name
+    return [
+        f"{relative}:{violation}"
+        for violation in _security_audit_authority_surface_violations(
+            trees[module]
+        )
+    ]
+
+
 def main() -> int:
     try:
         snapshot = build_python_source_snapshot(ROOT)
@@ -2510,6 +2754,7 @@ def main() -> int:
     failures.extend(_check_direct_import_bounds(snapshot))
     failures.extend(_check_security_audit_gap_surface(snapshot, trees))
     failures.extend(_check_security_audit_approval_surface(snapshot, trees))
+    failures.extend(_check_security_audit_authority_surface(snapshot, trees))
     for relative, budget in MODULE_BUDGETS.items():
         failures.extend(_check_production(snapshot, trees, relative, budget))
     for relative, budget in COMMAND_MODULE_BUDGETS.items():
