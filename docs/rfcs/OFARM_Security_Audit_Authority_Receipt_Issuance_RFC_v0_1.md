@@ -278,7 +278,7 @@ MAX_UNIX_MICROSECONDS = 9_223_372_036_854_775_807
 | --- | ---: |
 | Approver manifest carrier | 1 through 8,192 bytes |
 | Constructed authority payload | 1 through 12,288 bytes |
-| Raw KMS signing input | 58 through 12,345 bytes |
+| Raw KMS signing input | 55 through 12,342 bytes |
 | Returned authority envelope | 1 through 16,384 bytes |
 | Observer public key | 32 bytes |
 | Each approver public key | 32 bytes |
@@ -366,6 +366,21 @@ The displayed line breaks are presentation only; the implementation uses one
 anchored expression with no whitespace. Wildcards, aliases, parent resources,
 version zero, leading-zero versions, empty segments, and trailing text refuse.
 
+Focused tests use this exact shared resource-name matrix against both the local
+private validator through the public constructor and, test-side only, the
+existing `valid_google_kms_key_version_resource()` compatibility oracle:
+
+| Expected | Exact resource text |
+| --- | --- |
+| accept | `projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/security-audit-observer/cryptoKeyVersions/1` |
+| accept | `projects/a1234z/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/999` |
+| refuse | `projects/a123z/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1` |
+| refuse | `projects/example/locations/GLOBAL/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1` |
+| refuse | `projects/example/locations/global/keyRings/r/cryptoKeys/k` |
+| refuse | `projects/example/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/0` |
+| refuse | `projects/example/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/01` |
+| refuse | `projects/example/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1/trailing` |
+
 CRC32C is the standard reflected Castagnoli calculation with initial value
 `0xffffffff`, reflected polynomial `0x82f63b78`, and final XOR
 `0xffffffff`. The exact check vector is:
@@ -376,7 +391,10 @@ CRC32C(b"123456789") == 0xe3069283
 
 The issuer reproduces this small transport-integrity algorithm locally. CRC32C
 is never key identity, signature authenticity, resource authority, protection-
-level authority, or manifest authority.
+level authority, or manifest authority. Focused tests compare the local result
+for both the exact check vector and real signing/signature bytes with,
+test-side only, the existing `deployment.postgresql.tenant_contract.crc32c`
+compatibility oracle.
 
 ### 6.5 Exact approver manifest
 
@@ -438,6 +456,13 @@ observedAtUnixMicroseconds = now_us
 expiresAtUnixMicroseconds = now_us + 300_000_000
 ```
 
+The fixed lifetime is deliberately equal to the merged verifier's inclusive
+maximum interval, not merely less than it. There is zero protocol slack:
+focused compatibility evidence must prove that an exact 300,000,000-
+microsecond issuer receipt is accepted unchanged and that a mutated
+300,000,001-microsecond receipt refuses. Changing either boundary requires a
+new decision rather than silent skew allowance.
+
 The approver entries preserve the already-validated manifest order and add
 only the locally derived `keyId`. The resulting canonical payload must remain
 within 12,288 bytes before KMS is called. No manifest digest, resource name,
@@ -493,6 +518,14 @@ value therefore produces zero KMS calls. Once control enters
 `asymmetric_sign`, any return or ordinary exception consumes the one allowed
 attempt; the issuer never retries.
 
+The focused test uses identical signing bytes, resource, public key, and a
+deterministic fake client to compare this issuer's captured request and call
+arguments with the existing `kernel.google_kms_signer.GoogleKmsSigner`,
+test-side only. Both must submit the same `name`, raw `data`, and `data_crc32c`,
+leave `digest` and `digest_crc32c` unset, pass `retry=None`, and use timeout
+`5.0`. Different public failure types and the tenant signer's production
+authority dependencies are not compatibility inputs.
+
 ### 6.8 Exact KMS response acceptance
 
 The return must be an instance of
@@ -521,6 +554,14 @@ or signature from another key refuses without output.
 The configured public key is validated during construction, but the returned
 signature is verified after every KMS call. A matching resource string without
 a matching signature is insufficient.
+
+The same test-side comparison supplies one conventional valid
+`AsymmetricSignResponse` to both signers and mutates, one at a time, the common
+name, HSM protection, data/digest verification flags, signature length,
+signature CRC32C, and independently verified signature. Both must accept the
+valid response and refuse every common mutation. The issuer's exact response
+type and uint32/non-`bool` CRC checks remain intentional stricter additions;
+the oracle cannot weaken them.
 
 ### 6.9 Exact returned envelope and verifier compatibility
 
@@ -729,7 +770,7 @@ and production evidence path remain independent security-audit authorities.
 
 Implementation stays within the exact six-path envelope, one module-specific
 import/effect guard, one mechanically exact finished module budget no greater
-than 450 lines, and no group-budget, test-glob, shared test-line-limit, or
+than 520 lines, and no group-budget, test-glob, shared test-line-limit, or
 dependency-lock change.
 
 ## 8. Production-entry negative cases
@@ -856,18 +897,24 @@ time source, signing effect, and import boundary mechanically closed.
 
 After the production module is complete, Phase B must add one `MODULE_BUDGETS`
 entry whose value equals the architecture checker's physical line count at the
-exact implementation head and is no greater than `450`. The placeholder below
+exact implementation head and is no greater than `520`. The placeholder below
 describes the mechanical substitution; no placeholder may be committed:
 
 ```text
 MODULE_BUDGETS[
   "deployment/postgresql/security_audit_authority.py"
-] = <FINISHED_MODULE_LINE_COUNT_NOT_GREATER_THAN_450>
+] = <FINISHED_MODULE_LINE_COUNT_NOT_GREATER_THAN_520>
 
 DIRECT_IMPORT_BOUNDS[
   "deployment/postgresql/security_audit_authority.py"
 ] = frozenset()
 ```
+
+The 520-line value is a stop ceiling, not a target or predicted finished
+budget. It preserves room for the complete canonical-carrier, KMS, fixed-
+failure, and source-guard contract identified during Phase A review while the
+registered value must still equal the smaller exact finished count. Crossing
+520 requires a new decision version; unused margin confers no authority.
 
 The exact import and effect rules in section 9.2 belong to one check hard-coded
 to that exact relative path and must not change another module's rules. Phase B
@@ -943,8 +990,11 @@ work for a new decision version.
 - issue #172 remains closed and unchanged.
 
 No issue #176 branch, pull request, model, storage, approval workflow, or
-temporal behavior is a dependency. The tenant KMS signer and tenant authority
-are comparison evidence only and are not production dependencies.
+temporal behavior is a dependency. The existing
+`deployment/postgresql/tenant_contract.py` key-ID, resource-name, and CRC32C
+helpers and `kernel/google_kms_signer.py` request/response behavior are
+test-side comparison evidence only. The tenant signer and tenant authority are
+not production dependencies.
 
 ### 11.3 Reviewer non-requirements
 
@@ -971,7 +1021,9 @@ Those are follow-ups, not review fixes.
 ### 11.4 Ordered follow-ups
 
 1. production observer-root provisioning, independent IAM/key evidence,
-   trusted manifest/time loading, and issuer/verifier configuration handoff;
+   trusted manifest/time loading, issuer/verifier configuration handoff, and a
+   readiness gate that refuses any manifest without at least two usable
+   approvers in at least two distinct independence domains;
 2. durable one-operation admission for `(operation_id, approval_digest)`;
 3. temporary export-login creation, bounded credential custody, revocation,
    session termination, drop, and verified structural closure;
@@ -998,7 +1050,7 @@ Stop before editing if implementation or review requires:
 - approval creation or verification changes, database transition, credential,
   role, export call, output, or delivery;
 - a path outside section 11.1 or a second authority-issuer test path;
-- a finished module above 450 physical lines, a registered module budget
+- a finished module above 520 physical lines, a registered module budget
   different from its exact finished line count, a nonempty repository import
   bound, a group budget, or any `TEST_GLOBS` or `MAX_TEST_LINES` change; or
 - an additional dependency or lockfile change.
@@ -1044,10 +1096,10 @@ from this library.
 | `ARI-001` | constructor resource/key validators | manifest/response root substitution, sibling resource, mismatched signature | constructor matrix plus real Ed25519 vectors |
 | `ARI-002` | canonical manifest decoder | malformed, duplicate, noncanonical, oversized, wrong count/type/member | focused carrier matrix |
 | `ARI-003` | key-ID/order/uniqueness normalizer | caller key ID, wrong order, duplicate identity/key | exact vector plus roster matrix |
-| `ARI-004` | payload builder | extra time/lifetime input, overflow, wrong schema/audience/interval | boundary-value and decoded-payload tests |
-| `ARI-005` | request builder | changed domain/resource/data/digest/CRC/retry/timeout | exact fake-client request assertion |
+| `ARI-004` | payload builder | extra time/lifetime input, overflow, wrong schema/audience/interval | boundary values plus exact-maximum public-verifier compatibility |
+| `ARI-005` | resource/request builders | changed grammar/domain/resource/data/digest/CRC/retry/timeout | shared resource vectors plus captured request comparison with the existing signer |
 | `ARI-006` | ordered issue transition | each pre/post-call deterministic failure point | exact 0/1 call-count tests |
-| `ARI-007` | response validator | wrong response type/name/HSM/flags/length/checksum | response-field mutation matrix |
+| `ARI-007` | response validator | wrong response type/name/HSM/flags/length/checksum | common response mutation comparison plus issuer-only strict-type cases |
 | `ARI-008` | local Ed25519 verification | metadata-correct signature from another key | real mismatched-key vector |
 | `ARI-009` | envelope builder | byte mutation, alternate root, translation requirement | public merged-verifier end-to-end test |
 | `ARI-010` | time validator/payload builder | bool/float/negative/overflow and clock/name canaries | boundary tests plus AST guard |
@@ -1062,6 +1114,8 @@ from this library.
 - reviewed base remains current `main`, or base movement is mechanical and
   explicitly recorded;
 - every receipt member and signing byte matches the merged verifier contract;
+- the exact 300,000,000-microsecond issuer lifetime still equals the merged
+  verifier's inclusive maximum interval;
 - all required dependencies are already hash-pinned;
 - the complete contract passes repository package conformance;
 - the draft pull request receives one independent exact-head review;
@@ -1074,6 +1128,10 @@ from this library.
 - reproduce this invariant table before editing;
 - run the focused authority-issuer tests, including exact manifest, key-ID,
   CRC32C, KMS request/response, failure, and call-count matrices;
+- run the section 6.4 shared resource vectors and CRC32C equality evidence
+  against the test-only tenant-contract oracles;
+- run the section 6.7 and 6.8 common request/response compatibility matrix
+  against `GoogleKmsSigner` without weakening the issuer's stricter checks;
 - run the public merged-verifier compatibility test using real Ed25519
   signatures and the returned issuer bytes unchanged;
 - run architecture conformance with the exact module/import/effect guards;
@@ -1081,7 +1139,7 @@ from this library.
 - regenerate the review-baseline inventory mechanically;
 - run `python3 conformance/ofarm_pkg_contract_check.py` before every commit;
 - inspect the exact six-path diff; prove the registered module budget equals
-  the finished physical line count and is at most 450; and prove no group
+  the finished physical line count and is at most 520; and prove no group
   budget, test glob, shared test-line limit, or lockfile changed;
 - obtain hosted exact-head conformance and required architecture lanes; and
 - receive bounded implementation review with zero demonstrated in-scope
@@ -1111,15 +1169,37 @@ following are deliberately deferred and must not be answered by Phase B:
 
 ### 14.2 Review disposition
 
-- **Prepublication review:** the draft adopts the merged verifier's exact
+- **Initial design posture:** the draft adopts the merged verifier's exact
   receipt schema, audience, signature domain, canonical JSON, base64url,
   derived key-ID, entry ordering, entry bounds, and five-minute maximum. It
   closes the issuer side with one fixed manifest, exact resource/public key,
   raw-data KMS request, CRC32C, HSM response checks, independent signature
   verification, one-attempt ordering, fixed failure, and exact compatibility
-  evidence. No known in-scope design Blocker remains before publication.
-- **Independent pull-request review:** not yet received at this draft head.
-- **Preferences:** none recorded.
+  evidence.
+- **Independent exact-head review:** review
+  [4953548124](https://github.com/samovers/OFARM2/pull/320#pullrequestreview-4953548124)
+  at `7689cc5a0dcff486e081bf1e4447a8ae05455858` reported zero demonstrated
+  Blockers and found `ARI-001` through `ARI-014` implementable inside the
+  six-path boundary. It identified one production-composition follow-up: a
+  readiness gate must require at least two usable approvers across at least two
+  independence domains.
+- **Independent deep review:** review comment
+  [5319301362](https://github.com/samovers/OFARM2/pull/320#issuecomment-5319301362)
+  at the same head also reported zero demonstrated Blockers and proved the
+  receipt is accepted unchanged by the merged verifier. It identified an
+  incorrect normative signing-input range, missing test-side drift oracles for
+  the resource/KMS protocol duplications, a tight 450-line stop ceiling, and an
+  unstated exact-maximum lifetime coupling.
+- **Adopted corrections:** this revision changes the raw signing-input range to
+  55 through 12,342 bytes; adds fixed resource vectors plus test-side key-ID,
+  CRC32C, request, and response compatibility evidence; names the comparison
+  sources without making them production dependencies; raises only the stop
+  ceiling to 520 while retaining an exact finished budget; names the zero-slack
+  five-minute coupling; and records the two-domain production-readiness gate.
+- **Current-head posture:** focused exact-head re-review is required after
+  these changes. No prior review authorizes a later unreviewed head.
+- **Preferences:** none intentionally left unresolved from the recorded
+  reviews.
 - **Follow-ups:** section 11.4 only.
 
 A future reviewer observation is a Blocker only when it demonstrates that an
