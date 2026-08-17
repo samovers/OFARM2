@@ -71,6 +71,7 @@ MODULE_BUDGETS = {
     "kernel/security_audit_gap.py": 720,
     "kernel/security_audit_runtime.py": 250,
     "deployment/postgresql/security_audit_hmac_retirement.py": 450,
+    "deployment/postgresql/security_audit_approval.py": 623,
 }
 COMMAND_MODULE_BUDGETS = {
     "deployment/postgresql/run_security_audit_hmac_retirement.py": 160,
@@ -209,6 +210,12 @@ DIRECT_IMPORT_BOUNDS = {
     "deployment/postgresql/run_security_audit_hmac_retirement.py": frozenset(
         {"deployment.postgresql.security_audit_hmac_retirement"}
     ),
+    "deployment/postgresql/security_audit_approval.py": frozenset(
+        {
+            "deployment.postgresql.audit_contract",
+            "deployment.postgresql.security_audit_access",
+        }
+    ),
 }
 SECURITY_AUDIT_GAP_FORBIDDEN_IMPORTS = frozenset(
     {
@@ -230,6 +237,65 @@ SECURITY_AUDIT_GAP_FORBIDDEN_NAMES = frozenset(
         "mark_overflow_count_unknown",
         "open",
         "print",
+    }
+)
+SECURITY_AUDIT_APPROVAL_IMPORT_STATEMENTS = frozenset(
+    {
+        ("__future__", 0, (("annotations", None),)),
+        (
+            "base64",
+            0,
+            (("urlsafe_b64decode", None), ("urlsafe_b64encode", None)),
+        ),
+        ("binascii", 0, (("Error", "BinasciiError"),)),
+        ("dataclasses", 0, (("dataclass", None),)),
+        ("hashlib", 0, (("sha256", None),)),
+        ("json", 0, (("dumps", None), ("loads", None))),
+        ("re", 0, (("fullmatch", None),)),
+        ("uuid", 0, (("UUID", None),)),
+        ("cryptography.exceptions", 0, (("InvalidSignature", None),)),
+        (
+            "cryptography.hazmat.primitives.asymmetric.ed25519",
+            0,
+            (("Ed25519PublicKey", None),),
+        ),
+        (
+            "deployment.postgresql.audit_contract",
+            0,
+            (
+                ("EXPORT_ACCESS_PURPOSE_IDENTITY", None),
+                ("EXPORT_FUNCTION_IDENTITY", None),
+                ("EXPORT_MAX_BYTES", None),
+                ("EXPORT_MAX_ROWS", None),
+            ),
+        ),
+        (
+            "deployment.postgresql.security_audit_access",
+            0,
+            (("SecurityAuditAccessCursor", None),),
+        ),
+    }
+)
+SECURITY_AUDIT_APPROVAL_FORBIDDEN_NAMES = frozenset(
+    {
+        "__import__",
+        "eval",
+        "exec",
+        "compile",
+        "open",
+        "print",
+        "input",
+        "breakpoint",
+        "uuid1",
+        "uuid4",
+        "getnode",
+        "now",
+        "utcnow",
+        "today",
+        "time",
+        "time_ns",
+        "monotonic",
+        "perf_counter",
     }
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
@@ -2325,6 +2391,111 @@ def _check_security_audit_gap_surface(
     return failures
 
 
+def _normalized_import_statement(
+    node: ast.ImportFrom,
+) -> tuple[str | None, int, tuple[tuple[str, str | None], ...]]:
+    return (
+        node.module,
+        node.level,
+        tuple((alias.name, alias.asname) for alias in node.names),
+    )
+
+
+def _function_uses_now_us_in_comparison(
+    tree: ast.Module,
+    function_name: str,
+) -> bool:
+    functions = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    ]
+    if len(functions) != 1:
+        return False
+    function = functions[0]
+    if "now_us" not in {
+        argument.arg
+        for argument in (
+            *function.args.posonlyargs,
+            *function.args.args,
+            *function.args.kwonlyargs,
+        )
+    }:
+        return False
+    return any(
+        isinstance(node, ast.Compare)
+        and any(
+            isinstance(member, ast.Name)
+            and member.id == "now_us"
+            and isinstance(member.ctx, ast.Load)
+            for member in ast.walk(node)
+        )
+        for node in ast.walk(function)
+    )
+
+
+def _security_audit_approval_surface_violations(
+    tree: ast.Module,
+) -> list[str]:
+    violations = []
+    import_statements = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            violations.append(
+                f"{node.lineno}: whole-module import is prohibited"
+            )
+        elif isinstance(node, ast.ImportFrom):
+            statement = _normalized_import_statement(node)
+            import_statements.append(statement)
+            if statement not in SECURITY_AUDIT_APPROVAL_IMPORT_STATEMENTS:
+                violations.append(
+                    f"{node.lineno}: import statement is outside exact allowlist"
+                )
+        name = None
+        if isinstance(node, ast.Name):
+            name = node.id
+        elif isinstance(node, ast.Attribute):
+            name = node.attr
+        if name in SECURITY_AUDIT_APPROVAL_FORBIDDEN_NAMES:
+            violations.append(
+                f"{node.lineno}: prohibited approval surface {name!r}"
+            )
+        if (
+            isinstance(node, ast.Name)
+            and node.id == "now_us"
+            and isinstance(node.ctx, (ast.Store, ast.Del))
+        ):
+            violations.append(
+                f"{node.lineno}: caller-owned now_us is overwritten"
+            )
+    if (
+        len(import_statements) != len(SECURITY_AUDIT_APPROVAL_IMPORT_STATEMENTS)
+        or frozenset(import_statements)
+        != SECURITY_AUDIT_APPROVAL_IMPORT_STATEMENTS
+    ):
+        violations.append("exact import statement set is incomplete or duplicated")
+    for function_name in ("_authority", "_request"):
+        if not _function_uses_now_us_in_comparison(tree, function_name):
+            violations.append(
+                f"{function_name} lacks caller-owned now_us freshness comparison"
+            )
+    return sorted(set(violations))
+
+
+def _check_security_audit_approval_surface(
+    snapshot: PythonSourceSnapshotV1,
+    trees: collections.abc.Mapping[str, ast.Module],
+) -> list[str]:
+    relative = "deployment/postgresql/security_audit_approval.py"
+    module = snapshot.modules_by_relative_path[relative].module_name
+    return [
+        f"{relative}:{violation}"
+        for violation in _security_audit_approval_surface_violations(
+            trees[module]
+        )
+    ]
+
+
 def main() -> int:
     try:
         snapshot = build_python_source_snapshot(ROOT)
@@ -2338,6 +2509,7 @@ def main() -> int:
     failures.extend(_check_tenant_uow_architecture(snapshot, trees))
     failures.extend(_check_direct_import_bounds(snapshot))
     failures.extend(_check_security_audit_gap_surface(snapshot, trees))
+    failures.extend(_check_security_audit_approval_surface(snapshot, trees))
     for relative, budget in MODULE_BUDGETS.items():
         failures.extend(_check_production(snapshot, trees, relative, budget))
     for relative, budget in COMMAND_MODULE_BUDGETS.items():

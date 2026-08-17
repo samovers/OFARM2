@@ -1,7 +1,8 @@
 # OFARM Security-Audit Dual-Approval Verification — Phase A Contract v0.1
 
-**Status:** unapproved Phase A draft; independent exact-head review is pending;
-Phase B, deployment, and production operation are not authorized
+**Status:** Phase B repository implementation authorized by the exact same-task
+approval recorded in section 16; deployment and production operation are not
+authorized
 
 **Draft pull request:** `https://github.com/samovers/OFARM2/pull/319`
 
@@ -1116,7 +1117,10 @@ are deliberately deferred and must not be answered by implementation:
   that direct builtin `open` and `print` effects remained possible without an
   import. This revision closes that `DAV-011` gap with the exact
   `open`/`print`/`input`/`breakpoint` prohibition and matching AST evidence;
-  focused exact-head re-review is pending.
+  [focused exact-head re-review](https://github.com/samovers/OFARM2/pull/319#pullrequestreview-4952360511)
+  at `8a827881676c048b7a5ffd8a9951e32493bb1f1d` confirmed all
+  `DAV-001` through `DAV-013` contract rows pass with zero demonstrated
+  Blockers and authorized presentation of the complete live version-1 card.
 - **Adopted corrections:** mechanically derive the exact production budget
   under a 700-line ceiling; omit the redundant group and shared test-cap
   registrations; remove the residual group-guard requirement; pin local key-ID
@@ -1126,8 +1130,7 @@ are deliberately deferred and must not be answered by implementation:
   The five-minute operational sequencing risk remains explicit redesign
   evidence in section 12 and required no protocol change.
 - **Follow-ups:** section 11.4 only.
-- **Preferences:** none unresolved from the recorded review rounds; the latest
-  corrections remain subject to focused exact-head re-review.
+- **Preferences:** none unresolved from the recorded Phase A review rounds.
 
 Once every `DAV-001` through `DAV-013` invariant passes and no demonstrated
 in-scope Blocker remains, the approved workflow may permit Phase B only after
@@ -1161,3 +1164,22 @@ pull request after every gate passes. It would authorize no approval issuance,
 production trust root, durable admission, migration, temporary LOGIN,
 credential, export operation, output delivery, deployment, release, issue #192
 closure, or security waiver.
+
+## 16. Approval evidence
+
+- **Decision:** `ISSUE192-SECURITY-AUDIT-DUAL-APPROVAL-VERIFICATION-001`,
+  version `1`.
+- **Codex task:** `019ff570-c253-7d02-bbda-1ad8f4143f00`.
+- **Complete live card:** turn
+  `01a0103a-5427-74c0-9fe9-1ec24f7d375f`, stable reference `item-2113`.
+- **Task-user approval:** later turn
+  `01a0103b-e405-7cf1-b9ce-7f76cc95363f`, stable reference `item-2114`.
+- **Exact approval sentence:** `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-DUAL-APPROVAL-VERIFICATION-001 version 1.`
+- **Implementation PR:** `https://github.com/samovers/OFARM2/pull/319`.
+- **Observed role and order:** the assistant displayed the unique complete live
+  version-1 card first; the task user then supplied the exact sentence as the
+  entire visible later message in the same task.
+- **Evidence posture:** these task references and role/order observations are
+  provisional AI-attested evidence of the task user's decision. The task-user
+  message remains authority. This record is not deployment authority,
+  production authority, or an independently verifiable identity claim.

@@ -525,6 +525,36 @@ cleanup, structural closure, runtime health, protected output delivery,
 external clock fencing, deployment readiness, or completion of issue #192.
 Those remain prerequisites for a future operator-facing lifecycle.
 
+## Library-only security-audit dual-approval verification
+
+`security_audit_approval.py` is a side-effect-free verifier for a later,
+separately approved break-glass lifecycle. Trusted composition constructs it
+with one exact Ed25519 observer public key. A caller then supplies one bounded
+canonical observer-signed authority receipt, one bounded canonical approval
+bundle, and trusted current Unix time in microseconds. The verifier accepts
+only the fixed one-page export purpose, callable, cursor grammar, 2,048-row
+ceiling, and 8,388,608-byte ceiling. Exactly two canonical Ed25519 statements
+must bind the same receipt, request, and operation and resolve to different
+approver IDs, key IDs, and independence domains in the presented receipt.
+
+Success is one private immutable normalized evidence value. It contains no
+private key, signature, public key, raw carrier, credential, output, or
+consumption claim. It is not a bearer grant: a later admission boundary must
+receive and reverify the original carrier bytes with admission-owned time and
+atomically consume the exact operation and approval digest before creating any
+credential. Repeated verification here is deliberately equal and
+side-effect-free.
+
+The verifier does not acquire a clock, discover the latest authority receipt,
+issue approvals, persist replay state, create or change a role, receive a
+conninfo, call PostgreSQL, invoke the bounded export runner, write output, or
+provide a command or module entry point. Removing a key from newly issued
+receipts is therefore fully effective only after older signed receipts expire;
+every accepted receipt and request is capped at five minutes. Immediate
+revocation, production observer-root composition, durable admission,
+temporary-login lifecycle, protected delivery, deployment readiness, and
+issue #192 closure remain separate trust boundaries.
+
 ## One-shot security-audit overflow closure
 
 The overflow-closure command observes and closes at most one database-selected
