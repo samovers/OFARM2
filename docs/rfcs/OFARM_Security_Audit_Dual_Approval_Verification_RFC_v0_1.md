@@ -361,6 +361,18 @@ key_id = unpadded_base64url(sha256(thumbprint_input).digest())
 
 The key ID is exactly 43 canonical base64url characters.
 
+The local derivation is deliberate boundary duplication, not a second key
+authority. Production remains forbidden from importing tenant signing
+authority. The focused test may import
+`deployment.postgresql.tenant_contract.derive_ed25519_key_id` only as a
+test-side compatibility oracle and must prove that both implementations map
+the exact 32-byte public-key vector
+`000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f` to
+the exact key ID
+`P7IdLIpiTZiFaIoOSqbX3JrSyps3hvZ4Y2SieP96XIY`. Any disagreement fails
+`DAV-002` and `DAV-005` evidence; it is not resolved by accepting either
+implementation conditionally.
+
 `approverId` and `independenceDomain` contain 1 through 128 ASCII bytes and
 match `[A-Za-z0-9][A-Za-z0-9._:-]{0,127}` exactly. An operation ID is a
 lowercase canonical RFC 4122 UUIDv4 string that round-trips through `UUID` and
@@ -768,7 +780,9 @@ Phase B would add one module,
 
 It imports the existing export constants and cursor type without modifying
 them. It does not import tenant signing authority or extract a generic crypto
-framework.
+framework. Its local key-ID derivation is deliberately test-pinned to the
+existing repository derivation by the exact vector in section 6.4; that
+test-only comparison does not widen the production import surface.
 
 ### 9.2 Exact source import confinement
 
@@ -858,13 +872,17 @@ DIRECT_IMPORT_BOUNDS[
 ```
 
 The exact import-statement allowlist and forbidden-name checks in section 9.2
-also belong to this module's architecture registration. Phase B must not add a
-single-member `GROUP_BUDGETS` entry: it would duplicate the exact module
-budget without constraining another source file. Phase B must not change
-`TEST_GLOBS` or `MAX_TEST_LINES` for this slice. The one exact test path in
-section 11.1 is bounded by the closed path envelope and required evidence, not
-by the shared 800-line cap used for existing test families. No dependency-lock
-path is permitted because the required cryptography version is already pinned.
+also belong to this module's architecture registration. The new checker logic
+must be one module-specific check hard-coded to the exact relative path
+`deployment/postgresql/security_audit_approval.py`; it must not apply the new
+statement, symbol, forbidden-name, or forbidden-call policy to any other
+module. Phase B must not add a single-member `GROUP_BUDGETS` entry: it would
+duplicate the exact module budget without constraining another source file.
+Phase B must not change `TEST_GLOBS` or `MAX_TEST_LINES` for this slice. The one
+exact test path in section 11.1 is bounded by the closed path envelope and
+required evidence, not by the shared 800-line cap used for existing test
+families. No dependency-lock path is permitted because the required
+cryptography version is already pinned.
 
 ### 9.4 Why this is the minimum coherent design
 
@@ -881,7 +899,7 @@ minimum coherent prerequisite.
 
 ## 10. Elegance audit
 
-There is exactly one source of truth for each decision:
+There is exactly one runtime authority for each decision:
 
 - observer key for receipt authenticity;
 - presented signed receipt for the bounded approver mapping;
@@ -890,6 +908,11 @@ There is exactly one source of truth for each decision:
 - checked-in constants for export scope;
 - `now_us` for point-in-time currentness; and
 - the future admission store, explicitly absent here, for durable single use.
+
+The locally reproduced key-ID algorithm is deterministic protocol machinery,
+not another authority source. The exact section 6.4 vector and test-only
+equality check against the existing repository helper fail closed against
+implementation drift while preserving the pre-tenant production boundary.
 
 There is one authoritative verification transition point: `verify()`. There
 is no duplicate request state, mutable registry, generic capability bag,
@@ -1007,7 +1030,7 @@ separate reviewed boundaries.
 | Invariant | Owning prospective code | Negative evidence | Smallest verification |
 | --- | --- | --- | --- |
 | `DAV-001` | canonical carrier helpers | malformed, duplicate, noncanonical, oversized carriers | focused unit matrix |
-| `DAV-002` | authority validator/verifier | attacker root, wrong domain/schema/audience | real Ed25519 vectors |
+| `DAV-002` | authority validator/verifier and key-ID helper | attacker root, wrong domain/schema/audience, or local/shared key-ID disagreement | real Ed25519 vectors plus the exact section 6.4 equality vector |
 | `DAV-003` | exact time validators | future, expired, overlong, non-nested windows | boundary-value unit matrix |
 | `DAV-004` | request validator plus existing constants/cursor | every constant/cursor substitution | focused unit matrix |
 | `DAV-005` | digest helpers and binding validator | cross-receipt/request/bundle substitution | exact digest vectors |
@@ -1035,7 +1058,9 @@ separate reviewed boundaries.
 
 - reproduce this invariant table before editing;
 - run focused approval-verification tests;
-- run architecture conformance with the exact module/group/import guards;
+- run architecture conformance with the exact module/import guards;
+- run the exact section 6.4 key-ID vector against both the local derivation and
+  the existing test-only compatibility oracle;
 - run Ruff or the repository's equivalent Python lint for all changed Python;
 - regenerate the review-baseline inventory mechanically;
 - run `python3 conformance/ofarm_pkg_contract_check.py` before every commit;
@@ -1071,16 +1096,27 @@ are deliberately deferred and must not be answered by implementation:
   adopts exact schemas and bytes, bounded revocation latency, non-bearer
   handoff, one fixed refusal, deterministic short-circuit counts, and exact
   imported-symbol enforcement. No known design Blocker remains.
-- **Independent exact-head review:** two reviewers disagreed at published head
-  `e4a00083e0f556062f783de28ee7042882311c07`. One found no demonstrated
-  Blocker. The other identified the predicted 520-line production budget and
-  the single permitted test file's inherited 800-line cap as a Phase B stop
-  risk. This revision replaces the predicted production number with an exact
-  finished line count under a fixed 700-line ceiling, removes the redundant
-  group registration, and forbids test-glob or shared-cap changes. Focused
-  exact-head re-review of that correction is pending.
+- **Independent review history:** two reviewers disagreed at published head
+  `e4a00083e0f556062f783de28ee7042882311c07`. One reported
+  [no demonstrated Blockers](https://github.com/samovers/OFARM2/pull/319#pullrequestreview-4951508970).
+  The other [identified](https://github.com/samovers/OFARM2/pull/319#issuecomment-5315738397)
+  the predicted 520-line production budget and the single permitted test
+  file's inherited 800-line cap as a Phase B stop risk. Focused re-review at
+  `bbb9425cbb54035568b303f07703b59f80aea202`
+  [closed that Blocker](https://github.com/samovers/OFARM2/pull/319#issuecomment-5316331254)
+  and identified a residual group-guard word, missing key-ID equality
+  evidence, checker path scoping, and review-record accuracy. This revision
+  adopts those remaining corrections; focused exact-head re-review is pending.
+- **Adopted corrections:** mechanically derive the exact production budget
+  under a 700-line ceiling; omit the redundant group and shared test-cap
+  registrations; remove the residual group-guard requirement; pin local key-ID
+  derivation to the existing helper with one exact test vector; scope the new
+  checker logic to the approval module only; and preserve the review history
+  above. The five-minute operational sequencing risk remains explicit redesign
+  evidence in section 12 and required no protocol change.
 - **Follow-ups:** section 11.4 only.
-- **Preferences:** none.
+- **Preferences:** none unresolved from the recorded review rounds; the latest
+  corrections remain subject to focused exact-head re-review.
 
 Once every `DAV-001` through `DAV-013` invariant passes and no demonstrated
 in-scope Blocker remains, the approved workflow may permit Phase B only after
