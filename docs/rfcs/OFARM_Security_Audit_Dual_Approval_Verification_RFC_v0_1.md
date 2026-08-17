@@ -3,7 +3,7 @@
 **Status:** unapproved Phase A draft; independent exact-head review is pending;
 Phase B, deployment, and production operation are not authorized
 
-**Draft pull request:** pending initial publication
+**Draft pull request:** `https://github.com/samovers/OFARM2/pull/319`
 
 **Contract identity:**
 `ofarm2.security-audit-dual-approval-verification.v0.1`
