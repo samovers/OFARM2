@@ -837,20 +837,17 @@ out of scope under section 4.4.
 
 ### 9.3 Architecture-budget registration
 
-Phase B must register exactly:
+Phase B must add one mechanically derived production-module budget and the
+exact direct-import bound below. After the production module is complete, its
+registered `MODULE_BUDGETS` value must equal the architecture checker's
+physical line count for that module at the exact Phase B head and must be no
+greater than `700`. The placeholder below describes that mechanical
+substitution; no placeholder may be committed:
 
 ```text
 MODULE_BUDGETS[
   "deployment/postgresql/security_audit_approval.py"
-] = 520
-
-GROUP_BUDGETS[
-  "security audit dual approval"
-] = (520, ("deployment/postgresql/security_audit_approval.py",))
-
-TEST_GLOBS += (
-  "kernel/tests/*security_audit_approval*.py",
-)
+] = <FINISHED_MODULE_LINE_COUNT_NOT_GREATER_THAN_700>
 
 DIRECT_IMPORT_BOUNDS[
   "deployment/postgresql/security_audit_approval.py"
@@ -861,7 +858,12 @@ DIRECT_IMPORT_BOUNDS[
 ```
 
 The exact import-statement allowlist and forbidden-name checks in section 9.2
-also belong to this module's architecture registration. No dependency-lock
+also belong to this module's architecture registration. Phase B must not add a
+single-member `GROUP_BUDGETS` entry: it would duplicate the exact module
+budget without constraining another source file. Phase B must not change
+`TEST_GLOBS` or `MAX_TEST_LINES` for this slice. The one exact test path in
+section 11.1 is bounded by the closed path envelope and required evidence, not
+by the shared 800-line cap used for existing test families. No dependency-lock
 path is permitted because the required cryptography version is already pinned.
 
 ### 9.4 Why this is the minimum coherent design
@@ -964,7 +966,11 @@ Stop before editing if implementation or review requires:
 - a database transition, credential, role, export call, output, runtime
   composition, deployment configuration, or production key;
 - importing tenant signing authority or an additional dependency;
-- a path outside section 11.1 or a larger architecture budget; or
+- a path outside section 11.1 or a second approval-verification test path;
+- a finished production module above 700 physical lines, a registered module
+  budget different from its exact finished line count, a new single-member
+  group budget, or any `TEST_GLOBS` or `MAX_TEST_LINES` change for this slice;
+  or
 - changing the primary trust boundary or materially altering an invariant.
 
 Such evidence requires a new Phase A decision version or a separate stacked
@@ -1033,7 +1039,9 @@ separate reviewed boundaries.
 - run Ruff or the repository's equivalent Python lint for all changed Python;
 - regenerate the review-baseline inventory mechanically;
 - run `python3 conformance/ofarm_pkg_contract_check.py` before every commit;
-- inspect the exact six-path diff and architecture budgets;
+- inspect the exact six-path diff; prove the registered production-module
+  budget equals the finished line count and is at most 700; and prove no group
+  budget, test glob, or shared test-line limit changed for this slice;
 - obtain hosted exact-head conformance and required architecture lanes; and
 - receive bounded implementation review with zero demonstrated in-scope
   Blockers before merge.
@@ -1063,7 +1071,14 @@ are deliberately deferred and must not be answered by implementation:
   adopts exact schemas and bytes, bounded revocation latency, non-bearer
   handoff, one fixed refusal, deterministic short-circuit counts, and exact
   imported-symbol enforcement. No known design Blocker remains.
-- **Independent exact-head review:** pending after draft publication.
+- **Independent exact-head review:** two reviewers disagreed at published head
+  `e4a00083e0f556062f783de28ee7042882311c07`. One found no demonstrated
+  Blocker. The other identified the predicted 520-line production budget and
+  the single permitted test file's inherited 800-line cap as a Phase B stop
+  risk. This revision replaces the predicted production number with an exact
+  finished line count under a fixed 700-line ceiling, removes the redundant
+  group registration, and forbids test-glob or shared-cap changes. Focused
+  exact-head re-review of that correction is pending.
 - **Follow-ups:** section 11.4 only.
 - **Preferences:** none.
 
