@@ -1,9 +1,10 @@
 # OFARM Security-Audit Observer-Root Admission — Phase A Contract v0.1
 
-**Status:** Phase A draft; Phase B repository implementation, deployment, and
-production operation are not authorized
+**Status:** Phase A draft bound to PR #321; independent exact-head review is
+not yet complete; Phase B repository implementation, deployment, and production
+operation are not authorized
 
-**Draft pull request:** pending publication
+**Draft pull request:** https://github.com/samovers/OFARM2/pull/321
 
 **Contract identity:**
 `ofarm2.security-audit-observer-root-admission.v0.1`
@@ -1355,8 +1356,10 @@ deployment, release, security waiver, or issue #192 closure.
 
 - **Decision:** `ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, version
   `1`.
-- **Draft pull request:** pending publication.
-- **Exact reviewed Phase A head:** none yet.
+- **Draft pull request:** https://github.com/samovers/OFARM2/pull/321.
+- **Exact reviewed Phase A head:** none yet; the immutable head is recorded in
+  the PR review request and independent review comments rather than
+  self-referentially inside that same commit.
 - **Complete live card:** not yet displayed.
 - **Task-user Phase B approval:** not supplied.
 - **Evidence posture:** Phase B is stopped.
