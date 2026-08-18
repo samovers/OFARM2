@@ -1,8 +1,9 @@
 # OFARM Security-Audit Observer-Root Admission — Phase A Contract v0.1
 
-**Status:** Phase A draft bound to PR #321; independent exact-head review is
-not yet complete; Phase B repository implementation, deployment, and production
-operation are not authorized
+**Status:** Phase A draft bound to PR #321; exact-head reviews of
+`96a2a2dfb4fddd09a12a3c5818cb820518c31f6d` found three Blockers; corrected-
+head review is pending; Phase B repository implementation, deployment, and
+production operation are not authorized
 
 **Draft pull request:** https://github.com/samovers/OFARM2/pull/321
 
@@ -51,13 +52,14 @@ This task establishes one fail-closed, non-provisioning admission function that:
   verified attestation-bundle digest, two dedicated service-account principals,
   and three exact custom-role etags;
 - observes the exact CryptoKey, CryptoKeyVersion, DER public key, custom-role
-  definitions, and effective allow/deny explanations through separate
+  definitions, and effective allow/deny/principal-access-boundary explanations
+  through separate
   read-only clients;
 - requires one dedicated signer principal with only
   `cloudkms.cryptoKeyVersions.useToSign` on the exact version;
 - requires one different observer principal with only the three metadata
   permissions needed to inspect that exact key and version;
-- uses Policy Troubleshooter v3, not `testIamPermissions`, and refuses every
+- uses Policy Troubleshooter v3beta, not `testIamPermissions`, and refuses every
   incomplete, unknown, indirect, wider, or unexplained result;
 - submits one fixed non-production-shaped raw-data signing probe and verifies
   the HSM response under the observed public key;
@@ -136,7 +138,10 @@ This pull request does not change or add:
   version;
 - exact definitions and etags of the three custom roles used by those
   bindings;
-- complete visibility of relevant allow and deny policy explanations;
+- absence of a CryptoKey Key Access Justifications policy that could block
+  signing;
+- complete visibility of relevant allow, deny, and principal access boundary
+  policy explanations;
 - fixed, non-production-shaped signing-probe bytes and exact HSM response
   validation;
 - equality of the complete normalized before/after evidence snapshots;
@@ -158,12 +163,14 @@ This pull request does not change or add:
 - the distinct dedicated metadata-observer service account named in the
   manifest;
 - a separate evidence-reader credential with complete organization-level
-  visibility needed by Policy Troubleshooter and IAM `roles.get`;
+  visibility needed by Policy Troubleshooter for applicable allow, deny, role,
+  principal-set, principal access boundary policy, and policy-binding evidence,
+  plus IAM `roles.get`;
 - a separate Google Cloud administrator that created the resources and can
   later change key state, role definitions, or IAM policy;
 - Google Cloud KMS v1 authenticated metadata and signing behavior;
-- Google IAM v1 custom-role responses and Policy Troubleshooter v3 allow/deny
-  evaluation;
+- Google IAM v1 custom-role responses and Policy Troubleshooter v3beta
+  allow/deny/principal-access-boundary evaluation;
 - authenticated TLS, Google-issued credentials, SHA-256, Ed25519, strict JSON,
   strict UTF-8, canonical base64 encodings, and CRC32C;
 - `cryptography==49.0.0`, `google-api-core==2.33.0`,
@@ -197,9 +204,9 @@ survive arbitrary behavior by every root at once.
 - every manifest byte, JSON member, resource segment, principal, key, digest,
   role etag, order, encoding, and extra field until fully validated;
 - every KMS metadata and public-key response field;
-- every IAM role response, Policy Troubleshooter response, policy, binding,
-  membership result, condition result, error, omission, order, and unknown
-  state;
+- every IAM role response, Policy Troubleshooter response, allow policy, deny
+  policy, principal access boundary policy or binding, membership result,
+  condition result, error, omission, order, and unknown state;
 - every HTTP status, header, body byte, redirect, content encoding, size, JSON
   duplicate, and ordinary transport exception;
 - every KMS signing response field, checksum, signature byte, resource name,
@@ -247,7 +254,7 @@ and between-call drift are in scope and must refuse.
 | Signer identity | Exact manifest service-account email | active credential metadata, group, domain, response member |
 | Metadata-observer identity | Different exact manifest service-account email | signer, administrator, evidence reader |
 | Role identity and definition | Three fixed role names plus exact manifest etags and exact permission sets | role title, description, predefined role, similarly named role |
-| Effective access | Complete Policy Troubleshooter v3 response for each closed tuple | `testIamPermissions`, one direct policy read, one successful RPC, local assumption |
+| Effective access | Complete Policy Troubleshooter v3beta allow/deny/PAB response for each closed tuple | stable v3, `testIamPermissions`, one direct policy read, one successful RPC, local assumption |
 | Expected binding provenance | One exact direct service-account binding on the exact CryptoKey policy with exact role and condition | inherited, group, domain, wildcard, sibling, unconditioned, second grant |
 | Key metadata | Exact authenticated KMS `GetCryptoKey`, `GetCryptoKeyVersion`, and DER `GetPublicKey` responses | manifest assertion alone, primary alias, cached value |
 | Functional private-key match | One fixed probe signature independently verified with observed raw key | metadata, resource equality, CRC32C, attestation digest alone |
@@ -523,8 +530,16 @@ The CryptoKey response must have the exact name, purpose
 `ASYMMETRIC_SIGN`, `import_only == false`, no rotation period or next-rotation
 time, and a version template with algorithm `EC_SIGN_ED25519` and protection
 level `HSM`. Its `primary` field must be absent, as required by the provider
-contract for a non-`ENCRYPT_DECRYPT` key. No alias or response-selected version
-becomes authority.
+contract for a non-`ENCRYPT_DECRYPT` key. Its protobuf
+`key_access_justifications_policy` field must also be absent by field-presence
+inspection; an empty/default policy object is not treated as absence. Google
+documents that a present Key Access Justifications policy can reject sign
+operations when enforcement applies, while absence permits every justification
+code. V1 therefore admits no key carrying that policy. The normalized
+`cryptoKey` object records the derived marker
+`"keyAccessJustificationsPolicyPresent": false` in both snapshots so absence
+participates explicitly in equality and hashing. No alias or response-selected
+version becomes authority.
 
 The CryptoKeyVersion response must have the exact name, state `ENABLED`,
 algorithm `EC_SIGN_ED25519`, protection level `HSM`, `reimport_eligible ==
@@ -584,7 +599,7 @@ session using the independent evidence-reader credential. Phase B invokes only:
 
 ```text
 GET https://iam.googleapis.com/v1/<exact-derived-role-name>
-POST https://policytroubleshooter.googleapis.com/v3/iam:troubleshoot
+POST https://policytroubleshooter.googleapis.com/v3beta/iam:troubleshoot
 ```
 
 Every request has fixed timeout `5.0`, permits no redirect, supplies no query
@@ -599,7 +614,7 @@ and observer-key role definitions in that fixed order. No list, wildcard,
 search, project discovery, environment-derived host, alternate endpoint, or
 `testIamPermissions` call exists.
 
-### 6.7 Effective-IAM tuple matrix
+### 6.7 Effective-IAM allow/deny/PAB tuple matrix
 
 For Policy Troubleshooter, the email form without a `serviceAccount:` prefix is
 the `principal` request value. `fullResourceName` is exactly the KMS resource
@@ -624,6 +639,50 @@ request time, tag, caller-selected context, or other condition-context input is
 sent. Omitting or changing this resource context is not permitted: it could
 turn the exact expected conditional binding into `UNKNOWN_CONDITIONAL` or
 evaluate a different resource.
+
+Every query uses v3beta because stable v3 evaluates only allow and deny
+policies. The successful response has the documented five top-level components:
+`overallAccessState`, repeated `accessTuple`, `allowPolicyExplanation`,
+`denyPolicyExplanation`, and `pabPolicyExplanation`. Every component is present,
+has the exact documented type, and is validated before normalization.
+
+V1 deliberately supports only a principal-access-boundary posture in which no
+PAB policy or binding applies to either manifest principal. For every tuple,
+the present `pabPolicyExplanation` must have all of these semantic values:
+
+```text
+principalAccessBoundaryAccessState = PAB_ACCESS_STATE_NOT_ENFORCED
+explainedBindingsAndPolicies = []
+relevance in {
+  HEURISTIC_RELEVANCE_NORMAL,
+  HEURISTIC_RELEVANCE_HIGH
+}
+```
+
+The repeated field may be omitted by protobuf JSON default-value elision, but
+must decode to the exact empty list and is normalized as `[]`. Any nonempty
+binding/policy explanation refuses, including one whose condition is false,
+whose enforcement version does not cover the permission, or whose policy has no
+rules. `PAB_ACCESS_STATE_ALLOWED`, `PAB_ACCESS_STATE_NOT_ALLOWED`,
+`PAB_ACCESS_STATE_UNKNOWN_INFO`, `PAB_ACCESS_STATE_UNSPECIFIED`, missing PAB
+explanation, unspecified relevance, omitted policy text, or any unknown,
+unsupported, or malformed nested state also refuses. A later version that
+admits an enforced PAB needs a new decision; Phase B may not add that parser or
+policy semantics.
+
+The evidence-reader credential must be able to view every relevant PAB policy
+and policy binding for the organization containing each service-account
+principal. Current Google guidance names
+`roles/iam.principalAccessBoundaryViewer` and policy-binding visibility on the
+applicable organization, folder, and project; a least-privilege custom grant
+must include the documented `iam.policybindings.get` and
+`iam.policybindings.list` permissions instead of granting mutation authority.
+The resource organization also needs the documented
+`roles/iam.securityReviewer`, `roles/iam.denyReviewer`, and `roles/browser`
+visibility for complete allow, deny, role, and service-account principal-set
+evaluation. This module does not infer any of that visibility from credential
+metadata: the v3beta response must prove the exact complete no-PAB posture
+above, and every unknown or omission refuses.
 
 Each snapshot then evaluates this closed matrix in displayed top-to-bottom
 order:
@@ -671,10 +730,10 @@ condition, explanation, role, and relevant enum is normalized with deterministic
 ordering and included in the snapshot. No digest substitutes for validating
 the underlying values first.
 
-Policy Troubleshooter is authoritative here because v3 evaluates relevant
-resource and inherited allow and deny policies and reports incomplete
-visibility as unknown. The design does not infer authority from
-`testIamPermissions`, a successful KMS call, or direct policy text alone.
+Policy Troubleshooter is authoritative here because v3beta evaluates relevant
+resource and inherited allow, deny, and principal access boundary policies and
+reports incomplete visibility as unknown. The design does not infer authority
+from `testIamPermissions`, a successful KMS call, or direct policy text alone.
 
 ### 6.8 Fixed live signing probe
 
@@ -752,8 +811,9 @@ and therefore has one clock call. A malformed second value refuses after
 observation without returning partial evidence.
 
 Snapshot equality is semantic, not raw response-byte equality. It covers every
-validated KMS field, exact public key, attestation bundle, custom-role field,
-complete IAM policy and binding roster, access decision, and explanation.
+validated KMS field, explicit Key Access Justifications policy absence, exact
+public key, attestation bundle, custom-role field, complete allow/deny/PAB
+policy and binding roster, access decision, and explanation.
 Response object ordering that has no IAM meaning is normalized; values and
 list order with protocol meaning are not discarded.
 
@@ -771,13 +831,16 @@ top-level members:
 ```
 
 `cryptoKey`, `cryptoKeyVersion`, and `publicKey` contain every field validated
-in section 6.5 under its documented lower-camel JSON name; attestation format,
+in section 6.5 under its documented lower-camel JSON name; `cryptoKey` also
+contains the exact derived
+`"keyAccessJustificationsPolicyPresent": false` marker. Attestation format,
 content, and all three certificate chains remain nested under
 `cryptoKeyVersion.attestation`. `roles` contains the three complete validated
 role objects in fixed request order. `accessEvaluations` contains the ten full
-validated v3 responses in matrix order, including the repeated access tuple,
-allow explanation and complete policy text, deny explanation and complete
-policy text, all binding/rule explanations, and overall access state.
+validated v3beta responses in matrix order, including the repeated access
+tuple, allow explanation and complete policy text, deny explanation and
+complete policy text, the normalized no-PAB explanation, all binding/rule
+explanations, and overall access state.
 
 Provider byte fields use canonical padded standard base64, enum values use
 their exact documented names, and integers remain JSON integers. Semantically
@@ -827,6 +890,15 @@ A successful result says only that both observations agreed and the exact key
 worked during this bounded call. Google IAM and key state can change after
 `FINISHED`. Later runtime composition must reject at expiry and refresh; this
 slice neither implements that composition nor claims immediate revocation.
+One successful collection can make 33 sequential network calls with 5-second
+timeouts and therefore can take up to 165 seconds, longer than the 30-second
+result lifetime. Later composition must pipeline staggered concurrent
+admission calls so a later attempt is already in flight when an admission is
+published and a newly completed result can replace it before its exact expiry.
+Merely starting one refresh after publication, even before expiry, cannot
+guarantee continuity at the fixed worst-case latency. Composition atomically
+publishes only a completed admission and never extends the previous expiry
+after refresh failure.
 
 ### 6.10 Failure and side-effect protocol
 
@@ -866,7 +938,11 @@ CRC32C fields, raw-data input, response identity, verification flags, and
 protection level used here. The
 [`CryptoKeyVersion` resource](https://cloud.google.com/kms/docs/reference/rest/v1/projects.locations.keyRings.cryptoKeys.cryptoKeyVersions)
 defines enabled state, algorithm, HSM protection, import fields, and the HSM
-attestation bundle.
+attestation bundle. The
+[`CryptoKey` resource](https://cloud.google.com/kms/docs/reference/rest/v1/projects.locations.keyRings.cryptoKeys)
+defines `keyAccessJustificationsPolicy`, its effect on sign operations when
+enforced, and absence as the default posture that permits all justification
+codes.
 
 Google's
 [`Verifying attestations`](https://cloud.google.com/kms/docs/attest-key)
@@ -878,13 +954,18 @@ The IAM
 [`roles.get`](https://cloud.google.com/iam/docs/reference/rest/v1/projects.roles/get)
 reference defines the exact custom-role name, included permissions, stage,
 etag, and deletion fields. Policy Troubleshooter
-[`iam.troubleshoot` v3](https://cloud.google.com/policy-intelligence/docs/reference/policytroubleshooter/rest/v3/iam/troubleshoot)
-defines complete inherited allow/deny evaluation and the `CAN_ACCESS`,
-`CANNOT_ACCESS`, `UNKNOWN_INFO`, and `UNKNOWN_CONDITIONAL` states. Google's
-[`ConditionContext` resource fields](https://cloud.google.com/policy-intelligence/docs/reference/policytroubleshooter/rest/v3/iam/troubleshoot#conditioncontext)
+[`iam.troubleshoot` v3beta](https://cloud.google.com/policy-intelligence/docs/reference/policytroubleshooter/rest/v3beta/iam/troubleshoot)
+defines inherited allow/deny/PAB evaluation, the `CAN_ACCESS`, `CANNOT_ACCESS`,
+`UNKNOWN_INFO`, and `UNKNOWN_CONDITIONAL` states, and the exact PAB explanation
+states. Google's
+[`ConditionContext` resource fields](https://cloud.google.com/policy-intelligence/docs/reference/policytroubleshooter/rest/v3beta/iam/troubleshoot#conditioncontext)
 define the exact `resource.name`,
 `resource.service`, and `resource.type` inputs needed to evaluate the fixed IAM
 conditions rather than producing an unknown conditional result. Google's
+[`Troubleshoot IAM permissions`](https://cloud.google.com/policy-intelligence/docs/troubleshoot-access)
+guide distinguishes stable v3 allow/deny evaluation from v3beta
+allow/deny/PAB evaluation, identifies PAB troubleshooting as Preview, and names
+the organization-level visibility required for complete PAB results. Google's
 [`testIamPermissions`](https://cloud.google.com/kms/docs/reference/rest/v1/projects.locations.keyRings.cryptoKeys/testIamPermissions)
 reference explicitly says that method is not for authorization checking and
 may fail open, which is why it is prohibited as evidence.
@@ -906,8 +987,9 @@ replace them.
 
 Both snapshots require the exact CryptoKey and CryptoKeyVersion identities,
 asymmetric-sign purpose, `EC_SIGN_ED25519`, `HSM`, enabled state, no rotation,
-no primary field, no import posture, and the complete bounded attestation
-bundle.
+no primary field, no Key Access Justifications policy, no import posture, and
+the complete bounded attestation bundle. The absent policy is explicitly
+represented in both normalized snapshots.
 
 ### `ORA-003` — exact public-key extraction
 
@@ -935,12 +1017,15 @@ No other direct or inherited membership for either principal is accepted, and
 no second binding in the applicable hierarchy may carry a role containing
 `useToSign` for any principal.
 
-### `ORA-007` — complete effective allow/deny evidence
+### `ORA-007` — complete effective allow/deny/PAB evidence
 
-Every closed Policy Troubleshooter v3 tuple has the required overall state,
-complete visible policies and explanations, and no unknown, omitted, erroneous,
-or unexplained component. Every request includes the exact derived resource
-condition context; `testIamPermissions` is never called or consumed.
+Every closed Policy Troubleshooter v3beta tuple has the required overall state,
+complete visible allow/deny explanations, and the exact visible no-PAB posture:
+`PAB_ACCESS_STATE_NOT_ENFORCED`, an empty explained binding/policy list, and
+non-unspecified relevance. No unknown, omitted, erroneous, applicable-PAB, or
+unexplained component passes. Every request includes the exact derived resource
+condition context; stable v3 and `testIamPermissions` are never called or
+consumed.
 
 ### `ORA-008` — signer least privilege
 
@@ -970,8 +1055,9 @@ verification under the observed manifest-equal key.
 
 A returned admission requires exactly two supplied-clock calls. No invocation
 makes more than two. The successful interval is nonnegative and at most 180
-seconds; normalized snapshots A and B are equal; and result expiry is exactly
-30 seconds after the second observation.
+seconds; normalized snapshots A and B include equal explicit Key Access
+Justifications absence and equal complete v3beta PAB evidence; and result expiry
+is exactly 30 seconds after the second observation.
 
 ### `ORA-013` — immutable minimal output
 
@@ -1004,17 +1090,17 @@ and passes every named verification gate.
 | Invariant | Supported entry point and counterexample | Required result |
 | --- | --- | --- |
 | `ORA-001` | Future composition calls admission with noncanonical JSON, a sibling version, repeated role name, equal principals, 31-byte key, changed etag, or extra member. | Refuse before the first clock or network call. |
-| `ORA-002` | Observer client returns a software, disabled, imported, rotating, primary-bearing, wrong-purpose, wrong-algorithm, or differently named key/version. | Refuse; no probe and no admission. |
+| `ORA-002` | Observer client returns a software, disabled, imported, rotating, primary-bearing, Key Access Justifications policy-bearing, wrong-purpose, wrong-algorithm, or differently named key/version. | Refuse; no probe and no admission. |
 | `ORA-003` | `GetPublicKey` returns PEM, unspecified format, wrong name, wrong CRC, alternate DER, trailing byte, or another raw key. | Refuse before IAM evidence can become output. |
 | `ORA-004` | KMS returns a missing chain, oversized content, different format, reordered certificate chain, or bundle whose digest was not approved. | Refuse; HSM enum alone does not pass. |
 | `ORA-005` | IAM `roles.get` returns a changed etag, adds `destroy`, omits `get`, reports beta/disabled/deleted, or names an organization/predefined role. | Refuse the snapshot. |
 | `ORA-006` | Policy Troubleshooter shows an unconditional project grant, group-derived signer membership, a second read-only observer binding, multiple members in the expected binding, a prefix condition, or another principal/role able to sign the exact key. | Refuse even if all positive tuples say `CAN_ACCESS`. |
-| `ORA-007` | A request omits or changes the derived resource condition context, or the evidence reader lacks an ancestor policy or role permission and v3 returns `UNKNOWN_INFO`, missing policy text, null condition value, or an error. | Refuse; never substitute `testIamPermissions` or a KMS success. |
+| `ORA-007` | A request uses stable v3, omits or changes the derived resource condition context, receives an applicable/nonempty PAB explanation, or the evidence reader lacks an ancestor policy, role, PAB, principal-set, or policy-binding permission and v3beta returns unknown, missing policy text, null condition value, or an error. | Refuse; never substitute stable v3, `testIamPermissions`, or a KMS success. |
 | `ORA-008` | Signer is also granted KMS admin at the folder, while a deny currently blocks `destroy`. | Refuse the extra matched binding despite the negative tuple. |
 | `ORA-009` | Observer gains `useToSign`, set-IAM authority, or the signer role through another binding. | Refuse; role separation cannot be masked by a deny. |
 | `ORA-010` | Supported admission call reaches a fake signer that records a digest request, different bytes, retry object, second call, changed resource, or timeout. | Refuse and tests prove the exact one-call contract. |
 | `ORA-011` | HSM response has matching metadata and CRC but a signature from another Ed25519 key, wrong flags, wrong name, or 63 bytes. | Refuse without output. |
-| `ORA-012` | Policy changes after snapshot A, role description changes, key disables, clock decreases, interval exceeds 180 seconds, or expiry addition overflows. | Refuse; unequal snapshots or invalid time never return admission. |
+| `ORA-012` | An allow/deny/PAB policy or Key Access Justifications posture changes after snapshot A, a role description changes, the key disables, the clock decreases, the interval exceeds 180 seconds, or expiry addition overflows. | Refuse; unequal snapshots or invalid time never return admission. |
 | `ORA-013` | Caller attempts to obtain a policy body, client, mutable list, raw attestation, or certificate from a successful result. | The frozen public type has no such field. |
 | `ORA-014` | HTTP raises a detailed credential exception or KMS raises after the probe transition; a `KeyboardInterrupt` canary is also injected. | Ordinary error becomes fresh empty refusal; canary propagates. |
 | `ORA-015` | A proposed implementation reads an env var, opens a file, logs a policy, calls `setIamPolicy`, updates a key, imports authority issuer code, or adds `__main__`. | Architecture conformance fails. |
@@ -1037,7 +1123,8 @@ public boundaries, not private-field mutation or impossible runtime state.
 - strict manifest, resource, service-account, base64, digest, DER, CRC32C, and
   time validation;
 - exact KMS request/response validators;
-- bounded role and Policy Troubleshooter v3 JSON transport/parsing;
+- bounded role and Policy Troubleshooter v3beta allow/deny/PAB JSON
+  transport/parsing;
 - normalized complete snapshot construction and equality;
 - the fixed probe and independent Ed25519 verification; and
 - one public `admit_security_audit_observer_root(...)` function.
@@ -1075,12 +1162,12 @@ bind the same exact key/public key into issuer and verifier construction.
 ### 9.3 Why this is the smallest coherent solution
 
 KMS metadata alone cannot establish IAM least privilege. Direct IAM policy text
-alone omits inherited allow and deny evaluation. Policy Troubleshooter alone
-does not prove that the private key works or that its public key matches the
-manifest. A successful signing call alone does not show the named principal's
-complete effective authority. One snapshot cannot detect ordinary drift across
-the probe. `testIamPermissions` is explicitly unsuitable for authorization
-evidence.
+alone omits inherited allow, deny, and principal access boundary evaluation.
+Policy Troubleshooter alone does not prove that the private key works or that
+its public key matches the manifest. A successful signing call alone does not
+show the named principal's complete effective authority. One snapshot cannot
+detect ordinary drift across the probe. `testIamPermissions` is explicitly
+unsuitable for authorization evidence.
 
 The proposed module is therefore the minimum unit that binds all four facts:
 reviewed root identity, exact live KMS material, complete effective IAM, and
@@ -1097,8 +1184,8 @@ separated under the workspace trust-boundary policy.
 
 - one manifest is authority for expected identity;
 - one KMS version is authority for live key material;
-- one complete Policy Troubleshooter/role snapshot is authority for effective
-  IAM at each observation;
+- one complete Policy Troubleshooter v3beta allow/deny/PAB and role snapshot is
+  authority for effective IAM at each observation;
 - one fixed probe establishes private-key/public-key function;
 - one clock callable supplies exactly two time observations; and
 - one public function has the sole transition to a frozen admission.
@@ -1152,13 +1239,15 @@ Path 1 is the approved contract and later evidence record. Path 2 is the only
 production code. Path 3 documents only the non-mutating admission and explicit
 non-readiness. Path 4 contains focused deterministic tests. Path 5 registers
 the exact module budget, direct-import boundary, prohibited side effects,
-fixed probe/KMS/HTTP surfaces, and test glob without changing shared test-line
-or function limits. Path 6 is mechanical output only.
+and fixed probe/KMS/HTTP surfaces without registering a test glob or changing
+shared test-line or function limits. Path 6 is mechanical output only.
 
 The production module's architecture budget must equal its finished physical
-line count and be at most 700 lines. The focused test remains under the existing
-800-line per-test-file cap. No group budget, shared cap, dependency, lockfile,
-Dockerfile, workflow, migration, command module, or seventh path may change.
+line count and be at most 700 lines. The focused test remains the one exact path
+listed above; its physical line count is reported but is not governed by the
+shared `MAX_TEST_LINES` value. Phase B must not add that path to `TEST_GLOBS` or
+change a shared cap. No group budget, dependency, lockfile, Dockerfile,
+workflow, migration, command module, or seventh path may change.
 
 ### 11.3 Dependencies and ordering
 
@@ -1180,11 +1269,17 @@ reach through it to reuse raw clients or partial evidence.
    exact workload identity, proves there is no unaccounted user-managed
    service-account key, impersonation, token-creation, attachment, or alternate
    credential path, loads one approved manifest, constructs the independent
-   clients and trusted clock, refreshes this admission, rejects it at expiry,
-   binds its exact root into both issuer and verifier, and requires at least two
-   usable approvers in two independence domains. If credential custody and
-   runtime integration cannot remain one primary boundary, they must be two
-   ordered PRs rather than one mixed PR.
+   clients and trusted clock, pipelines staggered concurrent admission calls,
+   atomically replaces a current admission only with a newly completed one,
+   never extends an old expiry after refresh failure, binds its exact root into
+   both issuer and verifier, and requires at least two usable approvers in two
+   independence domains. It must account for the 165-second maximum sequential
+   call time and ensure a later call is already in flight when a 30-second
+   admission is published; starting one serialized refresh after publication is
+   insufficient. Before production it also performs the provider-currentness
+   and support-status gate in section 12. If credential custody and runtime
+   integration cannot remain one primary boundary, they must be two ordered PRs
+   rather than one mixed PR.
 2. A separate root-rotation and compromise-response decision defines manifest
    replacement, old/new handoff, revocation latency, and hostile evidence.
 3. The already recorded #192 sequence then continues with durable
@@ -1201,35 +1296,48 @@ this PR and becomes a separate prerequisite or follow-up.
 
 ## 12. Provisional design record
 
-Not provisional.
+The provider PAB-observation dependency is provisional. Google currently marks
+principal access boundary troubleshooting through v3beta as Preview and subject
+to its Pre-GA terms. Phase B may implement and deterministically test only the
+exact protocol pinned here, but Phase A approval or a later Phase B merge would
+not authorize production operation of that Preview dependency.
 
-The 30-second admission is an explicit security property, not a temporary
+Before production composition or deployment, a new provider-currentness gate
+must verify that v3beta still exposes the exact allow/deny/PAB response shape,
+the evidence reader still receives complete no-PAB evidence, and the provider
+support status is acceptable. If the shape changes, v3beta is removed, or its
+Pre-GA status is not accepted explicitly for production, a new decision must
+choose a supported evidence path. Stable v3 is not a fallback because it omits
+PAB evaluation.
+
+The 30-second admission remains an explicit security property, not a temporary
 cache guess. The pre-deployment AI-assisted approval workflow governing
 repository implementation is separately provisional and never authorizes
 deployment.
 
-A future provider protocol change that removes complete v3 allow/deny
+A future provider protocol change that removes complete allow/deny/PAB
 explanations, removes strict DER/CRC32C/HSM evidence, or changes supported HSM
 attestation formats requires a new design decision. A product requirement for
-immediate revocation, multiple simultaneous roots, another KMS, or a different
-custody architecture also requires a new decision rather than widening V1.
+immediate revocation, multiple simultaneous roots, another KMS, an enforced PAB,
+or a different custody architecture also requires a new decision rather than
+widening V1.
 
 ## 13. Traceability and verification
 
 | Invariant | Owning prospective code | Negative evidence | Smallest verification |
 | --- | --- | --- | --- |
 | `ORA-001` | manifest parser and derived identity types | malformed/canonical/size/member/resource/principal/key/etag matrix | focused constructor tests and shared resource vectors |
-| `ORA-002` | KMS metadata normalizer | wrong identity/purpose/algorithm/protection/state/import/rotation | typed fake response matrix for both snapshots |
+| `ORA-002` | KMS metadata normalizer | wrong identity/purpose/algorithm/protection/state/import/rotation or present Key Access Justifications policy | typed fake response and protobuf-presence matrix for both snapshots |
 | `ORA-003` | public-key response validator | format/name/CRC/SPKI/key mutation matrix | RFC 8410 vector plus existing test-only extraction oracle |
 | `ORA-004` | attestation bundle normalizer/digest | missing/oversized/reordered/changed bundle | exact canonical digest vectors for V1 and V2 formats |
 | `ORA-005` | role response parser | name/permission/stage/deleted/etag mutations | three-role closed matrix in snapshots A and B |
 | `ORA-006` | policy/binding normalizer | direct, inherited, group, second signer, wildcard, and condition mutations | complete-policy fixtures through public function |
-| `ORA-007` | v3 request/response parser | unknown/error/omission/tuple/explanation mutations and `testIamPermissions` canary | ten-tuple matrix plus AST/transport guard |
+| `ORA-007` | v3beta request/response parser | stable-v3 endpoint, PAB state/list/relevance, visibility, unknown/error/omission/tuple/explanation mutations, and `testIamPermissions` canary | ten-tuple allow/deny/PAB matrix plus AST/transport guard |
 | `ORA-008` | signer role/binding and tuple validators | metadata/mutation/IAM widening | exact role plus negative effective-access tests |
 | `ORA-009` | observer role/binding and tuple validators | sign/set-IAM widening or principal equality | exact role separation and negative access tests |
 | `ORA-010` | probe request builder and ordered transition | alternate message/resource/digest/retry/timeout/call count | captured KMS request and 0/1 probe-count tests |
 | `ORA-011` | probe response validator | type/name/HSM/flags/length/CRC/mismatched-key matrix | real Ed25519 signature vectors |
-| `ORA-012` | clock and snapshot equality transition | first/second time, overflow, duration, every A/B drift point | exact transition-prefix 0/1/2 clock counts and drift tests |
+| `ORA-012` | clock and snapshot equality transition | first/second time, overflow, duration, KAJ/PAB drift, and every other A/B drift point | exact transition-prefix 0/1/2 clock counts and drift tests |
 | `ORA-013` | frozen result constructor | public-field and mutability inspection | exact dataclass shape/value tests |
 | `ORA-014` | public wrapper | every ordinary dependency failure plus `KeyboardInterrupt` | empty args/string/context and propagation tests |
 | `ORA-015` | complete module and architecture guard | forbidden import/call/global/entrypoint mutations | AST conformance plus fake client effect ledger |
@@ -1243,8 +1351,9 @@ custody architecture also requires a new decision rather than widening V1.
 - every provider assertion is supported by current official Google Cloud
   documentation;
 - the design explicitly rejects `testIamPermissions` as authorization evidence;
-- the exact roles, conditions, tuple matrix, observation order, bounds, output,
-  and failure protocol are internally consistent;
+- the exact roles, conditions, allow/deny/PAB tuple matrix, absent Key Access
+  Justifications posture, observation order, bounds, output, and failure
+  protocol are internally consistent;
 - all prospective dependencies are already hash-pinned;
 - `python3 conformance/ofarm_pkg_contract_check.py` passes before every commit;
 - the draft pull request receives independent exact-head Phase A review;
@@ -1256,8 +1365,9 @@ custody architecture also requires a new decision rather than widening V1.
 
 - reproduce this invariant table before editing;
 - run the focused observer-root admission tests with the complete manifest,
-  KMS metadata, attestation, role, policy, tuple, probe, time, drift, failure,
-  and side-effect matrices;
+  KMS metadata, Key Access Justifications presence, attestation, role,
+  allow/deny/PAB policy, tuple, probe, time, drift, failure, and side-effect
+  matrices;
 - compare the shared KMS resource grammar, CRC32C vector, RFC 8410 extraction,
   and raw Ed25519 request/response behavior with existing test-only oracles
   without creating a production import;
@@ -1272,9 +1382,9 @@ custody architecture also requires a new decision rather than widening V1.
 - regenerate the review-baseline inventory mechanically;
 - run `python3 conformance/ofarm_pkg_contract_check.py` before every commit;
 - inspect the exact six-path diff; prove the module budget equals finished
-  physical lines and is at most 700; prove the test is below 800 lines; and
-  prove no group budget, shared cap, dependency, lockfile, migration, command,
-  or seventh path changed;
+  physical lines and is at most 700; report the focused test's physical line
+  count without adding its path to `TEST_GLOBS`; and prove no group budget,
+  shared cap, dependency, lockfile, migration, command, or seventh path changed;
 - obtain hosted exact-head conformance and required architecture lanes; and
 - receive bounded implementation review with zero demonstrated in-scope
   Blockers before merge.
@@ -1297,8 +1407,10 @@ are deliberately deferred and must not be answered by Phase B:
 - exact signer credential custody, absence of user-managed keys or
   impersonation/attachment paths, and how the future runtime obtains its
   independent clients and trusted clock;
-- refresh cadence, startup/readiness integration, failure publication, and
-  atomic issuer/verifier handoff;
+- refresh cadence inside the required overlap window, startup/readiness
+  integration, failure publication, and atomic issuer/verifier handoff;
+- production acceptance of the current Preview v3beta PAB dependency or its
+  supported replacement after the required provider-currentness check;
 - root rotation, compromise response, and whether a later version supports
   simultaneous roots;
 - approver provisioning and the two-domain usability gate; and
@@ -1306,10 +1418,31 @@ are deliberately deferred and must not be answered by Phase B:
 
 ### 14.2 Review disposition
 
-- **Initial design posture:** one non-provisioning admission binds a reviewed manifest
-  to exact live KMS material, exact custom roles, complete effective allow/deny
-  evidence, one fixed live probe, double collection, and a short frozen result.
-- **Blockers:** none known before independent exact-head review.
+- **Initial design posture:** one non-provisioning admission binds a reviewed
+  manifest to exact live KMS material, exact custom roles, complete effective
+  allow/deny evidence, one fixed live probe, double collection, and a short
+  frozen result.
+- **Exact reviewed head:**
+  `96a2a2dfb4fddd09a12a3c5818cb820518c31f6d` received review records
+  `5326539196` and `4959921846`.
+- **Accepted Blocker — test envelope:** removed the proposed `TEST_GLOBS`
+  registration and 800-line test cap while retaining one exact test path, the
+  700-line production-module cap, all architecture guards, and the six-path
+  envelope.
+- **Accepted Blocker — principal access boundaries:** changed all ten queries
+  from stable v3 to v3beta; V1 now requires the complete exact no-PAB posture in
+  both snapshots and refuses applicable, unknown, omitted, or malformed PAB
+  evidence. The Preview dependency is recorded in section 12.
+- **Accepted Blocker — Key Access Justifications:** V1 now requires the
+  CryptoKey policy field to be absent and records that absence explicitly in
+  both normalized snapshots.
+- **Accepted should-fix — currentness:** recorded that the 165-second maximum
+  sequential collection time exceeds the 30-second result lifetime and made
+  overlapping refresh, atomic replacement, and non-extension after failure
+  requirements for later composition.
+- **Current disposition:** all three demonstrated Blockers are addressed in the
+  corrected contract; independent exact-corrected-head confirmation is still
+  required before a live decision card may be displayed.
 - **Follow-ups:** section 11.4 only.
 - **Preferences:** none recorded.
 
@@ -1357,8 +1490,10 @@ deployment, release, security waiver, or issue #192 closure.
 - **Decision:** `ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, version
   `1`.
 - **Draft pull request:** https://github.com/samovers/OFARM2/pull/321.
-- **Exact reviewed Phase A head:** none yet; the immutable head is recorded in
-  the PR review request and independent review comments rather than
+- **Exact reviewed Phase A head:**
+  `96a2a2dfb4fddd09a12a3c5818cb820518c31f6d`; its two review records report
+  three demonstrated Blockers. The corrected immutable head is recorded in its
+  PR re-review request and independent review comments rather than
   self-referentially inside that same commit.
 - **Complete live card:** not yet displayed.
 - **Task-user Phase B approval:** not supplied.
