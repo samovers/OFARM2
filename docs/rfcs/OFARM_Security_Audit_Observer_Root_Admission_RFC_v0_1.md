@@ -1,8 +1,10 @@
 # OFARM Security-Audit Observer-Root Admission — Phase A Contract v0.1
 
-**Status:** Phase A draft bound to PR #321; exact-head reviews of
-`96a2a2dfb4fddd09a12a3c5818cb820518c31f6d` found three Blockers; corrected-
-head review is pending; Phase B repository implementation, deployment, and
+**Status:** Phase A contract approved for PR #321 after two independent
+zero-Blocker reviews of corrected head
+`3aafb333f079931843bee330838ecd911e5fb7da`; Phase B repository implementation
+is authorized and present in the draft PR, but merge remains gated on hosted
+exact-head checks and zero-Blocker implementation review; deployment and
 production operation are not authorized
 
 **Draft pull request:** https://github.com/samovers/OFARM2/pull/321
@@ -1422,9 +1424,14 @@ are deliberately deferred and must not be answered by Phase B:
   manifest to exact live KMS material, exact custom roles, complete effective
   allow/deny evidence, one fixed live probe, double collection, and a short
   frozen result.
-- **Exact reviewed head:**
+- **Initial reviewed head:**
   `96a2a2dfb4fddd09a12a3c5818cb820518c31f6d` received review records
-  `5326539196` and `4959921846`.
+  `5326539196` and `4959921846`, which demonstrated the three Blockers recorded
+  below.
+- **Exact approved Phase A head:**
+  `3aafb333f079931843bee330838ecd911e5fb7da` received independent review records
+  `5327314658` and `4960437577`; both reported zero demonstrated in-scope
+  Blockers.
 - **Accepted Blocker — test envelope:** removed the proposed `TEST_GLOBS`
   registration and 800-line test cap while retaining one exact test path, the
   700-line production-module cap, all architecture guards, and the six-path
@@ -1441,8 +1448,11 @@ are deliberately deferred and must not be answered by Phase B:
   overlapping refresh, atomic replacement, and non-extension after failure
   requirements for later composition.
 - **Current disposition:** all three demonstrated Blockers are addressed in the
-  corrected contract; independent exact-corrected-head confirmation is still
-  required before a live decision card may be displayed.
+  corrected contract; both exact-corrected-head reviews reported zero
+  demonstrated in-scope Blockers; the complete live decision card was
+  displayed and the task user supplied its exact approval sentence. Phase B is
+  authorized only within section 11.2 and remains subject to every section
+  13.2 merge gate.
 - **Follow-ups:** section 11.4 only.
 - **Preferences:** none recorded.
 
@@ -1467,19 +1477,19 @@ card's approval sentence can authorize Phase B. Generic approval, current
 publication authority, an AI message, delegation, another task, or a summary of
 lost task items does not authorize implementation.
 
-The prospective exact approval form is:
+The required exact approval form is:
 
 ```text
 I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001 version 1.
 ```
 
-If later shown in a complete live card and supplied as the exact entire later
-task-user message, that approval would authorize only in-envelope repository
+When shown in a complete live card and supplied as the exact entire later
+task-user message, that approval authorizes only in-envelope repository
 implementation, tests, documentation, mechanical inventory regeneration,
 review handling, commits, pushes, and eventual merge in the one named draft
 pull request after every gate passes.
 
-It would authorize no cloud resource or IAM mutation, credential act,
+It authorizes no cloud resource or IAM mutation, credential act,
 attestation-verification ceremony, manifest publication or deployment, runtime
 composition, readiness, root rotation, approver key, approval statement,
 database admission, migration, temporary login, export, output delivery,
@@ -1491,10 +1501,15 @@ deployment, release, security waiver, or issue #192 closure.
   `1`.
 - **Draft pull request:** https://github.com/samovers/OFARM2/pull/321.
 - **Exact reviewed Phase A head:**
-  `96a2a2dfb4fddd09a12a3c5818cb820518c31f6d`; its two review records report
-  three demonstrated Blockers. The corrected immutable head is recorded in its
-  PR re-review request and independent review comments rather than
-  self-referentially inside that same commit.
-- **Complete live card:** not yet displayed.
-- **Task-user Phase B approval:** not supplied.
-- **Evidence posture:** Phase B is stopped.
+  `3aafb333f079931843bee330838ecd911e5fb7da`; independent review records
+  `5327314658` and `4960437577` both report zero demonstrated in-scope
+  Blockers.
+- **Complete live card:** displayed in this Codex task after both exact-head
+  reviews and before approval.
+- **Task-user Phase B approval:** supplied as the exact entire later message:
+  `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001 version 1.`
+- **Evidence posture:** Phase B repository implementation, tests,
+  documentation, mechanical inventory regeneration, review handling, commits,
+  pushes, and eventual merge are authorized inside the exact six-path envelope
+  after every gate passes. All excluded production and follow-up authorities
+  remain unauthorized.
