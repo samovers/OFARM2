@@ -73,6 +73,7 @@ MODULE_BUDGETS = {
     "deployment/postgresql/security_audit_hmac_retirement.py": 450,
     "deployment/postgresql/security_audit_approval.py": 623,
     "deployment/postgresql/security_audit_authority.py": 388,
+    "deployment/postgresql/security_audit_observer_root_admission.py": 698,
 }
 COMMAND_MODULE_BUDGETS = {
     "deployment/postgresql/run_security_audit_hmac_retirement.py": 160,
@@ -218,6 +219,7 @@ DIRECT_IMPORT_BOUNDS = {
         }
     ),
     "deployment/postgresql/security_audit_authority.py": frozenset(),
+    "deployment/postgresql/security_audit_observer_root_admission.py": frozenset(),
 }
 SECURITY_AUDIT_GAP_FORBIDDEN_IMPORTS = frozenset(
     {
@@ -351,6 +353,78 @@ SECURITY_AUDIT_AUTHORITY_FORBIDDEN_NAMES = frozenset(
         "token_bytes",
         "randbytes",
     }
+)
+SECURITY_AUDIT_OBSERVER_ROOT_IMPORT_STATEMENTS = frozenset(
+    {
+        ("__future__", 0, (("annotations", None),)),
+        (
+            "base64",
+            0,
+            (
+                ("b64decode", None),
+                ("b64encode", None),
+                ("urlsafe_b64decode", None),
+                ("urlsafe_b64encode", None),
+            ),
+        ),
+        ("binascii", 0, (("Error", "BinasciiError"),)),
+        ("collections.abc", 0, (("Mapping", None),)),
+        ("dataclasses", 0, (("dataclass", None),)),
+        ("hashlib", 0, (("sha256", None),)),
+        ("json", 0, (("dumps", None), ("loads", None))),
+        ("re", 0, (("fullmatch", None),)),
+        ("typing", 0, (("Protocol", None),)),
+        (
+            "cryptography.hazmat.primitives.asymmetric.ed25519",
+            0,
+            (("Ed25519PublicKey", None),),
+        ),
+        ("google.cloud", 0, (("kms_v1", None),)),
+    }
+)
+SECURITY_AUDIT_OBSERVER_ROOT_FORBIDDEN_NAMES = frozenset(
+    {
+        "__import__",
+        "breakpoint",
+        "compile",
+        "connect",
+        "create_crypto_key",
+        "create_crypto_key_version",
+        "create_role",
+        "delete",
+        "environ",
+        "eval",
+        "exec",
+        "getenv",
+        "input",
+        "logging",
+        "open",
+        "popen",
+        "print",
+        "run",
+        "set_iam_policy",
+        "sleep",
+        "socket",
+        "system",
+        "test_iam_permissions",
+        "time",
+        "time_ns",
+        "token_bytes",
+        "traceback",
+        "update_crypto_key",
+        "update_crypto_key_version",
+        "update_role",
+        "uuid1",
+        "uuid4",
+    }
+)
+SECURITY_AUDIT_OBSERVER_ROOT_PUBLIC_SURFACE = (
+    "SecurityAuditObserverRootAdmission",
+    "SecurityAuditObserverRootAdmissionRefused",
+    "admit_security_audit_observer_root",
+)
+SECURITY_AUDIT_OBSERVER_ROOT_PROBE = (
+    b"\x00OFARM2-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-V1\x00"
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 _TENANT_UOW_MODULE = "kernel.tenant_uow"
@@ -2740,6 +2814,308 @@ def _check_security_audit_authority_surface(
     ]
 
 
+def _observer_root_literal(
+    tree: ast.Module,
+    name: str,
+) -> object:
+    assignments = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == name
+    ]
+    if len(assignments) != 1:
+        raise ValueError
+    return ast.literal_eval(assignments[0].value)
+
+
+def _observer_root_function(
+    tree: ast.Module,
+    name: str,
+) -> ast.FunctionDef | None:
+    functions = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == name
+    ]
+    return functions[0] if len(functions) == 1 else None
+
+
+def _observer_root_rpc_call_violations(tree: ast.Module) -> list[str]:
+    violations = []
+    expected = {
+        "get_crypto_key": ("_crypto_key", "client"),
+        "get_crypto_key_version": ("_crypto_key_version", "client"),
+        "get_public_key": ("_public_key", "client"),
+        "asymmetric_sign": ("_probe", "signer"),
+    }
+    for method, (function_name, receiver) in expected.items():
+        function = _observer_root_function(tree, function_name)
+        calls = [] if function is None else [
+            node
+            for node in ast.walk(function)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == receiver
+            and node.func.attr == method
+        ]
+        all_calls = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == method
+        ]
+        if len(calls) != 1 or calls != all_calls:
+            violations.append(f"exactly one direct {method} call is required")
+            continue
+        call = calls[0]
+        keywords = {keyword.arg: keyword.value for keyword in call.keywords}
+        if call.args or set(keywords) != {"request", "retry", "timeout"}:
+            violations.append(f"{method} call shape differs")
+        elif (
+            not isinstance(keywords["request"], ast.Name)
+            or keywords["request"].id != "request"
+            or not isinstance(keywords["retry"], ast.Constant)
+            or keywords["retry"].value is not None
+            or not isinstance(keywords["timeout"], ast.Name)
+            or keywords["timeout"].id != "_KMS_TIMEOUT"
+        ):
+            violations.append(f"{method} retry or timeout differs")
+    return violations
+
+
+def _observer_root_request_violations(tree: ast.Module) -> list[str]:
+    violations = []
+    expected = {
+        "GetCryptoKeyRequest": {"name"},
+        "GetCryptoKeyVersionRequest": {"name"},
+        "GetPublicKeyRequest": {"name", "public_key_format"},
+        "AsymmetricSignRequest": {"data", "data_crc32c", "name"},
+    }
+    for constructor, fields in expected.items():
+        calls = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "kms_v1"
+            and node.func.attr == constructor
+        ]
+        if len(calls) != 1:
+            violations.append(f"exactly one {constructor} constructor is required")
+            continue
+        call = calls[0]
+        keywords = {keyword.arg: keyword.value for keyword in call.keywords}
+        if call.args or set(keywords) != fields:
+            violations.append(f"{constructor} field set differs")
+            continue
+        if constructor == "AsymmetricSignRequest" and (
+            not isinstance(keywords["data"], ast.Name)
+            or keywords["data"].id != "_PROBE"
+            or not isinstance(keywords["data_crc32c"], ast.Call)
+            or not isinstance(keywords["data_crc32c"].func, ast.Name)
+            or keywords["data_crc32c"].func.id != "_crc32c"
+            or len(keywords["data_crc32c"].args) != 1
+            or not isinstance(keywords["data_crc32c"].args[0], ast.Name)
+            or keywords["data_crc32c"].args[0].id != "_PROBE"
+        ):
+            violations.append("AsymmetricSignRequest probe authority differs")
+        if constructor == "GetPublicKeyRequest" and not (
+            isinstance(keywords["public_key_format"], ast.Attribute)
+            and keywords["public_key_format"].attr == "DER"
+        ):
+            violations.append("GetPublicKeyRequest does not explicitly require DER")
+    return violations
+
+
+def _observer_root_http_call_violations(tree: ast.Module) -> list[str]:
+    violations = []
+    expected = {
+        "get": ("_role", {"allow_redirects", "headers", "stream", "timeout"}),
+        "post": (
+            "_access",
+            {"allow_redirects", "data", "headers", "stream", "timeout"},
+        ),
+    }
+    for method, (function_name, keyword_names) in expected.items():
+        function = _observer_root_function(tree, function_name)
+        calls = [] if function is None else [
+            node
+            for node in ast.walk(function)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "session"
+            and node.func.attr == method
+        ]
+        if len(calls) != 1:
+            violations.append(f"exactly one direct evidence-session {method} call is required")
+            continue
+        call = calls[0]
+        keywords = {keyword.arg: keyword.value for keyword in call.keywords}
+        if len(call.args) != 1 or set(keywords) != keyword_names:
+            violations.append(f"evidence-session {method} call shape differs")
+        elif (
+            not isinstance(keywords["allow_redirects"], ast.Constant)
+            or keywords["allow_redirects"].value is not False
+            or not isinstance(keywords["stream"], ast.Constant)
+            or keywords["stream"].value is not True
+            or not isinstance(keywords["timeout"], ast.Name)
+            or keywords["timeout"].id != "_HTTP_TIMEOUT"
+        ):
+            violations.append(f"evidence-session {method} bounds differ")
+    strings = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    ]
+    iam = "https://iam.googleapis.com/v1/"
+    troubleshooter = (
+        "https://policytroubleshooter.googleapis.com/v3beta/iam:troubleshoot"
+    )
+    if strings.count(iam) != 1 or strings.count(troubleshooter) != 1:
+        violations.append("exact evidence endpoints differ")
+    if any(
+        "policytroubleshooter.googleapis.com/" in value
+        and value != troubleshooter
+        for value in strings
+    ):
+        violations.append("alternate Policy Troubleshooter endpoint is present")
+    if any("testIamPermissions" in value for value in strings):
+        violations.append("testIamPermissions evidence path is present")
+    return violations
+
+
+def _observer_root_clock_violations(tree: ast.Module) -> list[str]:
+    function = _observer_root_function(tree, "_admit")
+    if function is None:
+        return ["exact _admit transition is missing"]
+    calls = [
+        node
+        for node in ast.walk(function)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "clock"
+    ]
+    all_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "clock"
+    ]
+    if len(calls) != 2 or calls != all_calls or any(
+        call.args or call.keywords for call in calls
+    ):
+        return ["exactly two zero-argument supplied-clock calls are required"]
+    return []
+
+
+def _security_audit_observer_root_surface_violations(
+    tree: ast.Module,
+) -> list[str]:
+    violations = []
+    imports = []
+    refusal_calls = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            violations.append(f"{node.lineno}: whole-module import is prohibited")
+        elif isinstance(node, ast.ImportFrom):
+            statement = _normalized_import_statement(node)
+            imports.append(statement)
+            if statement not in SECURITY_AUDIT_OBSERVER_ROOT_IMPORT_STATEMENTS:
+                violations.append(
+                    f"{node.lineno}: import statement is outside exact allowlist"
+                )
+        name = None
+        if isinstance(node, ast.Name):
+            name = node.id
+        elif isinstance(node, ast.Attribute):
+            name = node.attr
+        if name in SECURITY_AUDIT_OBSERVER_ROOT_FORBIDDEN_NAMES:
+            violations.append(f"{node.lineno}: prohibited observer-root surface {name!r}")
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "SecurityAuditObserverRootAdmissionRefused"
+        ):
+            refusal_calls.append(node)
+    if (
+        len(imports) != len(SECURITY_AUDIT_OBSERVER_ROOT_IMPORT_STATEMENTS)
+        or frozenset(imports) != SECURITY_AUDIT_OBSERVER_ROOT_IMPORT_STATEMENTS
+    ):
+        violations.append("exact import statement set is incomplete or duplicated")
+    if len(refusal_calls) != 1 or refusal_calls[0].args or refusal_calls[0].keywords:
+        violations.append("fixed observer-root refusal construction differs")
+    expected_literals = {
+        "_MANIFEST_SCHEMA": (
+            "ofarm.security-audit-observer-root-admission-manifest.v1"
+        ),
+        "_ATTESTATION_DOMAIN": (
+            b"OFARM2_SECURITY_AUDIT_OBSERVER_ROOT_ATTESTATION_V1\x00"
+        ),
+        "_EVIDENCE_DOMAIN": (
+            b"OFARM2_SECURITY_AUDIT_OBSERVER_ROOT_EVIDENCE_V1\x00"
+        ),
+        "_KMS_TIMEOUT": 5.0,
+        "_HTTP_TIMEOUT": 5.0,
+        "_MAX_SPAN_US": 180_000_000,
+        "_LIFETIME_US": 30_000_000,
+        "_MAX_UNIX_US": 9_223_372_036_854_775_807,
+        "_MAX_MANIFEST": 8_192,
+        "_MAX_HTTP": 1_048_576,
+        "_MAX_ATTESTATION": 262_144,
+        "_MAX_CERTIFICATES": 16,
+        "_MAX_CERTIFICATE": 32_768,
+        "_PROBE": SECURITY_AUDIT_OBSERVER_ROOT_PROBE,
+        "__all__": SECURITY_AUDIT_OBSERVER_ROOT_PUBLIC_SURFACE,
+    }
+    for name, expected in expected_literals.items():
+        try:
+            observed = _observer_root_literal(tree, name)
+        except (ValueError, TypeError):
+            observed = object()
+        if type(observed) is not type(expected) or observed != expected:
+            violations.append(f"{name} literal differs")
+    if len(SECURITY_AUDIT_OBSERVER_ROOT_PROBE) != 50:
+        violations.append("architecture-owned observer-root probe length differs")
+    if any(
+        isinstance(node, ast.If)
+        and any(
+            isinstance(member, ast.Name) and member.id == "__name__"
+            for member in ast.walk(node.test)
+        )
+        for node in ast.walk(tree)
+    ):
+        violations.append("executable module entry point is prohibited")
+    violations.extend(_observer_root_rpc_call_violations(tree))
+    violations.extend(_observer_root_request_violations(tree))
+    violations.extend(_observer_root_http_call_violations(tree))
+    violations.extend(_observer_root_clock_violations(tree))
+    return sorted(set(violations))
+
+
+def _check_security_audit_observer_root_surface(
+    snapshot: PythonSourceSnapshotV1,
+    trees: collections.abc.Mapping[str, ast.Module],
+) -> list[str]:
+    relative = (
+        "deployment/postgresql/security_audit_observer_root_admission.py"
+    )
+    module = snapshot.modules_by_relative_path[relative].module_name
+    return [
+        f"{relative}:{violation}"
+        for violation in _security_audit_observer_root_surface_violations(
+            trees[module]
+        )
+    ]
+
+
 def main() -> int:
     try:
         snapshot = build_python_source_snapshot(ROOT)
@@ -2755,6 +3131,7 @@ def main() -> int:
     failures.extend(_check_security_audit_gap_surface(snapshot, trees))
     failures.extend(_check_security_audit_approval_surface(snapshot, trees))
     failures.extend(_check_security_audit_authority_surface(snapshot, trees))
+    failures.extend(_check_security_audit_observer_root_surface(snapshot, trees))
     for relative, budget in MODULE_BUDGETS.items():
         failures.extend(_check_production(snapshot, trees, relative, budget))
     for relative, budget in COMMAND_MODULE_BUDGETS.items():
