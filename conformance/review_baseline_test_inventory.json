@@ -12961,6 +12961,11 @@
       "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_deny_policy_schema_rule_order_and_explanations_are_bound",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_deny_policy_without_policy_text_refuses",
       "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
       "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
@@ -16986,8 +16991,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "dc7ba1808245431a399e51555cd738a2b06cfd3a83d833b1326d49d0e3eb9fc4",
-  "entryCount": 3397,
+  "entriesSha256": "bddefb34f3b9f6d77c830205ffab0aed9a21bf7c1a69ee2928d2e909a3d54908",
+  "entryCount": 3398,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

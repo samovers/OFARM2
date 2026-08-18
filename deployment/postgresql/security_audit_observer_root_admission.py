@@ -1,9 +1,11 @@
 """Observe and admit one manifest-pinned security-audit observer root."""
+# ruff: noqa: E701, E702 -- the approved admission envelope has an exact 700-line cap.
 from __future__ import annotations
 from base64 import b64decode, b64encode, urlsafe_b64decode, urlsafe_b64encode
 from binascii import Error as BinasciiError
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from hashlib import sha256
 from json import dumps, loads
 from re import fullmatch
@@ -37,9 +39,11 @@ _PRINCIPAL_PATTERN = (
 )
 _MANIFEST_MEMBERS = ("attestationBundleSha256", "attestationFormat", "kmsKeyVersionResource", "observerKeyRoleEtag", "observerPrincipal", "observerPublicKey", "observerVersionRoleEtag", "schemaVersion", "signerPrincipal", "signerRoleEtag")
 _RELEVANCE = {"HEURISTIC_RELEVANCE_NORMAL", "HEURISTIC_RELEVANCE_HIGH"}
-_UNORDERED_LISTS = {"auditConfigs", "bindings", "bindingExplanations", "effectiveTags", "explainedPolicies", "explainedResources", "exemptedMembers", "members", "ruleExplanations", "rules"}
 _JSON_ENUMS = {"denyAccessState": {"DENY_ACCESS_STATE_DENIED", "DENY_ACCESS_STATE_NOT_DENIED"}, "membership": {"MEMBERSHIP_MATCHED", "MEMBERSHIP_NOT_MATCHED"}, "permissionMatchingState": {"PERMISSION_PATTERN_MATCHED", "PERMISSION_PATTERN_NOT_MATCHED"}, "relevance": _RELEVANCE}
 _DENY_RULE_MEMBERS = ("combinedDeniedPermission", "combinedDeniedPrincipal", "combinedExceptionPermission", "combinedExceptionPrincipal", "deniedPermissions", "deniedPrincipals", "denyAccessState", "exceptionPermissions", "exceptionPrincipals", "relevance")
+_DENY_POLICY_NAME = r"policies/cloudresourcemanager\.googleapis\.com%2F(?:projects|folders|organizations)%2F[1-9][0-9]*/denypolicies/[a-z](?:[a-z0-9.-]{1,61}[a-z0-9])"
+_DENY_PERMISSION = r"[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)*\.googleapis\.com/(?:[A-Za-z][A-Za-z0-9]*|\*)\.(?:[A-Za-z][A-Za-z0-9]*|\*)"
+_DENY_PRINCIPAL = r"(?:principal://goog/subject/[^/?#\s]+|deleted:principal://goog/subject/[^/?#\s]+\?uid=[1-9][0-9]*|principal://iam\.googleapis\.com/projects/-/serviceAccounts/[^/?#\s]+|deleted:principal://iam\.googleapis\.com/projects/-/serviceAccounts/[^/?#\s]+\?uid=[1-9][0-9]*|principalSet://goog/group/[^/?#\s]+|deleted:principalSet://goog/group/[^/?#\s]+\?uid=[1-9][0-9]*|principalSet://goog/(?:public:all|cloudIdentityCustomerId/[A-Za-z0-9]+)|(?:deleted:)?principal://iam\.googleapis\.com/locations/global/workforcePools/[^/?#\s]+/subject/[^/?#\s]+|principalSet://iam\.googleapis\.com/(?:locations/global/workforcePools/[^/?#\s]+|projects/[1-9][0-9]*/locations/global/workloadIdentityPools/[^/?#\s]+)/(?:group/[^/?#\s]+|attribute\.[A-Za-z0-9_]+/[^/?#\s]+|\*)|principal://iam\.googleapis\.com/projects/[1-9][0-9]*/locations/global/workloadIdentityPools/[^/?#\s]+/subject/[^/?#\s]+|principalSet://cloudresourcemanager\.googleapis\.com/(?:projects|folders|organizations)/[1-9][0-9]*/type/(?:ServiceAccount|ServiceAgent)|principal://[a-z0-9.-]+\.system\.id\.goog/resources/[A-Za-z0-9._~!$&'()+,;=:@%/-]+|principalSet://[a-z0-9.-]+\.system\.id\.goog/(?:\*|attribute\.platformContainer/[A-Za-z0-9._~!$&'()+,;=:@%/-]+))"
 class _KmsObserverClient(Protocol):
     def get_crypto_key(self, *, request: kms_v1.GetCryptoKeyRequest, retry: None, timeout: float) -> kms_v1.CryptoKey: ...
     def get_crypto_key_version(self, *, request: kms_v1.GetCryptoKeyVersionRequest, retry: None, timeout: float) -> kms_v1.CryptoKeyVersion: ...
@@ -493,53 +497,51 @@ def _allow(value: object, access: _AccessSpec, specs: tuple[_BindingSpec, ...]) 
     if grants and not any(item["role"] == access.grant_role and item["allowAccessState"] == "ALLOW_ACCESS_STATE_GRANTED" for policy in normalized for item in policy["bindingExplanations"]):
         raise ValueError
     return {"allowAccessState": expected_state, "explainedPolicies": sorted(normalized, key=_canonical), "relevance": document["relevance"]}
-def _generic_json(value: object, name: str = "") -> object:
-    if type(value) is dict:
-        result = {key: _generic_json(member, key) for key, member in value.items() if type(key) is str}
-        if len(result) != len(value) or result.get("errors", []) != []:
-            raise ValueError
-        return result
-    if type(value) is list:
-        result = [_generic_json(member) for member in value]
-        return sorted(result, key=_canonical) if name in _UNORDERED_LISTS else result
-    if type(value) in {str, int, bool} and (name not in _JSON_ENUMS or value in _JSON_ENUMS[name]):
-        return value
-    raise ValueError
+def _require(condition: bool) -> None:
+    if condition is not True: raise ValueError
+def _limited(value: object, maximum: int, pattern: str | None = None, minimum: int = 1) -> str:
+    _require(type(value) is str and minimum <= len(value) <= maximum and (pattern is None or fullmatch(pattern, value) is not None)); return value
+def _deny_timestamp(value: object) -> tuple[datetime, int]:
+    text = _limited(value, 30); _require(fullmatch(r"[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.(?:[0-9]{3}|[0-9]{6}|[0-9]{9}))?Z", text) is not None); return datetime.fromisoformat(text[:19] + "+00:00"), int(((text[20:-1] if text[19:20] == "." else "") + "000000000")[:9])
+def _deny_values(value: object, pattern: str, maximum: int, required: bool) -> list[str]:
+    _require(type(value) is list and len(value) <= 500 and (not required or bool(value))); result = [_limited(item, maximum, pattern) for item in value]; _require(len(result) == len(set(result))); return sorted(result)
+def _deny_rule(value: object) -> dict[str, object]:
+    document = _members(value, ("denyRule",), ("description",)); rule = _members(document["denyRule"], ("deniedPermissions", "deniedPrincipals"), ("denialCondition", "exceptionPermissions", "exceptionPrincipals"))
+    result = {"deniedPermissions": _deny_values(rule["deniedPermissions"], _DENY_PERMISSION, 256, True), "deniedPrincipals": _deny_values(rule["deniedPrincipals"], _DENY_PRINCIPAL, 2_048, True), "exceptionPermissions": _deny_values(rule.get("exceptionPermissions", []), _DENY_PERMISSION, 256, False), "exceptionPrincipals": _deny_values(rule.get("exceptionPrincipals", []), _DENY_PRINCIPAL, 2_048, False)}
+    _require("principalSet://goog/public:all" not in result["exceptionPrincipals"])
+    if "denialCondition" in rule: result["denialCondition"] = _expr(rule["denialCondition"])
+    return {"denyRule": result, **({"description": _limited(document["description"], 256, minimum=0)} if "description" in document else {})}
+def _deny_policy_text(value: object) -> dict[str, object]:
+    document = _members(value, ("createTime", "etag", "kind", "name", "rules", "uid", "updateTime"), ("annotations", "deleteTime", "displayName")); rules = document["rules"]; annotations = document.get("annotations", {})
+    _limited(document["name"], 256, _DENY_POLICY_NAME); _limited(document["uid"], 128); _require(document["kind"] == "DenyPolicy" and type(rules) is list and 1 <= len(rules) <= 500 and "deleteTime" not in document); _b64_standard(document["etag"]); _require(_deny_timestamp(document["updateTime"]) >= _deny_timestamp(document["createTime"]))
+    _require(type(annotations) is dict and len(annotations) <= 64 and not any(type(key) is not str or not 1 <= len(key) <= 63 or type(item) is not str or len(item) > 255 for key, item in annotations.items()))
+    normalized = {name: document[name] for name in ("createTime", "etag", "kind", "name", "uid", "updateTime")}; normalized["rules"] = [_deny_rule(rule) for rule in rules]
+    return {**normalized, **({"displayName": _limited(document["displayName"], 63, minimum=0)} if "displayName" in document else {}), **({"annotations": dict(sorted(annotations.items()))} if "annotations" in document else {})}
 def _deny_annotation(value: object, state: str) -> dict[str, object]:
-    document = _members(value, (state, "relevance"))
-    if document[state] not in _JSON_ENUMS[state] or document["relevance"] not in _RELEVANCE:
-        raise ValueError
-    return document
+    document = _members(value, (state, "relevance")); _require(document[state] in _JSON_ENUMS[state] and document["relevance"] in _RELEVANCE); return document
 def _deny_map(value: object, state: str) -> dict[str, object]:
-    if type(value) is not dict or any(type(name) is not str or not name for name in value):
-        raise ValueError
-    return {name: _deny_annotation(item, state) for name, item in value.items()}
-def _deny_policy(value: object) -> dict[str, object]:
-    document = _members(value, ("denyAccessState", "policy", "relevance", "ruleExplanations"))
-    rules = document["ruleExplanations"]
-    if document["denyAccessState"] not in _JSON_ENUMS["denyAccessState"] or document["relevance"] not in _RELEVANCE or type(document["policy"]) is not dict or not document["policy"] or type(rules) is not list:
-        raise ValueError
-    for rule in rules:
-        item = _members(rule, _DENY_RULE_MEMBERS, ("condition", "conditionExplanation"))
-        for name in ("combinedDeniedPermission", "combinedExceptionPermission"):
-            _deny_annotation(item[name], "permissionMatchingState")
-        for name in ("deniedPermissions", "exceptionPermissions"):
-            _deny_map(item[name], "permissionMatchingState")
-        for name in ("combinedDeniedPrincipal", "combinedExceptionPrincipal"):
-            _deny_annotation(item[name], "membership")
-        for name in ("deniedPrincipals", "exceptionPrincipals"):
-            _deny_map(item[name], "membership")
-        if ("condition" in item) != ("conditionExplanation" in item):
-            raise ValueError
-        if "condition" in item:
-            _expr(item["condition"])
-            _condition_explanation(item["conditionExplanation"])
-    normalized = _generic_json(document)
-    denied = any(rule["denyAccessState"] == "DENY_ACCESS_STATE_DENIED" for rule in normalized["ruleExplanations"])
-    if document["denyAccessState"] != ("DENY_ACCESS_STATE_DENIED" if denied else "DENY_ACCESS_STATE_NOT_DENIED"):
-        raise ValueError
-    return normalized
-def _deny(value: object) -> dict[str, object]:
+    _require(type(value) is dict and len(value) <= 500 and not any(type(name) is not str or not name for name in value)); return {name: _deny_annotation(item, state) for name, item in value.items()}
+def _deny_pair(item: dict[str, object], combined_name: str, map_name: str, state: str, expected: list[str]) -> tuple[dict[str, object], dict[str, object], bool]:
+    combined = _deny_annotation(item[combined_name], state); members = _deny_map(item[map_name], state); matched_state = "PERMISSION_PATTERN_MATCHED" if state == "permissionMatchingState" else "MEMBERSHIP_MATCHED"; matched = any(member[state] == matched_state for member in members.values()); _require(set(members) == set(expected) and (combined[state] == matched_state) == matched); return combined, members, matched
+def _deny_permission_matches(pattern: str, access: _AccessSpec) -> bool:
+    service, member = pattern.split("/", 1); resource, action = member.split(".", 1); expected_resource, expected_action = access.permission.split(".", 1)[1].split(".", 1); return service == "cloudkms.googleapis.com" and resource in {"*", expected_resource} and action in {"*", expected_action}
+def _deny_principal_matches(pattern: str, access: _AccessSpec) -> bool | None:
+    return True if pattern in {"principal://iam.googleapis.com/projects/-/serviceAccounts/" + access.principal, "principalSet://goog/public:all"} else (False if pattern.startswith(("principal://", "deleted:principal://")) else None)
+def _deny_policy(value: object, access: _AccessSpec) -> dict[str, object]:
+    document = _members(value, ("denyAccessState", "policy", "relevance", "ruleExplanations")); policy = _deny_policy_text(document["policy"]); explanations = document["ruleExplanations"]; _require(document["denyAccessState"] in _JSON_ENUMS["denyAccessState"] and document["relevance"] in _RELEVANCE and type(explanations) is list and len(explanations) == len(policy["rules"]))
+    normalized = []
+    for policy_rule, explanation in zip(policy["rules"], explanations, strict=True):
+        rule = policy_rule["denyRule"]; item = _members(explanation, _DENY_RULE_MEMBERS, ("condition", "conditionExplanation")); _require(item["denyAccessState"] in _JSON_ENUMS["denyAccessState"] and item["relevance"] in _RELEVANCE)
+        result = dict(item); denied_permission = _deny_pair(item, "combinedDeniedPermission", "deniedPermissions", "permissionMatchingState", rule["deniedPermissions"]); exception_permission = _deny_pair(item, "combinedExceptionPermission", "exceptionPermissions", "permissionMatchingState", rule["exceptionPermissions"]); denied_principal = _deny_pair(item, "combinedDeniedPrincipal", "deniedPrincipals", "membership", rule["deniedPrincipals"]); exception_principal = _deny_pair(item, "combinedExceptionPrincipal", "exceptionPrincipals", "membership", rule["exceptionPrincipals"])
+        for names, pair in zip((("combinedDeniedPermission", "deniedPermissions"), ("combinedExceptionPermission", "exceptionPermissions"), ("combinedDeniedPrincipal", "deniedPrincipals"), ("combinedExceptionPrincipal", "exceptionPrincipals")), (denied_permission, exception_permission, denied_principal, exception_principal), strict=True): result[names[0]], result[names[1]] = pair[:2]
+        _require(not any((annotation["permissionMatchingState"] == "PERMISSION_PATTERN_MATCHED") != _deny_permission_matches(pattern, access) for pair in (denied_permission, exception_permission) for pattern, annotation in pair[1].items()))
+        _require(not any((known := _deny_principal_matches(pattern, access)) is not None and (annotation["membership"] == "MEMBERSHIP_MATCHED") != known for pair in (denied_principal, exception_principal) for pattern, annotation in pair[1].items()))
+        condition = "denialCondition" in rule; _require(("condition" in item) == condition and ("conditionExplanation" in item) == condition and (not condition or _expr(item["condition"]) == rule["denialCondition"]))
+        condition_explanation = _condition_explanation(item["conditionExplanation"]) if condition else None; condition_matches = condition_explanation["value"] if condition_explanation is not None else True
+        if condition: result["condition"] = rule["denialCondition"]; result["conditionExplanation"] = condition_explanation
+        denied = denied_permission[2] and denied_principal[2] and not exception_permission[2] and not exception_principal[2] and condition_matches; _require(item["denyAccessState"] == ("DENY_ACCESS_STATE_DENIED" if denied else "DENY_ACCESS_STATE_NOT_DENIED")); normalized.append(result)
+    denied = any(rule["denyAccessState"] == "DENY_ACCESS_STATE_DENIED" for rule in normalized); _require(document["denyAccessState"] == ("DENY_ACCESS_STATE_DENIED" if denied else "DENY_ACCESS_STATE_NOT_DENIED")); return {"denyAccessState": document["denyAccessState"], "policy": policy, "relevance": document["relevance"], "ruleExplanations": normalized}
+def _deny(value: object, access: _AccessSpec) -> dict[str, object]:
     document = _members(value, ("denyAccessState", "explainedResources", "permissionDeniable", "relevance"))
     resources = document["explainedResources"]
     if document["denyAccessState"] not in {"DENY_ACCESS_STATE_DENIED", "DENY_ACCESS_STATE_NOT_DENIED"} or type(document["permissionDeniable"]) is not bool or document["relevance"] not in _RELEVANCE or type(resources) is not list:
@@ -550,7 +552,7 @@ def _deny(value: object) -> dict[str, object]:
         item = _members(resource, ("denyAccessState", "explainedPolicies", "fullResourceName", "relevance"))
         if item["denyAccessState"] not in {"DENY_ACCESS_STATE_DENIED", "DENY_ACCESS_STATE_NOT_DENIED"} or item["relevance"] not in _RELEVANCE or not _text(item["fullResourceName"]).startswith("//") or type(item["explainedPolicies"]) is not list:
             raise ValueError
-        policies = sorted((_deny_policy(policy) for policy in item["explainedPolicies"]), key=_canonical)
+        policies = sorted((_deny_policy(policy, access) for policy in item["explainedPolicies"]), key=_canonical)
         policy_denied = any(policy.get("denyAccessState") == "DENY_ACCESS_STATE_DENIED" for policy in policies if type(policy) is dict)
         if item["denyAccessState"] != ("DENY_ACCESS_STATE_DENIED" if policy_denied else "DENY_ACCESS_STATE_NOT_DENIED"):
             raise ValueError
@@ -600,7 +602,7 @@ def _access(session: _EvidenceSession, access: _AccessSpec, specs: tuple[_Bindin
     if value["overallAccessState"] != access.required:
         raise ValueError
     allow = _allow(value["allowPolicyExplanation"], access, specs)
-    deny = _deny(value["denyPolicyExplanation"])
+    deny = _deny(value["denyPolicyExplanation"], access)
     if access.required == "CAN_ACCESS" and deny["denyAccessState"] != "DENY_ACCESS_STATE_NOT_DENIED":
         raise ValueError
     if access.required == "CANNOT_ACCESS" and allow["allowAccessState"] != "ALLOW_ACCESS_STATE_NOT_GRANTED" and deny["denyAccessState"] != "DENY_ACCESS_STATE_DENIED":

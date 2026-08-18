@@ -1052,6 +1052,10 @@ def _matching(value: str, *, permission: bool) -> dict[str, str]:
 
 
 def _deny_policy_explanation() -> dict[str, object]:
+    deny_permission = "cloudkms.googleapis.com/cryptoKeyVersions.get"
+    deny_principal = (
+        "principal://iam.googleapis.com/projects/-/serviceAccounts/" + SIGNER
+    )
     matched_permission = _matching("PERMISSION_PATTERN_MATCHED", permission=True)
     unmatched_permission = _matching(
         "PERMISSION_PATTERN_NOT_MATCHED", permission=True
@@ -1061,18 +1065,38 @@ def _deny_policy_explanation() -> dict[str, object]:
     return {
         "denyAccessState": "DENY_ACCESS_STATE_DENIED",
         "policy": {
-            "name": "policies/security-audit-deny",
-            "rules": [{"denyRule": {"deniedPermissions": ["cloudkms.*"]}}],
+            "name": (
+                "policies/cloudresourcemanager.googleapis.com%2Fprojects%2F"
+                "123456789012/denypolicies/security-audit-deny"
+            ),
+            "uid": "06ccd2eb-d2a5-5dd1-a746-eaf4c6f3f816",
+            "kind": "DenyPolicy",
+            "displayName": "Security audit deny",
+            "annotations": {"owner": "security-audit"},
+            "etag": POLICY_ETAG,
+            "createTime": "2026-08-18T10:00:00Z",
+            "updateTime": "2026-08-18T10:00:00.123456Z",
+            "rules": [
+                {
+                    "description": "Deny signer metadata access",
+                    "denyRule": {
+                        "deniedPermissions": [deny_permission],
+                        "deniedPrincipals": [deny_principal],
+                        "exceptionPermissions": [],
+                        "exceptionPrincipals": [],
+                    },
+                }
+            ],
         },
         "ruleExplanations": [
             {
                 "denyAccessState": "DENY_ACCESS_STATE_DENIED",
                 "combinedDeniedPermission": matched_permission,
-                "deniedPermissions": {"cloudkms.*": matched_permission},
+                "deniedPermissions": {deny_permission: matched_permission},
                 "combinedExceptionPermission": unmatched_permission,
                 "exceptionPermissions": {},
                 "combinedDeniedPrincipal": matched_principal,
-                "deniedPrincipals": {SIGNER: matched_principal},
+                "deniedPrincipals": {deny_principal: matched_principal},
                 "combinedExceptionPrincipal": unmatched_principal,
                 "exceptionPrincipals": {},
                 "relevance": "HEURISTIC_RELEVANCE_HIGH",
@@ -1119,6 +1143,118 @@ def test_deny_policy_without_policy_text_refuses() -> None:
         return value
 
     _assert_refused(session=_EvidenceSession(missing))
+
+
+def test_deny_policy_schema_rule_order_and_explanations_are_bound() -> None:
+    module = security_audit_observer_root_admission
+    access = module._AccessSpec(
+        SIGNER,
+        RESOURCE,
+        "cloudkms.cryptoKeyVersions.get",
+        "CANNOT_ACCESS",
+        None,
+    )
+    base = _deny_policy_explanation()
+    normalized = module._deny_policy(copy.deepcopy(base), access)
+    assert normalized["policy"]["kind"] == "DenyPolicy"
+
+    def unmatched_permission(value: dict[str, object]) -> None:
+        explanation = value["ruleExplanations"][0]
+        permission = next(iter(explanation["deniedPermissions"]))
+        annotation = _matching(
+            "PERMISSION_PATTERN_NOT_MATCHED", permission=True
+        )
+        explanation["combinedDeniedPermission"] = annotation
+        explanation["deniedPermissions"] = {permission: annotation}
+
+    def unmatched_principal(value: dict[str, object]) -> None:
+        explanation = value["ruleExplanations"][0]
+        principal = next(iter(explanation["deniedPrincipals"]))
+        annotation = _matching("MEMBERSHIP_NOT_MATCHED", permission=False)
+        explanation["combinedDeniedPrincipal"] = annotation
+        explanation["deniedPrincipals"] = {principal: annotation}
+
+    mutations = (
+        ("arbitrary policy", lambda value: value.__setitem__("policy", {"garbage": True})),
+        ("extra policy field", lambda value: value["policy"].update({"garbage": True})),
+        ("missing metadata", lambda value: value["policy"].pop("uid")),
+        ("invalid name", lambda value: value["policy"].update({"name": "policies/security-audit-deny"})),
+        ("invalid kind", lambda value: value["policy"].update({"kind": "AllowPolicy"})),
+        ("empty uid", lambda value: value["policy"].update({"uid": ""})),
+        ("invalid etag", lambda value: value["policy"].update({"etag": "not-base64"})),
+        ("long display name", lambda value: value["policy"].update({"displayName": "x" * 64})),
+        ("long annotation key", lambda value: value["policy"].update({"annotations": {"x" * 64: "value"}})),
+        ("invalid timestamp", lambda value: value["policy"].update({"createTime": "2026-02-31T10:00:00Z"})),
+        ("reversed timestamps", lambda value: value["policy"].update({"updateTime": "2026-08-17T10:00:00Z"})),
+        ("reversed nanoseconds", lambda value: value["policy"].update({"createTime": "2026-08-18T10:00:00.123456789Z", "updateTime": "2026-08-18T10:00:00.123456788Z"})),
+        ("deleted effective policy", lambda value: value["policy"].update({"deleteTime": "2026-08-19T10:00:00Z"})),
+        ("extra policy rule field", lambda value: value["policy"]["rules"][0].update({"garbage": True})),
+        ("invalid principal", lambda value: value["policy"]["rules"][0]["denyRule"].update({"deniedPrincipals": ["not-a-principal"]})),
+        ("invalid permission", lambda value: value["policy"]["rules"][0]["denyRule"].update({"deniedPermissions": ["cloudkms.cryptoKeyVersions.get"]})),
+        ("duplicate permission", lambda value: value["policy"]["rules"][0]["denyRule"]["deniedPermissions"].append(value["policy"]["rules"][0]["denyRule"]["deniedPermissions"][0])),
+        ("public exception", lambda value: value["policy"]["rules"][0]["denyRule"].update({"exceptionPrincipals": ["principalSet://goog/public:all"]})),
+        ("missing explanation", lambda value: value.update({"ruleExplanations": []})),
+        ("extra explanation field", lambda value: value["ruleExplanations"][0].update({"garbage": True})),
+        ("permission map drift", lambda value: value["ruleExplanations"][0].update({"deniedPermissions": {}})),
+        ("principal map drift", lambda value: value["ruleExplanations"][0].update({"deniedPrincipals": {}})),
+        ("exception permission map drift", lambda value: value["policy"]["rules"][0]["denyRule"].update({"exceptionPermissions": ["cloudkms.googleapis.com/cryptoKeyVersions.get"]})),
+        ("exception principal map drift", lambda value: value["policy"]["rules"][0]["denyRule"].update({"exceptionPrincipals": [next(iter(value["ruleExplanations"][0]["deniedPrincipals"]))]})),
+        ("combined state contradiction", lambda value: value["ruleExplanations"][0].update({"combinedDeniedPermission": _matching("PERMISSION_PATTERN_NOT_MATCHED", permission=True)})),
+        ("permission match contradiction", unmatched_permission),
+        ("principal match contradiction", unmatched_principal),
+        ("rule state contradiction", lambda value: value["ruleExplanations"][0].update({"denyAccessState": "DENY_ACCESS_STATE_NOT_DENIED"})),
+        ("policy state contradiction", lambda value: value.update({"denyAccessState": "DENY_ACCESS_STATE_NOT_DENIED"})),
+        ("unexplained condition", lambda value: value["policy"]["rules"][0]["denyRule"].update({"denialCondition": {"expression": "true"}})),
+    )
+    for label, mutate in mutations:
+        malformed = copy.deepcopy(base)
+        mutate(malformed)
+        try:
+            module._deny_policy(malformed, access)
+        except ValueError:
+            continue
+        pytest.fail(f"accepted malformed deny evidence: {label}")
+
+    ordered = copy.deepcopy(base)
+    second_rule = copy.deepcopy(ordered["policy"]["rules"][0])
+    second_rule["denyRule"]["deniedPermissions"] = [
+        "cloudkms.googleapis.com/cryptoKeyVersions.destroy"
+    ]
+    second_explanation = copy.deepcopy(ordered["ruleExplanations"][0])
+    unmatched = _matching("PERMISSION_PATTERN_NOT_MATCHED", permission=True)
+    second_explanation["denyAccessState"] = "DENY_ACCESS_STATE_NOT_DENIED"
+    second_explanation["combinedDeniedPermission"] = unmatched
+    second_explanation["deniedPermissions"] = {
+        "cloudkms.googleapis.com/cryptoKeyVersions.destroy": unmatched
+    }
+    ordered["policy"]["rules"].append(second_rule)
+    ordered["ruleExplanations"].append(second_explanation)
+    assert len(module._deny_policy(ordered, access)["ruleExplanations"]) == 2
+    ordered["ruleExplanations"].reverse()
+    with pytest.raises(ValueError):
+        module._deny_policy(ordered, access)
+
+    conditioned = copy.deepcopy(base)
+    condition = {
+        "expression": "resource.matchTag('123/environment', 'prod')",
+        "title": "Production only",
+    }
+    conditioned["policy"]["rules"][0]["denyRule"]["denialCondition"] = condition
+    conditioned["ruleExplanations"][0]["condition"] = copy.deepcopy(condition)
+    conditioned["ruleExplanations"][0]["conditionExplanation"] = {"value": True}
+    module._deny_policy(conditioned, access)
+    condition_false = copy.deepcopy(conditioned)
+    condition_false["denyAccessState"] = "DENY_ACCESS_STATE_NOT_DENIED"
+    condition_false["ruleExplanations"][0][
+        "denyAccessState"
+    ] = "DENY_ACCESS_STATE_NOT_DENIED"
+    condition_false["ruleExplanations"][0]["conditionExplanation"] = {
+        "value": False
+    }
+    module._deny_policy(condition_false, access)
+    conditioned["ruleExplanations"][0]["condition"]["expression"] = "false"
+    with pytest.raises(ValueError):
+        module._deny_policy(conditioned, access)
 
 
 def _effective_tag() -> dict[str, object]:

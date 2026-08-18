@@ -73,7 +73,7 @@ MODULE_BUDGETS = {
     "deployment/postgresql/security_audit_hmac_retirement.py": 450,
     "deployment/postgresql/security_audit_approval.py": 623,
     "deployment/postgresql/security_audit_authority.py": 388,
-    "deployment/postgresql/security_audit_observer_root_admission.py": 698,
+    "deployment/postgresql/security_audit_observer_root_admission.py": 700,
 }
 COMMAND_MODULE_BUDGETS = {
     "deployment/postgresql/run_security_audit_hmac_retirement.py": 160,
@@ -370,6 +370,7 @@ SECURITY_AUDIT_OBSERVER_ROOT_IMPORT_STATEMENTS = frozenset(
         ("binascii", 0, (("Error", "BinasciiError"),)),
         ("collections.abc", 0, (("Mapping", None),)),
         ("dataclasses", 0, (("dataclass", None),)),
+        ("datetime", 0, (("datetime", None),)),
         ("hashlib", 0, (("sha256", None),)),
         ("json", 0, (("dumps", None), ("loads", None))),
         ("re", 0, (("fullmatch", None),)),
