@@ -1,11 +1,13 @@
 # OFARM Security-Audit Observer-Root Admission — Phase A Contract v0.1
 
-**Status:** decision version 2 is approved after two zero-Blocker reviews of
-exact amendment head `79fff484628c4ee8653cecab3c7223f9a64d8f93` and the
-required live task-user approval; its behavior-preserving formatting and
-conformance implementation is present for exact-head review in draft PR #321;
-hosted implementation evidence and implementation review remain merge gates;
-deployment and production operation remain unauthorized
+**Status:** decision version 2 is approved and its behavior-preserving
+formatting implementation is present at exact head
+`ca2a6c696e969767d5f2867170e39957151cb271`; hosted run `#988` passed, but its
+two exact-head implementation reviewers disagree about whether version 2
+authorized the module-specific function-span exception; proposed decision
+version 3 is an RFC-only publication amendment that resolves the stricter
+review disposition and is not approved; PR #321 remains Draft, and deployment
+and production operation remain unauthorized
 
 **Draft pull request:** https://github.com/samovers/OFARM2/pull/321
 
@@ -14,6 +16,7 @@ deployment and production operation remain unauthorized
 
 **Decision identity:**
 `ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, approved version `2`;
+proposed version `3` is not approved;
 approved version `1` remains the historical semantic baseline at exact head
 `3fced1380c429dbe493b80358067f0d792beefed`
 
@@ -29,6 +32,12 @@ IAM authorization evidence
 library-only non-mutating observer-root admission module; focused tests; minimal
 deployment documentation; exact architecture-check registration; and the
 mechanically regenerated review-baseline test inventory only
+
+**Proposed version 3 Phase A boundary:** this RFC only, to decide whether the
+exact observer-root module may replace the generic physical function-span
+heuristic with its already-required deterministic formatting, exact source
+shape, and immutable-AST gates; no implementation path may change before
+version 3 approval
 
 ## 1. Problem and goal
 
@@ -111,6 +120,45 @@ No manifest, KMS, IAM, Policy Troubleshooter, PAB, probe, snapshot, clock,
 result, refusal, provider, or side-effect rule changes in version 2. The
 separately reviewed explained-resource attachment-point hardening remains a
 pre-production follow-up and may not be folded into this formatting amendment.
+
+### 1.2 Proposed version 3 function-span publication amendment
+
+Deterministic formatting at exact implementation head
+`ca2a6c696e969767d5f2867170e39957151cb271` leaves the shared
+`MAX_FUNCTION_LINES` constant at 80 while making `_allow_policy` span 84
+physical lines and `_deny_policy` span 127 physical lines. The implementation
+therefore excludes only the exact observer-root module from that generic
+physical-span heuristic inside `_check_production` and subjects it instead to
+the version 2 deterministic-formatting, source-shape, exact-budget, and
+immutable-AST gates.
+
+The two required exact-head implementation reviewers disagree about whether
+version 2 authorized that choice. Independent review comment `5340536580`
+classifies the exclusion as one publication Blocker because sections 11.2 and
+15 did not expressly authorize it. Formal review `4971095895` classifies the
+same choice as consistent with version 2 and reports zero Blockers. Because
+merge requires both reviewers to report zero demonstrated in-scope Blockers,
+the stricter disposition controls and PR #321 may not merge under version 2.
+
+Proposed version 3 makes the previously implicit choice exact:
+
+1. `MAX_FUNCTION_LINES` remains exactly 80 and continues to govern every
+   registered production module except
+   `deployment/postgresql/security_audit_observer_root_admission.py`.
+2. Only that exact path is excluded from the generic physical function-span
+   heuristic. It has no alternate numeric function limit; publication instead
+   requires its exact 1,747-line finished count, 1,800-line ceiling,
+   120-character physical-line ceiling, pinned Ruff check and format check,
+   source-shape prohibitions, and exact location-free AST equality with
+   `3fced1380c429dbe493b80358067f0d792beefed`.
+3. The exclusion may not be generalized, parameterized, moved to another
+   helper, applied to another path, or used without every replacement gate.
+4. Version 3 authorizes no function decomposition. Decomposing either long
+   function would change the immutable AST and requires a separate reviewed
+   decision rather than a review fix.
+5. Version 3 changes publication authority only. It changes no manifest,
+   provider, KMS, IAM, PAB, parser, probe, clock, snapshot, digest, result,
+   refusal, side effect, dependency, runtime, deployment, or production rule.
 
 ## 2. Learning value
 
@@ -1145,7 +1193,7 @@ statements, and has no physical line longer than 120 characters.
 | `ORA-013` | Caller attempts to obtain a policy body, client, mutable list, raw attestation, or certificate from a successful result. | The frozen public type has no such field. |
 | `ORA-014` | HTTP raises a detailed credential exception or KMS raises after the probe transition; a `KeyboardInterrupt` canary is also injected. | Ordinary error becomes fresh empty refusal; canary propagates. |
 | `ORA-015` | A proposed implementation reads an env var, opens a file, logs a policy, calls `setIamPolicy`, updates a key, imports authority issuer code, or adds `__main__`. | Architecture conformance fails. |
-| `ORA-016` | Phase B diff adds a seventh path, dependency, lockfile, test cap, group budget, migration, CLI, Terraform, generated credential, module `noqa`, compound-statement compression, over-120-character source line, non-formatted source, non-equivalent AST, or budget above 1,800 lines. | Mechanical path, formatting, semantic-equivalence, or envelope gate fails and merge stops. |
+| `ORA-016` | Phase B diff adds a seventh path, dependency, lockfile, test cap, group budget, migration, CLI, Terraform, generated credential, module `noqa`, compound-statement compression, over-120-character source line, non-formatted source, non-equivalent AST, budget above 1,800 lines, changed shared numeric function limit, or function-span exclusion for any path other than the exact observer-root module. | Mechanical path, formatting, semantic-equivalence, or envelope gate fails and merge stops. |
 
 All counterexamples enter through the proposed public admission function and
 its supported client/clock protocols. Tests use deterministic fakes at those
@@ -1281,7 +1329,10 @@ production code. Path 3 documents only the non-mutating admission and explicit
 non-readiness. Path 4 contains focused deterministic tests. Path 5 registers
 the exact module budget, direct-import boundary, prohibited side effects,
 fixed probe/KMS/HTTP surfaces, and module-specific formatting guards without
-registering a test glob or changing shared test-line or function limits. Path 6
+registering a test glob or changing either shared numeric limit. Version 2 left
+`MAX_FUNCTION_LINES` at 80 but excluded the exact observer-root path from that
+generic physical-span heuristic. Proposed version 3 expressly authorizes only
+that exact exclusion and does not change the limit for any other path. Path 6
 is mechanical output only.
 
 The production module's architecture budget must equal its finished physical
@@ -1292,11 +1343,17 @@ statement joining, one-line compound-statement body, or physical line longer
 than 120 characters. The formatted module's parsed AST, excluding source
 locations, must equal the AST at implementation head
 `3fced1380c429dbe493b80358067f0d792beefed`; implicit adjacent-literal splits
-must preserve the exact constant value. The focused test remains the one exact
-path listed above; its physical line count is reported but is not governed by
-the shared `MAX_TEST_LINES` value. Phase B must not add that path to
-`TEST_GLOBS` or change a shared cap. No group budget, dependency, lockfile,
-Dockerfile, workflow, migration, command module, or seventh path may change.
+must preserve the exact constant value. Under proposed version 3,
+`MAX_FUNCTION_LINES` must remain 80 and must continue to govern every
+registered production path other than the exact observer-root path. That one
+path is accepted outside the generic heuristic only while every deterministic
+formatting, source-shape, exact-budget, and immutable-AST gate above passes.
+The focused test remains the one exact path listed above; its physical line
+count is reported but is not governed by the shared `MAX_TEST_LINES` value.
+Phase B must not add that path to `TEST_GLOBS`, change either shared numeric
+limit, or broaden the exact function-span exclusion. No group budget,
+dependency, lockfile, Dockerfile, workflow, migration, command module, or
+seventh path may change.
 
 ### 11.3 Dependencies and ordering
 
@@ -1390,7 +1447,7 @@ widening V1.
 | `ORA-013` | frozen result constructor | public-field and mutability inspection | exact dataclass shape/value tests |
 | `ORA-014` | public wrapper | every ordinary dependency failure plus `KeyboardInterrupt` | empty args/string/context and propagation tests |
 | `ORA-015` | complete module and architecture guard | forbidden import/call/global/entrypoint mutations | AST conformance plus fake client effect ledger |
-| `ORA-016` | architecture registration, formatter, AST-equivalence, and diff gates | seventh path/dependency/budget/cap/lock mutation, `noqa`, compressed compound statements, overlong line, formatter drift, or semantic AST drift | exact allowlist comparison, source-shape checks, Ruff check/format check, AST comparison, and package conformance |
+| `ORA-016` | architecture registration, formatter, AST-equivalence, exact-path function-span replacement, and diff gates | seventh path/dependency/budget/cap/lock mutation, broadened function-span exclusion, `noqa`, compressed compound statements, overlong line, formatter drift, or semantic AST drift | exact allowlist and exact exception comparison, unchanged shared numeric limits, source-shape checks, Ruff check/format check, AST comparison, and package conformance |
 
 ### 13.1 Phase A verification gates
 
@@ -1404,16 +1461,22 @@ widening V1.
   Justifications posture, observation order, bounds, output, and failure
   protocol are internally consistent;
 - all prospective dependencies are already hash-pinned;
-- the version 2 amendment changes only this RFC before approval and does not
-  alter the present production implementation;
-- the measured 1,692-line Ruff-formatted rendering and the 1,800-line ceiling
-  are independently checked against exact implementation head
+- the proposed version 3 amendment changes only this RFC relative to exact
+  implementation head `ca2a6c696e969767d5f2867170e39957151cb271` and does
+  not alter the present production or conformance implementation;
+- independently verify that the exact implementation has 1,747 physical lines,
+  a 102-character longest line, `_allow_policy` at 84 physical lines,
+  `_deny_policy` at 127 physical lines, `MAX_FUNCTION_LINES == 80`, and exact
+  location-free AST equality with
   `3fced1380c429dbe493b80358067f0d792beefed`;
+- prove that proposed version 3 names one exact-path exception, preserves the
+  generic 80-line heuristic everywhere else, and authorizes no decomposition,
+  semantic change, or general exception mechanism;
 - `python3 conformance/ofarm_pkg_contract_check.py` passes before every commit;
-- the draft pull request receives independent exact-head Phase A review;
+- the draft pull request receives two independent exact-head Phase A reviews;
 - every demonstrated Phase A Blocker is corrected in this RFC; and
-- a complete live decision card is shown only after exact-head review reports
-  zero demonstrated in-scope Blockers.
+- a complete live version 3 decision card is shown only after both exact-head
+  reviews report zero demonstrated in-scope Blockers.
 
 ### 13.2 Prospective Phase B verification gates
 
@@ -1437,6 +1500,9 @@ widening V1.
 - prove architecture conformance rejects `noqa`, semicolon statement joining,
   one-line compound-statement bodies, and physical lines longer than 120
   characters in that module;
+- prove `MAX_FUNCTION_LINES` remains exactly 80, the generic heuristic still
+  rejects an over-limit function at every other registered production path,
+  and only the exact observer-root path uses the complete replacement gate;
 - compare parsed ASTs, excluding source locations, between implementation head
   `3fced1380c429dbe493b80358067f0d792beefed` and the reformatted module and
   require exact equality before tests may support merge;
@@ -1445,8 +1511,8 @@ widening V1.
 - inspect the exact six-path diff; prove the module budget equals finished
   physical lines and is at most 1,800; report the focused test's physical line
   count without adding its path to `TEST_GLOBS`; and prove no group budget,
-  shared cap, dependency, lockfile, workflow, migration, command, or seventh
-  path changed;
+  shared numeric limit, broadened function-span exclusion, dependency,
+  lockfile, workflow, migration, command, or seventh path changed;
 - obtain hosted exact-head conformance and required architecture lanes; and
 - receive bounded implementation review with zero demonstrated in-scope
   Blockers before merge.
@@ -1460,12 +1526,19 @@ deployment inputs and remain unauthorized.
 
 ### 14.1 Open material decisions
 
-No material decision remains open inside the version 2 formatting boundary.
-Exact amendment head `79fff484628c4ee8653cecab3c7223f9a64d8f93`
-received two zero-Blocker reviews, the complete live decision card was shown,
-and the task user supplied the exact version 2 approval sentence. Hosted
-implementation evidence and exact-head implementation review are verification
-and merge gates, not authority to expand the decision.
+One material publication decision is open. Exact version 2 implementation head
+`ca2a6c696e969767d5f2867170e39957151cb271` received one zero-Blocker formal
+review and one independent review with a Blocker over whether the exact
+observer-root module may be excluded from the generic 80-line physical
+function-span heuristic. Proposed version 3 selects the narrow exact-path
+exclusion, preserves all replacement gates, and is not approved. Its RFC-only
+head must receive two independent zero-Blocker reviews before a live version 3
+decision card may be shown.
+
+Version 2 remains approved historical authority for the deterministic reformat
+and source-shape gates. It does not supply the disputed publication authority,
+and neither hosted success nor one zero-Blocker implementation review can
+expand it.
 
 The following remain deliberately deferred and must not be answered by this
 formatting amendment or its implementation:
@@ -1545,12 +1618,26 @@ formatting amendment or its implementation:
   `3fced1380c429dbe493b80358067f0d792beefed`. The exact implementation commit,
   hosted checks, and implementation reviews are recorded in the pull request
   after commit rather than self-referentially here.
-- **Current disposition:** version 2 implementation is authorized and confined
-  to the six paths, but PR #321 remains Draft until exact-head hosted evidence
-  and zero-Blocker implementation review pass. Merge does not authorize any
-  deployment or production operation.
+- **Version 2 exact-head review conflict:** independent review comment
+  `5340536580` and formal review `4971095895` both reviewed exact head
+  `ca2a6c696e969767d5f2867170e39957151cb271`, independently confirmed
+  behavior-preserving AST equality and the formatting evidence, and disagreed
+  only about authority for the exact module-specific function-span exclusion.
+  The former reports one publication Blocker; the latter reports zero
+  Blockers. Hosted run `#988` (`32237274296`) passed before both reviews.
+- **Proposed version 3 disposition:** accept the stricter review result and
+  amend the contract rather than treating the exclusion as a version 2 review
+  fix. Version 3 expressly authorizes the exact existing exclusion, keeps
+  `MAX_FUNCTION_LINES == 80` everywhere else, and forbids decomposition or any
+  other AST change.
+- **Current disposition:** proposed version 3 is RFC-only and unapproved. PR
+  #321 remains Draft and may not merge until the exact amendment head receives
+  two zero-Blocker reviews, the complete live card is shown, the task user
+  supplies the exact later version 3 approval sentence, and the resulting
+  exact head passes hosted checks and bounded implementation review. Merge
+  would still authorize no deployment or production operation.
 - **Follow-ups:** section 11.4 and exact explained-resource attachment-point
-  binding before production composition. Neither may enter version 2.
+  binding before production composition. Neither may enter version 3.
 - **Preferences:** captured live provider responses and the provider-currentness
   decision remain pre-production evidence, not formatting-amendment scope.
 
@@ -1620,7 +1707,7 @@ composition, readiness, root rotation, approver key, approval statement,
 database admission, migration, temporary login, export, output delivery,
 deployment, release, security waiver, or issue #192 closure.
 
-## 16. Approval evidence
+## 16. Historical approval and implementation evidence
 
 - **Approved decision:**
   `ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, version `2`; version
@@ -1656,14 +1743,97 @@ deployment, release, security waiver, or issue #192 closure.
   `sha256:d8af95faf3cc932c96f60ac611931c35337609aca229f75e8b23d9d39b251af6`,
   precomputed from immutable head
   `3fced1380c429dbe493b80358067f0d792beefed` rather than from the candidate.
-- **Shared-envelope posture:** `MAX_FUNCTION_LINES` remains 80 and the focused
-  test remains outside `TEST_GLOBS`. Because deterministic Ruff rendering makes
-  two semantically unchanged functions exceed that generic physical-span
-  heuristic, only this immutable-AST module uses its exact AST and source-shape
-  guard instead; no shared cap, group budget, dependency, lockfile, workflow,
-  or seventh path changes.
+- **Observed version 2 shared-envelope posture:** `MAX_FUNCTION_LINES` remains
+  80 and the focused test remains outside `TEST_GLOBS`. Deterministic Ruff
+  rendering makes two semantically unchanged functions exceed that generic
+  physical-span heuristic, so the implementation makes only this immutable-AST
+  module use its exact AST and source-shape guard instead. Review records
+  `5340536580` and `4971095895` disagree about whether version 2 authorized that
+  exact exception; proposed version 3 supplies no authority until approved.
 - **Implementation-head evidence:** the exact version 2 implementation commit,
   hosted run, and exact-head implementation reviews are recorded in PR #321
   after commit rather than self-referentially in this commit.
 - **Evidence posture:** all excluded production, semantic-hardening, and
   follow-up authorities remain unauthorized.
+
+## 17. Proposed version 3 function-span amendment approval boundary
+
+Version 3 is a publication amendment to the approved version 2 auditability
+envelope. It does not reopen version 1 security semantics or authorize a new
+production implementation. The code at exact head
+`ca2a6c696e969767d5f2867170e39957151cb271` remains unmerged evidence while
+this amendment is reviewed.
+
+This RFC amendment, local analysis, review requests, commits, pushes, pull
+request activity, repository credentials, or a generic `go` authorize only
+drafting and reviewing this RFC-only Phase A amendment. They grant no version 3
+publication or merge authority. The RFC-only amendment must first receive two
+independent exact-head Phase A reviews with zero demonstrated in-scope
+Blockers. The AI must then display one complete version 3 live decision card in
+this same Codex task.
+
+Only the exact entire text of a later task-user message matching the live
+card's approval sentence can authorize the version 3 publication work. Generic
+approval, version 2 authority, an AI message, delegation, another task, or a
+summary of lost task items is insufficient.
+
+The required exact approval form is:
+
+```text
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001 version 3.
+```
+
+If the prerequisites above are satisfied, that exact approval authorizes only
+these in-envelope repository effects in draft PR #321 after every gate passes:
+
+- retain the exact existing `_check_production` rule under which
+  `MAX_FUNCTION_LINES == 80` governs every registered production path except
+  `deployment/postgresql/security_audit_observer_root_admission.py`;
+- publish that one exact exception only with the unchanged module-specific
+  Ruff, source-shape, exact-budget, 1,800-line ceiling, 120-character ceiling,
+  and immutable-AST gates;
+- update only this RFC's approval and exact-head evidence needed to record the
+  version 3 decision; and
+- run local and hosted verification, handle bounded review, commit, push, and
+  eventually merge the one named pull request after two zero-Blocker exact-head
+  implementation reviews and normal merge controls pass.
+
+Version 3 authorizes no change to the production module, `_check_production`,
+the shared numeric limits, tests, inventory, dependency graph, lockfiles,
+workflows, or any other repository path. It authorizes no function
+decomposition or other AST difference from
+`3fced1380c429dbe493b80358067f0d792beefed`.
+
+It also authorizes no parser, provider schema, principal, permission,
+resource-attachment, authorization, probe, clock, snapshot, digest, result,
+failure-semantics, cloud/IAM, credential, manifest, runtime, readiness,
+rotation, database, export, delivery, deployment, release, production, or issue
+#192 closure action.
+
+## 18. Proposed version 3 Phase A evidence
+
+- **Phase A delta:** this proposed amendment changes only this RFC relative to
+  exact version 2 implementation head
+  `ca2a6c696e969767d5f2867170e39957151cb271`.
+- **Exact measured implementation:** 1,747 physical lines, longest physical
+  line 102 characters, `_allow_policy` 84 physical lines, `_deny_policy` 127
+  physical lines, and `MAX_FUNCTION_LINES == 80`.
+- **Replacement gates:** pinned Ruff `0.15.5` check and format check, exact
+  finished-count registration, 1,800-line and 120-character ceilings, no
+  `noqa`, semicolon joining, or one-line compound body, plus Python 3.12.13
+  location-free AST digest
+  `sha256:d8af95faf3cc932c96f60ac611931c35337609aca229f75e8b23d9d39b251af6`
+  from immutable semantic reference
+  `3fced1380c429dbe493b80358067f0d792beefed`.
+- **Prior exact-head evidence:** hosted run `#988` (`32237274296`) passed on
+  `ca2a6c696e969767d5f2867170e39957151cb271`; independent review comment
+  `5340536580` and formal review `4971095895` agree on the measurements and AST
+  equality but disagree on version 2 authority.
+- **Exact version 3 amendment head:** recorded in PR #321 after commit rather
+  than self-referentially in this commit.
+- **Version 3 Phase A reviews:** not yet received.
+- **Version 3 live card:** not yet displayed.
+- **Version 3 task-user approval:** not yet supplied.
+- **Evidence posture:** PR #321 remains Draft, and all implementation, merge,
+  deployment, production, follow-up, and issue-closure authority remains
+  excluded until the exact version 3 sequence is satisfied.
