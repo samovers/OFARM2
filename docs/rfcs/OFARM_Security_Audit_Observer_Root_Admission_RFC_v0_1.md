@@ -1,11 +1,13 @@
 # OFARM Security-Audit Observer-Root Admission — Phase A Contract v0.1
 
-**Status:** Phase A contract approved for PR #321 after two independent
-zero-Blocker reviews of corrected head
-`3aafb333f079931843bee330838ecd911e5fb7da`; Phase B repository implementation
-is authorized and present in the draft PR, but merge remains gated on hosted
-exact-head checks and zero-Blocker implementation review; deployment and
-production operation are not authorized
+**Status:** decision version 1 is approved and its repository implementation is
+present at exact head `3fced1380c429dbe493b80358067f0d792beefed` in
+draft PR #321; hosted run `32145965081` passed and two exact-head reviews
+reported zero demonstrated in-scope security Blockers, but one reviewer withheld
+merge support because the exact 700-line cap forced a module-wide Ruff
+suppression and compressed source; decision version 2 is a documentation-only
+formatting amendment draft and grants no version 2 implementation or merge
+authority; deployment and production operation remain unauthorized
 
 **Draft pull request:** https://github.com/samovers/OFARM2/pull/321
 
@@ -13,7 +15,9 @@ production operation are not authorized
 `ofarm2.security-audit-observer-root-admission.v0.1`
 
 **Decision identity:**
-`ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, version `1`
+`ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, proposed version `2`;
+approved version `1` remains the historical authority for the implementation
+already present in this draft pull request
 
 **Issue:** #192
 
@@ -75,6 +79,42 @@ This task establishes one fail-closed, non-provisioning admission function that:
 The result is evidence for a later composition decision. It does not load
 production configuration, make the authority-receipt issuer ready, or authorize
 any deployment.
+
+### 1.1 Version 2 amendment purpose
+
+Version 1 fixed the production module at no more than 700 physical lines. The
+implementation reached exactly 700 lines only by placing multiple statements on
+single lines and adding a module-wide `# ruff: noqa: E701, E702` suppression.
+Exact-head review confirmed that the security correction is substantive and
+that all demonstrated security Blockers are closed, but one of the two required
+reviewers would not merge source whose line budget is satisfied by disabling
+the default compound-statement lint rules.
+
+Applying the repository-pinned Ruff `0.15.5` formatter to the exact
+`3fced1380c429dbe493b80358067f0d792beefed` module produces 1,692 physical
+lines before removal of the obsolete suppression and before splitting the four
+formatter-resistant regular-expression lines longer than 120 characters. A
+1,800-line ceiling therefore permits one deterministic readable rendering plus
+bounded headroom without weakening the exact finished-count registration.
+
+Version 2 changes only the repository auditability envelope:
+
+1. raise the production-module ceiling from 700 to 1,800 physical lines while
+   still requiring the registered budget to equal the finished line count;
+2. require the exact module to pass the repository-pinned Ruff check and
+   `ruff format --check` without any file-wide or inline `noqa` exemption;
+3. require architecture conformance to reject `noqa`, semicolon statement
+   joining, one-line compound-statement bodies, and physical lines longer than
+   120 characters in the production module;
+4. permit long constant literals to be split only through Python's implicit
+   literal concatenation with exactly unchanged resulting values; and
+5. require the reformatted module's parsed AST, excluding source locations, to
+   equal the AST of exact head `3fced1380c429dbe493b80358067f0d792beefed`.
+
+No manifest, KMS, IAM, Policy Troubleshooter, PAB, probe, snapshot, clock,
+result, refusal, provider, or side-effect rule changes in version 2. The
+separately reviewed explained-resource attachment-point hardening remains a
+pre-production follow-up and may not be folded into this formatting amendment.
 
 ## 2. Learning value
 
@@ -1085,7 +1125,10 @@ authority.
 Phase A changes only this RFC. Prospective Phase B changes only the six exact
 paths in section 11, adds no dependency, executable, migration, credential,
 fixture secret, test-line-cap change, group-budget change, or lockfile change,
-and passes every named verification gate.
+and passes every named verification gate. The production module has an exact
+finished-count budget no greater than 1,800 lines, is stable under the
+repository-pinned formatter, contains no `noqa` or compressed compound
+statements, and has no physical line longer than 120 characters.
 
 ## 8. Production-reachable negative cases
 
@@ -1106,7 +1149,7 @@ and passes every named verification gate.
 | `ORA-013` | Caller attempts to obtain a policy body, client, mutable list, raw attestation, or certificate from a successful result. | The frozen public type has no such field. |
 | `ORA-014` | HTTP raises a detailed credential exception or KMS raises after the probe transition; a `KeyboardInterrupt` canary is also injected. | Ordinary error becomes fresh empty refusal; canary propagates. |
 | `ORA-015` | A proposed implementation reads an env var, opens a file, logs a policy, calls `setIamPolicy`, updates a key, imports authority issuer code, or adds `__main__`. | Architecture conformance fails. |
-| `ORA-016` | Phase B diff adds a seventh path, dependency, lockfile, test cap, group budget, migration, CLI, Terraform, or generated credential. | Mechanical path/envelope gate fails and merge stops. |
+| `ORA-016` | Phase B diff adds a seventh path, dependency, lockfile, test cap, group budget, migration, CLI, Terraform, generated credential, module `noqa`, compound-statement compression, over-120-character source line, non-formatted source, non-equivalent AST, or budget above 1,800 lines. | Mechanical path, formatting, semantic-equivalence, or envelope gate fails and merge stops. |
 
 All counterexamples enter through the proposed public admission function and
 its supported client/clock protocols. Tests use deterministic fakes at those
@@ -1241,15 +1284,23 @@ Path 1 is the approved contract and later evidence record. Path 2 is the only
 production code. Path 3 documents only the non-mutating admission and explicit
 non-readiness. Path 4 contains focused deterministic tests. Path 5 registers
 the exact module budget, direct-import boundary, prohibited side effects,
-and fixed probe/KMS/HTTP surfaces without registering a test glob or changing
-shared test-line or function limits. Path 6 is mechanical output only.
+fixed probe/KMS/HTTP surfaces, and module-specific formatting guards without
+registering a test glob or changing shared test-line or function limits. Path 6
+is mechanical output only.
 
 The production module's architecture budget must equal its finished physical
-line count and be at most 700 lines. The focused test remains the one exact path
-listed above; its physical line count is reported but is not governed by the
-shared `MAX_TEST_LINES` value. Phase B must not add that path to `TEST_GLOBS` or
-change a shared cap. No group budget, dependency, lockfile, Dockerfile,
-workflow, migration, command module, or seventh path may change.
+line count and be at most 1,800 lines. The exact module must pass the
+repository-pinned Ruff check and `ruff format --check` without a file-wide or
+inline `noqa`. Its architecture registration must reject any `noqa`, semicolon
+statement joining, one-line compound-statement body, or physical line longer
+than 120 characters. The formatted module's parsed AST, excluding source
+locations, must equal the AST at implementation head
+`3fced1380c429dbe493b80358067f0d792beefed`; implicit adjacent-literal splits
+must preserve the exact constant value. The focused test remains the one exact
+path listed above; its physical line count is reported but is not governed by
+the shared `MAX_TEST_LINES` value. Phase B must not add that path to
+`TEST_GLOBS` or change a shared cap. No group budget, dependency, lockfile,
+Dockerfile, workflow, migration, command module, or seventh path may change.
 
 ### 11.3 Dependencies and ordering
 
@@ -1343,7 +1394,7 @@ widening V1.
 | `ORA-013` | frozen result constructor | public-field and mutability inspection | exact dataclass shape/value tests |
 | `ORA-014` | public wrapper | every ordinary dependency failure plus `KeyboardInterrupt` | empty args/string/context and propagation tests |
 | `ORA-015` | complete module and architecture guard | forbidden import/call/global/entrypoint mutations | AST conformance plus fake client effect ledger |
-| `ORA-016` | architecture registration and diff gate | seventh path/dependency/budget/cap/lock mutation | exact allowlist comparison and package conformance |
+| `ORA-016` | architecture registration, formatter, AST-equivalence, and diff gates | seventh path/dependency/budget/cap/lock mutation, `noqa`, compressed compound statements, overlong line, formatter drift, or semantic AST drift | exact allowlist comparison, source-shape checks, Ruff check/format check, AST comparison, and package conformance |
 
 ### 13.1 Phase A verification gates
 
@@ -1357,6 +1408,11 @@ widening V1.
   Justifications posture, observation order, bounds, output, and failure
   protocol are internally consistent;
 - all prospective dependencies are already hash-pinned;
+- the version 2 amendment changes only this RFC before approval and does not
+  alter the present production implementation;
+- the measured 1,692-line Ruff-formatted rendering and the 1,800-line ceiling
+  are independently checked against exact implementation head
+  `3fced1380c429dbe493b80358067f0d792beefed`;
 - `python3 conformance/ofarm_pkg_contract_check.py` passes before every commit;
 - the draft pull request receives independent exact-head Phase A review;
 - every demonstrated Phase A Blocker is corrected in this RFC; and
@@ -1380,13 +1436,21 @@ widening V1.
 - prove no `testIamPermissions`, KMS/IAM mutation, file/environment/database,
   log/output, executable, fallback, retry, or alternate endpoint is reachable;
 - run architecture conformance with the exact import/effect/probe/HTTP guards;
-- run Ruff or the repository-equivalent lint for changed Python;
+- run the repository-pinned Ruff check and `ruff format --check` for the exact
+  production module, with no file-wide or inline `noqa` exemption;
+- prove architecture conformance rejects `noqa`, semicolon statement joining,
+  one-line compound-statement bodies, and physical lines longer than 120
+  characters in that module;
+- compare parsed ASTs, excluding source locations, between implementation head
+  `3fced1380c429dbe493b80358067f0d792beefed` and the reformatted module and
+  require exact equality before tests may support merge;
 - regenerate the review-baseline inventory mechanically;
 - run `python3 conformance/ofarm_pkg_contract_check.py` before every commit;
 - inspect the exact six-path diff; prove the module budget equals finished
-  physical lines and is at most 700; report the focused test's physical line
+  physical lines and is at most 1,800; report the focused test's physical line
   count without adding its path to `TEST_GLOBS`; and prove no group budget,
-  shared cap, dependency, lockfile, migration, command, or seventh path changed;
+  shared cap, dependency, lockfile, workflow, migration, command, or seventh
+  path changed;
 - obtain hosted exact-head conformance and required architecture lanes; and
 - receive bounded implementation review with zero demonstrated in-scope
   Blockers before merge.
@@ -1400,8 +1464,14 @@ deployment inputs and remain unauthorized.
 
 ### 14.1 Open material decisions
 
-No material decision remains open inside this Phase A boundary. The following
-are deliberately deferred and must not be answered by Phase B:
+One material decision is open inside this Phase A boundary: whether to approve
+the version 2 auditability amendment in section 1.1. Its complete choices are
+already fixed in this draft. Exact-head review may correct the amendment, but
+implementation may not begin until a complete version 2 live decision card is
+shown and the task user supplies its exact approval sentence.
+
+The following remain deliberately deferred and must not be answered by this
+formatting amendment or its implementation:
 
 - exact production project, location, key ring, key, version, principals,
   credentials, role etags, and attestation digest;
@@ -1447,14 +1517,31 @@ are deliberately deferred and must not be answered by Phase B:
   sequential collection time exceeds the 30-second result lifetime and made
   overlapping refresh, atomic replacement, and non-extension after failure
   requirements for later composition.
-- **Current disposition:** all three demonstrated Blockers are addressed in the
-  corrected contract; both exact-corrected-head reviews reported zero
-  demonstrated in-scope Blockers; the complete live decision card was
-  displayed and the task user supplied its exact approval sentence. Phase B is
-  authorized only within section 11.2 and remains subject to every section
-  13.2 merge gate.
-- **Follow-ups:** section 11.4 only.
-- **Preferences:** none recorded.
+- **Approved version 1 implementation:** exact head
+  `3fced1380c429dbe493b80358067f0d792beefed` is confined to the six paths,
+  passes hosted conformance run `32145965081`, and closes the earlier malformed
+  deny-policy evidence Blocker from review `4961530875`.
+- **Exact implementation reviews:** records `5329732151` and `4962514064` both
+  reviewed exact head `3fced1380c429dbe493b80358067f0d792beefed`, confirmed
+  the deny-policy correction, and reported zero demonstrated in-scope security
+  Blockers. Record `5329732151` nevertheless withheld merge support because the
+  700-line cap is met by a module-wide E701/E702 suppression and 45 otherwise
+  default-lint violations. Record `4962514064` classified the same condition as
+  non-blocking auditability debt.
+- **Accepted version 2 publication gate:** normal merge controls will honor the
+  stricter review disposition. Version 2 raises only the source envelope,
+  removes the suppression, requires deterministic formatting and source-shape
+  guards, and proves semantic AST equality. It does not reopen or alter the
+  security protocol.
+- **Current disposition:** version 1 remains the authority for the implementation
+  already present. Version 2 is an unapproved RFC-only amendment. No version 2
+  source reformat, architecture change, ready-for-review transition, or merge is
+  authorized until its exact-head Phase A reviews and later exact task-user
+  approval are complete.
+- **Follow-ups:** section 11.4 and exact explained-resource attachment-point
+  binding before production composition. Neither may enter version 2.
+- **Preferences:** captured live provider responses and the provider-currentness
+  decision remain pre-production evidence, not formatting-amendment scope.
 
 A review finding is a Blocker only when it demonstrates that an `ORA-001`
 through `ORA-016` invariant cannot hold, that the protocol is internally
@@ -1463,13 +1550,18 @@ slice crosses its primary trust boundary. Broader runtime, deployment,
 rotation, approver, database, export, delivery, or issue-closure work is a
 follow-up unless it demonstrates one of those failures.
 
-## 15. Phase A approval boundary
+## 15. Version 2 amendment approval boundary
 
-This RFC grants no Phase B authority by authorship, local review, commit, push,
-pull-request creation, GitHub activity, repository credentials, or a generic
-`go`. It must first be bound to one already-created draft pull request and
-receive independent exact-head Phase A review with zero demonstrated in-scope
-Blockers. The AI must then display one complete live decision card in the same
+The exact version 1 approval remains historical authority for the implementation
+already present at head `3fced1380c429dbe493b80358067f0d792beefed`. It does
+not authorize changing the approved 700-line ceiling or its architecture
+registration.
+
+This RFC amendment, local analysis, review requests, commits, pushes, pull
+request activity, repository credentials, or a generic `go` grant no version 2
+implementation authority. The RFC-only amendment must first receive two
+independent exact-head Phase A reviews with zero demonstrated in-scope Blockers.
+The AI must then display one complete version 2 live decision card in this same
 Codex task.
 
 Only the exact entire text of a later task-user message matching the live
@@ -1480,14 +1572,29 @@ lost task items does not authorize implementation.
 The required exact approval form is:
 
 ```text
-I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001 version 1.
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001 version 2.
 ```
 
 When shown in a complete live card and supplied as the exact entire later
-task-user message, that approval authorizes only in-envelope repository
-implementation, tests, documentation, mechanical inventory regeneration,
-review handling, commits, pushes, and eventual merge in the one named draft
-pull request after every gate passes.
+task-user message, that approval authorizes only these in-envelope repository
+effects in draft PR #321 after every gate passes:
+
+- apply a behavior-preserving source reformat to the exact version 1 production
+  module;
+- remove the module-wide Ruff suppression and split long constants only with
+  unchanged values;
+- change the module's exact architecture budget to its finished count, bounded
+  by 1,800, and add the module-specific formatting/source-shape guards;
+- make only the focused tests, RFC evidence, and mechanical inventory updates
+  necessary to verify those formatting guards;
+- run local and hosted verification, handle review, commit, push, and eventually
+  merge the one named pull request after zero-Blocker exact-head review.
+
+Version 2 authorizes no parser, provider schema, principal, permission,
+resource-attachment, authorization, probe, clock, snapshot, digest, result, or
+failure-semantics change. Any AST difference from exact head
+`3fced1380c429dbe493b80358067f0d792beefed` stops implementation and requires a
+new reviewed decision rather than a review fix.
 
 It authorizes no cloud resource or IAM mutation, credential act,
 attestation-verification ceremony, manifest publication or deployment, runtime
@@ -1497,19 +1604,33 @@ deployment, release, security waiver, or issue #192 closure.
 
 ## 16. Approval evidence
 
-- **Decision:** `ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, version
-  `1`.
+- **Approved decision:**
+  `ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, version `1`.
 - **Draft pull request:** https://github.com/samovers/OFARM2/pull/321.
-- **Exact reviewed Phase A head:**
+- **Exact reviewed version 1 Phase A head:**
   `3aafb333f079931843bee330838ecd911e5fb7da`; independent review records
   `5327314658` and `4960437577` both report zero demonstrated in-scope
   Blockers.
-- **Complete live card:** displayed in this Codex task after both exact-head
-  reviews and before approval.
-- **Task-user Phase B approval:** supplied as the exact entire later message:
+- **Version 1 complete live card:** displayed in this Codex task after both
+  exact-head reviews and before approval.
+- **Version 1 task-user Phase B approval:** supplied as the exact entire later
+  message:
   `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001 version 1.`
-- **Evidence posture:** Phase B repository implementation, tests,
-  documentation, mechanical inventory regeneration, review handling, commits,
-  pushes, and eventual merge are authorized inside the exact six-path envelope
-  after every gate passes. All excluded production and follow-up authorities
-  remain unauthorized.
+- **Exact version 1 implementation head:**
+  `3fced1380c429dbe493b80358067f0d792beefed`; hosted run `32145965081` passed;
+  exact-head review records `5329732151` and `4962514064` reported zero
+  demonstrated security Blockers, while record `5329732151` withheld merge
+  support for the source-compression trade-off.
+- **Proposed decision:**
+  `ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, version `2`, limited to
+  the formatting and auditability amendment in sections 1.1, 11.2, 13, and 15.
+- **Exact version 2 Phase A amendment head:** recorded in the pull-request
+  review request after the RFC-only commit rather than self-referentially in
+  that commit.
+- **Version 2 complete live card:** not yet displayed; it may be shown only
+  after two independent exact-amendment-head reviews report zero demonstrated
+  in-scope Blockers.
+- **Version 2 task-user approval:** not yet supplied. No version 2
+  implementation authority exists.
+- **Evidence posture:** all excluded production, semantic-hardening, and
+  follow-up authorities remain unauthorized.
