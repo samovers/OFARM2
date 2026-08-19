@@ -577,6 +577,34 @@ composition, custody, and lifecycle authorities remain separate decisions;
 this library alone does not establish deployment readiness or complete issue
 #192.
 
+## Library-only security-audit observer-root admission
+
+`security_audit_observer_root_admission.py` is the non-provisioning admission
+boundary for one independently reviewed Google Cloud KMS HSM Ed25519 observer
+root. Trusted composition supplies one bounded canonical manifest, separate
+observer and signer KMS clients, an authenticated evidence HTTP session, and a
+trusted clock. One call observes the exact key, version, DER public key,
+attestation bundle, three closed custom roles, and ten effective-IAM tuples
+twice around one fixed non-production signing probe. Every Policy
+Troubleshooter request uses the v3beta allow/deny/PAB surface and accepts only
+the exact no-PAB posture frozen by the RFC.
+
+Success is one frozen 30-second admission containing the pinned identities,
+times, and SHA-256 digests of the manifest, equal normalized snapshot, and
+complete probe-bound evidence. It contains no policy, certificate,
+attestation, signature, credential, client, or mutable carrier. Any ordinary
+failure becomes a fresh empty refusal, while invalid local configuration makes
+no clock or network call and a successful call performs exactly one probe
+between two complete 16-read snapshots.
+
+The module cannot create or change a key, role, policy, credential, database,
+export, delivery route, runtime, or readiness state. It does not load the
+manifest, select production credentials, publish the admission, or authorize
+production use of the Preview v3beta dependency. Credential custody,
+provider-currentness acceptance, refresh and atomic publication, root
+rotation, runtime integration, deployment readiness, and issue #192 closure
+remain separate decisions.
+
 ## One-shot security-audit overflow closure
 
 The overflow-closure command observes and closes at most one database-selected

@@ -12896,6 +12896,451 @@
       "sourcePath": "kernel/tests/test_security_audit_hmac_retirement.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_architecture_guard_rejects_alternate_effects_endpoints_and_probe",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_base_exception_canaries_propagate[kwargs0]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_base_exception_canaries_propagate[kwargs1]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_base_exception_canaries_propagate[kwargs2]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_base_exception_canaries_propagate[kwargs3]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_bounded_http_transport_refuses_malformed_responses[response0]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_bounded_http_transport_refuses_malformed_responses[response1]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_bounded_http_transport_refuses_malformed_responses[response2]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_bounded_http_transport_refuses_malformed_responses[response3]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_bounded_http_transport_refuses_malformed_responses[response4]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_bounded_http_transport_refuses_malformed_responses[response5]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_complete_admission_has_exact_result_digests_and_effect_order",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_complete_deny_policy_text_is_validated_normalized_and_bound",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_deny_policy_schema_rule_order_and_explanations_are_bound",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_deny_policy_without_policy_text_refuses",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_effective_tags_are_validated_and_normalized",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_exact_request_shapes_and_matrix_order",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_incomplete_or_unknown_policy_evidence_refuses[mutate0]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_incomplete_or_unknown_policy_evidence_refuses[mutate1]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_incomplete_or_unknown_policy_evidence_refuses[mutate2]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_incomplete_or_unknown_policy_evidence_refuses[mutate3]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_incomplete_or_unknown_policy_evidence_refuses[mutate4]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_incomplete_or_unknown_policy_evidence_refuses[mutate5]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_incomplete_or_unknown_policy_evidence_refuses[mutate6]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_incomplete_or_unknown_policy_evidence_refuses[mutate7]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_incomplete_or_unknown_policy_evidence_refuses[mutate8]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_indirect_or_extra_signer_binding_refuses_even_when_result_says_can",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_invalid_finished_time_refuses_after_complete_observation[times0]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_invalid_finished_time_refuses_after_complete_observation[times1]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_invalid_finished_time_refuses_after_complete_observation[times2]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_invalid_finished_time_refuses_after_complete_observation[times3]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_invalid_started_time_makes_no_network_call[-1]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_invalid_started_time_makes_no_network_call[1.0]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_invalid_started_time_makes_no_network_call[1]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_invalid_started_time_makes_no_network_call[None]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_invalid_started_time_makes_no_network_call[True]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_kms_metadata_mutations_refuse_before_probe[key-<lambda>0]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_kms_metadata_mutations_refuse_before_probe[key-<lambda>1]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_kms_metadata_mutations_refuse_before_probe[key-<lambda>2]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_kms_metadata_mutations_refuse_before_probe[key-<lambda>3]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_kms_metadata_mutations_refuse_before_probe[key-<lambda>4]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_kms_metadata_mutations_refuse_before_probe[public-<lambda>0]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_kms_metadata_mutations_refuse_before_probe[public-<lambda>1]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_kms_metadata_mutations_refuse_before_probe[public-<lambda>2]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_kms_metadata_mutations_refuse_before_probe[version-<lambda>0]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_kms_metadata_mutations_refuse_before_probe[version-<lambda>1]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_kms_metadata_mutations_refuse_before_probe[version-<lambda>2]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_kms_metadata_mutations_refuse_before_probe[version-<lambda>3]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_manifest_mutations_refuse_before_clock_or_network[<lambda>0]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_manifest_mutations_refuse_before_clock_or_network[<lambda>1]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_manifest_mutations_refuse_before_clock_or_network[<lambda>2]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_manifest_mutations_refuse_before_clock_or_network[<lambda>3]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_manifest_mutations_refuse_before_clock_or_network[<lambda>4]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_manifest_mutations_refuse_before_clock_or_network[<lambda>5]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_manifest_mutations_refuse_before_clock_or_network[<lambda>6]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_manifest_mutations_refuse_before_clock_or_network[<lambda>7]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_manifest_mutations_refuse_before_clock_or_network[<lambda>8]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_manifest_mutations_refuse_before_clock_or_network[<lambda>9]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_missing_dependency_surface_refuses_before_clock[clock-replacement3]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_missing_dependency_surface_refuses_before_clock[observer-replacement0]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_missing_dependency_surface_refuses_before_clock[session-replacement2]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_missing_dependency_surface_refuses_before_clock[signer-replacement1]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_noncanonical_manifest_carriers_refuse_without_effect[ {\"attestationBundleSha256\":\"049e6844b27f7e3e403316d8cce6cb48dc4b20c632caceec231954ea98222e4b\",\"attestationFormat\":\"CAVIUM_V1_COMPRESSED\",\"kmsKeyVersionResource\":\"projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/security-audit-observer/cryptoKeyVersions/1\",\"observerKeyRoleEtag\":\"a2V5\",\"observerPrincipal\":\"audit-observer@example.iam.gserviceaccount.com\",\"observerPublicKey\":\"A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg\",\"observerVersionRoleEtag\":\"dmVyc2lvbg==\",\"schemaVersion\":\"ofarm.security-audit-observer-root-admission-manifest.v1\",\"signerPrincipal\":\"audit-signer@example.iam.gserviceaccount.com\",\"signerRoleEtag\":\"c2lnbmVy\"}]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_noncanonical_manifest_carriers_refuse_without_effect[/xc3/xa5]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_noncanonical_manifest_carriers_refuse_without_effect[/xef/xbb/xbf{\"attestationBundleSha256\":\"049e6844b27f7e3e403316d8cce6cb48dc4b20c632caceec231954ea98222e4b\",\"attestationFormat\":\"CAVIUM_V1_COMPRESSED\",\"kmsKeyVersionResource\":\"projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/security-audit-observer/cryptoKeyVersions/1\",\"observerKeyRoleEtag\":\"a2V5\",\"observerPrincipal\":\"audit-observer@example.iam.gserviceaccount.com\",\"observerPublicKey\":\"A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg\",\"observerVersionRoleEtag\":\"dmVyc2lvbg==\",\"schemaVersion\":\"ofarm.security-audit-observer-root-admission-manifest.v1\",\"signerPrincipal\":\"audit-signer@example.iam.gserviceaccount.com\",\"signerRoleEtag\":\"c2lnbmVy\"}]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_noncanonical_manifest_carriers_refuse_without_effect[]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_noncanonical_manifest_carriers_refuse_without_effect[{\"attestationBundleSha256\":\"049e6844b27f7e3e403316d8cce6cb48dc4b20c632caceec231954ea98222e4b\",\"attestationFormat\":\"CAVIUM_V1_COMPRESSED\",\"kmsKeyVersionResource\":\"projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/security-audit-observer/cryptoKeyVersions/1\",\"observerKeyRoleEtag\":\"a2V5\",\"observerPrincipal\":\"audit-observer@example.iam.gserviceaccount.com\",\"observerPublicKey\":\"A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg\",\"observerVersionRoleEtag\":\"dmVyc2lvbg==\",\"schemaVersion\":\"ofarm.security-audit-observer-root-admission-manifest.v1\",\"signerPrincipal\":\"audit-signer@example.iam.gserviceaccount.com\",\"signerRoleEtag\":\"c2lnbmVy\"}/n]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_noncanonical_manifest_carriers_refuse_without_effect[{\"schemaVersion\":\"x\",\"schemaVersion\":\"y\"}]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_noncanonical_manifest_carriers_refuse_without_effect[{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_ordinary_dependency_errors_become_fresh_empty_refusals[kwargs0-observer]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_ordinary_dependency_errors_become_fresh_empty_refusals[kwargs1-session]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_ordinary_dependency_errors_become_fresh_empty_refusals[kwargs2-signer]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_ordinary_dependency_errors_become_fresh_empty_refusals[kwargs3-clock]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_probe_response_mutations_stop_before_second_snapshot[<lambda>0]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_probe_response_mutations_stop_before_second_snapshot[<lambda>1]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_probe_response_mutations_stop_before_second_snapshot[<lambda>2]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_probe_response_mutations_stop_before_second_snapshot[<lambda>3]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_probe_response_mutations_stop_before_second_snapshot[<lambda>4]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_probe_response_mutations_stop_before_second_snapshot[<lambda>5]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_probe_response_mutations_stop_before_second_snapshot[<lambda>6]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_probe_signature_must_match_the_manifest_public_key",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_repository_envelope_pins_budget_without_shared_test_cap",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_role_definition_mutations_refuse_before_probe[<lambda>0]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_role_definition_mutations_refuse_before_probe[<lambda>1]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_role_definition_mutations_refuse_before_probe[<lambda>2]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_role_definition_mutations_refuse_before_probe[<lambda>3]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_role_definition_mutations_refuse_before_probe[<lambda>4]",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_semantically_unordered_binding_roster_is_stable",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_observer_root_admission.py::test_valid_snapshot_drift_refuses_after_second_clock",
+      "sourceModule": "kernel.tests.test_security_audit_observer_root_admission",
+      "sourcePath": "kernel/tests/test_security_audit_observer_root_admission.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_overflow.py::test_acknowledged_report_has_only_the_fixed_non_count_fields",
       "sourceModule": "kernel.tests.test_security_audit_overflow",
       "sourcePath": "kernel/tests/test_security_audit_overflow.py"
@@ -16546,8 +16991,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "eea796be7eeee19f89553de1bcfc3a9701f4b0fa5c9a22a287ebe9172f407b88",
-  "entryCount": 3309,
+  "entriesSha256": "bddefb34f3b9f6d77c830205ffab0aed9a21bf7c1a69ee2928d2e909a3d54908",
+  "entryCount": 3398,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
