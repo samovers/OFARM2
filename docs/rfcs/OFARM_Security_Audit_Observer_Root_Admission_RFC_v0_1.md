@@ -1,13 +1,11 @@
 # OFARM Security-Audit Observer-Root Admission — Phase A Contract v0.1
 
-**Status:** decision version 1 is approved and its repository implementation is
-present at exact head `3fced1380c429dbe493b80358067f0d792beefed` in
-draft PR #321; hosted run `32145965081` passed and two exact-head reviews
-reported zero demonstrated in-scope security Blockers, but one reviewer withheld
-merge support because the exact 700-line cap forced a module-wide Ruff
-suppression and compressed source; decision version 2 is a documentation-only
-formatting amendment draft and grants no version 2 implementation or merge
-authority; deployment and production operation remain unauthorized
+**Status:** decision version 2 is approved after two zero-Blocker reviews of
+exact amendment head `79fff484628c4ee8653cecab3c7223f9a64d8f93` and the
+required live task-user approval; its behavior-preserving formatting and
+conformance implementation is present for exact-head review in draft PR #321;
+hosted implementation evidence and implementation review remain merge gates;
+deployment and production operation remain unauthorized
 
 **Draft pull request:** https://github.com/samovers/OFARM2/pull/321
 
@@ -15,9 +13,9 @@ authority; deployment and production operation remain unauthorized
 `ofarm2.security-audit-observer-root-admission.v0.1`
 
 **Decision identity:**
-`ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, proposed version `2`;
-approved version `1` remains the historical authority for the implementation
-already present in this draft pull request
+`ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, approved version `2`;
+approved version `1` remains the historical semantic baseline at exact head
+`3fced1380c429dbe493b80358067f0d792beefed`
 
 **Issue:** #192
 
@@ -27,9 +25,7 @@ already present in this draft pull request
 provisioned Google Cloud KMS HSM Ed25519 observer root and its exact effective
 IAM authorization evidence
 
-**Phase A review-head boundary:** this RFC only
-
-**Maximum prospective Phase B pull request boundary:** this RFC; one
+**Version 2 implementation-review boundary:** this RFC; one
 library-only non-mutating observer-root admission module; focused tests; minimal
 deployment documentation; exact architecture-check registration; and the
 mechanically regenerated review-baseline test inventory only
@@ -1464,11 +1460,12 @@ deployment inputs and remain unauthorized.
 
 ### 14.1 Open material decisions
 
-One material decision is open inside this Phase A boundary: whether to approve
-the version 2 auditability amendment in section 1.1. Its complete choices are
-already fixed in this draft. Exact-head review may correct the amendment, but
-implementation may not begin until a complete version 2 live decision card is
-shown and the task user supplies its exact approval sentence.
+No material decision remains open inside the version 2 formatting boundary.
+Exact amendment head `79fff484628c4ee8653cecab3c7223f9a64d8f93`
+received two zero-Blocker reviews, the complete live decision card was shown,
+and the task user supplied the exact version 2 approval sentence. Hosted
+implementation evidence and exact-head implementation review are verification
+and merge gates, not authority to expand the decision.
 
 The following remain deliberately deferred and must not be answered by this
 formatting amendment or its implementation:
@@ -1533,11 +1530,25 @@ formatting amendment or its implementation:
   removes the suppression, requires deterministic formatting and source-shape
   guards, and proves semantic AST equality. It does not reopen or alter the
   security protocol.
-- **Current disposition:** version 1 remains the authority for the implementation
-  already present. Version 2 is an unapproved RFC-only amendment. No version 2
-  source reformat, architecture change, ready-for-review transition, or merge is
-  authorized until its exact-head Phase A reviews and later exact task-user
-  approval are complete.
+- **Exact version 2 amendment review:** exact RFC-only head
+  `79fff484628c4ee8653cecab3c7223f9a64d8f93` passed hosted run `#987`
+  (`32227035347`). Review `4970216823` and independent review comment
+  `5339952674` both reported zero demonstrated in-scope Blockers and found the
+  amendment sufficient to resolve the source-compression publication dispute.
+- **Version 2 approval:** the complete live card was displayed after those
+  reviews, and the task user then supplied the exact approval sentence in
+  section 15.
+- **Version 2 implementation posture:** the module is now Ruff-stable at an
+  exact 1,747 physical lines, has no `noqa`, semicolon, one-line compound body,
+  or over-120-character line, and has the same location-free parsed AST as
+  exact version 1 implementation head
+  `3fced1380c429dbe493b80358067f0d792beefed`. The exact implementation commit,
+  hosted checks, and implementation reviews are recorded in the pull request
+  after commit rather than self-referentially here.
+- **Current disposition:** version 2 implementation is authorized and confined
+  to the six paths, but PR #321 remains Draft until exact-head hosted evidence
+  and zero-Blocker implementation review pass. Merge does not authorize any
+  deployment or production operation.
 - **Follow-ups:** section 11.4 and exact explained-resource attachment-point
   binding before production composition. Neither may enter version 2.
 - **Preferences:** captured live provider responses and the provider-currentness
@@ -1575,6 +1586,13 @@ The required exact approval form is:
 I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001 version 2.
 ```
 
+Exact amendment head `79fff484628c4ee8653cecab3c7223f9a64d8f93`
+received zero-Blocker review `4970216823` and zero-Blocker independent review
+comment `5339952674` after hosted run `#987` passed. The complete live card was
+then displayed in this Codex task, and the task user supplied the exact sentence
+above as the entire later message. Those prerequisites now supply only the
+bounded implementation authority described below.
+
 When shown in a complete live card and supplied as the exact entire later
 task-user message, that approval authorizes only these in-envelope repository
 effects in draft PR #321 after every gate passes:
@@ -1605,7 +1623,8 @@ deployment, release, security waiver, or issue #192 closure.
 ## 16. Approval evidence
 
 - **Approved decision:**
-  `ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, version `1`.
+  `ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, version `2`; version
+  `1` remains the historical semantic baseline.
 - **Draft pull request:** https://github.com/samovers/OFARM2/pull/321.
 - **Exact reviewed version 1 Phase A head:**
   `3aafb333f079931843bee330838ecd911e5fb7da`; independent review records
@@ -1621,16 +1640,30 @@ deployment, release, security waiver, or issue #192 closure.
   exact-head review records `5329732151` and `4962514064` reported zero
   demonstrated security Blockers, while record `5329732151` withheld merge
   support for the source-compression trade-off.
-- **Proposed decision:**
-  `ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, version `2`, limited to
-  the formatting and auditability amendment in sections 1.1, 11.2, 13, and 15.
-- **Exact version 2 Phase A amendment head:** recorded in the pull-request
-  review request after the RFC-only commit rather than self-referentially in
-  that commit.
-- **Version 2 complete live card:** not yet displayed; it may be shown only
-  after two independent exact-amendment-head reviews report zero demonstrated
-  in-scope Blockers.
-- **Version 2 task-user approval:** not yet supplied. No version 2
-  implementation authority exists.
+- **Exact version 2 Phase A amendment head:**
+  `79fff484628c4ee8653cecab3c7223f9a64d8f93`; hosted run `#987`
+  (`32227035347`) passed, and review `4970216823` plus independent review
+  comment `5339952674` reported zero demonstrated in-scope Blockers.
+- **Version 2 complete live card:** displayed in this Codex task after both
+  exact-amendment-head reviews and before approval.
+- **Version 2 task-user approval:** supplied as the exact entire later message:
+  `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001 version 2.`
+- **Local version 2 implementation evidence:** pinned Ruff `0.15.5` check and
+  `ruff format --check` pass; architecture conformance passes; all 89 focused
+  tests pass in a 1,384-line focused test file; the module has exactly 1,747
+  physical lines and a maximum physical line length of 102; and its Python
+  3.12.13 location-free AST digest is exactly
+  `sha256:d8af95faf3cc932c96f60ac611931c35337609aca229f75e8b23d9d39b251af6`,
+  precomputed from immutable head
+  `3fced1380c429dbe493b80358067f0d792beefed` rather than from the candidate.
+- **Shared-envelope posture:** `MAX_FUNCTION_LINES` remains 80 and the focused
+  test remains outside `TEST_GLOBS`. Because deterministic Ruff rendering makes
+  two semantically unchanged functions exceed that generic physical-span
+  heuristic, only this immutable-AST module uses its exact AST and source-shape
+  guard instead; no shared cap, group budget, dependency, lockfile, workflow,
+  or seventh path changes.
+- **Implementation-head evidence:** the exact version 2 implementation commit,
+  hosted run, and exact-head implementation reviews are recorded in PR #321
+  after commit rather than self-referentially in this commit.
 - **Evidence posture:** all excluded production, semantic-hardening, and
   follow-up authorities remain unauthorized.

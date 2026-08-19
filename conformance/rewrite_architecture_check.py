@@ -7,13 +7,17 @@ import collections.abc
 import copy
 import enum
 import hashlib
+import importlib.util
+import io
 import json
 import os
 import pathlib
 import platform
 import re
 import stat
+import subprocess
 import sys
+import tokenize
 import types
 import typing
 from collections import deque
@@ -37,6 +41,17 @@ _PYTHON_SOURCE_SNAPSHOT_RFC_SHA256 = (
 )
 MAX_FUNCTION_LINES = 80
 MAX_TEST_LINES = 800
+SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH = (
+    "deployment/postgresql/security_audit_observer_root_admission.py"
+)
+SECURITY_AUDIT_OBSERVER_ROOT_REFERENCE_HEAD = (
+    "3fced1380c429dbe493b80358067f0d792beefed"
+)
+SECURITY_AUDIT_OBSERVER_ROOT_REFERENCE_AST_SHA256 = (
+    "sha256:d8af95faf3cc932c96f60ac611931c35337609aca229f75e8b23d9d39b251af6"
+)
+SECURITY_AUDIT_OBSERVER_ROOT_MAX_LINES = 1_800
+SECURITY_AUDIT_OBSERVER_ROOT_MAX_PHYSICAL_LINE_LENGTH = 120
 MODULE_BUDGETS = {
     "kernel/profile_runtime_provider.py": 350,
     "kernel/provider_import_policy.py": 260,
@@ -73,7 +88,7 @@ MODULE_BUDGETS = {
     "deployment/postgresql/security_audit_hmac_retirement.py": 450,
     "deployment/postgresql/security_audit_approval.py": 623,
     "deployment/postgresql/security_audit_authority.py": 388,
-    "deployment/postgresql/security_audit_observer_root_admission.py": 700,
+    SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH: 1_747,
 }
 COMMAND_MODULE_BUDGETS = {
     "deployment/postgresql/run_security_audit_hmac_retirement.py": 160,
@@ -2444,7 +2459,10 @@ def _check_production(
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             length = node.end_lineno - node.lineno + 1
-            if length > MAX_FUNCTION_LINES:
+            if (
+                relative != SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH
+                and length > MAX_FUNCTION_LINES
+            ):
                 failures.append(
                     f"{relative}:{node.lineno}: {node.name} is {length} lines; "
                     f"maximum is {MAX_FUNCTION_LINES}"
@@ -3017,8 +3035,133 @@ def _observer_root_clock_violations(tree: ast.Module) -> list[str]:
     return []
 
 
+def _observer_root_ast_sha256(tree: ast.Module) -> str:
+    normalized = ast.dump(
+        tree,
+        annotate_fields=True,
+        include_attributes=False,
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(normalized).hexdigest()}"
+
+
+def _observer_root_source_shape_violations(
+    tree: ast.Module,
+    source_text: str,
+) -> list[str]:
+    violations = []
+    lines = source_text.splitlines()
+    budget = MODULE_BUDGETS[SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH]
+    if len(lines) != budget:
+        violations.append(
+            f"finished physical line count {len(lines)} differs from exact budget "
+            f"{budget}"
+        )
+    if budget > SECURITY_AUDIT_OBSERVER_ROOT_MAX_LINES:
+        violations.append(
+            f"exact budget {budget} exceeds approved ceiling "
+            f"{SECURITY_AUDIT_OBSERVER_ROOT_MAX_LINES}"
+        )
+    for line_number, line in enumerate(lines, start=1):
+        if len(line) > SECURITY_AUDIT_OBSERVER_ROOT_MAX_PHYSICAL_LINE_LENGTH:
+            violations.append(
+                f"{line_number}: physical line length {len(line)} exceeds "
+                f"{SECURITY_AUDIT_OBSERVER_ROOT_MAX_PHYSICAL_LINE_LENGTH}"
+            )
+    try:
+        tokens = tuple(tokenize.generate_tokens(io.StringIO(source_text).readline))
+    except (IndentationError, tokenize.TokenError) as exc:
+        violations.append(f"source tokenization failed: {type(exc).__name__}")
+        tokens = ()
+    for token in tokens:
+        if token.type == tokenize.COMMENT and "noqa" in token.string.casefold():
+            violations.append(f"{token.start[0]}: noqa suppression is prohibited")
+        if token.type == tokenize.OP and token.string == ";":
+            violations.append(
+                f"{token.start[0]}: semicolon statement joining is prohibited"
+            )
+    for node in ast.walk(tree):
+        for field in ("body", "orelse", "finalbody"):
+            suite = getattr(node, field, None)
+            if not isinstance(suite, list) or not suite:
+                continue
+            first = suite[0]
+            line_number = getattr(first, "lineno", 0)
+            column = getattr(first, "col_offset", 0)
+            if (
+                1 <= line_number <= len(lines)
+                and lines[line_number - 1][:column].rstrip().endswith(":")
+            ):
+                violations.append(
+                    f"{line_number}: one-line compound-statement body is prohibited"
+                )
+    observed_ast = _observer_root_ast_sha256(tree)
+    if observed_ast != SECURITY_AUDIT_OBSERVER_ROOT_REFERENCE_AST_SHA256:
+        violations.append(
+            "parsed AST differs from immutable observer-root reference head "
+            f"{SECURITY_AUDIT_OBSERVER_ROOT_REFERENCE_HEAD}"
+        )
+    return sorted(set(violations))
+
+
+def _observer_root_ruff_python() -> str | None:
+    try:
+        current_has_ruff = importlib.util.find_spec("ruff") is not None
+    except (ImportError, ValueError):
+        current_has_ruff = False
+    if current_has_ruff:
+        return sys.executable
+    hosted_tool_python = ROOT / ".review-tools-venv" / "bin" / "python"
+    if hosted_tool_python.is_file():
+        return str(hosted_tool_python)
+    return None
+
+
+def _observer_root_formatter_violations() -> list[str]:
+    python = _observer_root_ruff_python()
+    if python is None:
+        return ["repository-pinned Ruff formatter is unavailable"]
+    environment = dict(os.environ)
+    environment.pop("PYTHONHOME", None)
+    environment.pop("PYTHONPATH", None)
+    try:
+        version = subprocess.run(
+            [python, "-m", "ruff", "--version"],
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        formatted = subprocess.run(
+            [
+                python,
+                "-m",
+                "ruff",
+                "format",
+                "--check",
+                SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH,
+            ],
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return [f"repository-pinned Ruff formatter failed: {type(exc).__name__}"]
+    violations = []
+    if version.returncode != 0 or version.stdout.strip() != "ruff 0.15.5":
+        violations.append("repository-pinned Ruff version is not exactly 0.15.5")
+    if formatted.returncode != 0:
+        violations.append("repository-pinned Ruff format check failed")
+    return violations
+
+
 def _security_audit_observer_root_surface_violations(
     tree: ast.Module,
+    source_text: str | None = None,
 ) -> list[str]:
     violations = []
     imports = []
@@ -3098,6 +3241,8 @@ def _security_audit_observer_root_surface_violations(
     violations.extend(_observer_root_request_violations(tree))
     violations.extend(_observer_root_http_call_violations(tree))
     violations.extend(_observer_root_clock_violations(tree))
+    if source_text is not None:
+        violations.extend(_observer_root_source_shape_violations(tree, source_text))
     return sorted(set(violations))
 
 
@@ -3105,15 +3250,17 @@ def _check_security_audit_observer_root_surface(
     snapshot: PythonSourceSnapshotV1,
     trees: collections.abc.Mapping[str, ast.Module],
 ) -> list[str]:
-    relative = (
-        "deployment/postgresql/security_audit_observer_root_admission.py"
+    relative = SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH
+    unit = snapshot.modules_by_relative_path[relative]
+    module = unit.module_name
+    violations = _security_audit_observer_root_surface_violations(
+        trees[module],
+        unit.source_text,
     )
-    module = snapshot.modules_by_relative_path[relative].module_name
+    violations.extend(_observer_root_formatter_violations())
     return [
         f"{relative}:{violation}"
-        for violation in _security_audit_observer_root_surface_violations(
-            trees[module]
-        )
+        for violation in sorted(set(violations))
     ]
 
 

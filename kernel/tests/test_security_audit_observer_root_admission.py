@@ -1292,9 +1292,15 @@ def test_effective_tags_are_validated_and_normalized() -> None:
 
 def test_architecture_guard_rejects_alternate_effects_endpoints_and_probe() -> None:
     source = Path(security_audit_observer_root_admission.__file__).read_text()
+    tree = ast.parse(source)
     assert rewrite_architecture_check._security_audit_observer_root_surface_violations(
-        ast.parse(source)
+        tree,
+        source,
     ) == []
+    assert rewrite_architecture_check._observer_root_ast_sha256(tree) == (
+        rewrite_architecture_check.SECURITY_AUDIT_OBSERVER_ROOT_REFERENCE_AST_SHA256
+    )
+    assert rewrite_architecture_check._observer_root_formatter_violations() == []
     mutations = (
         source.replace("v3beta/iam:troubleshoot", "v3/iam:troubleshoot"),
         source.replace("ADMISSION-V1", "ADMISSION-V2"),
@@ -1303,16 +1309,74 @@ def test_architecture_guard_rejects_alternate_effects_endpoints_and_probe() -> N
     )
     for mutation in mutations:
         assert rewrite_architecture_check._security_audit_observer_root_surface_violations(
-            ast.parse(mutation)
+            ast.parse(mutation),
+            mutation,
+        )
+
+    protocol_body = (
+        "    def close(self) -> None:\n"
+        "        # Protocol declaration.\n"
+        "        ...\n"
+    )
+    shape_mutations = (
+        (
+            "noqa suppression is prohibited",
+            source.replace(
+                "from base64 import b64decode, b64encode, urlsafe_b64decode, urlsafe_b64encode",
+                "from base64 import b64decode, b64encode, urlsafe_b64decode, urlsafe_b64encode  # noqa: E701",
+                1,
+            ),
+        ),
+        (
+            "semicolon statement joining is prohibited",
+            source.replace("_KMS_TIMEOUT = 5.0", "_KMS_TIMEOUT = 5.0;", 1),
+        ),
+        (
+            "one-line compound-statement body is prohibited",
+            source.replace(protocol_body, "    def close(self) -> None: ...\n", 1),
+        ),
+        (
+            "physical line length",
+            source.replace(
+                "from base64 import b64decode, b64encode, urlsafe_b64decode, urlsafe_b64encode",
+                "from base64 import b64decode, b64encode, urlsafe_b64decode, "
+                f"urlsafe_b64encode  # {'x' * 121}",
+                1,
+            ),
+        ),
+    )
+    for expected, mutation in shape_mutations:
+        mutation_tree = ast.parse(mutation)
+        assert rewrite_architecture_check._observer_root_ast_sha256(mutation_tree) == (
+            rewrite_architecture_check.SECURITY_AUDIT_OBSERVER_ROOT_REFERENCE_AST_SHA256
+        )
+        violations = (
+            rewrite_architecture_check._security_audit_observer_root_surface_violations(
+                mutation_tree,
+                mutation,
+            )
+        )
+        assert any(expected in violation for violation in violations), (
+            expected,
+            violations,
         )
 
 
 def test_repository_envelope_pins_budget_without_shared_test_cap() -> None:
-    relative = "deployment/postgresql/security_audit_observer_root_admission.py"
+    relative = rewrite_architecture_check.SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH
     source = Path(security_audit_observer_root_admission.__file__).read_text()
     budget = rewrite_architecture_check.MODULE_BUDGETS[relative]
     assert len(source.splitlines()) == budget
-    assert budget <= 700
+    assert budget == 1_747
+    assert budget <= rewrite_architecture_check.SECURITY_AUDIT_OBSERVER_ROOT_MAX_LINES
+    assert rewrite_architecture_check.SECURITY_AUDIT_OBSERVER_ROOT_MAX_LINES == 1_800
+    assert max(map(len, source.splitlines())) <= (
+        rewrite_architecture_check.SECURITY_AUDIT_OBSERVER_ROOT_MAX_PHYSICAL_LINE_LENGTH
+    )
+    assert rewrite_architecture_check.MAX_FUNCTION_LINES == 80
+    assert rewrite_architecture_check.SECURITY_AUDIT_OBSERVER_ROOT_REFERENCE_HEAD == (
+        "3fced1380c429dbe493b80358067f0d792beefed"
+    )
     test_relative = "kernel/tests/test_security_audit_observer_root_admission.py"
     assert not any(
         Path(test_relative).match(pattern)
