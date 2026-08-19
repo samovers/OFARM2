@@ -10,8 +10,8 @@
 - **Reviewed base:**
   `bdf636d155e45ecbf4d9ac828e232bbcf91e1d59`, the merge commit for PR
   [#321](https://github.com/samovers/OFARM2/pull/321)
-- **Draft pull request:** to be recorded after this RFC-only branch is
-  published
+- **Draft pull request:**
+  [#322](https://github.com/samovers/OFARM2/pull/322)
 - **Primary trust boundary:** non-provisioning validation of Policy
   Troubleshooter deny-resource evidence for the security-audit observer root
 - **Phase A repository effect:** this RFC is the only changed path
