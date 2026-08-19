@@ -1,13 +1,13 @@
 # OFARM Security-Audit Observer-Root Admission — Phase A Contract v0.1
 
-**Status:** decision version 2 is approved and its behavior-preserving
-formatting implementation is present at exact head
-`ca2a6c696e969767d5f2867170e39957151cb271`; hosted run `#988` passed, but its
-two exact-head implementation reviewers disagree about whether version 2
-authorized the module-specific function-span exception; proposed decision
-version 3 is an RFC-only publication amendment that resolves the stricter
-review disposition and is not approved; PR #321 remains Draft, and deployment
-and production operation remain unauthorized
+**Status:** decision version 3 is approved from exact RFC-only amendment head
+`877e0d02a463e7804ee1148e580eaa5393e143b2` after hosted run `#989`, two
+zero-Blocker exact-head reviews, the complete live card, and the exact task-user
+approval sentence; its publication record is being updated without changing
+the version 2 implementation at
+`ca2a6c696e969767d5f2867170e39957151cb271`; PR #321 remains Draft, and merge,
+deployment, and production operation remain unauthorized until their later
+gates pass
 
 **Draft pull request:** https://github.com/samovers/OFARM2/pull/321
 
@@ -15,9 +15,9 @@ and production operation remain unauthorized
 `ofarm2.security-audit-observer-root-admission.v0.1`
 
 **Decision identity:**
-`ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, approved version `2`;
-proposed version `3` is not approved;
-approved version `1` remains the historical semantic baseline at exact head
+`ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001`, approved version `3`;
+approved version `2` remains the historical formatting authority, and approved
+version `1` remains the historical semantic baseline at exact head
 `3fced1380c429dbe493b80358067f0d792beefed`
 
 **Issue:** #192
@@ -33,11 +33,10 @@ library-only non-mutating observer-root admission module; focused tests; minimal
 deployment documentation; exact architecture-check registration; and the
 mechanically regenerated review-baseline test inventory only
 
-**Proposed version 3 Phase A boundary:** this RFC only, to decide whether the
-exact observer-root module may replace the generic physical function-span
+**Version 3 publication boundary:** this RFC only, to record approval of the
+exact observer-root module replacing the generic physical function-span
 heuristic with its already-required deterministic formatting, exact source
-shape, and immutable-AST gates; no implementation path may change before
-version 3 approval
+shape, and immutable-AST gates; no implementation path may change
 
 ## 1. Problem and goal
 
@@ -121,7 +120,7 @@ result, refusal, provider, or side-effect rule changes in version 2. The
 separately reviewed explained-resource attachment-point hardening remains a
 pre-production follow-up and may not be folded into this formatting amendment.
 
-### 1.2 Proposed version 3 function-span publication amendment
+### 1.2 Version 3 function-span publication amendment
 
 Deterministic formatting at exact implementation head
 `ca2a6c696e969767d5f2867170e39957151cb271` leaves the shared
@@ -140,7 +139,7 @@ same choice as consistent with version 2 and reports zero Blockers. Because
 merge requires both reviewers to report zero demonstrated in-scope Blockers,
 the stricter disposition controls and PR #321 may not merge under version 2.
 
-Proposed version 3 makes the previously implicit choice exact:
+Approved version 3 makes the previously implicit choice exact:
 
 1. `MAX_FUNCTION_LINES` remains exactly 80 and continues to govern every
    registered production module except
@@ -1331,7 +1330,7 @@ the exact module budget, direct-import boundary, prohibited side effects,
 fixed probe/KMS/HTTP surfaces, and module-specific formatting guards without
 registering a test glob or changing either shared numeric limit. Version 2 left
 `MAX_FUNCTION_LINES` at 80 but excluded the exact observer-root path from that
-generic physical-span heuristic. Proposed version 3 expressly authorizes only
+generic physical-span heuristic. Approved version 3 expressly authorizes only
 that exact exclusion and does not change the limit for any other path. Path 6
 is mechanical output only.
 
@@ -1343,7 +1342,7 @@ statement joining, one-line compound-statement body, or physical line longer
 than 120 characters. The formatted module's parsed AST, excluding source
 locations, must equal the AST at implementation head
 `3fced1380c429dbe493b80358067f0d792beefed`; implicit adjacent-literal splits
-must preserve the exact constant value. Under proposed version 3,
+must preserve the exact constant value. Under approved version 3,
 `MAX_FUNCTION_LINES` must remain 80 and must continue to govern every
 registered production path other than the exact observer-root path. That one
 path is accepted outside the generic heuristic only while every deterministic
@@ -1461,7 +1460,7 @@ widening V1.
   Justifications posture, observation order, bounds, output, and failure
   protocol are internally consistent;
 - all prospective dependencies are already hash-pinned;
-- the proposed version 3 amendment changes only this RFC relative to exact
+- the version 3 amendment changes only this RFC relative to exact
   implementation head `ca2a6c696e969767d5f2867170e39957151cb271` and does
   not alter the present production or conformance implementation;
 - independently verify that the exact implementation has 1,747 physical lines,
@@ -1469,7 +1468,7 @@ widening V1.
   `_deny_policy` at 127 physical lines, `MAX_FUNCTION_LINES == 80`, and exact
   location-free AST equality with
   `3fced1380c429dbe493b80358067f0d792beefed`;
-- prove that proposed version 3 names one exact-path exception, preserves the
+- prove that version 3 names one exact-path exception, preserves the
   generic 80-line heuristic everywhere else, and authorizes no decomposition,
   semantic change, or general exception mechanism;
 - `python3 conformance/ofarm_pkg_contract_check.py` passes before every commit;
@@ -1524,21 +1523,22 @@ deployment inputs and remain unauthorized.
 
 ## 14. Open decisions and review disposition
 
-### 14.1 Open material decisions
+### 14.1 Publication decision and deferred material decisions
 
-One material publication decision is open. Exact version 2 implementation head
+The material function-span publication decision is closed by approved version
+3. Exact version 2 implementation head
 `ca2a6c696e969767d5f2867170e39957151cb271` received one zero-Blocker formal
 review and one independent review with a Blocker over whether the exact
 observer-root module may be excluded from the generic 80-line physical
-function-span heuristic. Proposed version 3 selects the narrow exact-path
-exclusion, preserves all replacement gates, and is not approved. Its RFC-only
-head must receive two independent zero-Blocker reviews before a live version 3
-decision card may be shown.
+function-span heuristic. Exact RFC-only amendment head
+`877e0d02a463e7804ee1148e580eaa5393e143b2` selected the narrow exact-path
+exclusion, preserved all replacement gates, passed hosted run `#989`, and
+received two independent zero-Blocker reviews before the live version 3 card
+and exact task-user approval.
 
 Version 2 remains approved historical authority for the deterministic reformat
-and source-shape gates. It does not supply the disputed publication authority,
-and neither hosted success nor one zero-Blocker implementation review can
-expand it.
+and source-shape gates. It did not supply the disputed publication authority;
+approved version 3 now supplies only that narrow authority.
 
 The following remain deliberately deferred and must not be answered by this
 formatting amendment or its implementation:
@@ -1625,17 +1625,27 @@ formatting amendment or its implementation:
   only about authority for the exact module-specific function-span exclusion.
   The former reports one publication Blocker; the latter reports zero
   Blockers. Hosted run `#988` (`32237274296`) passed before both reviews.
-- **Proposed version 3 disposition:** accept the stricter review result and
+- **Approved version 3 disposition:** accept the stricter review result and
   amend the contract rather than treating the exclusion as a version 2 review
   fix. Version 3 expressly authorizes the exact existing exclusion, keeps
   `MAX_FUNCTION_LINES == 80` everywhere else, and forbids decomposition or any
   other AST change.
-- **Current disposition:** proposed version 3 is RFC-only and unapproved. PR
-  #321 remains Draft and may not merge until the exact amendment head receives
-  two zero-Blocker reviews, the complete live card is shown, the task user
-  supplies the exact later version 3 approval sentence, and the resulting
-  exact head passes hosted checks and bounded implementation review. Merge
-  would still authorize no deployment or production operation.
+- **Version 3 Phase A approval:** exact RFC-only head
+  `877e0d02a463e7804ee1148e580eaa5393e143b2` passed hosted run `#989`
+  (`32245043213`). Independent review comment `5341520464` and formal review
+  `4971703553` both reported zero demonstrated in-scope Blockers. The complete
+  live card was then displayed in this Codex task, and the task user supplied
+  the exact version 3 approval sentence in section 17.
+- **Non-blocking version 3 review note:** review `5341520464` recommends that a
+  future decision re-pinning the immutable AST baseline either re-decide the
+  exact-path function-span exclusion or decompose the two long functions. The
+  review did not classify that future-decision recommendation as a Blocker, and
+  version 3 authorizes no AST re-pin or decomposition.
+- **Current disposition:** version 3 is approved only for the RFC publication
+  boundary in section 17. PR #321 remains Draft and may not merge until the
+  resulting exact publication head passes hosted checks and receives two
+  zero-Blocker exact-head implementation reviews. Merge would still authorize
+  no deployment or production operation.
 - **Follow-ups:** section 11.4 and exact explained-resource attachment-point
   binding before production composition. Neither may enter version 3.
 - **Preferences:** captured live provider responses and the provider-currentness
@@ -1749,14 +1759,15 @@ deployment, release, security waiver, or issue #192 closure.
   physical-span heuristic, so the implementation makes only this immutable-AST
   module use its exact AST and source-shape guard instead. Review records
   `5340536580` and `4971095895` disagree about whether version 2 authorized that
-  exact exception; proposed version 3 supplies no authority until approved.
+  exact exception; version 3 supplies that narrow publication authority only
+  after the approval sequence recorded below.
 - **Implementation-head evidence:** the exact version 2 implementation commit,
   hosted run, and exact-head implementation reviews are recorded in PR #321
   after commit rather than self-referentially in this commit.
 - **Evidence posture:** all excluded production, semantic-hardening, and
   follow-up authorities remain unauthorized.
 
-## 17. Proposed version 3 function-span amendment approval boundary
+## 17. Version 3 function-span amendment approval boundary
 
 Version 3 is a publication amendment to the approved version 2 auditability
 envelope. It does not reopen version 1 security semantics or authorize a new
@@ -1783,8 +1794,14 @@ The required exact approval form is:
 I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001 version 3.
 ```
 
-If the prerequisites above are satisfied, that exact approval authorizes only
-these in-envelope repository effects in draft PR #321 after every gate passes:
+Exact RFC-only amendment head
+`877e0d02a463e7804ee1148e580eaa5393e143b2` passed hosted run `#989`
+(`32245043213`) and received zero-Blocker independent review comment
+`5341520464` plus zero-Blocker formal review `4971703553`. The complete live
+version 3 card was then displayed in this Codex task, and the task user supplied
+the exact sentence above as the entire later message. Those prerequisites now
+authorize only these in-envelope repository effects in draft PR #321 after
+every remaining gate passes:
 
 - retain the exact existing `_check_production` rule under which
   `MAX_FUNCTION_LINES == 80` governs every registered production path except
@@ -1810,9 +1827,9 @@ failure-semantics, cloud/IAM, credential, manifest, runtime, readiness,
 rotation, database, export, delivery, deployment, release, production, or issue
 #192 closure action.
 
-## 18. Proposed version 3 Phase A evidence
+## 18. Version 3 approval and publication evidence
 
-- **Phase A delta:** this proposed amendment changes only this RFC relative to
+- **Phase A delta:** this approved amendment changes only this RFC relative to
   exact version 2 implementation head
   `ca2a6c696e969767d5f2867170e39957151cb271`.
 - **Exact measured implementation:** 1,747 physical lines, longest physical
@@ -1829,11 +1846,22 @@ rotation, database, export, delivery, deployment, release, production, or issue
   `ca2a6c696e969767d5f2867170e39957151cb271`; independent review comment
   `5340536580` and formal review `4971095895` agree on the measurements and AST
   equality but disagree on version 2 authority.
-- **Exact version 3 amendment head:** recorded in PR #321 after commit rather
-  than self-referentially in this commit.
-- **Version 3 Phase A reviews:** not yet received.
-- **Version 3 live card:** not yet displayed.
-- **Version 3 task-user approval:** not yet supplied.
-- **Evidence posture:** PR #321 remains Draft, and all implementation, merge,
-  deployment, production, follow-up, and issue-closure authority remains
-  excluded until the exact version 3 sequence is satisfied.
+- **Exact version 3 amendment head:**
+  `877e0d02a463e7804ee1148e580eaa5393e143b2`; hosted run `#989`
+  (`32245043213`) passed the conformance, amd64 native-verifier, arm64
+  native-verifier, and canonical OCI-index jobs.
+- **Version 3 Phase A reviews:** independent review comment `5341520464` and
+  formal review `4971703553` both reviewed the exact amendment head and
+  reported zero demonstrated in-scope Blockers. Review `5341520464` also
+  recorded the non-blocking future AST-repin recommendation in section 14.2.
+- **Version 3 live card:** displayed in this Codex task after both exact-head
+  reviews.
+- **Version 3 task-user approval:** supplied as the exact entire later message:
+  `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-ADMISSION-001 version 3.`
+- **Publication-head evidence:** the approval-record commit, its hosted run,
+  and its exact-head implementation reviews are recorded in PR #321 after
+  commit rather than self-referentially in this commit.
+- **Evidence posture:** version 3 is approved only for the RFC publication
+  boundary. PR #321 remains Draft, and merge, deployment, production,
+  follow-up, and issue-closure authority remain excluded until their exact
+  later gates pass.
