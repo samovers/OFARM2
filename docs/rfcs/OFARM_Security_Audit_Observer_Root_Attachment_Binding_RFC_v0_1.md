@@ -16,6 +16,8 @@
   Troubleshooter deny-resource evidence for the security-audit observer root
 - **Phase A repository effect:** this RFC is the only changed path
 - **Phase B:** not authorized
+- **Provider-evidence gate:** unresolved; no live decision card or Phase B
+  authorization is permitted until section 5.1 passes on one exact RFC head
 
 ## 1. Problem and goal
 
@@ -68,6 +70,10 @@ permission, cloud resource, or runtime composition changes. The accepted
 effect is only that inconsistent or ungrounded deny-resource evidence refuses
 instead of becoming part of an observer-root admission.
 
+Exact equality is the proposed local protocol, not yet an established
+provider fact. Section 5.1 must establish it from complete authenticated
+same-response evidence before this goal can receive implementation authority.
+
 ## 2. Learning value
 
 This slice closes one demonstrated evidence-integrity gap in issue #192's
@@ -81,8 +87,10 @@ response cannot make a resource label look consistent merely by repeating the
 same lie in snapshots A and B.
 
 This is the last recorded semantic hardening prerequisite on the merged
-observer-root parser before separately governed provider-currentness,
-credential-custody, and runtime-composition decisions may rely on it.
+observer-root parser only if section 5.1 first establishes the proposed
+provider relation. Separately governed provider-currentness,
+credential-custody, and runtime-composition decisions may not rely on it
+before then.
 
 ## 3. Non-goals
 
@@ -98,8 +106,10 @@ This pull request does not change or add:
   inventory, or caller-supplied attachment roster;
 - provider-currentness or production acceptance of the Preview v3beta PAB
   dependency;
-- captured live provider responses, cloud credentials, cloud provisioning,
-  IAM mutation, deny-policy creation, or deployment evidence;
+- executing the separately authorized provider-evidence capture required by
+  section 5.1; this RFC may later record its publication-safe result, but this
+  decision grants no cloud credentials, cloud provisioning, IAM mutation,
+  deny-policy creation, or deployment authority;
 - signer, observer, or evidence-reader credential custody; user-managed key,
   impersonation, token-creation, workload attachment, or alternate-credential
   inspection;
@@ -192,6 +202,7 @@ inside scope and must refuse.
 
 | Decision | Sole authority in this slice | Explicit non-authorities |
 | --- | --- | --- |
+| Eligibility to authorize exact-equality implementation | The completed same-response provider-evidence gate in section 5.1 | Normative prose alone, either illustrative sample alone, typed fixtures, inference, or a generic `go` |
 | Deny-policy attachment point | The attachment segment of each fully validated IAM v2 `Policy.name` | Queried KMS resource, manifest project text, caller argument, environment, resource label by itself |
 | Attachment resource spelling | Exact deterministic transformation of that validated segment: prepend `//` and replace each exact `%2F` separator with `/` | General URL decoder, case folding, normalization library, heuristic prefix match |
 | Containing resource identity | Exact equality between the derived spelling from every contained policy and `ExplainedDenyResource.fullResourceName` | `startswith("//")`, first policy alone, outer reported deny state |
@@ -220,8 +231,8 @@ The exact derived resource form is:
   {projects|folders|organizations}/{positive-decimal-id}
 ```
 
-Official Google documentation says that `ExplainedDenyResource` represents a
-resource whose attached policies were evaluated, that its policies are
+Normative Google API descriptions say that `ExplainedDenyResource` represents
+a resource whose attached policies were evaluated, that its policies are
 policies attached to that resource, and that IAM v2 deny-policy names encode
 their URL-encoded attachment point. The official references observed for this
 Phase A decision are:
@@ -231,9 +242,79 @@ Phase A decision are:
 - [IAM deny policies and attachment points](https://cloud.google.com/iam/docs/deny-overview); and
 - [IAM v2 policy name format](https://cloud.google.com/iam/docs/reference/rest/v2/policies/update).
 
-These references define the deterministic repository protocol. They do not
-satisfy the separately required production provider-currentness and support
-decision.
+Those descriptions support the proposed deterministic repository protocol,
+but the current official troubleshooting guide contains two internally
+contradictory illustrative responses. In its first complete response, one
+explained deny resource contains this pair:
+
+```text
+fullResourceName:
+  //cloudresourcemanager.googleapis.com/projects/123456789012
+Policy.name attachment:
+  cloudresourcemanager.googleapis.com%2Fprojects%2F546942305807
+```
+
+In its later REST response, both fields identify project `546942305807`:
+
+```text
+fullResourceName:
+  //cloudresourcemanager.googleapis.com/projects/546942305807
+Policy.name attachment:
+  cloudresourcemanager.googleapis.com%2Fprojects%2F546942305807
+```
+
+The first sample would refuse under this RFC and the second would pass. The
+repository must not assume that the first is merely a documentation error.
+Neither the normative descriptions nor either illustrative response alone
+establish the provider relation required for Phase B.
+
+### 5.1 Ordered provider-evidence gate before Phase B authorization
+
+Before a complete live decision card may be displayed or Phase B may be
+authorized, a separately authorized actor with appropriate provider
+credentials must complete this gate without using authority from this RFC:
+
+1. capture one complete authenticated Policy Troubleshooter v3beta response
+   involving a controlled project-attached IAM v2 deny policy;
+2. have both bounded reviewers inspect the complete response and record in
+   this RFC the capture time, exact endpoint and API version, a SHA-256 digest
+   of the complete response, and the exact `fullResourceName` and full
+   `Policy.name` taken from the same `ExplainedDenyResource` object;
+3. capture a complete no-deny control whose top-level
+   `explainedResources` is empty, and confirm in the deny-bearing response
+   that every present explained resource contains at least one visible policy;
+4. verify whether exact prefix and suffix removal plus exact uppercase `%2F`
+   replacement makes the policy attachment byte-for-byte equal to the outer
+   `fullResourceName`; and
+5. record which attachment kinds have been observed with that same-response
+   equality.
+
+Credentials, access tokens, and sensitive response data must not be committed.
+The complete responses must nevertheless be available to the two bounded
+reviewers; a digest or extracted pair alone is not a substitute for their
+inspection of the complete evidence.
+
+The gate has only these outcomes:
+
+- If the controlled project response matches exactly, the normative type
+  descriptions plus captured provider behavior control this repository
+  protocol. The mismatched guide sample remains recorded as an inconsistent
+  illustrative example rather than being silently ignored.
+- If the controlled response does not match, or if the two fields identify the
+  same logical resource in different forms such as project ID versus project
+  number, implementation stops. A new decision version must revise the
+  authority model; no lookup or fallback may be added as a review fix.
+- Folder and organization attachment kinds may proceed only after matching
+  same-response evidence is recorded for each kind. An unobserved kind is
+  deferred, not inferred from project behavior; this all-three-kind version
+  must be narrowed and re-reviewed before authorization if either kind remains
+  unobserved.
+- If a complete response contains a present explained resource with zero
+  visible policies, implementation stops for a new decision version.
+
+Completing this narrow evidence gate does not accept Preview v3beta or PAB for
+production. Provider support currentness and production acceptance remain a
+separate trust boundary and later decision.
 
 ## 6. State machine and ordering
 
@@ -283,10 +364,11 @@ evaluated deny-policy resource. Once a resource object is present, an empty
 `explainedPolicies` list cannot establish its attachment or contribution and
 must refuse.
 
-Multiple resource objects remain supported. A project, folder, and
-organization may each appear, but each object is checked only against the
-policies it contains. This slice does not independently reconstruct or query
-the resource hierarchy.
+Subject to section 5.1's observed-kind gate, multiple resource objects remain
+supported. Each attachment kind retained by the evidence-bearing approved
+version may appear, but each object is checked only against the policies it
+contains. This slice does not independently reconstruct or query the resource
+hierarchy.
 
 ### 6.3 Exact transformation
 
@@ -332,7 +414,8 @@ Every attachment resource is derived only from a deny-policy name that passed
 the existing exact IAM v2 policy-name grammar. The transformation is fixed to
 the exact prefix/suffix removal, exact `%2F` separator replacement, and `//`
 prefix described in section 6. No general URL decoding, alternate grammar,
-caller input, manifest field, or provider-selected fallback exists.
+caller input, manifest field, or provider-selected fallback exists. This
+derivation receives no implementation authority until section 5.1 passes.
 
 ### `ORAB-002` — exact resource-to-policy binding
 
@@ -370,6 +453,11 @@ Phase A changes only this RFC. Prospective Phase B changes only the five exact
 paths in section 11. It adds no dependency, lockfile, workflow, migration,
 command, credential, service, test glob, group budget, shared numeric-limit
 change, or sixth path.
+
+The section 5.1 result is recorded only in this RFC on a new exact Phase A
+head. The separately authorized provider capture is not performed by this PR,
+does not add a repository path, and cannot import credential or cloud-mutation
+authority into Phase B.
 
 The production module keeps the 1,800-line ceiling, exact finished-count
 budget, pinned Ruff check and format check, 120-character physical-line limit,
@@ -455,13 +543,28 @@ This semantic change necessarily invalidates the old whole-module AST digest.
 The new decision makes the consequence explicit:
 
 1. do not decompose or otherwise edit `_allow_policy` or `_deny_policy`;
-2. make only the approved helper and `_deny` equality changes;
-3. create one identifiable semantic implementation commit;
-4. pin that commit identity and its location-free whole-module AST digest in
-   architecture conformance;
-5. require all later production heads in the PR to match that new digest; and
+2. after section 5.1 and exact approval pass, create **Commit A** containing
+   only the approved helper and `_deny` semantic changes, their tests, the
+   resulting exact module budget and guards, the mechanically regenerated
+   inventory, and the new location-free whole-module AST digest;
+3. require the package contract to pass on Commit A against that one new
+   digest; Commit A intentionally remains non-merge-eligible because its own
+   immutable SHA cannot be embedded in itself as its reference identity;
+4. create **Commit B** that pins Commit A's exact immutable SHA as
+   `SECURITY_AUDIT_OBSERVER_ROOT_REFERENCE_HEAD` and changes no production or
+   test semantics; Commit B is the first merge-eligible conformance head;
+5. require the package contract to pass again on Commit B and every later
+   head, with exactly one accepted AST digest and Commit A as the one semantic
+   reference; and
 6. re-authorize the existing exception for only the exact observer-root path
-   while all replacement gates pass.
+   beginning at Commit B while all replacement gates pass.
+
+Commit A replaces the old AST digest; it may not preserve the old digest as an
+alternative. The transition may not use a temporary digest bypass, dual
+accepted digests, a candidate-derived oracle, a weakened comparison, `noqa`,
+or an unreviewed suppression. Commit B may change only the immutable reference
+identity and mechanically necessary evidence for that identity. Any semantic
+change after Commit A requires another reference sequence and bounded review.
 
 The semantic reference commit cannot contain runtime, credential, deployment,
 or unrelated refactoring work. Conformance and review must compare it with base
@@ -562,6 +665,12 @@ and non-readiness statement are unchanged. No sixth path may enter Phase B.
 - Issue #172 and parked issue #176 work are not dependencies and must not be
   modified or imported.
 
+Section 5.1 is a non-repository evidence prerequisite to Phase B authority.
+Its provider call and credentials require separate explicit authority and do
+not belong to this PR. Its publication-safe result may be recorded only in
+this RFC, after which the new exact RFC head must rerun hosted checks and both
+bounded Phase A reviews. No implementation commit may precede that sequence.
+
 Later provider-currentness, credential-custody, and runtime-integration work
 may assume the attachment invariant only after this separate pull request
 merges. This pull request may not assume authority from those future slices.
@@ -571,9 +680,10 @@ merges. This pull request may not assume authority from those future slices.
 After this boundary merges, the remaining observer-root path must still be
 split under the workspace one-boundary rule:
 
-1. a separate provider-currentness and support-status decision verifies the
-   exact v3beta allow/deny/PAB response shape and whether Preview is acceptable
-   for production;
+1. a separate provider-currentness and support-status decision completes the
+   provider work beyond section 5.1, verifies the full v3beta allow/deny/PAB
+   response contract, and decides whether Preview is acceptable for
+   production;
 2. a separate credential-custody decision names exact workload identities and
    proves the absence of unaccounted user-managed keys, impersonation,
    token-creation, workload attachment, or alternate credential paths;
@@ -592,31 +702,40 @@ boundaries and may not share one PR merely because section 11.4 of the earlier
 RFC described them together conditionally.
 
 Reviewers must not require any follow-up above to clear this PR. A demonstrated
-need to edit one stops this PR and becomes a separate prerequisite.
+need to edit one stops this PR and becomes a separate prerequisite. Section
+5.1 is not one of these post-merge follow-ups: it is an explicit pre-Phase-B
+gate created by the contradictory official evidence.
 
 ## 12. Provisional design record
 
-The attachment equality is not a speculative convenience. It follows the
-current official relationship between `ExplainedDenyResource`, its attached
-policies, and the attachment point encoded by IAM v2 policy names.
+The attachment equality is not a speculative convenience: normative API type
+descriptions relate an `ExplainedDenyResource` to policies attached to that
+resource, and IAM v2 policy names encode their attachment point. It is also not
+yet an established provider fact, because section 5 records contradictory
+official illustrative responses.
 
 The wider provider dependency remains provisional:
 
-- **Acceptable before deployment because:** this PR only makes the local parser
-  stricter, has no live cloud or runtime effect, and production composition is
-  still forbidden.
-- **Evidence requiring redesign:** official v3beta documentation or captured
-  complete responses demonstrate that `fullResourceName` does not identify the
-  resource owning the enclosed policies; IAM changes the response policy-name
-  encoding; an explained resource can lawfully contain zero visible policies
-  while still being complete; or v3beta/PAB support changes.
+- **Evidence required before Phase B authority:** section 5.1 must establish
+  exact same-response equality for every attachment kind retained by this
+  version, prove the no-deny empty-list control, and show that every present
+  deny resource contains visible policy evidence.
+- **Evidence requiring redesign:** a complete response pairs different
+  resources; pairs the same logical resource in different identifier forms,
+  including project ID versus project number; uses a policy-name encoding
+  outside the closed grammar; lawfully contains a present explained resource
+  with zero visible policies; or changes the v3beta/PAB contract.
+- **Unobserved attachment kinds:** folder or organization behavior may not be
+  inferred from a project capture. An unobserved kind must be removed or
+  deferred by a new exact decision head and re-reviewed before Phase B.
 - **Likely upgrade path:** a new provider-currentness decision chooses and
   pins the supported response contract before production composition. It may
   revise this parser only through another reviewed semantic decision.
 
 Stable v3 is not an authorized fallback because the accepted observer-root
 contract requires complete PAB evidence. Phase A approval or a later merge of
-this parser hardening does not accept Preview for production.
+this parser hardening does not accept Preview for production. Until section
+5.1 passes, even repository Phase B implementation is forbidden.
 
 ## 13. Traceability and verification
 
@@ -635,8 +754,16 @@ this parser hardening does not accept Preview for production.
 - the reviewed base and `origin/main` both remain
   `bdf636d155e45ecbf4d9ac828e232bbcf91e1d59`, or a later base movement is
   inspected and recorded before review;
-- current official Google documentation supports the exact resource/policy
-  relationship and policy-name attachment encoding stated here;
+- the two contradictory official Google examples and their exact
+  `fullResourceName`/`Policy.name` pairs remain recorded rather than being
+  resolved by assumption;
+- before a complete live card, section 5.1 is completed and this RFC records
+  the complete-response digests, exact same-response field pairs, cardinality
+  controls, and observed attachment kinds;
+- a matching capture expressly identifies the normative type contract and
+  captured provider behavior as controlling, while a mismatch, identifier-form
+  difference, empty present resource, or unobserved retained kind stops this
+  version;
 - the contract distinguishes the request's KMS resource from each deny-policy
   attachment resource;
 - the five-path prospective boundary contains no credential, runtime, cloud,
@@ -644,12 +771,15 @@ this parser hardening does not accept Preview for production.
 - `python3 conformance/ofarm_pkg_contract_check.py` passes before every commit;
 - the draft PR receives two independent reviews of one exact RFC head;
 - every demonstrated Phase A Blocker is corrected in this RFC; and
-- no complete live decision card is displayed until both exact-head reviews
-  report zero demonstrated in-scope Blockers.
+- no complete live decision card is displayed until the final evidence-bearing
+  exact head passes hosted checks and both exact-head reviews report zero
+  demonstrated in-scope Blockers.
 
 ### 13.2 Prospective Phase B verification gates
 
 - reproduce this invariant table before editing;
+- verify section 5.1 passed on the exact approved RFC head and that no
+  attachment kind retained by the implementation is unobserved;
 - verify the original live card and exact later approval remain directly
   retrievable in the same task and bind this one named draft PR;
 - implement only the one private derivation and one `_deny` equality/presence
@@ -661,14 +791,17 @@ this parser hardening does not accept Preview for production.
 - prove the same mismatch in both snapshots refuses before equality;
 - prove empty top-level `explainedResources` still accepts under an otherwise
   valid no-deny response, while a present resource with no policies refuses;
-- prove valid project, folder, and organization attachment spellings and a
-  valid multi-policy or multi-resource response bind per resource;
+- prove valid project, folder, and organization attachment spellings retained
+  by the evidence-bearing approved version and a valid multi-policy or
+  multi-resource response bind per resource;
 - run the complete focused observer-root admission suite;
 - prove requests, call counts, endpoint, PAB posture, policy-state
   recomputation, probe, clocks, output, and ordinary-refusal behavior are
   unchanged;
-- create and record one semantic implementation reference commit, then pin its
-  exact location-free whole-module AST digest in architecture conformance;
+- execute section 9.3's exact two-commit sequence: Commit A pins the one new
+  AST digest and passes the package contract; Commit B pins Commit A's exact
+  SHA, changes no production or test semantics, and passes again as the first
+  merge-eligible conformance head;
 - compare the semantic reference with base and verify the only production AST
   changes are the approved helper and `_deny` gate;
 - prove `_allow_policy` and `_deny_policy` remain semantically unchanged, the
@@ -690,30 +823,33 @@ this parser hardening does not accept Preview for production.
 - receive two bounded exact-head implementation reviews with zero demonstrated
   in-scope Blockers before merge.
 
-No live Cloud KMS or IAM account is required for repository Phase B. Typed
-deterministic responses exercise this local trust transition. Captured live
-provider evidence belongs to the later provider-currentness decision.
+Repository Phase B performs no live Cloud KMS or IAM call. Its typed
+deterministic fixtures exercise the local trust transition, but they are not a
+substitute for the separately authorized section 5.1 capture that must precede
+Phase B authority. That narrow capture does not decide wider provider support
+currentness or production acceptance.
 
 ## 14. Open decisions and review disposition
 
 ### 14.1 Closed design choices in proposed version 1
 
-- Policy names, not the request resource or outer field, are attachment
-  authority.
+- Subject to section 5.1, policy names, not the request resource or outer
+  field, are attachment authority.
 - Every contained policy must agree; first-policy comparison is insufficient.
 - A present explained resource must contain at least one validated policy.
 - No hierarchy or project-number lookup is added.
 - No generic URL decoder is added.
 - The existing two long policy parsers are not refactored.
 - The exact-path function-span exception is expressly re-decided against a new
-  semantic reference instead of silently surviving an AST re-pin.
+  semantic reference through the exact Commit A/Commit B sequence instead of
+  silently surviving an AST re-pin.
 - Credential custody, provider-currentness, and runtime integration remain
   separate later decisions.
 
 ### 14.2 Material decisions still deferred
 
 - production acceptance or replacement of Preview v3beta/PAB evidence;
-- captured response conformance and provider support currentness;
+- provider support currentness beyond section 5.1's narrow prerequisite;
 - exact production resources, principals, credentials, and role etags;
 - manifest publication and trusted-time custody;
 - workload credential custody and absence of alternate access paths;
@@ -724,8 +860,19 @@ provider evidence belongs to the later provider-currentness decision.
 
 ### 14.3 Current review disposition
 
-- **Blockers:** Phase A exact-head reviews have not yet occurred.
-- **Follow-ups:** the ordered, separately governed boundaries in section 11.4.
+- **Prior exact head:** `19762d0babeb2c99d585d4b562d78a4e29250e5c`.
+- **Review 1:** [comment 5343407461](https://github.com/samovers/OFARM2/pull/322#issuecomment-5343407461)
+  reported zero Blockers and required the identifier-form redesign trigger and
+  same-response evidence pair now specified in sections 5.1, 12, and 13.1.
+- **Review 2:** [review 4973238325](https://github.com/samovers/OFARM2/pull/322#pullrequestreview-4973238325)
+  reported one in-scope Blocker: the contradictory official examples. It also
+  required the cardinality controls and exact two-commit semantic-reference
+  sequence now specified in sections 5.1 and 9.3.
+- **Current Blockers:** the previous exact-head control gaps are amended, but
+  section 5.1's provider evidence is not yet recorded and the amended exact
+  head has not received its two superseding reviews.
+- **Follow-ups:** wider provider currentness and the ordered, separately
+  governed boundaries in section 11.4.
 - **Preferences:** none recorded.
 - **Active baseline files affected:** none; this is not OFARM baseline law.
 - **Change classification:** high-risk supporting security evidence-validation
@@ -743,9 +890,11 @@ unless it proves one of those failures.
 This RFC, its draft pull request, local analysis, reviews, commits, pushes,
 repository credentials, or a generic `go` grant no Phase B authority.
 
-After one exact RFC head passes hosted checks and receives two independent
-zero-Blocker Phase A reviews, one complete live decision card may be displayed
-in the same Codex task. The card must include:
+Only after section 5.1 passes and its evidence record is present on one exact
+RFC head may that same head run hosted checks and receive the two independent
+Phase A reviews used for approval. If both reviews report zero demonstrated
+in-scope Blockers, one complete live decision card may be displayed in the
+same Codex task. The card must include:
 
 - decision ID and version;
 - parent issue;
@@ -756,7 +905,8 @@ in the same Codex task. The card must include:
 - the authorized repository effects;
 - the excluded credential, provider-acceptance, runtime, cloud, database,
   export, rotation, deployment, and issue-closure authorities;
-- the provisional-evidence limitation;
+- the complete-response digests, exact same-response field pairs, observed
+  attachment kinds, and remaining provisional-evidence limitation;
 - review disposition and stop conditions; and
 - the exact approval sentence below.
 
@@ -791,8 +941,13 @@ Stop and require a new decision version before implementation or merge if:
 - the original live card or exact later approval cannot be retrieved and
   verified in order;
 - another trust boundary or sixth path is needed;
-- official or captured provider evidence contradicts the attachment relation
-  specified here;
+- section 5.1 is incomplete, unavailable for bounded review, or absent from the
+  exact approved RFC head;
+- the controlled capture contradicts exact attachment equality, represents the
+  same logical resource in a different identifier form, or leaves an
+  attachment kind retained by this version unobserved;
+- official provider documentation changes beyond the two contradictory
+  examples already recorded here;
 - an explained resource with zero policies must be accepted as complete;
 - a hierarchy lookup, generic URL decoder, alternate policy-name grammar, or
   second attachment authority is needed;
