@@ -22,8 +22,8 @@ decision
 
 **Reviewed base:** bdf636d155e45ecbf4d9ac828e232bbcf91e1d59
 
-**Published predecessor head:**
-1a36251a43c092ad3e794384488858770f6fe9ab
+**Phase A review checkpoint head:**
+7c51ecc57477ba2d00f5926be634a9316c9b9953
 
 **Primary trust boundary:** authenticated, read-only acquisition and
 publication of controlled Google Policy Troubleshooter evidence
@@ -132,8 +132,8 @@ decision does not repair those prerequisites.
 - the complete exact response entity bytes for D1 and N1;
 - the binding between each body, request, endpoint, timestamps, length,
   digest, and derived deny inventory;
-- the exact executable, source, manifest, RFC, fresh-process, renderer, and
-  two-call identities;
+- the exact host, executable, separately linked Python runtime when present,
+  source, manifest, RFC, fresh-process, renderer, and two-call identities;
 - the complete publication allowlist and the fact that no unapproved response
   value reaches Git or GitHub;
 - the bearer and all credential/materialization details;
@@ -147,10 +147,12 @@ Subject to later exact approval, this decision trusts only:
 - the task user to approve one complete live card and declare every manifest
   value suitable for public repository publication;
 - the separate credential authority to materialize one bearer before launch;
-- the exact 1059-line source in section 7.2 at SHA-256
-  c9ca1548f1b803d2eef12e322b7eec9998b009466b100b7ae94ed22fc79dd10d;
-- the exact CPython 3.12.13 executable path and digest in the live manifest,
-  invoked with -I -S -B;
+- the exact 1305-line source in section 7.2 at SHA-256
+  2c6fc7928e7b3f7ea018dfaa52dff5acba48ff2847396cc2fc8f43e1e777d46c;
+- the exact Darwin host system, kernel release, and machine, CPython 3.12.13
+  executable path and digest, runtime build classification, and separately
+  linked Python runtime-library path and digest when one exists, all fixed in
+  the live manifest and invoked with -I -S -B;
 - the operating system, terminal driver, host trust store, TLS stack,
   standard-library modules loaded by that isolated interpreter, SHA-256, and
   RFC 4648 base64 implementation; and
@@ -196,11 +198,25 @@ members, with no others:
 - maxPublishableBodyBytes exactly 131072; the same fixed value also bounds
   each canonical request body;
 - programSourceSha256;
+- hostSystem, hostRelease, and hostMachine equal to the live Darwin host
+  identity;
 - pythonExecutablePath and pythonExecutableSha256;
+- pythonRuntimeBuildKind, pythonRuntimeLibraryPath, and
+  pythonRuntimeLibrarySha256;
 - workingDirectory;
 - rfcPath and rfcPreCaptureSha256;
 - d1Request, d1ExpectedPairs, and d1ExpectedResponse; and
 - n1Request and n1ExpectedResponse.
+
+pythonRuntimeBuildKind is exactly MONOLITHIC_EXECUTABLE, FRAMEWORK, or
+SHARED_LIBRARY. A monolithic build has null runtime-library path and digest,
+and the operator must independently establish through native binary-linkage
+inspection that no separate Python runtime library is loaded. A framework or
+shared-library build supplies the absolute real runtime-library path and its
+complete SHA-256. The exact program no-follow reads and hashes the executable
+and, when separate, that library. Their observed owner, group, mode, byte
+length, and link count enter the record; a root owner or multiple hard links
+does not itself invalidate an otherwise exact path-and-byte identity.
 
 The file bytes are canonical JSON produced with ASCII escaping, sorted object
 keys, separators comma and colon, no insignificant whitespace, and no terminal
@@ -271,7 +287,7 @@ controlled response.
 | Begin capture | Exact later task-user approval after one complete live card | This Draft, generic go, review, credential availability, or PR #322 approval |
 | Public inputs | Exact complete canonical manifest, exact source, and literal hashes in the approved card | Discovery, defaults, response-selected values, or caller improvisation |
 | Authentication | One bearer already materialized by separate authority, read hidden from /dev/tty after public input removal | ADC, metadata, STS, impersonation, file, environment, refresh, replay, or command |
-| Process identity | Exact pinned executable path/digest, fresh env, -I -S -B, source path/digest, and launch vector | Wrapper, inherited process, preloaded module, alternate interpreter, plugin, or adapter |
+| Process identity | Exact Darwin host/release/machine, pinned executable and separate runtime-library identities, build kind, fresh minimal env, -I -S -B, source path/digest, and launch vector | Wrapper, inherited process, preloaded module, alternate interpreter, plugin, or adapter |
 | Network effects | Exact source; fixed D1 then N1 direct HTTPS requests; zero auth-side calls | Proxy, debug trace, redirect, retry, discovery, replay, or hidden call |
 | Publication safety | Canonical equality to each complete expected response object | Human spot check, mutable inspector, redaction, excerpt, or permissive schema |
 | Rendering | Exact renderer in the same source, one marker-delimited RFC replacement, immutable JSON bytes, and atomic replace | External formatter, mutable result callback, second file, log, or manual copy |
@@ -299,10 +315,10 @@ Phase B may execute only the source below. The source-byte boundary is the
 UTF-8 LF sequence beginning with the first f in from __future__ and ending
 with the LF after the last source line. The Markdown fences are excluded.
 
-It is exactly 1059 lines with SHA-256:
+It is exactly 1305 lines with SHA-256:
 
 ~~~text
-c9ca1548f1b803d2eef12e322b7eec9998b009466b100b7ae94ed22fc79dd10d
+2c6fc7928e7b3f7ea018dfaa52dff5acba48ff2847396cc2fc8f43e1e777d46c
 ~~~
 
 ~~~python
@@ -341,12 +357,14 @@ MAX_RFC_BYTES = 1048576
 MAX_EXECUTABLE_BYTES = 67108864
 RECORDABLE_FAILURE_CODES = {
     "D1_ATTACHMENT_MISMATCH",
+    "D1_EXPLAINED_RESOURCES_OMITTED",
     "D1_RESOURCE_VISIBILITY_OMITTED",
     "N1_EXPLAINED_RESOURCES_OMITTED",
 }
 RELEVANCE = {"HEURISTIC_RELEVANCE_NORMAL", "HEURISTIC_RELEVANCE_HIGH"}
 TOKEN = re.compile(r"[A-Za-z0-9._~+/=-]{1,8192}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
+MODE = re.compile(r"[0-7]{4}")
 CF_USER_TEXT_ENCODING = re.compile(r"0x[0-9A-F]+:0x0:0x0")
 PERMISSION_FQDN = re.compile(r"[a-z0-9.-]+\.googleapis\.com/[A-Za-z][A-Za-z0-9.]+")
 TAG_KEY = re.compile(r"tagKeys/[1-9][0-9]*")
@@ -371,25 +389,57 @@ def _stop(code: str) -> NoReturn:
     raise CaptureStop(code) from None
 
 
-def _runtime() -> None:
+def _runtime() -> dict[str, object]:
     environment = dict(os.environ)
+    environment_keys = sorted(environment)
+    cf_value = environment.get("__CF_USER_TEXT_ENCODING")
+    flags = {
+        "dontWriteBytecode": sys.flags.dont_write_bytecode,
+        "ignoreEnvironment": sys.flags.ignore_environment,
+        "isolated": sys.flags.isolated,
+        "noSite": sys.flags.no_site,
+        "safePath": sys.flags.safe_path,
+    }
+    uname = os.uname()
     if (
         sys.implementation.name != "cpython"
         or sys.version_info[:3] != (3, 12, 13)
-        or sys.flags.isolated != 1
-        or sys.flags.ignore_environment != 1
-        or sys.flags.no_site != 1
-        or sys.flags.safe_path != 1
-        or sys.flags.dont_write_bytecode != 1
-        or set(environment) != {"LC_ALL", "__CF_USER_TEXT_ENCODING"}
-        or environment.get("LC_ALL") != "C"
-        or CF_USER_TEXT_ENCODING.fullmatch(
-            environment.get("__CF_USER_TEXT_ENCODING", "")
+        or sys.platform != "darwin"
+        or flags
+        != {
+            "dontWriteBytecode": 1,
+            "ignoreEnvironment": 1,
+            "isolated": 1,
+            "noSite": 1,
+            "safePath": True,
+        }
+        or set(environment)
+        not in (
+            {"LC_ALL"},
+            {"LC_ALL", "__CF_USER_TEXT_ENCODING"},
         )
-        is None
+        or environment.get("LC_ALL") != "C"
+        or (cf_value is not None and CF_USER_TEXT_ENCODING.fullmatch(cf_value) is None)
         or http.client.HTTPConnection.debuglevel != 0
     ):
         _stop("WRONG_PYTHON_RUNTIME")
+    return {
+        "environmentEntryCount": len(environment),
+        "environmentKeys": environment_keys,
+        "httpDebugLevel": http.client.HTTPConnection.debuglevel,
+        "implementation": sys.implementation.name,
+        "osName": os.name,
+        "platformMachine": uname.machine,
+        "platformRelease": uname.release,
+        "platformSystem": uname.sysname,
+        "pythonExecutablePath": os.path.realpath(sys.executable),
+        "pythonFlags": flags,
+        "pythonVersion": ".".join(str(value) for value in sys.version_info[:3]),
+        "pythonVersionText": sys.version,
+        "sysPlatform": sys.platform,
+        "userTextEncodingPresent": cf_value is not None,
+        "userTextEncodingValue": cf_value,
+    }
 
 
 def _utc_now() -> str:
@@ -478,14 +528,17 @@ def _read_regular(
     path_value: str,
     maximum: int,
     code: str,
+    *,
+    require_owner: bool = True,
+    require_single_link: bool = True,
 ) -> tuple[str, bytes, os.stat_result]:
     path = os.path.abspath(path_value)
     try:
         before = os.lstat(path)
         if (
             not stat.S_ISREG(before.st_mode)
-            or before.st_nlink != 1
-            or before.st_uid != os.getuid()
+            or (require_single_link and before.st_nlink != 1)
+            or (require_owner and before.st_uid != os.getuid())
             or not hasattr(os, "O_NOFOLLOW")
         ):
             _stop(code)
@@ -622,6 +675,8 @@ def _deny_inventory(
     value: object,
     expected_pairs: list[list[str]],
 ) -> dict[str, object]:
+    if label == "D1" and type(value) is dict and "explainedResources" not in value:
+        _stop("D1_EXPLAINED_RESOURCES_OMITTED")
     if label == "N1" and type(value) is dict and "explainedResources" not in value:
         _stop("N1_EXPLAINED_RESOURCES_OMITTED")
     document = _members(
@@ -882,6 +937,39 @@ def _expected_pairs(value: object) -> list[list[str]]:
     return value
 
 
+def _validate_runtime_manifest(document: dict[str, object]) -> None:
+    for name in (
+        "hostMachine",
+        "hostRelease",
+        "hostSystem",
+        "pythonExecutablePath",
+        "rfcPath",
+        "workingDirectory",
+    ):
+        _text(document[name], "INVALID_MANIFEST_PATH")
+    uname = os.uname()
+    if (
+        document["hostSystem"] != uname.sysname
+        or document["hostMachine"] != uname.machine
+        or document["hostRelease"] != uname.release
+    ):
+        _stop("WRONG_HOST_IDENTITY")
+    build_kind = document["pythonRuntimeBuildKind"]
+    library_path = document["pythonRuntimeLibraryPath"]
+    library_sha256 = document["pythonRuntimeLibrarySha256"]
+    framework = getattr(sys, "_framework", "")
+    if build_kind == "MONOLITHIC_EXECUTABLE":
+        if library_path is not None or library_sha256 is not None or framework:
+            _stop("WRONG_PYTHON_RUNTIME_LINKAGE")
+    elif build_kind in {"FRAMEWORK", "SHARED_LIBRARY"}:
+        _text(library_path, "INVALID_PYTHON_RUNTIME_LIBRARY_PATH")
+        _digest_text(library_sha256, "INVALID_PYTHON_RUNTIME_LIBRARY_DIGEST")
+        if build_kind == "FRAMEWORK" and not framework:
+            _stop("WRONG_PYTHON_RUNTIME_LINKAGE")
+    else:
+        _stop("WRONG_PYTHON_RUNTIME_LINKAGE")
+
+
 def _capture_plan(
     manifest: dict[str, object],
 ) -> tuple[
@@ -900,6 +988,9 @@ def _capture_plan(
             "d1ExpectedResponse",
             "d1Request",
             "decisionId",
+            "hostMachine",
+            "hostRelease",
+            "hostSystem",
             "launchProtocolId",
             "manifestSchema",
             "maxPublishableBodyBytes",
@@ -908,6 +999,9 @@ def _capture_plan(
             "programSourceSha256",
             "pythonExecutablePath",
             "pythonExecutableSha256",
+            "pythonRuntimeBuildKind",
+            "pythonRuntimeLibraryPath",
+            "pythonRuntimeLibrarySha256",
             "rfcPath",
             "rfcPreCaptureSha256",
             "workingDirectory",
@@ -927,12 +1021,7 @@ def _capture_plan(
         "rfcPreCaptureSha256",
     ):
         _digest_text(document[name], "INVALID_MANIFEST_DIGEST")
-    for name in (
-        "pythonExecutablePath",
-        "rfcPath",
-        "workingDirectory",
-    ):
-        _text(document[name], "INVALID_MANIFEST_PATH")
+    _validate_runtime_manifest(document)
     expected_pairs = _expected_pairs(document["d1ExpectedPairs"])
     d1_body, d1_access = _request(document["d1Request"])
     n1_body, n1_access = _request(document["n1Request"])
@@ -968,24 +1057,90 @@ def _pretty_json(value: object) -> bytes:
     ).encode("utf-8")
 
 
+def _file_observation(
+    path: str,
+    value: bytes,
+    info: os.stat_result,
+) -> dict[str, object]:
+    return {
+        "byteLength": len(value),
+        "groupId": info.st_gid,
+        "linkCount": info.st_nlink,
+        "mode": f"{stat.S_IMODE(info.st_mode):04o}",
+        "ownerId": info.st_uid,
+        "path": path,
+        "sha256": _sha256(value),
+    }
+
+
+def _validated_file_observation(value: object) -> dict[str, object]:
+    document = _members(
+        value,
+        ("byteLength", "groupId", "linkCount", "mode", "ownerId", "path", "sha256"),
+    )
+    _text(document["path"], "INVALID_PROVENANCE_PATH")
+    _digest_text(document["sha256"], "INVALID_PROVENANCE_DIGEST")
+    mode = _text(document["mode"], "INVALID_PROVENANCE_FILE_IDENTITY")
+    if (
+        MODE.fullmatch(mode) is None
+        or type(document["byteLength"]) is not int
+        or document["byteLength"] < 0
+        or type(document["groupId"]) is not int
+        or document["groupId"] < 0
+        or type(document["ownerId"]) is not int
+        or document["ownerId"] < 0
+        or type(document["linkCount"]) is not int
+        or document["linkCount"] < 1
+    ):
+        _stop("INVALID_PROVENANCE_FILE_IDENTITY")
+    return {name: document[name] for name in document}
+
+
 def _provenance(value: object) -> dict[str, object]:
     names = (
         "manifestSha256",
         "programSourceSha256",
-        "pythonExecutablePath",
-        "pythonExecutableSha256",
+        "pythonExecutableIdentity",
+        "pythonRuntimeBuildKind",
+        "pythonRuntimeLibraryIdentity",
         "rfcPreCaptureSha256",
+        "temporaryInputObservation",
     )
     document = _members(value, names)
     for name in (
         "manifestSha256",
         "programSourceSha256",
-        "pythonExecutableSha256",
         "rfcPreCaptureSha256",
     ):
         _digest_text(document[name], "INVALID_PROVENANCE_DIGEST")
-    _text(document["pythonExecutablePath"], "INVALID_PROVENANCE_PATH")
-    return {name: document[name] for name in names}
+    executable = _validated_file_observation(document["pythonExecutableIdentity"])
+    build_kind = document["pythonRuntimeBuildKind"]
+    library_value = document["pythonRuntimeLibraryIdentity"]
+    if build_kind == "MONOLITHIC_EXECUTABLE":
+        if library_value is not None:
+            _stop("INVALID_PROVENANCE_RUNTIME_LINKAGE")
+        library = None
+    elif build_kind in {"FRAMEWORK", "SHARED_LIBRARY"}:
+        library = _validated_file_observation(library_value)
+    else:
+        _stop("INVALID_PROVENANCE_RUNTIME_LINKAGE")
+    temporary_value = _members(
+        document["temporaryInputObservation"],
+        ("directoryAbsent", "manifestAbsent", "sourceAbsent"),
+    )
+    if any(temporary_value[name] is not True for name in temporary_value):
+        _stop("INVALID_PROVENANCE_TEMPORARY_INPUT_OBSERVATION")
+    return {
+        "manifestSha256": document["manifestSha256"],
+        "programSourceSha256": document["programSourceSha256"],
+        "pythonExecutableIdentity": executable,
+        "pythonRuntimeBuildKind": build_kind,
+        "pythonRuntimeLibraryIdentity": library,
+        "rfcPreCaptureSha256": document["rfcPreCaptureSha256"],
+        "temporaryInputObservation": {
+            name: temporary_value[name] for name in temporary_value
+        },
+    }
 
 
 def run_capture(
@@ -993,13 +1148,14 @@ def run_capture(
     manifest: dict[str, object],
     provenance: dict[str, object],
 ) -> bytes:
-    _runtime()
+    runtime_observation = _runtime()
     provenance_document = _provenance(provenance)
     if type(bearer_token) is not str or TOKEN.fullmatch(bearer_token) is None:
         _stop("INVALID_PREMATERIALIZED_BEARER_TOKEN")
     document, d1_body, d1_access, n1_body, n1_access, expected_pairs = _capture_plan(
         manifest
     )
+    auth_side_call_ledger: list[dict[str, object]] = []
     ledger: list[dict[str, object]] = []
     try:
         captures = [
@@ -1031,7 +1187,8 @@ def run_capture(
     if [entry["label"] for entry in ledger] != ["D1", "N1"]:
         _stop("WRONG_CALL_LEDGER")
     record = {
-        "authSideCallCount": 0,
+        "authSideCallCount": len(auth_side_call_ledger),
+        "authSideCallLedger": auth_side_call_ledger,
         "captures": captures,
         "externalReviewControl": {
             "evidenceAuthority": "GIT_COMMIT_CONTAINING_THIS_RECORD",
@@ -1039,22 +1196,13 @@ def run_capture(
             "reviewObjectsStored": "EXTERNAL_GITHUB_RECORDS",
             "status": "PENDING_EXTERNAL_EXACT_HEAD_REVIEWS",
         },
-        "freshProcess": True,
         "launchProtocolId": LAUNCH_PROTOCOL_ID,
         "policyTroubleshooterCallLedger": ledger,
         "programId": PROGRAM_ID,
         "publicationSafety": "FULL_EXPECTED_RESPONSES_EXACT_CANONICAL_JSON",
         "recordSchema": RECORD_SCHEMA,
         "rendererId": RENDERER_ID,
-        "runtime": {
-            "environmentEntryCount": 2,
-            "environmentKeys": ["LC_ALL", "__CF_USER_TEXT_ENCODING"],
-            "httpDebugLevel": 0,
-            "implementation": "cpython",
-            "pythonFlags": ["-I", "-S", "-B"],
-            "version": "3.12.13",
-        },
-        "temporaryInputsRemovedBeforeBearer": True,
+        "runtimeObservation": runtime_observation,
         **provenance_document,
     }
     return _pretty_json(record)
@@ -1076,6 +1224,48 @@ def _private_input_directory(source_path: str, manifest_path: str) -> str:
     ):
         _stop("INVALID_PUBLIC_INPUT_DIRECTORY")
     return source_parent
+
+
+def _runtime_file_identities(
+    document: dict[str, object],
+) -> tuple[dict[str, object], dict[str, object] | None]:
+    executable_path, executable_bytes, executable_info = _read_regular(
+        os.path.realpath(sys.executable),
+        MAX_EXECUTABLE_BYTES,
+        "INVALID_PYTHON_EXECUTABLE",
+        require_owner=False,
+        require_single_link=False,
+    )
+    if os.path.abspath(os.getcwd()) != os.path.abspath(document["workingDirectory"]):
+        _stop("WRONG_WORKING_DIRECTORY")
+    if executable_path != os.path.abspath(document["pythonExecutablePath"]):
+        _stop("WRONG_PYTHON_EXECUTABLE_PATH")
+    if _sha256(executable_bytes) != document["pythonExecutableSha256"]:
+        _stop("WRONG_PYTHON_EXECUTABLE_DIGEST")
+    executable_identity = _file_observation(
+        executable_path,
+        executable_bytes,
+        executable_info,
+    )
+    library_identity: dict[str, object] | None = None
+    if document["pythonRuntimeLibraryPath"] is not None:
+        library_path, library_bytes, library_info = _read_regular(
+            os.path.realpath(document["pythonRuntimeLibraryPath"]),
+            MAX_EXECUTABLE_BYTES,
+            "INVALID_PYTHON_RUNTIME_LIBRARY",
+            require_owner=False,
+            require_single_link=False,
+        )
+        if library_path != os.path.abspath(document["pythonRuntimeLibraryPath"]):
+            _stop("WRONG_PYTHON_RUNTIME_LIBRARY_PATH")
+        if _sha256(library_bytes) != document["pythonRuntimeLibrarySha256"]:
+            _stop("WRONG_PYTHON_RUNTIME_LIBRARY_DIGEST")
+        library_identity = _file_observation(
+            library_path,
+            library_bytes,
+            library_info,
+        )
+    return executable_identity, library_identity
 
 
 def _prepare_inputs(
@@ -1116,17 +1306,7 @@ def _prepare_inputs(
         _stop("INVALID_PUBLIC_INPUT_DIRECTORY")
     if input_common == os.path.realpath(os.getcwd()):
         _stop("PUBLIC_INPUT_DIRECTORY_INSIDE_WORKTREE")
-    executable_path, executable_bytes, _ = _read_regular(
-        os.path.realpath(sys.executable),
-        MAX_EXECUTABLE_BYTES,
-        "INVALID_PYTHON_EXECUTABLE",
-    )
-    if os.path.abspath(os.getcwd()) != os.path.abspath(document["workingDirectory"]):
-        _stop("WRONG_WORKING_DIRECTORY")
-    if executable_path != os.path.abspath(document["pythonExecutablePath"]):
-        _stop("WRONG_PYTHON_EXECUTABLE_PATH")
-    if _sha256(executable_bytes) != document["pythonExecutableSha256"]:
-        _stop("WRONG_PYTHON_EXECUTABLE_DIGEST")
+    executable_identity, library_identity = _runtime_file_identities(document)
     if rfc_path != os.path.abspath(document["rfcPath"]):
         _stop("WRONG_RFC_PATH")
     if os.path.relpath(rfc_path, os.getcwd()) != RFC_RELATIVE_PATH:
@@ -1142,12 +1322,21 @@ def _prepare_inputs(
         os.rmdir(input_directory)
     except Exception:
         _stop("PUBLIC_INPUT_DIRECTORY_REMOVAL_FAILED")
+    temporary_input_observation = {
+        "directoryAbsent": not os.path.lexists(input_directory),
+        "manifestAbsent": not os.path.lexists(manifest_path),
+        "sourceAbsent": not os.path.lexists(source_path),
+    }
+    if any(value is not True for value in temporary_input_observation.values()):
+        _stop("PUBLIC_INPUT_REMOVAL_NOT_OBSERVED")
     provenance = {
         "manifestSha256": expected_manifest_sha,
         "programSourceSha256": expected_source_sha,
-        "pythonExecutablePath": executable_path,
-        "pythonExecutableSha256": document["pythonExecutableSha256"],
+        "pythonExecutableIdentity": executable_identity,
+        "pythonRuntimeBuildKind": document["pythonRuntimeBuildKind"],
+        "pythonRuntimeLibraryIdentity": library_identity,
         "rfcPreCaptureSha256": document["rfcPreCaptureSha256"],
+        "temporaryInputObservation": temporary_input_observation,
     }
     return manifest, rfc_bytes, rfc_path, rfc_info, provenance
 
@@ -1165,8 +1354,8 @@ def _read_bearer() -> str:
         original = termios.tcgetattr(descriptor)
         hidden = original.copy()
         hidden[3] &= ~termios.ECHO
-        os.write(descriptor, b"Pre-materialized bearer (input hidden): ")
         termios.tcsetattr(descriptor, termios.TCSAFLUSH, hidden)
+        os.write(descriptor, b"Pre-materialized bearer (input hidden): ")
         value = bytearray()
         while len(value) <= 8192:
             character = os.read(descriptor, 1)
@@ -1236,21 +1425,66 @@ def _render_rfc_bytes(rfc: bytes, record: bytes) -> bytes:
     return rendered
 
 
+def _same_rfc_identity(left: os.stat_result, right: os.stat_result) -> bool:
+    return (
+        left.st_dev,
+        left.st_ino,
+        left.st_ctime_ns,
+        left.st_mtime_ns,
+        left.st_size,
+        left.st_mode,
+        left.st_uid,
+        left.st_gid,
+        left.st_nlink,
+    ) == (
+        right.st_dev,
+        right.st_ino,
+        right.st_ctime_ns,
+        right.st_mtime_ns,
+        right.st_size,
+        right.st_mode,
+        right.st_uid,
+        right.st_gid,
+        right.st_nlink,
+    )
+
+
+def _verify_rfc_unchanged(
+    path: str,
+    before: os.stat_result,
+    expected_sha256: str,
+) -> None:
+    current_path, current_bytes, current_info = _read_regular(
+        path,
+        MAX_RFC_BYTES,
+        "RFC_CHANGED_BEFORE_RENDER",
+    )
+    try:
+        after = os.lstat(path)
+    except Exception:
+        _stop("RFC_CHANGED_BEFORE_RENDER")
+    if (
+        current_path != path
+        or not _same_rfc_identity(before, current_info)
+        or not _same_rfc_identity(current_info, after)
+        or _sha256(current_bytes) != expected_sha256
+    ):
+        _stop("RFC_CHANGED_BEFORE_RENDER")
+
+
 def _write_rfc(
     path: str,
     before: os.stat_result,
+    expected_sha256: str,
     rendered: bytes,
 ) -> None:
     temporary = path + ".opec-render.tmp"
     descriptor: int | None = None
     replaced = False
     try:
-        current = os.lstat(path)
-        if (current.st_dev, current.st_ino) != (
-            before.st_dev,
-            before.st_ino,
-        ) or os.path.lexists(temporary):
+        if os.path.lexists(temporary):
             _stop("RFC_CHANGED_BEFORE_RENDER")
+        _verify_rfc_unchanged(path, before, expected_sha256)
         descriptor = os.open(
             temporary,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
@@ -1266,9 +1500,7 @@ def _write_rfc(
         os.fchmod(descriptor, stat.S_IMODE(before.st_mode))
         os.close(descriptor)
         descriptor = None
-        current = os.lstat(path)
-        if (current.st_dev, current.st_ino) != (before.st_dev, before.st_ino):
-            _stop("RFC_CHANGED_BEFORE_RENDER")
+        _verify_rfc_unchanged(path, before, expected_sha256)
         os.replace(temporary, path)
         replaced = True
         directory = os.open(os.path.dirname(path), os.O_RDONLY)
@@ -1297,6 +1529,11 @@ def _failure_record(
     error: CaptureStop,
     provenance: dict[str, object],
 ) -> bytes:
+    if (
+        error.code not in RECORDABLE_FAILURE_CODES
+        or not _recordable_failure_has_provider_call(error)
+    ):
+        _stop("UNOBSERVED_RECORDABLE_FAILURE")
     provenance_document = _provenance(provenance)
     return _pretty_json(
         {
@@ -1317,6 +1554,23 @@ def _failure_record(
     )
 
 
+def _recordable_failure_has_provider_call(error: CaptureStop) -> bool:
+    ledger = error.metadata.get("policyTroubleshooterCallLedger")
+    label = error.metadata.get("label")
+    if type(ledger) is not list or not ledger or type(label) is not str:
+        return False
+    last_entry = ledger[-1]
+    return (
+        type(last_entry) is dict
+        and error.code.startswith(label + "_")
+        and last_entry.get("label") == label
+        and last_entry.get("method") == "POST"
+        and last_entry.get("endpoint") == ENDPOINT
+        and type(last_entry.get("status")) is int
+        and type(last_entry.get("completedAt")) is str
+    )
+
+
 def _main(arguments: list[str]) -> None:
     manifest, rfc, rfc_path, rfc_info, provenance = _prepare_inputs(arguments)
     bearer_token = _read_bearer()
@@ -1329,12 +1583,20 @@ def _main(arguments: list[str]) -> None:
     finally:
         bearer_token = ""
     if capture_error is not None:
-        if capture_error.code not in RECORDABLE_FAILURE_CODES:
+        if (
+            capture_error.code not in RECORDABLE_FAILURE_CODES
+            or not _recordable_failure_has_provider_call(capture_error)
+        ):
             raise capture_error
         record = _failure_record(capture_error, provenance)
     if record is None:
         _stop("MISSING_RENDER_RECORD")
-    _write_rfc(rfc_path, rfc_info, _render_rfc_bytes(rfc, record))
+    _write_rfc(
+        rfc_path,
+        rfc_info,
+        _sha256(rfc),
+        _render_rfc_bytes(rfc, record),
+    )
     if capture_error is not None:
         raise CaptureStop(
             "RECORDABLE_FAILURE_RENDERED",
@@ -1375,8 +1637,8 @@ or separate renderer.
 The embedded source is not a repository Python path, so hosted structural and
 unit-test gates do not execute it. Reviewers must extract the exact bytes and
 reproduce the section 12 checks. At the recorded line layout, _deny_inventory
-occupies lines 312 through 429 inclusive, 118 lines, and _post occupies lines
-457 through 563 inclusive, 107 lines. They are the only functions over the
+occupies lines 349 through 468 inclusive, 120 lines, and _post occupies lines
+496 through 602 inclusive, 107 lines. They are the only functions over the
 repository's 80-line production-code structural threshold. This explicit
 review exception applies only to the inert embedded artifact; it grants no
 production-code exception.
@@ -1392,8 +1654,9 @@ Before bearer input, the operator:
 3. extracts the exact section 7.2 source into capture.py in that directory and
    writes the exact canonical public manifest beside it;
 4. sets both regular, single-link files to mode 0400;
-5. independently verifies the source, manifest, pinned CPython executable, and
-   pre-capture RFC digests; and
+5. independently verifies the Darwin host identity, native Python build
+   linkage, source, manifest, pinned CPython executable, any separately linked
+   Python runtime library, and pre-capture RFC digests; and
 6. invokes the following argument vector directly, with no function, wrapper,
    pipeline, redirection, debugger, tracer, profiler, or command substitution:
 
@@ -1403,33 +1666,48 @@ Before bearer input, the operator:
 
 The script itself revalidates:
 
-- CPython 3.12.13, isolated mode, ignore-environment, no-site, safe-path, and
-  no-bytecode flags;
-- a process environment containing exactly LC_ALL=C and the macOS-injected
-  __CF_USER_TEXT_ENCODING matching its fixed numeric pattern;
+- CPython 3.12.13 on the exact Darwin host system, kernel release, and machine,
+  isolated mode, ignore-environment, no-site, safe-path, and no-bytecode flags;
+- a launch environment containing exactly LC_ALL=C, while permitting the
+  operating system to inject __CF_USER_TEXT_ENCODING only when it matches the
+  fixed numeric pattern;
 - global and per-connection HTTP debug level zero;
 - source and manifest ownership, regular-file type, single link, modes,
   bounded sizes, exact hashes, same private directory, directory mode, and
   resolution outside the repository worktree;
 - canonical manifest bytes and every expected response semantic;
-- the real pinned executable path and complete executable SHA-256;
+- the real pinned executable path and complete executable SHA-256, the exact
+  build classification, and the complete path and SHA-256 of a framework or
+  shared Python runtime library when present;
 - exact working directory, absolute and repository-relative RFC path, RFC
   pre-capture digest, and unique ordered record markers; and
 - exact source digest agreement between the argument and manifest.
 
-The program then unlinks capture.py and manifest.json and removes their
-private directory. Only after successful removal does it open /dev/tty
-directly, verify it is a TTY, disable echo, and read the pre-materialized ASCII
-bearer. The bearer is never a shell argument, environment value, file value,
-return value, digest input, or record member. Terminal attributes are restored
-on every path.
+The program then unlinks capture.py and manifest.json, removes their private
+directory, and observes that all three paths are absent. Only after successful
+removal does it open /dev/tty directly and verify it is a TTY. It disables
+echo with TCSAFLUSH before emitting the prompt, so already typed input is
+discarded before any prompt can expose an echo-enabled typeahead window, then
+reads the pre-materialized ASCII bearer. The bearer is never a shell argument,
+environment value, file value, return value, digest input, or record member.
+Terminal attributes are restored on every path.
 
 The fresh -I -S process prevents ordinary site customization, user-site,
 script-directory import, Python environment, or preloaded application-module
-injection. The exact program has no dynamic import or caller callback. It also
-closes the provenance object to five exact public members before rendering.
-After the calls it creates deterministic immutable UTF-8 JSON record bytes; no
-mutable result object leaves the exact program.
+injection. The exact program has no dynamic import or caller callback. The
+record contains actual runtime observations, executable/runtime-library file
+observations, computed auth-side ledger and count, and observed temporary-path
+absence. It intentionally has no self-attested freshProcess boolean: freshness
+is a property of the exact launch protocol, supported by the current-process
+observations. After the calls it creates deterministic immutable UTF-8 JSON
+record bytes; no mutable result object leaves the exact program.
+
+Python does not provide reliable secure erasure of immutable strings or all
+intermediate process memory. The source rebinds its bearer variable after use
+and never serializes the bearer, but it does not claim that CPython heap pages,
+TLS buffers, kernel buffers, or terminal-driver memory are scrubbed. Process
+exit and the trusted host/operating-system precondition bound that residual
+memory risk.
 
 ### 7.4 Exact request, transport, and authentication protocol
 
@@ -1493,17 +1771,26 @@ object. This is the automated publication allowlist. There is no human viewer
 or inspector between provider input and publication. Any otherwise valid
 difference produces an unapproved-response refusal and no RFC write.
 
-Exactly three body-derived failures may write a stopped-run record:
+Exactly four body-derived failures may write a stopped-run record:
 
 - D1_ATTACHMENT_MISMATCH;
+- D1_EXPLAINED_RESOURCES_OMITTED;
 - D1_RESOURCE_VISIBILITY_OMITTED; and
 - N1_EXPLAINED_RESOURCES_OMITTED.
+
+The exact program renders one of those codes only when the captured exception
+also carries a nonempty observed Policy Troubleshooter call ledger whose last
+entry matches the failure label, POST method, fixed endpoint, response status,
+and completion timestamp. A pre-call expected-manifest validation error or a
+synthetic recordable code therefore cannot create provider-observation
+metadata.
 
 Those records contain only the fixed code, capture label, status, body length,
 body digest, call ledger, and public provenance. They contain no response body,
 returned attachment spelling, resource name, policy name, header value, or
-token. D1 attachment mismatch is therefore confirmation-only: it records that
-exact equality failed but publishes no observed spelling.
+token. D1 outer explainedResources omission has its own code rather than the
+generic object-members code. D1 attachment mismatch is confirmation-only: it
+records that exact equality failed but publishes no observed spelling.
 
 ### 7.6 Exact publication encoding and renderer
 
@@ -1520,11 +1807,14 @@ indentation, ASCII escaping, and one terminal LF. The same exact source:
 2. chooses a tilde fence longer than any tilde run in the record;
 3. replaces only the bytes between those markers;
 4. refuses a rendered RFC over 1048576 bytes;
-5. verifies the original RFC inode has not changed;
+5. no-follow re-reads the current RFC and verifies both its complete SHA-256
+   against the pre-capture bytes and its device, inode, ctime, mtime, size,
+   mode, owner, group, and link-count identity;
 6. creates only a sibling .opec-render.tmp with exclusive no-follow semantics
    and the original file mode;
 7. writes and fsyncs the complete rendered bytes;
-8. rechecks the original inode, atomically replaces only the RFC, and fsyncs
+8. immediately no-follow re-reads and rehashes the current RFC, rechecks that
+   complete original identity, atomically replaces only the RFC, and fsyncs
    its directory; and
 9. removes an incomplete temporary file on failure.
 
@@ -1559,9 +1849,10 @@ UNAPPROVED
 ~~~
 
 Any pre-call failure stops with zero calls. Any post-call non-recordable
-failure stops with no RFC write. One of the three recordable failures writes
-only its bounded confirmation record and stops. No partial result grants
-authority, and N1 cannot cure a failed D1.
+failure stops with no RFC write. One of the four recordable failures writes
+only its bounded confirmation record after a nonempty matching observed call
+ledger proves that the named provider call occurred, then stops. No partial
+result grants authority, and N1 cannot cure a failed D1.
 
 ## 9. Normative invariants and refusal cases
 
@@ -1569,14 +1860,19 @@ authority, and N1 cannot cure a failed D1.
 
 - OPEC-001 — No call occurs before one complete live card and exact later
   approval. The call ledger is exactly D1 then N1, with zero auth-side calls
-  and no retry or replay.
+  and no retry or replay. A recordable failure requires a nonempty observed
+  ledger ending in the matching D1 or N1 provider call.
 - OPEC-002 — The process is a fresh exact CPython 3.12.13 process with the
-  pinned executable digest, -I -S -B, exact environment, exact source digest,
-  no wrapper, and no application-module injection path.
+  pinned executable digest, exact Darwin host and runtime linkage, -I -S -B,
+  the minimal permitted environment, exact source digest, no wrapper, and no
+  application-module injection path.
 - OPEC-003 — The source and canonical public manifest are private-mode
-  non-secret temporary inputs and are removed before the hidden bearer read.
-- OPEC-004 — HTTP debug output is disabled; the bearer has no argument,
-  environment, file, return, logging, digest, or publication path.
+  non-secret temporary inputs; their removal and path absence are observed
+  before the hidden bearer read.
+- OPEC-004 — HTTP debug output is disabled and terminal echo is disabled and
+  pending input flushed before the bearer prompt; the bearer has no argument,
+  environment, file, return, logging, digest, or publication path. No secure
+  process-memory erasure claim is made.
 - OPEC-005 — Each complete response body is frozen before parsing and bound to
   its exact byte range, length, digest, and lossless base64.
 - OPEC-006 — Each returned request-controlled access tuple equals its exact
@@ -1590,7 +1886,8 @@ authority, and N1 cannot cure a failed D1.
 - OPEC-009 — The complete strict parsed response equals the complete
   pre-approved manifest object under canonical JSON before publication.
 - OPEC-010 — The deterministic renderer can replace only this RFC's one
-  marker-delimited record and returns no mutable capture result.
+  marker-delimited record, re-reads and matches its complete pre-capture digest
+  immediately before replacement, and returns no mutable capture result.
 - OPEC-011 — The immutable evidence commit contains no embedded exact-head
   review IDs. Hosted checks and two reviews are external merge controls bound
   to that unchanged commit.
@@ -1622,18 +1919,20 @@ equivalence is forbidden.
 | Condition | Required result |
 | --- | --- |
 | Missing card, approval, fixture, public manifest, pinned runtime, source identity, or separate bearer authority | Zero calls; stop |
-| Wrong environment, Python flag/path/digest, source/manifest/RFC path or digest, file ownership/mode/link, marker count, or working directory | Zero calls; stop |
+| Wrong environment, host, Python flag/path/digest/build linkage, separate runtime-library identity, source/manifest/RFC path or digest, private-input/RFC ownership/mode/link, marker count, or working directory | Zero calls; stop |
 | Wrapper, debugger, profiler, callback, module injection, proxy, token lookup, refresh, replay, retry, redirect, debug trace, or hidden call | Stop; no accepted evidence |
 | Wrong method, endpoint, call order, request, header, timeout, or request body over 131072 bytes | Stop; no accepted evidence |
 | Transport failure, 401, other non-200 status, empty/oversized/compressed body, or invalid JSON | Stop; no refresh or retry |
 | Response access tuple differs from its request or output-only values are malformed | Stop before deny evidence is used |
 | D1 is indeterminate, invisible, empty, non-project, incomplete, unexpected, or outside the approved pair list | Stop; only the dedicated visibility or attachment confirmation may be rendered |
+| D1 outer explainedResources is omitted | Render only D1_EXPLAINED_RESOURCES_OMITTED plus safe metadata; never infer empty |
 | D1 derived attachment differs | Render only D1_ATTACHMENT_MISMATCH plus safe metadata; publish no spelling |
 | D1 resource visibility field is omitted | Render only D1_RESOURCE_VISIBILITY_OMITTED plus safe metadata |
 | N1 is indeterminate, denied, malformed, or nonempty | Stop; no no-deny evidence |
 | N1 explainedResources is omitted | Render only N1_EXPLAINED_RESOURCES_OMITTED plus safe metadata; never infer empty |
 | Complete parsed body differs from the approved expected object | Stop with no RFC write |
-| RFC changes before render or another path would be needed | Stop; do not broaden scope |
+| A recordable code has no nonempty matching observed provider-call ledger | Stop with no RFC write; never claim a provider observation from preflight |
+| RFC bytes, digest, or complete file identity change before render, or another path would be needed | Stop; do not overwrite or broaden scope |
 | Evidence commit changes after either exact-head review | Reviews are stale; repeat checks and both external reviews on the new head |
 
 ## 10. Exact evidence record
@@ -1642,11 +1941,16 @@ equivalence is forbidden.
 
 A successful record contains:
 
-- record, program, launch-protocol, renderer, manifest, source, executable, and
-  pre-capture RFC identities;
-- fresh-process, environment, Python-flag, HTTP-debug, and temporary-input
-  removal outcomes;
-- authSideCallCount exactly zero;
+- record, program, launch-protocol, renderer, manifest, source, executable,
+  runtime-build, optional separate runtime-library, and pre-capture RFC
+  identities;
+- the observed executable and optional runtime-library byte lengths, digests,
+  owners, groups, modes, and link counts;
+- actual runtime environment keys and count, Python implementation, version,
+  flags, platform and host values, executable path, HTTP debug level, and
+  optional operating-system-injected text-encoding value;
+- observed source, manifest, and private-directory absence before bearer input;
+- the computed empty authSideCallLedger and authSideCallCount exactly zero;
 - the two-entry D1/N1 ledger with ordinal, method, endpoint, timestamps, and
   status;
 - for each call, exact request base64/length/digest and access tuple;
@@ -1656,14 +1960,20 @@ A successful record contains:
 - externalReviewControl stating that two exact-head review objects are
   required and stored externally on GitHub.
 
+It does not assert freshProcess or temporary-input removal through hard-coded
+booleans. Freshness is controlled by the launch protocol, while the record
+publishes the available current-process observations and the independently
+computed path-absence results.
+
 It never contains a review ID or URL. The evidence authority is the Git commit
 containing the record. After that commit, review objects refer to its immutable
 head externally. This prevents a self-referential requirement to edit the
 evidence commit with its own future review references.
 
 A recordable stopped run contains the exact safe subset defined in section
-7.5. It establishes only the named serialization or equality observation. It
-does not establish accepted provider evidence.
+7.5 and a nonempty observed provider-call ledger ending in the call that
+produced the failure. It establishes only the named serialization or equality
+observation. It does not establish accepted provider evidence.
 
 ### 10.2 Provisional execution record
 
@@ -1671,7 +1981,7 @@ does not establish accepted provider evidence.
 
 ~~~text
 CAPTURE STATUS: UNEXECUTED
-PROGRAM SOURCE: EMBEDDED; 1059 LINES; SHA-256 c9ca1548f1b803d2eef12e322b7eec9998b009466b100b7ae94ed22fc79dd10d
+PROGRAM SOURCE: EMBEDDED; 1305 LINES; SHA-256 2c6fc7928e7b3f7ea018dfaa52dff5acba48ff2847396cc2fc8f43e1e777d46c
 FRESH PROCESS: NOT STARTED
 PUBLIC MANIFEST: NOT SUPPLIED
 TEMPORARY INPUT REMOVAL: NOT PERFORMED
@@ -1760,21 +2070,37 @@ Reviewers must independently:
 
 - confirm this RFC is the only changed path and the trust boundary stayed
   acquisition/publication only;
-- extract the first Python block exactly and reproduce 1059 LF-terminated
+- extract the first Python block exactly and reproduce 1305 LF-terminated
   lines and SHA-256
-  c9ca1548f1b803d2eef12e322b7eec9998b009466b100b7ae94ed22fc79dd10d;
+  2c6fc7928e7b3f7ea018dfaa52dff5acba48ff2847396cc2fc8f43e1e777d46c;
 - compile it with exact CPython 3.12.13;
 - run repository-pinned Ruff 0.15.5 check and format check;
 - run an isolated fake-transport harness under an empty LC_ALL=C environment,
-  -I -S -B, covering the valid two-call path, runtime/env refusal, debug-level
-  control, connection failure, secret absence, tuple swaps, each
-  request-controlled field, effectiveTags present/absent, unknown N1, omitted
-  N1 resources, omitted D1 visibility, attachment mismatch, nonempty N1,
-  unapproved complete response, source/manifest/executable/RFC identity
-  checks, pre-bearer temporary-input removal, record-marker injection,
-  deterministic fence selection, and atomic one-RFC replacement;
+  -I -S -B, covering the valid two-call path; optional valid macOS text-encoding
+  injection; runtime, host, flag, and environment refusal; global and
+  per-connection debug-level control; connection failure; secret absence;
+  terminal-call ordering; tuple swaps; each request-controlled field;
+  effectiveTags present/absent; unknown
+  N1; omitted N1 resources; omitted D1 outer resources; omitted D1 resource
+  visibility; attachment mismatch; nonempty N1; unapproved complete response;
+  source/manifest/executable/runtime-library/RFC identity checks; root-owned or
+  hard-linked exact executable acceptance; monolithic and separate-runtime
+  linkage rules; observed runtime, auth-side ledger/count, and temporary-path
+  absence; rejection of a recordable code without a nonempty matching provider
+  call ledger; record-marker injection; deterministic fence selection;
+  wrong-current-digest and same-inode RFC mutation refusal; and atomic one-RFC
+  replacement;
+- run a real controlling-PTY regression that queues harmless input before echo
+  suppression, supplies a bearer-shaped value after suppression but before
+  prompt output, proves the queued input is discarded and the bearer never
+  appears in terminal output, verifies the hidden value or fixed refusal, and
+  compares complete terminal attributes before and after both success and
+  refusal;
 - inspect the exact fresh launch vector and verify no wrapper or callback is
   admitted;
+- inspect the executable with the host's native linkage tool; establish a
+  genuinely monolithic build or pin and hash the separately linked Python
+  runtime library in the manifest;
 - confirm _post and _deny_inventory are the only over-80-line functions and
   apply the explicit embedded-artifact review noted in section 7.2;
 - confirm exactly one HTTPS constructor path, one request statement, fixed
@@ -1789,9 +2115,12 @@ Reviewers must independently:
 
 Before publication and review:
 
-- reproduce every OPEC invariant and every source/manifest/runtime/RFC digest;
-- prove both temporary public inputs disappeared before bearer input;
-- reproduce the exact D1/N1 call ledger and zero auth-side calls;
+- reproduce every OPEC invariant and every
+  source/manifest/executable/runtime-library/RFC digest;
+- reproduce the recorded absence of both temporary public inputs and their
+  directory before bearer input;
+- reproduce the exact D1/N1 call ledger and the independently computed empty
+  auth-side ledger and count;
 - decode every base64-line array and reproduce response lengths and digests;
 - independently parse the complete bodies with duplicate-member refusal;
 - reproduce request binding, all output-only fields, every D1 pair and
@@ -1827,9 +2156,11 @@ independent zero-Blocker reviews may one complete live decision card be
 displayed in this same Codex task. The card must include:
 
 - decision ID and proposed version;
-- exact RFC head, source line count/digest, pinned executable path/digest,
-  manifest bytes/digest, working directory, RFC path/pre-capture digest, and
-  launch vector;
+- exact RFC head, source line count/digest, Darwin host system/kernel
+  release/machine, pinned executable path/digest, Python build classification,
+  separate runtime-library path/digest when applicable or the independently
+  verified monolithic-linkage result, manifest bytes/digest, working directory,
+  RFC path/pre-capture digest, and launch vector;
 - the complete public manifest, including both full expected response objects;
 - the controlled non-production publication and complete-visibility
   declarations;
@@ -1868,8 +2199,9 @@ trace, retry, replay, redirect, callback, or other call path exists.
 
 After a call, enforce section 9 without retry, redaction, inference,
 provisioning, mutation, or scope expansion. A non-recordable failure writes no
-RFC. A recordable failure writes only its approved confirmation metadata and
-still stops.
+RFC. A recordable failure writes only its approved confirmation metadata when
+its nonempty observed call ledger ends in the matching call; otherwise it
+writes nothing. Every recordable failure still stops.
 
 Stop before evidence publication if the diff includes another path or the
 record contains anything outside the complete manifest allowlist. Stop before
@@ -1882,27 +2214,31 @@ be handed to PR #322. That handoff is evidence, not authority.
 ## 15. Current disposition
 
 - Reviewed base: bdf636d155e45ecbf4d9ac828e232bbcf91e1d59.
-- Draft PR: [#323](https://github.com/samovers/OFARM2/pull/323), open, Draft,
-  and unmerged at the time of this amendment.
-- Published predecessor head:
-  1a36251a43c092ad3e794384488858770f6fe9ab.
-- Exact-head conversation review:
-  [comment 5354420973](https://github.com/samovers/OFARM2/pull/323#issuecomment-5354420973)
-  reported zero Blockers and requested structural-gate disclosure, a dedicated
-  D1 visibility-omission code, confirmation-only mismatch wording, and current
-  provenance.
-- Exact-head formal review:
-  [review 4981633589](https://github.com/samovers/OFARM2/pull/323#pullrequestreview-4981633589)
-  reported two controlling Blockers: the unbound wrapper/process/inspector/
-  renderer chain and the impossible same-head review-reference cycle.
-- This amendment replaces that chain with one exact fresh-process program,
-  complete expected-response allowlisting, hidden post-removal bearer input,
-  deterministic atomic rendering, external-only exact-head review records, the
-  three dedicated recordable codes, and explicit embedded-source gate
-  disclosure.
-- The remote PR description must be synchronized to the eventual published
-  corrected head before requesting another review; this local amendment does
-  not claim that synchronization has occurred.
+- Draft PR: [#323](https://github.com/samovers/OFARM2/pull/323).
+- Phase A review checkpoint head:
+  7c51ecc57477ba2d00f5926be634a9316c9b9953.
+- The latest conversation review of that checkpoint,
+  [comment 5357073800](https://github.com/samovers/OFARM2/pull/323#issuecomment-5357073800),
+  withdrew its earlier prompt-order Blocker, retained the correction as a high
+  should-fix, demonstrated that an in-place RFC edit was silently overwritten,
+  and identified the latent empty-ledger recordable-failure path.
+- The independent formal review of the same checkpoint,
+  [review 4983884605](https://github.com/samovers/OFARM2/pull/323#pullrequestreview-4983884605),
+  retained the prompt-order finding as one Blocker and required a real PTY
+  regression. It agreed on observed runtime evidence, interpreter/runtime
+  linkage, coherent environment identity, stronger RFC drift detection, and
+  explicit memory-erasure limits.
+- The contract source above disables echo and flushes pending input before the
+  prompt, requires a nonempty matching observed call before rendering failure
+  metadata, records runtime/auth-side/removal observations, pins host and Python
+  build linkage, permits only validated optional macOS text-encoding injection,
+  uses four dedicated recordable codes, disclaims secure memory erasure, and
+  twice no-follow re-reads and hashes the RFC under complete file-identity
+  checks. Section 12 requires the real PTY success/refusal regression.
+- Git and GitHub, rather than a self-referential claim inside this RFC, are
+  authoritative for any successor published head and its review status. The PR
+  description and external review objects must identify the actual remote head
+  before that head is considered reviewed.
 - Provider iam:troubleshoot calls under this decision: zero.
 - Google/provider credentials used under this decision: none.
 - Captured responses and observed attachment kinds: none.
