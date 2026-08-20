@@ -277,9 +277,11 @@ credentials must complete this gate without using authority from this RFC:
 1. capture one complete authenticated Policy Troubleshooter v3beta response
    involving a controlled project-attached IAM v2 deny policy;
 2. have both bounded reviewers inspect the complete response and record in
-   this RFC the capture time, exact endpoint and API version, a SHA-256 digest
-   of the complete response, and the exact `fullResourceName` and full
-   `Policy.name` taken from the same `ExplainedDenyResource` object;
+   this RFC the capture time, exact endpoint and API version, the exact byte
+   range and encoding hashed, a SHA-256 digest of those complete response
+   bytes, every relevant `fullResourceName` and enclosed full `Policy.name`
+   pair, all explained-resource and policy cardinalities, and the attachment
+   kind for every pair;
 3. capture a complete no-deny control whose top-level
    `explainedResources` is empty, and confirm in the deny-bearing response
    that every present explained resource contains at least one visible policy;
@@ -289,10 +291,14 @@ credentials must complete this gate without using authority from this RFC:
 5. record which attachment kinds have been observed with that same-response
    equality.
 
-Credentials, access tokens, and sensitive response data must not be committed.
-The complete responses must nevertheless be available to the two bounded
-reviewers; a digest or extracted pair alone is not a substitute for their
-inspection of the complete evidence.
+The separately approved capture must use controlled resources, principals,
+and policy contents whose complete response bytes are explicitly approved for
+publication in this RFC. Credentials and access tokens are never response
+evidence and must not be committed. Both bounded reviewers inspect the same
+published complete bytes; a digest, redacted response, or extracted pair alone
+is not a substitute. If complete publication-safe responses cannot be
+produced, this gate stops for a separate evidence-custody and reviewer-channel
+decision rather than using an informal out-of-band channel.
 
 The gate has only these outcomes:
 
@@ -308,7 +314,9 @@ The gate has only these outcomes:
   same-response evidence is recorded for each kind. An unobserved kind is
   deferred, not inferred from project behavior; this all-three-kind version
   must be narrowed and re-reviewed before authorization if either kind remains
-  unobserved.
+  unobserved. A narrowed version must refuse every policy name with an
+  unobserved attachment kind before it contributes to a resource or snapshot;
+  accepting that kind without binding is forbidden.
 - If a complete response contains a present explained resource with zero
   visible policies, implementation stops for a new decision version.
 
@@ -548,8 +556,9 @@ The new decision makes the consequence explicit:
    resulting exact module budget and guards, the mechanically regenerated
    inventory, and the new location-free whole-module AST digest;
 3. require the package contract to pass on Commit A against that one new
-   digest; Commit A intentionally remains non-merge-eligible because its own
-   immutable SHA cannot be embedded in itself as its reference identity;
+   digest; Commit A intentionally remains non-merge-eligible under an explicit
+   review and merge-control obligation because its own immutable SHA cannot be
+   embedded in itself as its reference identity;
 4. create **Commit B** that pins Commit A's exact immutable SHA as
    `SECURITY_AUDIT_OBSERVER_ROOT_REFERENCE_HEAD` and changes no production or
    test semantics; Commit B is the first merge-eligible conformance head;
@@ -565,6 +574,15 @@ accepted digests, a candidate-derived oracle, a weakened comparison, `noqa`,
 or an unreviewed suppression. Commit B may change only the immutable reference
 identity and mechanically necessary evidence for that identity. Any semantic
 change after Commit A requires another reference sequence and bounded review.
+
+The current architecture checker compares the parsed module only with the
+pinned AST digest and uses `REFERENCE_HEAD` only in its refusal message. It
+does not mechanically prove that the reference commit contains that digest.
+Commit A can therefore pass conformance while remaining review-ineligible.
+Every reviewer and merger must verify that Commit B, not Commit A, is the
+candidate head and that Commit B names Commit A exactly. Adding Git history
+resolution to conformance would change the checker's capability surface and is
+outside this decision.
 
 The semantic reference commit cannot contain runtime, credential, deployment,
 or unrelated refactoring work. Conformance and review must compare it with base
@@ -727,7 +745,10 @@ The wider provider dependency remains provisional:
   with zero visible policies; or changes the v3beta/PAB contract.
 - **Unobserved attachment kinds:** folder or organization behavior may not be
   inferred from a project capture. An unobserved kind must be removed or
-  deferred by a new exact decision head and re-reviewed before Phase B.
+  deferred by a new exact decision head and re-reviewed before Phase B. The
+  narrowed parser must refuse that kind fail-closed; it may not accept the
+  resource through the merged all-three-kind grammar without attachment
+  binding.
 - **Likely upgrade path:** a new provider-currentness decision chooses and
   pins the supported response contract before production composition. It may
   revise this parser only through another reviewed semantic decision.
@@ -758,8 +779,9 @@ this parser hardening does not accept Preview for production. Until section
   `fullResourceName`/`Policy.name` pairs remain recorded rather than being
   resolved by assumption;
 - before a complete live card, section 5.1 is completed and this RFC records
-  the complete-response digests, exact same-response field pairs, cardinality
-  controls, and observed attachment kinds;
+  the complete publication-safe response bytes, their exact hash boundary and
+  digest, every same-response resource/policy pair, all cardinalities, and
+  observed attachment kinds;
 - a matching capture expressly identifies the normative type contract and
   captured provider behavior as controlling, while a mismatch, identifier-form
   difference, empty present resource, or unobserved retained kind stops this
@@ -794,6 +816,9 @@ this parser hardening does not accept Preview for production. Until section
 - prove valid project, folder, and organization attachment spellings retained
   by the evidence-bearing approved version and a valid multi-policy or
   multi-resource response bind per resource;
+- if the approved version narrows attachment kinds, prove every unobserved or
+  deferred kind refuses before resource-state recomputation and cannot enter a
+  normalized snapshot through the merged policy-name grammar;
 - run the complete focused observer-root admission suite;
 - prove requests, call counts, endpoint, PAB posture, policy-state
   recomputation, probe, clocks, output, and ordinary-refusal behavior are
@@ -868,12 +893,25 @@ currentness or production acceptance.
   reported one in-scope Blocker: the contradictory official examples. It also
   required the cardinality controls and exact two-commit semantic-reference
   sequence now specified in sections 5.1 and 9.3.
-- **Current Blockers:** the previous exact-head control gaps are amended, but
-  section 5.1's provider evidence is not yet recorded and the amended exact
-  head has not received its two superseding reviews.
+- **Corrected review head:**
+  `e32caa3b4fdadfcdb4d7ad0d9cde21d193689261`.
+- **Corrected-head review 1:** [comment 5344506443](https://github.com/samovers/OFARM2/pull/322#issuecomment-5344506443)
+  reported zero Blockers, required the Commit A review-control wording now in
+  section 9.3, and asked for the narrowed-kind and complete-evidence-channel
+  outcomes now made exact in sections 5.1, 12, and 13.1.
+- **Corrected-head review 2:** [review 4974026585](https://github.com/samovers/OFARM2/pull/322#pullrequestreview-4974026585)
+  closed the prior contract and semantic-reference findings and reported one
+  remaining Blocker: section 5.1 has not been executed. It also required the
+  final evidence record to enumerate every relevant resource/policy pair and
+  cardinality, now stated in sections 5.1 and 13.1.
+- **Current Blockers:** section 5.1's complete authenticated provider evidence
+  is not yet recorded. No wording change, hosted check, review, or generic
+  `go` can substitute for that separately authorized evidence.
 - **Follow-ups:** wider provider currentness and the ordered, separately
   governed boundaries in section 11.4.
-- **Preferences:** none recorded.
+- **Preferences:** the corrected-head questions about narrowed kinds and the
+  reviewer evidence channel are answered by the explicit fail-closed and
+  publication-safe rules above.
 - **Active baseline files affected:** none; this is not OFARM baseline law.
 - **Change classification:** high-risk supporting security evidence-validation
   decision under issue #192.
@@ -943,9 +981,12 @@ Stop and require a new decision version before implementation or merge if:
 - another trust boundary or sixth path is needed;
 - section 5.1 is incomplete, unavailable for bounded review, or absent from the
   exact approved RFC head;
+- the complete response cannot be made publication-safe for both reviewers,
+  the two reviewers cannot inspect the same exact bytes, or the RFC omits any
+  relevant resource/policy pair or cardinality from those bytes;
 - the controlled capture contradicts exact attachment equality, represents the
   same logical resource in a different identifier form, or leaves an
-  attachment kind retained by this version unobserved;
+  attachment kind retained by this version unobserved or accepted unbound;
 - official provider documentation changes beyond the two contradictory
   examples already recorded here;
 - an explained resource with zero policies must be accepted as complete;
