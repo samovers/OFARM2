@@ -151,8 +151,8 @@ Subject to later exact approval, this decision trusts only:
 - the task user to approve one complete live card and declare every manifest
   value suitable for public repository publication;
 - the separate credential authority to materialize one bearer before launch;
-- the exact 1475-line source in section 7.2 at SHA-256
-  22d2449d2e62322d6f8199a83b880796aa05603898e7d9515d6564c9f79f74b2;
+- the exact 1476-line source in section 7.2 at SHA-256
+  7c88e22d5691c640d7b325c8f460ad495cedb70984e2b46fe8c8bd62ccaaef33;
 - the exact Darwin host system, kernel release, and machine, CPython 3.12.13
   executable path and digest, runtime build classification, and separately
   linked Python runtime-library path and digest when one exists, all fixed in
@@ -263,11 +263,12 @@ target, condition, rule, unknown state, or enforced state refuses.
 Before bearer input, the exact source walks every object key and value in both
 complete expected responses and applies closed validation to semantic
 principal fields. accessTuple.principal and every members, memberships,
-deniedPrincipals, and exceptionPrincipals entry must be exactly one of the
-service-account email values, serviceAccount members, or explicit
-service-account principal URIs derived from publicServiceAccountEmails. A
-principalSet field is always forbidden. Every other principal:// or
-principalSet:// spelling, bare IAM pool target, principal.type or
+exemptedMembers, deniedPrincipals, and exceptionPrincipals entry must be
+exactly one of the service-account email values, serviceAccount members, or
+explicit service-account principal URIs derived from
+publicServiceAccountEmails. A principalSet field is always forbidden. Every
+other principal:// or principalSet:// spelling, bare IAM pool target,
+principal.type or
 principal.subject condition, user, group, domain, deleted, public, folder,
 organization, human email, opaque semantic principal, or unapproved service
 account refuses. This covers Google's current
@@ -410,10 +411,10 @@ Phase B may execute only the source below. The source-byte boundary is the
 UTF-8 LF sequence beginning with the first f in from __future__ and ending
 with the LF after the last source line. The Markdown fences are excluded.
 
-It is exactly 1475 lines with SHA-256:
+It is exactly 1476 lines with SHA-256:
 
 ~~~text
-22d2449d2e62322d6f8199a83b880796aa05603898e7d9515d6564c9f79f74b2
+7c88e22d5691c640d7b325c8f460ad495cedb70984e2b46fe8c8bd62ccaaef33
 ~~~
 
 ~~~python
@@ -501,6 +502,7 @@ FORBIDDEN_PUBLIC_SCOPE_FRAGMENTS = (
 PUBLIC_PRINCIPAL_FIELDS = {
     "deniedPrincipals",
     "exceptionPrincipals",
+    "exemptedMembers",
     "members",
     "memberships",
     "principal",
@@ -728,7 +730,7 @@ def _validate_principal_field(
 ) -> None:
     if name == "principal":
         identities = [value]
-    elif name == "members":
+    elif name in {"exemptedMembers", "members"}:
         if type(value) is not list:
             _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
         identities = value
@@ -1903,8 +1905,8 @@ and complete expected-response identity/scope validation.
 The embedded source is not a repository Python path, so hosted structural and
 unit-test gates do not execute it. Reviewers must extract the exact bytes and
 reproduce the section 12 checks. At the recorded line layout, _deny_inventory
-occupies lines 447 through 566 inclusive, 120 lines, and _post occupies lines
-594 through 704 inclusive, 111 lines. They are the only functions over the
+occupies lines 521 through 640 inclusive, 120 lines, and _post occupies lines
+669 through 779 inclusive, 111 lines. They are the only functions over the
 repository's 80-line production-code structural threshold. This explicit
 review exception applies only to the inert embedded artifact; it grants no
 production-code exception.
@@ -2027,14 +2029,15 @@ explainedBindingsAndPolicies list. This is the only admitted PAB shape.
 
 Before bearer input, the source recursively validates both complete expected
 response objects. It interprets principal-bearing fields rather than relying
-only on string substrings: principal is a scalar, members is a list,
-memberships is a keyed map, and deniedPrincipals and exceptionPrincipals may be
-lists or keyed maps. Every admitted entry must equal one of the three exact
-service-account forms derived from the sorted publicServiceAccountEmails
-manifest member. It rejects every principalSet field, every other
-principal:// or principalSet:// spelling, bare IAM pool targets,
-principal-bearing PAB conditions, human/group/domain/deleted/public values,
-opaque semantic principals, ancestor scope, and unapproved service accounts.
+only on string substrings: principal is a scalar, members and exemptedMembers
+are lists, memberships is a keyed map, and deniedPrincipals and
+exceptionPrincipals may be lists or keyed maps. Every admitted entry must
+equal one of the three exact service-account forms derived from the sorted
+publicServiceAccountEmails manifest member. It rejects every principalSet
+field, every other principal:// or principalSet:// spelling, bare IAM pool
+targets, principal-bearing PAB conditions, human/group/domain/deleted/public
+values, opaque semantic principals, ancestor scope, and unapproved service
+accounts.
 Both request principals must be in the manifest list. This gate is structural
 and precedes the complete-object canonical-equality gate; it cannot be bypassed
 by approving an unsafe expected object.
@@ -2211,7 +2214,7 @@ equivalence is forbidden.
 | --- | --- |
 | Missing card, approval, fixture, public manifest, pinned runtime, source identity, or separate bearer authority | Zero calls; stop |
 | Missing, malformed, or different decisionVersion, quotaProjectId, publicServiceAccountEmails, or quota-project header | Zero calls; stop |
-| Expected response contains a human, group, domain, deleted, public, opaque or non-service-account semantic principal, any unapproved service account, any unapproved principal:// spelling, any principalSet field or spelling, any principal-bearing PAB condition, or any folder/organization value | Zero calls; stop before bearer input |
+| Expected response contains a human, group, domain, deleted, public, opaque or non-service-account semantic principal, any unapproved service account, any unapproved principal:// spelling, any principalSet field or spelling, any unapproved audit-log exemptedMembers identity, any principal-bearing PAB condition, or any folder/organization value | Zero calls; stop before bearer input |
 | Expected or actual PAB explanation is not exactly NOT_ENFORCED with permitted relevance and an omitted or empty binding/policy list | Zero calls when expected; otherwise stop with no accepted evidence or RFC write |
 | Wrong environment, host, Python flag/path/digest/build linkage, separate runtime-library identity, source/manifest/RFC path or digest, private-input/RFC ownership/mode/link, marker count, or working directory | Zero calls; stop |
 | Wrapper, debugger, profiler, callback, module injection, proxy, token lookup, refresh, replay, retry, redirect, debug trace, or hidden call | Stop; no accepted evidence |
@@ -2279,7 +2282,7 @@ observation. It does not establish accepted provider evidence.
 ~~~text
 CAPTURE STATUS: UNEXECUTED
 DECISION VERSION: 2; UNAPPROVED
-PROGRAM SOURCE: EMBEDDED; 1475 LINES; SHA-256 22d2449d2e62322d6f8199a83b880796aa05603898e7d9515d6564c9f79f74b2
+PROGRAM SOURCE: EMBEDDED; 1476 LINES; SHA-256 7c88e22d5691c640d7b325c8f460ad495cedb70984e2b46fe8c8bd62ccaaef33
 FRESH PROCESS: NOT STARTED
 PUBLIC MANIFEST: NOT SUPPLIED
 PUBLIC SERVICE ACCOUNTS: NOT SUPPLIED
@@ -2383,9 +2386,9 @@ Reviewers must independently:
 
 - confirm this RFC is the only changed path and the trust boundary stayed
   acquisition/publication only;
-- extract the first Python block exactly and reproduce 1475 LF-terminated
+- extract the first Python block exactly and reproduce 1476 LF-terminated
   lines and SHA-256
-  22d2449d2e62322d6f8199a83b880796aa05603898e7d9515d6564c9f79f74b2;
+  7c88e22d5691c640d7b325c8f460ad495cedb70984e2b46fe8c8bd62ccaaef33;
 - compile it with exact CPython 3.12.13;
 - run repository-pinned Ruff 0.15.5 check and format check;
 - run an isolated fake-transport harness under an empty LC_ALL=C environment,
@@ -2399,8 +2402,13 @@ Reviewers must independently:
   missing/malformed/different quota project; missing or stale decision version;
   unsorted, duplicate, malformed, or incomplete public service-account lists;
   human/group/domain/deleted/public identities; opaque entries in every
-  semantic principal field; unapproved service accounts in values and object
-  keys; generic workforce, workload, GKE workload, and agent principal://
+  semantic principal field; nested
+  auditConfigs[].auditLogConfigs[].exemptedMembers values rejecting opaque,
+  user, group, domain, allUsers, deleted service-account, generic principal://,
+  every principalSet://, and unapproved service-account identities, plus one
+  exact allowlisted serviceAccount member acceptance; unapproved service
+  accounts in values and object keys; generic workforce, workload, GKE
+  workload, and agent principal://
   forms; every principalSet:// form; bare workforce/workload pool and project
   principal-set targets at the PAB target path; principal.type and
   principal.subject PAB conditions; allowed project resource spellings outside
