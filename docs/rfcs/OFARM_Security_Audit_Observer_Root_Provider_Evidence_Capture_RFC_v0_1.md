@@ -1,14 +1,15 @@
 # OFARM Security-Audit Observer-Root Provider-Evidence Capture — Phase A Contract v0.1
 
-**Status:** Phase A Draft; decision unapproved; no
-iam:troubleshoot call, Google/provider credential use, or Phase B authority
+**Status:** Phase A Draft; decision version 2 unapproved; no Phase B evidence
+call, evidence publication, or Phase B authority
 
 **Contract identity:**
 ofarm2.security-audit-observer-root-provider-evidence-capture.v0.1
 
 **Decision identity:**
 ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-PROVIDER-EVIDENCE-CAPTURE-001,
-proposed version 1
+proposed version 2; version 1 is superseded after its external fixture
+qualification returned two terminal HTTP 403 responses
 
 **Issue relationship:** issue #192 remains open; this is a separate
 provider-evidence prerequisite for the observer-root attachment-binding
@@ -22,8 +23,8 @@ decision
 
 **Reviewed base:** bdf636d155e45ecbf4d9ac828e232bbcf91e1d59
 
-**Phase A review checkpoint head:**
-7c51ecc57477ba2d00f5926be634a9316c9b9953
+**Predecessor reviewed Phase A head:**
+21cfcb770038aff0846cca2710dd4b7c2be9f2a9
 
 **Primary trust boundary:** authenticated, read-only acquisition and
 publication of controlled Google Policy Troubleshooter evidence
@@ -56,11 +57,14 @@ This decision defines one bounded acquisition:
 6. require the strict parsed response object to equal the complete
    pre-approved response object in a canonical public manifest;
 7. bind each returned access tuple to its exact request, inventory every
-   relevant resource/policy pair, and publish the unchanged body bytes; and
-8. render only this RFC, then leave hosted checks and both exact-head reviews
+   relevant resource/policy pair, and publish the unchanged body bytes;
+8. send the exact public quota-project header on both requests and reject any
+   expected response containing a human, group, domain, public principal, or
+   folder/organization policy value;
+9. render only this RFC, then leave hosted checks and both exact-head reviews
    as external GitHub records.
 
-Version 1 can establish project evidence only. It cannot establish folder or
+Version 2 can establish project evidence only. It cannot establish folder or
 organization behavior. A successful capture transfers evidence, not
 implementation or deployment authority, to PR #322.
 
@@ -134,8 +138,8 @@ decision does not repair those prerequisites.
   digest, and derived deny inventory;
 - the exact host, executable, separately linked Python runtime when present,
   source, manifest, RFC, fresh-process, renderer, and two-call identities;
-- the complete publication allowlist and the fact that no unapproved response
-  value reaches Git or GitHub;
+- the complete publication allowlist, fixture-only public identity boundary,
+  and the fact that no unapproved response value reaches Git or GitHub;
 - the bearer and all credential/materialization details;
 - the no-mutation boundary; and
 - the absence of authority transfer to PR #322.
@@ -147,8 +151,8 @@ Subject to later exact approval, this decision trusts only:
 - the task user to approve one complete live card and declare every manifest
   value suitable for public repository publication;
 - the separate credential authority to materialize one bearer before launch;
-- the exact 1305-line source in section 7.2 at SHA-256
-  2c6fc7928e7b3f7ea018dfaa52dff5acba48ff2847396cc2fc8f43e1e777d46c;
+- the exact 1401-line source in section 7.2 at SHA-256
+  c6258b1332ec5a3e130d5aa9292fc77a9bad161642f37b73877ee41821b2803c;
 - the exact Darwin host system, kernel release, and machine, CPython 3.12.13
   executable path and digest, runtime build classification, and separately
   linked Python runtime-library path and digest when one exists, all fixed in
@@ -193,8 +197,8 @@ Before any provider call, one canonical compact UTF-8 JSON manifest must be
 approved and published in the complete live card. It has exactly these
 members, with no others:
 
-- contractId, decisionId, launchProtocolId, and manifestSchema at their exact
-  constants from section 7.2;
+- contractId, decisionId, decisionVersion exactly 2, launchProtocolId, and
+  manifestSchema at their exact constants from section 7.2;
 - maxPublishableBodyBytes exactly 131072; the same fixed value also bounds
   each canonical request body;
 - programSourceSha256;
@@ -205,6 +209,11 @@ members, with no others:
   pythonRuntimeLibrarySha256;
 - workingDirectory;
 - rfcPath and rfcPreCaptureSha256;
+- quotaProjectId, the controlled public project ID sent in the exact
+  x-goog-user-project header;
+- publicServiceAccountEmails, a nonempty sorted unique list of the only
+  controlled service-account email values that may occur anywhere in either
+  complete response;
 - d1Request, d1ExpectedPairs, and d1ExpectedResponse; and
 - n1Request and n1ExpectedResponse.
 
@@ -245,18 +254,83 @@ expected response must have a determinate NOT_DENIED outer state, deniable
 permission, permitted relevance, and an explicitly present empty
 explainedResources array.
 
+Before bearer input, the exact source walks every object key and value in both
+complete expected responses. It rejects all user, group, domain, deleted,
+principal-set, public, folder, and organization identity or policy values. Any
+string containing an email address or service-account resource spelling must
+be exactly one of the service-account email values, serviceAccount members, or
+explicit service-account principal URIs derived from
+publicServiceAccountEmails. The two request principals must also be members of
+that list. Canonical equality then prevents the live response from adding any
+identity or ancestor-scope value that was not validated before bearer input.
+
 The complete live card must also declare that all projects, resources,
 principals, policy IDs, members, conditions, policy bodies, and response
 objects are controlled non-production data approved for public GitHub
 publication; that both fixtures are clean at every relevant ancestor; and that
-the reader has complete visibility of every relevant deny policy. This RFC
-does not discover or provision those facts.
+the reader has complete visibility of every relevant deny policy. It must also
+declare that quotaProjectId names the controlled D1 fixture project; the reader
+has Service Usage Consumer there; each fixture project IAM allow policy has no
+human, group, domain, deleted, or public member; and every permitted service
+account is controlled non-production data. This RFC does not discover,
+provision, or mutate those facts.
 
 The manifest contains no token, authorization header, credential path,
 credential subject, private key, client secret, cookie, or materialization
 mechanism.
 
-### 5.6 Completed unauthenticated Phase A schema check
+### 5.6 Failed version-1 qualification and version-2 visibility precondition
+
+On 2026-08-21 the task user separately authorized exactly two read-only
+fixture-qualification calls outside decision version 1, D1 then N1, solely to
+obtain the complete expected objects. They were not evidence calls. D1 used
+request SHA-256
+9ea63b198d772a7a72e68bb1547e0523c0842420411d6717bf3ef7ccbeff3564;
+N1 used request SHA-256
+3132ca2078aac06a8a1e756fb741ee24569e494decf1c85679449ab7db5a2e48.
+Both returned HTTP 403 with the same 126-byte PERMISSION_DENIED body at SHA-256
+40f3d33677ad0f26654065ef873c25baab52a98dd9a074af065d901e3e942baa.
+The two-call budget ended without retry. No expected object, manifest, evidence,
+or publication was produced, and the temporary local response directory was
+removed.
+
+Google's current
+[Policy Troubleshooter instructions](https://docs.cloud.google.com/policy-intelligence/docs/troubleshoot-access)
+require a quota project on REST requests and describe Security Reviewer,
+Deny Reviewer, and Service Usage Consumer visibility. The version-1 source
+omitted x-goog-user-project, and its dedicated reader lacked Security Reviewer.
+Because both calls used that same source and identity, the terminal response
+does not isolate one defect as the sole cause.
+
+Version 2 closes the request defect by sending the exact manifest
+quotaProjectId on both calls. Its public-safety design permits Security Reviewer
+only on the two fixture projects, Deny Reviewer only at the containing
+organization for complete deny-policy visibility, and Service Usage Consumer
+only on quotaProjectId. It forbids Security Reviewer on a folder or
+organization and forbids Browser, Organization Administrator, PAB viewer or
+administrator, and every other role that would reveal unrelated ancestor IAM
+members. The two fixture project policies must contain only the controlled
+service accounts admitted by publicServiceAccountEmails. Human administrative
+bindings must remain outside those project policies; a controlled fixture-admin
+service account may appear only when it is in publicServiceAccountEmails.
+
+Google documents organization-level Security Reviewer for full allow-policy
+troubleshooting. This decision does not need or claim complete allow- or PAB-
+policy visibility. A separately authorized replacement qualification must
+therefore prove that the narrower reader obtains successful determinate deny
+responses with the exact version-2 header and request shape. If either call is
+not HTTP 200, if deny visibility is incomplete, or if either complete response
+fails the identity/scope allowlist, version 2 remains blocked. Organization-
+wide Security Reviewer is not an allowed workaround.
+
+Any replacement qualification remains outside Phase B and needs a new exact
+task-user authorization for exactly D1 then N1, without retry, evidence use, or
+publication. It must use the same fixtures, reader, quota project, endpoint,
+headers, and request bodies intended for the live manifest. Its private
+responses may be used only to construct the complete public expected objects
+and must then be removed. This RFC and its publication authorize no such call.
+
+### 5.7 Completed unauthenticated Phase A schema check
 
 One malformed-path unauthenticated GET first returned HTTP 404 after shell
 expansion removed the literal discovery path segment. It used no authorization
@@ -284,12 +358,13 @@ controlled response.
 
 | Decision | Sole authority | Forbidden substitute |
 | --- | --- | --- |
+| Replacement fixture qualification | New exact task-user authorization for one private D1 then N1 pair using the version-2 reader, quota project, headers, and bodies | This RFC, the failed version-1 calls, generic go, or Phase B approval |
 | Begin capture | Exact later task-user approval after one complete live card | This Draft, generic go, review, credential availability, or PR #322 approval |
-| Public inputs | Exact complete canonical manifest, exact source, and literal hashes in the approved card | Discovery, defaults, response-selected values, or caller improvisation |
+| Public inputs | Exact complete canonical version-2 manifest, exact source, and literal hashes in the approved card | Discovery, defaults, unsafe qualification output, response-selected values, or caller improvisation |
 | Authentication | One bearer already materialized by separate authority, read hidden from /dev/tty after public input removal | ADC, metadata, STS, impersonation, file, environment, refresh, replay, or command |
 | Process identity | Exact Darwin host/release/machine, pinned executable and separate runtime-library identities, build kind, fresh minimal env, -I -S -B, source path/digest, and launch vector | Wrapper, inherited process, preloaded module, alternate interpreter, plugin, or adapter |
-| Network effects | Exact source; fixed D1 then N1 direct HTTPS requests; zero auth-side calls | Proxy, debug trace, redirect, retry, discovery, replay, or hidden call |
-| Publication safety | Canonical equality to each complete expected response object | Human spot check, mutable inspector, redaction, excerpt, or permissive schema |
+| Network effects | Exact source; fixed D1 then N1 direct HTTPS requests; exact public x-goog-user-project value; zero auth-side calls | Missing or different quota project, proxy, debug trace, redirect, retry, discovery, replay, or hidden call |
+| Publication safety | Public-service-account and project-only scope validation followed by canonical equality to each complete expected response object | Human/group/domain/ancestor data, human spot check, mutable inspector, redaction, excerpt, or permissive schema |
 | Rendering | Exact renderer in the same source, one marker-delimited RFC replacement, immutable JSON bytes, and atomic replace | External formatter, mutable result callback, second file, log, or manual copy |
 | Reviews | Two external GitHub review objects bound to the immutable evidence commit | Review IDs embedded into that commit, self-attestation, or a later attestation commit |
 | Consumer authority | PR #322's separately governed decision and approval | This capture or its reviews |
@@ -309,16 +384,21 @@ failure, timeout, non-200 response, malformed response, or refusal consumes
 the attempted call and stops. A later attempt requires a new explicit user
 authorization identifying the stopped run.
 
+The failed version-1 qualification calls in section 5.6 were external
+prerequisite calls, not Phase B calls, and supplied no evidence. A future
+replacement qualification is likewise a separately authorized prerequisite;
+it cannot satisfy, consume, or expand this Phase B evidence budget.
+
 ### 7.2 Exact self-contained fresh-process program
 
 Phase B may execute only the source below. The source-byte boundary is the
 UTF-8 LF sequence beginning with the first f in from __future__ and ending
 with the LF after the last source line. The Markdown fences are excluded.
 
-It is exactly 1305 lines with SHA-256:
+It is exactly 1401 lines with SHA-256:
 
 ~~~text
-2c6fc7928e7b3f7ea018dfaa52dff5acba48ff2847396cc2fc8f43e1e777d46c
+c6258b1332ec5a3e130d5aa9292fc77a9bad161642f37b73877ee41821b2803c
 ~~~
 
 ~~~python
@@ -337,13 +417,14 @@ import termios
 from datetime import datetime, timezone
 from typing import NoReturn
 
-PROGRAM_ID = "ofarm2.issue192.provider-evidence-capture.v1"
-RECORD_SCHEMA = "ofarm2.issue192.provider-evidence-record.v1"
-RENDERER_ID = "ofarm2.issue192.provider-evidence-rfc-renderer.v1"
-MANIFEST_SCHEMA = "ofarm2.issue192.provider-evidence-publication-manifest.v1"
-LAUNCH_PROTOCOL_ID = "ofarm2.issue192.provider-evidence-fresh-process.v1"
+PROGRAM_ID = "ofarm2.issue192.provider-evidence-capture.v2"
+RECORD_SCHEMA = "ofarm2.issue192.provider-evidence-record.v2"
+RENDERER_ID = "ofarm2.issue192.provider-evidence-rfc-renderer.v2"
+MANIFEST_SCHEMA = "ofarm2.issue192.provider-evidence-publication-manifest.v2"
+LAUNCH_PROTOCOL_ID = "ofarm2.issue192.provider-evidence-fresh-process.v2"
 CONTRACT_ID = "ofarm2.security-audit-observer-root-provider-evidence-capture.v0.1"
 DECISION_ID = "ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-PROVIDER-EVIDENCE-CAPTURE-001"
+DECISION_VERSION = 2
 RFC_RELATIVE_PATH = (
     "docs/rfcs/OFARM_Security_Audit_Observer_Root_Provider_Evidence_Capture_RFC_v0_1.md"
 )
@@ -366,6 +447,11 @@ TOKEN = re.compile(r"[A-Za-z0-9._~+/=-]{1,8192}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 MODE = re.compile(r"[0-7]{4}")
 CF_USER_TEXT_ENCODING = re.compile(r"0x[0-9A-F]+:0x0:0x0")
+PROJECT_ID = re.compile(r"[a-z][a-z0-9-]{4,28}[a-z0-9]")
+SERVICE_ACCOUNT_EMAIL = re.compile(
+    r"[a-z][a-z0-9-]{0,62}@[a-z][a-z0-9-]{4,28}[a-z0-9]"
+    r"\.iam\.gserviceaccount\.com"
+)
 PERMISSION_FQDN = re.compile(r"[a-z0-9.-]+\.googleapis\.com/[A-Za-z][A-Za-z0-9.]+")
 TAG_KEY = re.compile(r"tagKeys/[1-9][0-9]*")
 TAG_VALUE = re.compile(r"tagValues/[1-9][0-9]*")
@@ -375,6 +461,49 @@ NAMESPACED_TAG_VALUE = re.compile(r"[A-Za-z0-9_-]+/[A-Za-z0-9._-]+/[A-Za-z0-9._-
 PROJECT_POLICY = re.compile(
     r"policies/cloudresourcemanager\.googleapis\.com%2Fprojects%2F"
     r"([1-9][0-9]*)/denypolicies/[a-z0-9.-]+"
+)
+FORBIDDEN_PUBLIC_IDENTITIES = {"allAuthenticatedUsers", "allUsers"}
+FORBIDDEN_PUBLIC_IDENTITY_PREFIXES = (
+    "deleted:",
+    "domain:",
+    "group:",
+    "principal://goog/",
+    "principalSet://",
+    "user:",
+)
+FORBIDDEN_PUBLIC_SCOPE_FRAGMENTS = (
+    "//cloudresourcemanager.googleapis.com/folders/",
+    "//cloudresourcemanager.googleapis.com/organizations/",
+    "policies/cloudresourcemanager.googleapis.com%2Ffolders%2F",
+    "policies/cloudresourcemanager.googleapis.com%2Forganizations%2F",
+    "organizations/",
+)
+MANIFEST_MEMBERS = (
+    "contractId",
+    "d1ExpectedPairs",
+    "d1ExpectedResponse",
+    "d1Request",
+    "decisionId",
+    "decisionVersion",
+    "hostMachine",
+    "hostRelease",
+    "hostSystem",
+    "launchProtocolId",
+    "manifestSchema",
+    "maxPublishableBodyBytes",
+    "n1ExpectedResponse",
+    "n1Request",
+    "programSourceSha256",
+    "publicServiceAccountEmails",
+    "pythonExecutablePath",
+    "pythonExecutableSha256",
+    "pythonRuntimeBuildKind",
+    "pythonRuntimeLibraryPath",
+    "pythonRuntimeLibrarySha256",
+    "quotaProjectId",
+    "rfcPath",
+    "rfcPreCaptureSha256",
+    "workingDirectory",
 )
 
 
@@ -522,6 +651,55 @@ def _digest_text(value: object, code: str) -> str:
     if SHA256.fullmatch(text) is None:
         _stop(code)
     return text
+
+
+def _public_service_accounts(value: object) -> list[str]:
+    if type(value) is not list or not value:
+        _stop("INVALID_PUBLIC_SERVICE_ACCOUNTS")
+    accounts: list[str] = []
+    for item in value:
+        account = _text(item, "INVALID_PUBLIC_SERVICE_ACCOUNTS")
+        if SERVICE_ACCOUNT_EMAIL.fullmatch(account) is None:
+            _stop("INVALID_PUBLIC_SERVICE_ACCOUNTS")
+        accounts.append(account)
+    if accounts != sorted(set(accounts)):
+        _stop("INVALID_PUBLIC_SERVICE_ACCOUNTS")
+    return accounts
+
+
+def _validate_public_response(value: object, service_accounts: list[str]) -> None:
+    permitted_identities = set(service_accounts)
+    permitted_identities.update(
+        "serviceAccount:" + account for account in service_accounts
+    )
+    permitted_identities.update(
+        "principal://iam.googleapis.com/projects/-/serviceAccounts/" + account
+        for account in service_accounts
+    )
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if type(item) is dict:
+            for key, nested in item.items():
+                pending.extend((key, nested))
+        elif type(item) is list:
+            pending.extend(item)
+        elif type(item) is str:
+            if (
+                item in FORBIDDEN_PUBLIC_IDENTITIES
+                or item.startswith(FORBIDDEN_PUBLIC_IDENTITY_PREFIXES)
+                or any(
+                    fragment in item for fragment in FORBIDDEN_PUBLIC_SCOPE_FRAGMENTS
+                )
+            ):
+                _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
+            identity_shaped = (
+                "@" in item
+                or item.startswith("serviceAccount:")
+                or "/serviceAccounts/" in item
+            )
+            if identity_shaped and item not in permitted_identities:
+                _stop("UNAPPROVED_PUBLIC_SERVICE_ACCOUNT")
 
 
 def _read_regular(
@@ -820,6 +998,7 @@ def _validate_response(
 def _post(
     label: str,
     bearer_token: str,
+    quota_project_id: str,
     request_body: bytes,
     request_access: dict[str, object],
     expected_pairs: list[list[str]],
@@ -832,6 +1011,7 @@ def _post(
         "label": label,
         "method": "POST",
         "endpoint": ENDPOINT,
+        "quotaProjectId": quota_project_id,
         "startedAt": started_at,
     }
     ledger.append(entry)
@@ -856,6 +1036,7 @@ def _post(
                 "Authorization": "Bearer " + bearer_token,
                 "Connection": "close",
                 "Content-Type": "application/json; charset=utf-8",
+                "x-goog-user-project": quota_project_id,
             },
         )
         response = connection.getresponse()
@@ -913,6 +1094,7 @@ def _post(
         "requestBinding": "EXACT",
         "requestBodyBase64": _base64(request_body),
         "requestByteLength": len(request_body),
+        "requestQuotaProjectId": quota_project_id,
         "requestSha256": _sha256(request_body),
         "responseBodyBase64Lines": _base64_lines(body),
         "responseByteLength": len(body),
@@ -980,36 +1162,11 @@ def _capture_plan(
     dict[str, object],
     list[list[str]],
 ]:
-    document = _members(
-        manifest,
-        (
-            "contractId",
-            "d1ExpectedPairs",
-            "d1ExpectedResponse",
-            "d1Request",
-            "decisionId",
-            "hostMachine",
-            "hostRelease",
-            "hostSystem",
-            "launchProtocolId",
-            "manifestSchema",
-            "maxPublishableBodyBytes",
-            "n1ExpectedResponse",
-            "n1Request",
-            "programSourceSha256",
-            "pythonExecutablePath",
-            "pythonExecutableSha256",
-            "pythonRuntimeBuildKind",
-            "pythonRuntimeLibraryPath",
-            "pythonRuntimeLibrarySha256",
-            "rfcPath",
-            "rfcPreCaptureSha256",
-            "workingDirectory",
-        ),
-    )
+    document = _members(manifest, MANIFEST_MEMBERS)
     if (
         document["contractId"] != CONTRACT_ID
         or document["decisionId"] != DECISION_ID
+        or document["decisionVersion"] != DECISION_VERSION
         or document["launchProtocolId"] != LAUNCH_PROTOCOL_ID
         or document["manifestSchema"] != MANIFEST_SCHEMA
         or document["maxPublishableBodyBytes"] != MAX_BODY_BYTES
@@ -1022,13 +1179,26 @@ def _capture_plan(
     ):
         _digest_text(document[name], "INVALID_MANIFEST_DIGEST")
     _validate_runtime_manifest(document)
+    quota_project_id = _text(document["quotaProjectId"], "INVALID_QUOTA_PROJECT_ID")
+    if PROJECT_ID.fullmatch(quota_project_id) is None:
+        _stop("INVALID_QUOTA_PROJECT_ID")
+    public_service_accounts = _public_service_accounts(
+        document["publicServiceAccountEmails"]
+    )
     expected_pairs = _expected_pairs(document["d1ExpectedPairs"])
     d1_body, d1_access = _request(document["d1Request"])
     n1_body, n1_access = _request(document["n1Request"])
+    if any(
+        access["principal"] not in public_service_accounts
+        for access in (d1_access, n1_access)
+    ):
+        _stop("UNAPPROVED_REQUEST_PRINCIPAL")
     if d1_body == n1_body:
         _stop("IDENTICAL_D1_N1_REQUESTS")
     if len(d1_body) > MAX_BODY_BYTES or len(n1_body) > MAX_BODY_BYTES:
         _stop("REQUEST_OVER_BOUND")
+    _validate_public_response(document["d1ExpectedResponse"], public_service_accounts)
+    _validate_public_response(document["n1ExpectedResponse"], public_service_accounts)
     _validate_response(
         "D1",
         document["d1ExpectedResponse"],
@@ -1162,6 +1332,7 @@ def run_capture(
             _post(
                 "D1",
                 bearer_token,
+                document["quotaProjectId"],
                 d1_body,
                 d1_access,
                 expected_pairs,
@@ -1171,6 +1342,7 @@ def run_capture(
             _post(
                 "N1",
                 bearer_token,
+                document["quotaProjectId"],
                 n1_body,
                 n1_access,
                 [],
@@ -1190,6 +1362,8 @@ def run_capture(
         "authSideCallCount": len(auth_side_call_ledger),
         "authSideCallLedger": auth_side_call_ledger,
         "captures": captures,
+        "decisionId": DECISION_ID,
+        "decisionVersion": DECISION_VERSION,
         "externalReviewControl": {
             "evidenceAuthority": "GIT_COMMIT_CONTAINING_THIS_RECORD",
             "requiredExactHeadReviewCount": 2,
@@ -1199,7 +1373,9 @@ def run_capture(
         "launchProtocolId": LAUNCH_PROTOCOL_ID,
         "policyTroubleshooterCallLedger": ledger,
         "programId": PROGRAM_ID,
+        "publicServiceAccountEmails": document["publicServiceAccountEmails"],
         "publicationSafety": "FULL_EXPECTED_RESPONSES_EXACT_CANONICAL_JSON",
+        "quotaProjectId": document["quotaProjectId"],
         "recordSchema": RECORD_SCHEMA,
         "rendererId": RENDERER_ID,
         "runtimeObservation": runtime_observation,
@@ -1632,13 +1808,14 @@ if __name__ == "__main__":
 This program is the launcher verifier, runtime verifier, manifest verifier,
 response safety gate, evidence recorder, failure recorder, and RFC renderer.
 There is no executable wrapper, imported project module, inspector callback,
-or separate renderer.
+or separate renderer. Version 2 also owns quota-project header construction
+and complete expected-response identity/scope validation.
 
 The embedded source is not a repository Python path, so hosted structural and
 unit-test gates do not execute it. Reviewers must extract the exact bytes and
 reproduce the section 12 checks. At the recorded line layout, _deny_inventory
-occupies lines 349 through 468 inclusive, 120 lines, and _post occupies lines
-496 through 602 inclusive, 107 lines. They are the only functions over the
+occupies lines 447 through 566 inclusive, 120 lines, and _post occupies lines
+594 through 704 inclusive, 111 lines. They are the only functions over the
 repository's 80-line production-code structural threshold. This explicit
 review exception applies only to the inert embedded artifact; it grants no
 production-code exception.
@@ -1724,13 +1901,16 @@ Content-Type: application/json; charset=utf-8
 Accept-Encoding: identity
 Connection: close
 Authorization: Bearer <hidden pre-materialized value>
+x-goog-user-project: <exact public manifest quotaProjectId>
 ~~~
 
 Each request is canonical compact UTF-8 JSON of the exact manifest request,
 with no terminal newline and a 131072-byte maximum. The record includes the
-full request base64, byte length, SHA-256, and request-controlled access tuple.
-The source has one HTTPSConnection constructor path and one request statement.
-A 401 or any transport failure is terminal and cannot refresh or replay.
+full request base64, byte length, SHA-256, request-controlled access tuple, and
+public quotaProjectId. The quota project is not inferred, discovered, or read
+from credentials, configuration, or environment. The source has one
+HTTPSConnection constructor path and one request statement. A 401 or any
+transport failure is terminal and cannot refresh or replay.
 
 The response evidence boundary is the ordered entity-body octet sequence after
 HTTP framing is removed. Headers and framing are excluded. Content-Encoding
@@ -1753,6 +1933,14 @@ returned request-controlled access tuple must equal the request's principal,
 fullResourceName, permission, and complete conditionContext.resource.
 permissionFqdn and optional effectiveTags are validated and recorded as
 output-only values.
+
+Before bearer input, the source recursively validates both complete expected
+response objects. It rejects human, group, domain, deleted, principal-set, and
+public members; any folder or organization resource or policy spelling; and
+any email or service-account spelling not exactly derived from the sorted
+publicServiceAccountEmails manifest member. Both request principals must be in
+that list. This gate is structural and precedes the complete-object canonical
+equality gate; it cannot be bypassed by approving an unsafe expected object.
 
 For D1, every outer, resource, and policy deny state used by the inventory is
 determinate; relevance is permitted; every explained resource has visible
@@ -1835,6 +2023,7 @@ UNAPPROVED
   -> PUBLIC_INPUTS_PREPARED
   -> FRESH_PROCESS_AND_IDENTITIES_VERIFIED
   -> PUBLIC_MANIFEST_AND_EXPECTED_RESPONSES_VALIDATED
+  -> PUBLIC_IDENTITIES_AND_PROJECT_ONLY_SCOPE_VALIDATED
   -> PUBLIC_TEMPORARY_INPUTS_REMOVED
   -> HIDDEN_PREMATERIALIZED_BEARER_RECEIVED
   -> D1_SENT_AND_FROZEN
@@ -1858,17 +2047,19 @@ result grants authority, and N1 cannot cure a failed D1.
 
 ### 9.1 Normative invariants
 
-- OPEC-001 — No call occurs before one complete live card and exact later
-  approval. The call ledger is exactly D1 then N1, with zero auth-side calls
-  and no retry or replay. A recordable failure requires a nonempty observed
-  ledger ending in the matching D1 or N1 provider call.
+- OPEC-001 — No Phase B evidence call occurs before one complete live card and
+  exact later approval. The call ledger is exactly D1 then N1, with the exact
+  public quota project on each entry, zero auth-side calls, and no retry or
+  replay. A recordable failure requires a nonempty observed ledger ending in
+  the matching D1 or N1 provider call.
 - OPEC-002 — The process is a fresh exact CPython 3.12.13 process with the
   pinned executable digest, exact Darwin host and runtime linkage, -I -S -B,
   the minimal permitted environment, exact source digest, no wrapper, and no
   application-module injection path.
-- OPEC-003 — The source and canonical public manifest are private-mode
-  non-secret temporary inputs; their removal and path absence are observed
-  before the hidden bearer read.
+- OPEC-003 — The source and canonical version-2 public manifest, including
+  decisionVersion, quotaProjectId, and publicServiceAccountEmails, are
+  private-mode non-secret temporary inputs; their removal and path absence are
+  observed before the hidden bearer read.
 - OPEC-004 — HTTP debug output is disabled and terminal echo is disabled and
   pending input flushed before the bearer prompt; the bearer has no argument,
   environment, file, return, logging, digest, or publication path. No secure
@@ -1883,8 +2074,10 @@ result grants authority, and N1 cannot cure a failed D1.
   derived spelling exactly matches its containing project resource.
 - OPEC-008 — N1 is determinate NOT_DENIED evidence only when
   explainedResources is explicitly present and empty.
-- OPEC-009 — The complete strict parsed response equals the complete
-  pre-approved manifest object under canonical JSON before publication.
+- OPEC-009 — Both expected responses pass the no-human, controlled-service-
+  account, project-only scope gate before bearer input, and each complete
+  strict parsed response equals its complete pre-approved manifest object
+  under canonical JSON before publication.
 - OPEC-010 — The deterministic renderer can replace only this RFC's one
   marker-delimited record, re-reads and matches its complete pre-capture digest
   immediately before replacement, and returns no mutable capture result.
@@ -1893,7 +2086,8 @@ result grants authority, and N1 cannot cure a failed D1.
   to that unchanged commit.
 - OPEC-012 — The run performs no provider mutation, credential act, fixture
   provisioning, production acceptance, parser change, runtime integration, or
-  authority transfer to PR #322.
+  authority transfer to PR #322. Organization-wide allow-policy visibility is
+  forbidden and cannot be used to clear a qualification or capture failure.
 
 ### 9.2 Mandatory D1 derivation
 
@@ -1919,6 +2113,8 @@ equivalence is forbidden.
 | Condition | Required result |
 | --- | --- |
 | Missing card, approval, fixture, public manifest, pinned runtime, source identity, or separate bearer authority | Zero calls; stop |
+| Missing, malformed, or different decisionVersion, quotaProjectId, publicServiceAccountEmails, or quota-project header | Zero calls; stop |
+| Expected response contains a human, group, domain, deleted, principal-set, public, folder, organization, or unapproved service-account value | Zero calls; stop before bearer input |
 | Wrong environment, host, Python flag/path/digest/build linkage, separate runtime-library identity, source/manifest/RFC path or digest, private-input/RFC ownership/mode/link, marker count, or working directory | Zero calls; stop |
 | Wrapper, debugger, profiler, callback, module injection, proxy, token lookup, refresh, replay, retry, redirect, debug trace, or hidden call | Stop; no accepted evidence |
 | Wrong method, endpoint, call order, request, header, timeout, or request body over 131072 bytes | Stop; no accepted evidence |
@@ -1944,6 +2140,9 @@ A successful record contains:
 - record, program, launch-protocol, renderer, manifest, source, executable,
   runtime-build, optional separate runtime-library, and pre-capture RFC
   identities;
+- decision ID/version, the complete public service-account allowlist, and the
+  exact public quota project bound to the top-level record, both request
+  records, and both provider-call ledger entries;
 - the observed executable and optional runtime-library byte lengths, digests,
   owners, groups, modes, and link counts;
 - actual runtime environment keys and count, Python implementation, version,
@@ -1981,9 +2180,12 @@ observation. It does not establish accepted provider evidence.
 
 ~~~text
 CAPTURE STATUS: UNEXECUTED
-PROGRAM SOURCE: EMBEDDED; 1305 LINES; SHA-256 2c6fc7928e7b3f7ea018dfaa52dff5acba48ff2847396cc2fc8f43e1e777d46c
+DECISION VERSION: 2; UNAPPROVED
+PROGRAM SOURCE: EMBEDDED; 1401 LINES; SHA-256 c6258b1332ec5a3e130d5aa9292fc77a9bad161642f37b73877ee41821b2803c
 FRESH PROCESS: NOT STARTED
 PUBLIC MANIFEST: NOT SUPPLIED
+PUBLIC SERVICE ACCOUNTS: NOT SUPPLIED
+QUOTA PROJECT: NOT SUPPLIED
 TEMPORARY INPUT REMOVAL: NOT PERFORMED
 BEARER INPUT: NOT REQUESTED
 AUTH SIDE CALLS: NOT PERFORMED
@@ -2009,6 +2211,11 @@ for the two complete pre-approved response objects:
 - N1 explicitly carried an empty explainedResources array; and
 - the exact frozen response bytes were published.
 
+It also establishes that both expected response objects passed the version-2
+fixture-only identity and project-only scope gate before bearer input and that
+both requests used the exact public quotaProjectId. It does not establish that
+allow- or PAB-policy visibility was complete.
+
 It does not establish folder or organization behavior, broader project
 behavior, behavior under incomplete policy visibility, credential identity,
 least privilege, provider support currentness, parser correctness, production
@@ -2023,6 +2230,11 @@ zero Google/provider credentials. Local drafting does not authorize staging,
 commit, push, PR-description mutation, review reply, thread resolution, merge,
 or Phase B. Each remote Phase A publication action requires task-user
 authorization.
+
+The two failed calls in section 5.6 occurred under a separate, exhausted
+qualification authorization outside this decision. Recording their safe
+confirmation metadata here does not convert them into evidence or authorize a
+replacement qualification.
 
 ### 11.2 Prospective Phase B
 
@@ -2070,9 +2282,9 @@ Reviewers must independently:
 
 - confirm this RFC is the only changed path and the trust boundary stayed
   acquisition/publication only;
-- extract the first Python block exactly and reproduce 1305 LF-terminated
+- extract the first Python block exactly and reproduce 1401 LF-terminated
   lines and SHA-256
-  2c6fc7928e7b3f7ea018dfaa52dff5acba48ff2847396cc2fc8f43e1e777d46c;
+  c6258b1332ec5a3e130d5aa9292fc77a9bad161642f37b73877ee41821b2803c;
 - compile it with exact CPython 3.12.13;
 - run repository-pinned Ruff 0.15.5 check and format check;
 - run an isolated fake-transport harness under an empty LC_ALL=C environment,
@@ -2083,6 +2295,10 @@ Reviewers must independently:
   effectiveTags present/absent; unknown
   N1; omitted N1 resources; omitted D1 outer resources; omitted D1 resource
   visibility; attachment mismatch; nonempty N1; unapproved complete response;
+  missing/malformed/different quota project; missing or stale decision version;
+  unsorted, duplicate, malformed, or incomplete public service-account lists;
+  human/group/domain/deleted/public/principal-set identities; unapproved service
+  accounts in values and object keys; and folder/organization policy values;
   source/manifest/executable/runtime-library/RFC identity checks; root-owned or
   hard-linked exact executable acceptance; monolithic and separate-runtime
   linkage rules; observed runtime, auth-side ledger/count, and temporary-path
@@ -2105,7 +2321,8 @@ Reviewers must independently:
   apply the explicit embedded-artifact review noted in section 7.2;
 - confirm exactly one HTTPS constructor path, one request statement, fixed
   D1/N1 calls, no token/refresh/proxy/retry/redirect/logging path, and
-  normalized publishable headers;
+  normalized publishable headers including the exact public
+  x-goog-user-project value on both calls;
 - confirm the marker strings occur exactly once as the ordered record pair;
 - run git diff --check and the repository conformance command; and
 - note explicitly that hosted repository checks do not execute the embedded
@@ -2120,13 +2337,16 @@ Before publication and review:
 - reproduce the recorded absence of both temporary public inputs and their
   directory before bearer input;
 - reproduce the exact D1/N1 call ledger and the independently computed empty
-  auth-side ledger and count;
+  auth-side ledger and count, including the same exact quotaProjectId on both
+  provider-call and request records;
 - decode every base64-line array and reproduce response lengths and digests;
 - independently parse the complete bodies with duplicate-member refusal;
 - reproduce request binding, all output-only fields, every D1 pair and
   cardinality, exact project derivations, and explicit empty N1 array;
 - compare each complete parsed response to its complete expected manifest
   object;
+- reproduce the no-human, public-service-account-only, project-only scope gate
+  over every key and value in both complete expected response objects;
 - inspect the one-file diff and prove no secret or unexpected value is
   present;
 - run local conformance and hosted checks on evidence head E; and
@@ -2162,8 +2382,12 @@ displayed in this same Codex task. The card must include:
   verified monolithic-linkage result, manifest bytes/digest, working directory,
   RFC path/pre-capture digest, and launch vector;
 - the complete public manifest, including both full expected response objects;
-- the controlled non-production publication and complete-visibility
-  declarations;
+- the controlled non-production publication, exact quota project, permitted
+  public service accounts, project-scoped Security Reviewer, deny-only ancestor
+  visibility, and complete deny-visibility declarations;
+- the exhausted version-1 qualification result and the separate successful
+  version-2 qualification authority/reference that supplied the expected
+  objects, without private response-storage or credential details;
 - the separate non-secret bearer-authority reference, without materialization
   details;
 - all twelve OPEC invariants, the two-call budget, renderer boundary, external
@@ -2175,7 +2399,7 @@ displayed in this same Codex task. The card must include:
 The required exact approval form is:
 
 ~~~text
-I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-PROVIDER-EVIDENCE-CAPTURE-001 version 1.
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-PROVIDER-EVIDENCE-CAPTURE-001 version 2.
 ~~~
 
 Approval is recognized only when that sentence is the exact entire later
@@ -2194,7 +2418,9 @@ Stop before any provider call if the complete card or exact approval is absent;
 if any live-card public value is unsafe; if source, manifest, runtime,
 executable, repository, RFC, environment, file, or marker identity differs; if
 the bearer requires any unauthorized materialization path; if either controlled
-fixture or visibility declaration is absent; or if a wrapper, proxy, debug
+fixture, exact quota project, public-service-account list, or deny-visibility
+declaration is absent; if any response value crosses the project-only public
+scope; or if a wrapper, proxy, debug
 trace, retry, replay, redirect, callback, or other call path exists.
 
 After a call, enforce section 9 without retry, redaction, inference,
@@ -2215,33 +2441,34 @@ be handed to PR #322. That handoff is evidence, not authority.
 
 - Reviewed base: bdf636d155e45ecbf4d9ac828e232bbcf91e1d59.
 - Draft PR: [#323](https://github.com/samovers/OFARM2/pull/323).
-- Phase A review checkpoint head:
-  7c51ecc57477ba2d00f5926be634a9316c9b9953.
-- The latest conversation review of that checkpoint,
-  [comment 5357073800](https://github.com/samovers/OFARM2/pull/323#issuecomment-5357073800),
-  withdrew its earlier prompt-order Blocker, retained the correction as a high
-  should-fix, demonstrated that an in-place RFC edit was silently overwritten,
-  and identified the latent empty-ledger recordable-failure path.
-- The independent formal review of the same checkpoint,
-  [review 4983884605](https://github.com/samovers/OFARM2/pull/323#pullrequestreview-4983884605),
-  retained the prompt-order finding as one Blocker and required a real PTY
-  regression. It agreed on observed runtime evidence, interpreter/runtime
-  linkage, coherent environment identity, stronger RFC drift detection, and
-  explicit memory-erasure limits.
-- The contract source above disables echo and flushes pending input before the
-  prompt, requires a nonempty matching observed call before rendering failure
-  metadata, records runtime/auth-side/removal observations, pins host and Python
-  build linkage, permits only validated optional macOS text-encoding injection,
-  uses four dedicated recordable codes, disclaims secure memory erasure, and
-  twice no-follow re-reads and hashes the RFC under complete file-identity
-  checks. Section 12 requires the real PTY success/refusal regression.
+- Predecessor reviewed Phase A head:
+  21cfcb770038aff0846cca2710dd4b7c2be9f2a9.
+- Formal [review 4985246172](https://github.com/samovers/OFARM2/pull/323#pullrequestreview-4985246172)
+  reported zero demonstrated source-and-contract Blockers on that predecessor
+  head. It did not reproduce live provider execution.
+- The task user later approved decision version 1, but no Phase B evidence call
+  occurred. The separately authorized qualification in section 5.6 returned
+  two terminal HTTP 403 responses and exhausted its own budget. That result
+  invalidated the predecessor request/reader assumptions without producing
+  evidence.
+- This successor contract is proposed version 2. It adds the exact public
+  quota-project header, binds decisionVersion and quotaProjectId into the
+  manifest and record, and adds a structural no-human, controlled-service-
+  account, project-only publication gate. It also requires a successful
+  separately authorized replacement qualification before a live card.
+- Version-1 approval and predecessor reviews cannot authorize or review this
+  successor source. The actual published successor head must be identified by
+  the external PR description, pass hosted checks, and receive two new
+  independent exact-head zero-Blocker reviews before a version-2 live card.
 - Git and GitHub, rather than a self-referential claim inside this RFC, are
   authoritative for any successor published head and its review status. The PR
   description and external review objects must identify the actual remote head
   before that head is considered reviewed.
 - Provider iam:troubleshoot calls under this decision: zero.
-- Google/provider credentials used under this decision: none.
+- External fixture-qualification calls: exactly two failed calls recorded in
+  section 5.6; neither is evidence and neither authorizes a retry.
+- Google/provider credentials used under decision version 2: none.
 - Captured responses and observed attachment kinds: none.
-- Decision approval and Phase B authority: absent.
+- Decision version-2 approval and Phase B authority: absent.
 - PR #322 authority changed: none.
 - Primary trust-boundary scope: retained.
