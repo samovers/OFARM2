@@ -151,8 +151,8 @@ Subject to later exact approval, this decision trusts only:
 - the task user to approve one complete live card and declare every manifest
   value suitable for public repository publication;
 - the separate credential authority to materialize one bearer before launch;
-- the exact 1401-line source in section 7.2 at SHA-256
-  c6258b1332ec5a3e130d5aa9292fc77a9bad161642f37b73877ee41821b2803c;
+- the exact 1475-line source in section 7.2 at SHA-256
+  22d2449d2e62322d6f8199a83b880796aa05603898e7d9515d6564c9f79f74b2;
 - the exact Darwin host system, kernel release, and machine, CPython 3.12.13
   executable path and digest, runtime build classification, and separately
   linked Python runtime-library path and digest when one exists, all fixed in
@@ -254,15 +254,28 @@ expected response must have a determinate NOT_DENIED outer state, deniable
 permission, permitted relevance, and an explicitly present empty
 explainedResources array.
 
+Both expected responses must also have the same closed no-applicable-PAB
+semantic shape: principalAccessBoundaryAccessState exactly
+PAB_ACCESS_STATE_NOT_ENFORCED, explainedBindingsAndPolicies omitted or exactly
+the empty list, and permitted relevance. Any visible PAB binding, policy,
+target, condition, rule, unknown state, or enforced state refuses.
+
 Before bearer input, the exact source walks every object key and value in both
-complete expected responses. It rejects all user, group, domain, deleted,
-principal-set, public, folder, and organization identity or policy values. Any
-string containing an email address or service-account resource spelling must
-be exactly one of the service-account email values, serviceAccount members, or
-explicit service-account principal URIs derived from
-publicServiceAccountEmails. The two request principals must also be members of
-that list. Canonical equality then prevents the live response from adding any
-identity or ancestor-scope value that was not validated before bearer input.
+complete expected responses and applies closed validation to semantic
+principal fields. accessTuple.principal and every members, memberships,
+deniedPrincipals, and exceptionPrincipals entry must be exactly one of the
+service-account email values, serviceAccount members, or explicit
+service-account principal URIs derived from publicServiceAccountEmails. A
+principalSet field is always forbidden. Every other principal:// or
+principalSet:// spelling, bare IAM pool target, principal.type or
+principal.subject condition, user, group, domain, deleted, public, folder,
+organization, human email, opaque semantic principal, or unapproved service
+account refuses. This covers Google's current
+[principal identifier vocabulary](https://docs.cloud.google.com/iam/docs/principal-identifiers)
+without treating arbitrary project resource strings as identities. The two
+request principals must also be members of the public-service-account list.
+Canonical equality then prevents the live response from adding any identity
+or ancestor-scope value that was not validated before bearer input.
 
 The complete live card must also declare that all projects, resources,
 principals, policy IDs, members, conditions, policy bodies, and response
@@ -318,10 +331,12 @@ Google documents organization-level Security Reviewer for full allow-policy
 troubleshooting. This decision does not need or claim complete allow- or PAB-
 policy visibility. A separately authorized replacement qualification must
 therefore prove that the narrower reader obtains successful determinate deny
-responses with the exact version-2 header and request shape. If either call is
-not HTTP 200, if deny visibility is incomplete, or if either complete response
-fails the identity/scope allowlist, version 2 remains blocked. Organization-
-wide Security Reviewer is not an allowed workaround.
+responses with the exact version-2 header and request shape and the exact
+no-applicable-PAB shape above. If either call is not HTTP 200, if deny
+visibility is incomplete, if PAB state is unknown or any PAB binding is
+visible, or if either complete response fails the identity/scope allowlist,
+version 2 remains blocked. Organization-wide Security Reviewer is not an
+allowed workaround.
 
 Any replacement qualification remains outside Phase B and needs a new exact
 task-user authorization for exactly D1 then N1, without retry, evidence use, or
@@ -395,10 +410,10 @@ Phase B may execute only the source below. The source-byte boundary is the
 UTF-8 LF sequence beginning with the first f in from __future__ and ending
 with the LF after the last source line. The Markdown fences are excluded.
 
-It is exactly 1401 lines with SHA-256:
+It is exactly 1475 lines with SHA-256:
 
 ~~~text
-c6258b1332ec5a3e130d5aa9292fc77a9bad161642f37b73877ee41821b2803c
+22d2449d2e62322d6f8199a83b880796aa05603898e7d9515d6564c9f79f74b2
 ~~~
 
 ~~~python
@@ -464,12 +479,17 @@ PROJECT_POLICY = re.compile(
 )
 FORBIDDEN_PUBLIC_IDENTITIES = {"allAuthenticatedUsers", "allUsers"}
 FORBIDDEN_PUBLIC_IDENTITY_PREFIXES = (
+    "//iam.googleapis.com/",
     "deleted:",
     "domain:",
     "group:",
-    "principal://goog/",
+    "principal://",
     "principalSet://",
     "user:",
+)
+FORBIDDEN_PUBLIC_PRINCIPAL_CONDITION_FRAGMENTS = (
+    "principal.subject",
+    "principal.type",
 )
 FORBIDDEN_PUBLIC_SCOPE_FRAGMENTS = (
     "//cloudresourcemanager.googleapis.com/folders/",
@@ -478,6 +498,13 @@ FORBIDDEN_PUBLIC_SCOPE_FRAGMENTS = (
     "policies/cloudresourcemanager.googleapis.com%2Forganizations%2F",
     "organizations/",
 )
+PUBLIC_PRINCIPAL_FIELDS = {
+    "deniedPrincipals",
+    "exceptionPrincipals",
+    "members",
+    "memberships",
+    "principal",
+}
 MANIFEST_MEMBERS = (
     "contractId",
     "d1ExpectedPairs",
@@ -667,6 +694,60 @@ def _public_service_accounts(value: object) -> list[str]:
     return accounts
 
 
+def _validate_public_identity(
+    item: str,
+    permitted_identities: set[str],
+    *,
+    required: bool = False,
+) -> None:
+    if item in permitted_identities:
+        return
+    if (
+        item in FORBIDDEN_PUBLIC_IDENTITIES
+        or item.startswith(FORBIDDEN_PUBLIC_IDENTITY_PREFIXES)
+        or any(
+            fragment in item
+            for fragment in FORBIDDEN_PUBLIC_PRINCIPAL_CONDITION_FRAGMENTS
+        )
+    ):
+        _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
+    if (
+        ".iam.gserviceaccount.com" in item
+        or item.startswith("serviceAccount:")
+        or "/serviceAccounts/" in item
+    ):
+        _stop("UNAPPROVED_PUBLIC_SERVICE_ACCOUNT")
+    if "@" in item or required:
+        _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
+
+
+def _validate_principal_field(
+    name: str,
+    value: object,
+    permitted_identities: set[str],
+) -> None:
+    if name == "principal":
+        identities = [value]
+    elif name == "members":
+        if type(value) is not list:
+            _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
+        identities = value
+    elif name == "memberships":
+        if type(value) is not dict:
+            _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
+        identities = list(value)
+    elif type(value) is list:
+        identities = value
+    elif type(value) is dict:
+        identities = list(value)
+    else:
+        _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
+    for identity in identities:
+        if type(identity) is not str or not identity:
+            _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
+        _validate_public_identity(identity, permitted_identities, required=True)
+
+
 def _validate_public_response(value: object, service_accounts: list[str]) -> None:
     permitted_identities = set(service_accounts)
     permitted_identities.update(
@@ -681,25 +762,32 @@ def _validate_public_response(value: object, service_accounts: list[str]) -> Non
         item = pending.pop()
         if type(item) is dict:
             for key, nested in item.items():
+                if key == "principalSet":
+                    _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
+                if key in PUBLIC_PRINCIPAL_FIELDS:
+                    _validate_principal_field(key, nested, permitted_identities)
                 pending.extend((key, nested))
         elif type(item) is list:
             pending.extend(item)
         elif type(item) is str:
-            if (
-                item in FORBIDDEN_PUBLIC_IDENTITIES
-                or item.startswith(FORBIDDEN_PUBLIC_IDENTITY_PREFIXES)
-                or any(
-                    fragment in item for fragment in FORBIDDEN_PUBLIC_SCOPE_FRAGMENTS
-                )
-            ):
+            if any(fragment in item for fragment in FORBIDDEN_PUBLIC_SCOPE_FRAGMENTS):
                 _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
-            identity_shaped = (
-                "@" in item
-                or item.startswith("serviceAccount:")
-                or "/serviceAccounts/" in item
-            )
-            if identity_shaped and item not in permitted_identities:
-                _stop("UNAPPROVED_PUBLIC_SERVICE_ACCOUNT")
+            _validate_public_identity(item, permitted_identities)
+
+
+def _validate_pab_explanation(value: object) -> None:
+    document = _members(
+        value,
+        ("principalAccessBoundaryAccessState", "relevance"),
+        ("explainedBindingsAndPolicies",),
+    )
+    if (
+        document["principalAccessBoundaryAccessState"]
+        != "PAB_ACCESS_STATE_NOT_ENFORCED"
+        or document.get("explainedBindingsAndPolicies", []) != []
+        or document["relevance"] not in RELEVANCE
+    ):
+        _stop("UNSAFE_PAB_EXPLANATION")
 
 
 def _read_regular(
@@ -987,6 +1075,7 @@ def _validate_response(
         ),
     )
     outputs = _bind_access_tuple(response["accessTuple"], request_access)
+    _validate_pab_explanation(response["pabPolicyExplanation"])
     inventory = _deny_inventory(
         label,
         response["denyPolicyExplanation"],
@@ -1932,15 +2021,23 @@ denyPolicyExplanation, overallAccessState, and pabPolicyExplanation. The
 returned request-controlled access tuple must equal the request's principal,
 fullResourceName, permission, and complete conditionContext.resource.
 permissionFqdn and optional effectiveTags are validated and recorded as
-output-only values.
+output-only values. pabPolicyExplanation must have
+PAB_ACCESS_STATE_NOT_ENFORCED, permitted relevance, and an omitted or empty
+explainedBindingsAndPolicies list. This is the only admitted PAB shape.
 
 Before bearer input, the source recursively validates both complete expected
-response objects. It rejects human, group, domain, deleted, principal-set, and
-public members; any folder or organization resource or policy spelling; and
-any email or service-account spelling not exactly derived from the sorted
-publicServiceAccountEmails manifest member. Both request principals must be in
-that list. This gate is structural and precedes the complete-object canonical
-equality gate; it cannot be bypassed by approving an unsafe expected object.
+response objects. It interprets principal-bearing fields rather than relying
+only on string substrings: principal is a scalar, members is a list,
+memberships is a keyed map, and deniedPrincipals and exceptionPrincipals may be
+lists or keyed maps. Every admitted entry must equal one of the three exact
+service-account forms derived from the sorted publicServiceAccountEmails
+manifest member. It rejects every principalSet field, every other
+principal:// or principalSet:// spelling, bare IAM pool targets,
+principal-bearing PAB conditions, human/group/domain/deleted/public values,
+opaque semantic principals, ancestor scope, and unapproved service accounts.
+Both request principals must be in the manifest list. This gate is structural
+and precedes the complete-object canonical-equality gate; it cannot be bypassed
+by approving an unsafe expected object.
 
 For D1, every outer, resource, and policy deny state used by the inventory is
 determinate; relevance is permitted; every explained resource has visible
@@ -2075,9 +2172,9 @@ result grants authority, and N1 cannot cure a failed D1.
 - OPEC-008 — N1 is determinate NOT_DENIED evidence only when
   explainedResources is explicitly present and empty.
 - OPEC-009 — Both expected responses pass the no-human, controlled-service-
-  account, project-only scope gate before bearer input, and each complete
-  strict parsed response equals its complete pre-approved manifest object
-  under canonical JSON before publication.
+  account, project-only scope gate and the exact no-applicable-PAB gate before
+  bearer input, and each complete strict parsed response equals its complete
+  pre-approved manifest object under canonical JSON before publication.
 - OPEC-010 — The deterministic renderer can replace only this RFC's one
   marker-delimited record, re-reads and matches its complete pre-capture digest
   immediately before replacement, and returns no mutable capture result.
@@ -2114,7 +2211,8 @@ equivalence is forbidden.
 | --- | --- |
 | Missing card, approval, fixture, public manifest, pinned runtime, source identity, or separate bearer authority | Zero calls; stop |
 | Missing, malformed, or different decisionVersion, quotaProjectId, publicServiceAccountEmails, or quota-project header | Zero calls; stop |
-| Expected response contains a human, group, domain, deleted, principal-set, public, folder, organization, or unapproved service-account value | Zero calls; stop before bearer input |
+| Expected response contains a human, group, domain, deleted, public, opaque or non-service-account semantic principal, any unapproved service account, any unapproved principal:// spelling, any principalSet field or spelling, any principal-bearing PAB condition, or any folder/organization value | Zero calls; stop before bearer input |
+| Expected or actual PAB explanation is not exactly NOT_ENFORCED with permitted relevance and an omitted or empty binding/policy list | Zero calls when expected; otherwise stop with no accepted evidence or RFC write |
 | Wrong environment, host, Python flag/path/digest/build linkage, separate runtime-library identity, source/manifest/RFC path or digest, private-input/RFC ownership/mode/link, marker count, or working directory | Zero calls; stop |
 | Wrapper, debugger, profiler, callback, module injection, proxy, token lookup, refresh, replay, retry, redirect, debug trace, or hidden call | Stop; no accepted evidence |
 | Wrong method, endpoint, call order, request, header, timeout, or request body over 131072 bytes | Stop; no accepted evidence |
@@ -2181,7 +2279,7 @@ observation. It does not establish accepted provider evidence.
 ~~~text
 CAPTURE STATUS: UNEXECUTED
 DECISION VERSION: 2; UNAPPROVED
-PROGRAM SOURCE: EMBEDDED; 1401 LINES; SHA-256 c6258b1332ec5a3e130d5aa9292fc77a9bad161642f37b73877ee41821b2803c
+PROGRAM SOURCE: EMBEDDED; 1475 LINES; SHA-256 22d2449d2e62322d6f8199a83b880796aa05603898e7d9515d6564c9f79f74b2
 FRESH PROCESS: NOT STARTED
 PUBLIC MANIFEST: NOT SUPPLIED
 PUBLIC SERVICE ACCOUNTS: NOT SUPPLIED
@@ -2208,13 +2306,16 @@ for the two complete pre-approved response objects:
 - every D1 visible project pair had exact derived attachment equality and the
   full ordered pair list matched the controlled fixture;
 - D1 and N1 deny evidence was determinate and complete under this contract;
+- both PAB explanations had the exact determinate no-applicable-PAB shape;
 - N1 explicitly carried an empty explainedResources array; and
 - the exact frozen response bytes were published.
 
 It also establishes that both expected response objects passed the version-2
-fixture-only identity and project-only scope gate before bearer input and that
-both requests used the exact public quotaProjectId. It does not establish that
-allow- or PAB-policy visibility was complete.
+path-aware fixture-only identity, project-only scope, and closed PAB gates
+before bearer input and that both requests used the exact public
+quotaProjectId. It does not establish that allow-policy visibility was
+complete or that PAB behavior beyond the exact no-applicable state is
+supported.
 
 It does not establish folder or organization behavior, broader project
 behavior, behavior under incomplete policy visibility, credential identity,
@@ -2282,9 +2383,9 @@ Reviewers must independently:
 
 - confirm this RFC is the only changed path and the trust boundary stayed
   acquisition/publication only;
-- extract the first Python block exactly and reproduce 1401 LF-terminated
+- extract the first Python block exactly and reproduce 1475 LF-terminated
   lines and SHA-256
-  c6258b1332ec5a3e130d5aa9292fc77a9bad161642f37b73877ee41821b2803c;
+  22d2449d2e62322d6f8199a83b880796aa05603898e7d9515d6564c9f79f74b2;
 - compile it with exact CPython 3.12.13;
 - run repository-pinned Ruff 0.15.5 check and format check;
 - run an isolated fake-transport harness under an empty LC_ALL=C environment,
@@ -2297,8 +2398,15 @@ Reviewers must independently:
   visibility; attachment mismatch; nonempty N1; unapproved complete response;
   missing/malformed/different quota project; missing or stale decision version;
   unsorted, duplicate, malformed, or incomplete public service-account lists;
-  human/group/domain/deleted/public/principal-set identities; unapproved service
-  accounts in values and object keys; and folder/organization policy values;
+  human/group/domain/deleted/public identities; opaque entries in every
+  semantic principal field; unapproved service accounts in values and object
+  keys; generic workforce, workload, GKE workload, and agent principal://
+  forms; every principalSet:// form; bare workforce/workload pool and project
+  principal-set targets at the PAB target path; principal.type and
+  principal.subject PAB conditions; allowed project resource spellings outside
+  principal fields; closed PAB list omission/empty equivalence; every nonempty,
+  allowed, denied, unknown, unspecified, or malformed PAB posture; and
+  folder/organization policy values;
   source/manifest/executable/runtime-library/RFC identity checks; root-owned or
   hard-linked exact executable acceptance; monolithic and separate-runtime
   linkage rules; observed runtime, auth-side ledger/count, and temporary-path
@@ -2345,8 +2453,12 @@ Before publication and review:
   cardinality, exact project derivations, and explicit empty N1 array;
 - compare each complete parsed response to its complete expected manifest
   object;
-- reproduce the no-human, public-service-account-only, project-only scope gate
-  over every key and value in both complete expected response objects;
+- reproduce the path-aware no-human, public-service-account-only, project-only
+  scope gate over every key and value in both complete expected response
+  objects, including the scalar/list/map principal-field types and exact three
+  admitted service-account forms;
+- reproduce the exact NOT_ENFORCED, omitted-or-empty-binding, permitted-
+  relevance PAB shape for both responses;
 - inspect the one-file diff and prove no secret or unexpected value is
   present;
 - run local conformance and hosted checks on evidence head E; and
@@ -2384,7 +2496,8 @@ displayed in this same Codex task. The card must include:
 - the complete public manifest, including both full expected response objects;
 - the controlled non-production publication, exact quota project, permitted
   public service accounts, project-scoped Security Reviewer, deny-only ancestor
-  visibility, and complete deny-visibility declarations;
+  visibility, complete deny-visibility declarations, and exact closed
+  no-applicable-PAB expected-response shapes;
 - the exhausted version-1 qualification result and the separate successful
   version-2 qualification authority/reference that supplied the expected
   objects, without private response-storage or credential details;
