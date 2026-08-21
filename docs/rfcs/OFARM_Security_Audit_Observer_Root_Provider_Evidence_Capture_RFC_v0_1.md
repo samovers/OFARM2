@@ -60,7 +60,7 @@ This decision defines one bounded acquisition:
    relevant resource/policy pair, and publish the unchanged body bytes;
 8. send the exact public quota-project header on both requests and reject any
    expected response containing a human, group, domain, public principal, or
-   folder/organization policy value;
+   folder/organization scope spelling in any key or value;
 9. render only this RFC, then leave hosted checks and both exact-head reviews
    as external GitHub records.
 
@@ -151,8 +151,8 @@ Subject to later exact approval, this decision trusts only:
 - the task user to approve one complete live card and declare every manifest
   value suitable for public repository publication;
 - the separate credential authority to materialize one bearer before launch;
-- the exact 1476-line source in section 7.2 at SHA-256
-  7c88e22d5691c640d7b325c8f460ad495cedb70984e2b46fe8c8bd62ccaaef33;
+- the exact 1477-line source in section 7.2 at SHA-256
+  fb29765de7514f007858913617252bd5f7c56f3cece190af23f74177c2d149a0;
 - the exact Darwin host system, kernel release, and machine, CPython 3.12.13
   executable path and digest, runtime build classification, and separately
   linked Python runtime-library path and digest when one exists, all fixed in
@@ -273,10 +273,12 @@ principal.subject condition, user, group, domain, deleted, public, folder,
 organization, human email, opaque semantic principal, or unapproved service
 account refuses. This covers Google's current
 [principal identifier vocabulary](https://docs.cloud.google.com/iam/docs/principal-identifiers)
-without treating arbitrary project resource strings as identities. The two
-request principals must also be members of the public-service-account list.
-Canonical equality then prevents the live response from adding any identity
-or ancestor-scope value that was not validated before bearer input.
+without treating arbitrary project resource strings as identities. Every
+string key and value rejects complete and bare folder/organization scope
+spellings, including `folders/` and `organizations/` fragments. The two request
+principals must also be members of the public-service-account list. Canonical
+equality then prevents the live response from adding any identity or
+ancestor-scope value that was not validated before bearer input.
 
 The complete live card must also declare that all projects, resources,
 principals, policy IDs, members, conditions, policy bodies, and response
@@ -411,10 +413,10 @@ Phase B may execute only the source below. The source-byte boundary is the
 UTF-8 LF sequence beginning with the first f in from __future__ and ending
 with the LF after the last source line. The Markdown fences are excluded.
 
-It is exactly 1476 lines with SHA-256:
+It is exactly 1477 lines with SHA-256:
 
 ~~~text
-7c88e22d5691c640d7b325c8f460ad495cedb70984e2b46fe8c8bd62ccaaef33
+fb29765de7514f007858913617252bd5f7c56f3cece190af23f74177c2d149a0
 ~~~
 
 ~~~python
@@ -497,6 +499,7 @@ FORBIDDEN_PUBLIC_SCOPE_FRAGMENTS = (
     "//cloudresourcemanager.googleapis.com/organizations/",
     "policies/cloudresourcemanager.googleapis.com%2Ffolders%2F",
     "policies/cloudresourcemanager.googleapis.com%2Forganizations%2F",
+    "folders/",
     "organizations/",
 )
 PUBLIC_PRINCIPAL_FIELDS = {
@@ -1905,8 +1908,8 @@ and complete expected-response identity/scope validation.
 The embedded source is not a repository Python path, so hosted structural and
 unit-test gates do not execute it. Reviewers must extract the exact bytes and
 reproduce the section 12 checks. At the recorded line layout, _deny_inventory
-occupies lines 521 through 640 inclusive, 120 lines, and _post occupies lines
-669 through 779 inclusive, 111 lines. They are the only functions over the
+occupies lines 522 through 641 inclusive, 120 lines, and _post occupies lines
+670 through 780 inclusive, 111 lines. They are the only functions over the
 repository's 80-line production-code structural threshold. This explicit
 review exception applies only to the inert embedded artifact; it grants no
 production-code exception.
@@ -2038,6 +2041,8 @@ field, every other principal:// or principalSet:// spelling, bare IAM pool
 targets, principal-bearing PAB conditions, human/group/domain/deleted/public
 values, opaque semantic principals, ancestor scope, and unapproved service
 accounts.
+Every string key and value is also scanned for complete or bare folder and
+organization scope spellings, including `folders/` and `organizations/`.
 Both request principals must be in the manifest list. This gate is structural
 and precedes the complete-object canonical-equality gate; it cannot be bypassed
 by approving an unsafe expected object.
@@ -2214,7 +2219,7 @@ equivalence is forbidden.
 | --- | --- |
 | Missing card, approval, fixture, public manifest, pinned runtime, source identity, or separate bearer authority | Zero calls; stop |
 | Missing, malformed, or different decisionVersion, quotaProjectId, publicServiceAccountEmails, or quota-project header | Zero calls; stop |
-| Expected response contains a human, group, domain, deleted, public, opaque or non-service-account semantic principal, any unapproved service account, any unapproved principal:// spelling, any principalSet field or spelling, any unapproved audit-log exemptedMembers identity, any principal-bearing PAB condition, or any folder/organization value | Zero calls; stop before bearer input |
+| Expected response contains a human, group, domain, deleted, public, opaque or non-service-account semantic principal, any unapproved service account, any unapproved principal:// spelling, any principalSet field or spelling, any unapproved audit-log exemptedMembers identity, any principal-bearing PAB condition, or any complete or bare folder/organization scope spelling in any key or value | Zero calls; stop before bearer input |
 | Expected or actual PAB explanation is not exactly NOT_ENFORCED with permitted relevance and an omitted or empty binding/policy list | Zero calls when expected; otherwise stop with no accepted evidence or RFC write |
 | Wrong environment, host, Python flag/path/digest/build linkage, separate runtime-library identity, source/manifest/RFC path or digest, private-input/RFC ownership/mode/link, marker count, or working directory | Zero calls; stop |
 | Wrapper, debugger, profiler, callback, module injection, proxy, token lookup, refresh, replay, retry, redirect, debug trace, or hidden call | Stop; no accepted evidence |
@@ -2282,7 +2287,7 @@ observation. It does not establish accepted provider evidence.
 ~~~text
 CAPTURE STATUS: UNEXECUTED
 DECISION VERSION: 2; UNAPPROVED
-PROGRAM SOURCE: EMBEDDED; 1476 LINES; SHA-256 7c88e22d5691c640d7b325c8f460ad495cedb70984e2b46fe8c8bd62ccaaef33
+PROGRAM SOURCE: EMBEDDED; 1477 LINES; SHA-256 fb29765de7514f007858913617252bd5f7c56f3cece190af23f74177c2d149a0
 FRESH PROCESS: NOT STARTED
 PUBLIC MANIFEST: NOT SUPPLIED
 PUBLIC SERVICE ACCOUNTS: NOT SUPPLIED
@@ -2386,9 +2391,9 @@ Reviewers must independently:
 
 - confirm this RFC is the only changed path and the trust boundary stayed
   acquisition/publication only;
-- extract the first Python block exactly and reproduce 1476 LF-terminated
+- extract the first Python block exactly and reproduce 1477 LF-terminated
   lines and SHA-256
-  7c88e22d5691c640d7b325c8f460ad495cedb70984e2b46fe8c8bd62ccaaef33;
+  fb29765de7514f007858913617252bd5f7c56f3cece190af23f74177c2d149a0;
 - compile it with exact CPython 3.12.13;
 - run repository-pinned Ruff 0.15.5 check and format check;
 - run an isolated fake-transport harness under an empty LC_ALL=C environment,
@@ -2414,7 +2419,8 @@ Reviewers must independently:
   principal.subject PAB conditions; allowed project resource spellings outside
   principal fields; closed PAB list omission/empty equivalence; every nonempty,
   allowed, denied, unknown, unspecified, or malformed PAB posture; and
-  folder/organization policy values;
+  complete and bare folder/organization scope spellings in policy names,
+  arbitrary nonsemantic string values including etag, and object keys;
   source/manifest/executable/runtime-library/RFC identity checks; root-owned or
   hard-linked exact executable acceptance; monolithic and separate-runtime
   linkage rules; observed runtime, auth-side ledger/count, and temporary-path
