@@ -153,8 +153,8 @@ Subject to later exact approval, this decision trusts only:
 - the task user to approve one complete live card and declare every manifest
   value suitable for public repository publication;
 - the separate credential authority to materialize one bearer before launch;
-- the exact 1590-line source in section 7.2 at SHA-256
-  5937906c78b2e8470104ceffc830b78a256f9e3664807a132b3e5e5b19af635b;
+- the exact 1626-line source in section 7.2 at SHA-256
+  0c8ebd287bee43c33e0b5aeda4563b45f7f6124ee8c7e3edc592629233350a68;
 - the exact Darwin host system, kernel release, and machine, CPython 3.12.13
   executable path and digest, runtime build classification, and separately
   linked Python runtime-library path and digest when one exists, all fixed in
@@ -280,18 +280,26 @@ human email, opaque semantic principal, and unapproved service accounts also
 refuse. This covers Google's current
 [principal identifier vocabulary](https://docs.cloud.google.com/iam/docs/principal-identifiers)
 without treating resource strings as identities. Every folder spelling
-refuses. The only admitted organization-scope string values are the exact
+refuses. Before scope matching, every percent sign must begin one complete
+hexadecimal triplet. A single comparison pass uppercases percent-triplet hex
+digits and decodes only percent-encoded URI-unreserved characters; malformed
+triplets refuse and the comparison is never recursively decoded. Both the
+original string and that comparison view are checked for folder and
+organization scope. The only admitted organization-scope string values are
+the exact
 `//cloudresourcemanager.googleapis.com/organizations/<fixtureOrganizationId>`
 and `organizations/<fixtureOrganizationId>` values; either spelling as an
 object key, any embedded or different organization spelling, and every
-organization-attached deny-policy name refuse. The exact full organization
-resource must occur exactly once inside each expected
-allowPolicyExplanation. Its allow state and relevance must be determinate, its
-nonempty policy bindings visible, and its binding-explanation cardinality
-exact. The two request principals must also be members of the public-service-
-account list. Canonical equality then prevents the live response from adding
-any identity or ancestor-scope value that was not validated before bearer
-input.
+organization-attached deny-policy name refuse. Each expected
+allowPolicyExplanation must have determinate aggregate allow state and
+permitted relevance. Every explained allow policy must expose a nonempty
+resource name, determinate state and relevance, a nonempty visible policy
+object, a binding-explanations list, and exact binding/explanation
+cardinality. The exact full organization resource must occur exactly once and
+have nonempty bindings. The two request principals must also be members of the
+public-service-account list. Canonical equality then prevents the live
+response from adding any identity or ancestor-scope value that was not
+validated before bearer input.
 
 The complete live card must also declare that all projects, resources,
 principals, policy IDs, members, conditions, policy bodies, and response
@@ -442,10 +450,10 @@ Phase B may execute only the source below. The source-byte boundary is the
 UTF-8 LF sequence beginning with the first f in from __future__ and ending
 with the LF after the last source line. The Markdown fences are excluded.
 
-It is exactly 1590 lines with SHA-256:
+It is exactly 1626 lines with SHA-256:
 
 ~~~text
-5937906c78b2e8470104ceffc830b78a256f9e3664807a132b3e5e5b19af635b
+0c8ebd287bee43c33e0b5aeda4563b45f7f6124ee8c7e3edc592629233350a68
 ~~~
 
 ~~~python
@@ -490,6 +498,10 @@ RECORDABLE_FAILURE_CODES = {
     "N1_EXPLAINED_RESOURCES_OMITTED",
 }
 RELEVANCE = {"HEURISTIC_RELEVANCE_NORMAL", "HEURISTIC_RELEVANCE_HIGH"}
+DETERMINATE_ALLOW_ACCESS_STATES = {
+    "ALLOW_ACCESS_STATE_GRANTED",
+    "ALLOW_ACCESS_STATE_NOT_GRANTED",
+}
 TOKEN = re.compile(r"[A-Za-z0-9._~+/=-]{1,8192}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 MODE = re.compile(r"[0-7]{4}")
@@ -530,12 +542,16 @@ FORBIDDEN_PUBLIC_FOLDER_SCOPE_FRAGMENTS = (
     "//cloudresourcemanager.googleapis.com/folders/",
     "policies/cloudresourcemanager.googleapis.com%2Ffolders%2F",
     "folders/",
+    "folders%2F",
 )
 CONTROLLED_PUBLIC_ORGANIZATION_SCOPE_FRAGMENTS = (
     "//cloudresourcemanager.googleapis.com/organizations/",
     "policies/cloudresourcemanager.googleapis.com%2Forganizations%2F",
     "organizations/",
+    "organizations%2F",
 )
+URI_HEX_DIGITS = "0123456789ABCDEFabcdef"
+URI_UNRESERVED = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
 PUBLIC_PRINCIPAL_FIELDS = {
     "deniedPrincipals",
     "exceptionPrincipals",
@@ -779,6 +795,27 @@ def _validate_principal_field(
         _validate_public_identity(identity, permitted_identities, required=True)
 
 
+def _uri_scope_comparison(value: str) -> str:
+    normalized = []
+    index = 0
+    while index < len(value):
+        if value[index] != "%":
+            normalized.append(value[index])
+            index += 1
+            continue
+        if (
+            index + 2 >= len(value)
+            or value[index + 1] not in URI_HEX_DIGITS
+            or value[index + 2] not in URI_HEX_DIGITS
+        ):
+            _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
+        encoded = value[index + 1 : index + 3].upper()
+        decoded = chr(int(encoded, 16))
+        normalized.append(decoded if decoded in URI_UNRESERVED else "%" + encoded)
+        index += 3
+    return "".join(normalized)
+
+
 def _validate_public_response(
     value: object,
     service_accounts: list[str],
@@ -810,12 +847,16 @@ def _validate_public_response(
         elif type(item) is list:
             pending.extend((nested, False) for nested in item)
         elif type(item) is str:
+            comparison = _uri_scope_comparison(item)
             if any(
-                fragment in item for fragment in FORBIDDEN_PUBLIC_FOLDER_SCOPE_FRAGMENTS
+                fragment in candidate
+                for candidate in (item, comparison)
+                for fragment in FORBIDDEN_PUBLIC_FOLDER_SCOPE_FRAGMENTS
             ):
                 _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
             if any(
-                fragment in item
+                fragment in candidate
+                for candidate in (item, comparison)
                 for fragment in CONTROLLED_PUBLIC_ORGANIZATION_SCOPE_FRAGMENTS
             ) and (is_key or item not in permitted_organization_scopes):
                 _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
@@ -835,12 +876,13 @@ def _validate_fixture_organization_visibility(
     )
     policies = document["explainedPolicies"]
     if (
-        document["relevance"] not in RELEVANCE
+        document["allowAccessState"] not in DETERMINATE_ALLOW_ACCESS_STATES
+        or document["relevance"] not in RELEVANCE
         or type(policies) is not list
         or not policies
     ):
         _stop("FIXTURE_ORGANIZATION_VISIBILITY_REQUIRED")
-    matches = []
+    matches = 0
     for value_item in policies:
         item = _members(
             value_item,
@@ -852,26 +894,28 @@ def _validate_fixture_organization_visibility(
                 "relevance",
             ),
         )
-        if item["fullResourceName"] == expected:
-            matches.append(item)
-    if len(matches) != 1:
-        _stop("FIXTURE_ORGANIZATION_VISIBILITY_REQUIRED")
-    match = matches[0]
-    policy = match["policy"]
-    bindings = policy.get("bindings") if type(policy) is dict else None
-    explanations = match["bindingExplanations"]
-    if (
-        match["allowAccessState"]
-        not in {
-            "ALLOW_ACCESS_STATE_GRANTED",
-            "ALLOW_ACCESS_STATE_NOT_GRANTED",
-        }
-        or match["relevance"] not in RELEVANCE
-        or type(bindings) is not list
-        or not bindings
-        or type(explanations) is not list
-        or len(explanations) != len(bindings)
-    ):
+        full_resource_name = _text(
+            item["fullResourceName"],
+            "FIXTURE_ORGANIZATION_VISIBILITY_REQUIRED",
+        )
+        policy = item["policy"]
+        explanations = item["bindingExplanations"]
+        bindings = policy.get("bindings", []) if type(policy) is dict else None
+        if (
+            item["allowAccessState"] not in DETERMINATE_ALLOW_ACCESS_STATES
+            or item["relevance"] not in RELEVANCE
+            or type(policy) is not dict
+            or not policy
+            or type(bindings) is not list
+            or type(explanations) is not list
+            or len(explanations) != len(bindings)
+        ):
+            _stop("FIXTURE_ORGANIZATION_VISIBILITY_REQUIRED")
+        if full_resource_name == expected:
+            matches += 1
+            if not bindings:
+                _stop("FIXTURE_ORGANIZATION_VISIBILITY_REQUIRED")
+    if matches != 1:
         _stop("FIXTURE_ORGANIZATION_VISIBILITY_REQUIRED")
 
 
@@ -2051,8 +2095,8 @@ identity/scope validation.
 The embedded source is not a repository Python path, so hosted structural and
 unit-test gates do not execute it. Reviewers must extract the exact bytes and
 reproduce the section 12 checks. At the recorded line layout, _deny_inventory
-occupies lines 588 through 707 inclusive, 120 lines, and _post occupies lines
-741 through 853 inclusive, 113 lines. They are the only functions over the
+occupies lines 624 through 743 inclusive, 120 lines, and _post occupies lines
+777 through 889 inclusive, 113 lines. They are the only functions over the
 repository's 80-line production-code structural threshold. This explicit
 review exception applies only to the inert embedded artifact; it grants no
 production-code exception.
@@ -2190,15 +2234,21 @@ scanned for every embedded reserved IAM identity marker:
 `//iam.googleapis.com/`, `allAuthenticatedUsers`, `allUsers`, `deleted:`,
 `domain:`, `group:`, `principal://`, `principalSet://`,
 `serviceAccount:`, and `user:`. Every folder scope spelling refuses. The
-only admitted organization-scope string values are the exact full and bare
-resource names derived from fixtureOrganizationId; either value as an object
-key, an embedded/different organization spelling, or an organization-attached
-deny-policy name refuses. The exact full organization resource must occur once
-inside each expected allowPolicyExplanation with determinate state/relevance,
-visible nonempty policy bindings, and exact binding-explanation cardinality.
-Both request principals must be in the manifest list. This gate is structural
-and precedes the complete-object canonical-equality gate; it cannot be bypassed
-by approving an unsafe expected object.
+source validates every percent triplet and constructs one nonrecursive URI
+comparison view by normalizing hex case and decoding only URI-unreserved
+characters. It checks both the original and comparison strings. The only
+admitted organization-scope string values are the exact full and bare resource
+names derived from fixtureOrganizationId; either value as an object key, an
+encoded, embedded, different, or malformed organization spelling, or an
+organization-attached deny-policy name refuses. Each expected aggregate allow
+state is determinate. Every explained allow policy has determinate state and
+relevance, a visible nonempty policy object, a binding-explanations list, and
+exact binding/explanation cardinality. The exact full organization resource
+must occur once with nonempty bindings. Both request principals must be in the
+manifest list. overallAccessState is preserved and compared as part of the
+complete response but is not used as evidence of allow-policy visibility. This
+gate is structural and precedes the complete-object canonical-equality gate;
+it cannot be bypassed by approving an unsafe expected object.
 
 For D1, every outer, resource, and policy deny state used by the inventory is
 determinate; relevance is permitted; every explained resource has visible
@@ -2334,12 +2384,14 @@ result grants authority, and N1 cannot cure a failed D1.
   explainedResources is explicitly present and empty.
 - OPEC-009 — Both expected responses pass the no-human, controlled-service-
   account gate; admit exactly the dedicated fixture organization and no folder,
-  other organization, shared-organization member, or unapproved organization
-  spelling; expose that exact organization once in each allow explanation with
-  determinate state/relevance, visible nonempty bindings, and exact explanation
-  cardinality; and pass the exact no-applicable-PAB gate before bearer input.
-  Each complete strict parsed response equals its complete pre-approved
-  manifest object under canonical JSON before publication.
+  other organization, shared-organization member, malformed percent triplet,
+  URI-equivalent encoded scope, or unapproved organization spelling; require a
+  determinate aggregate allow state and complete determinate visibility of
+  every explained allow policy; expose that exact organization once in each
+  allow explanation with nonempty bindings; and pass the exact no-applicable-
+  PAB gate before bearer input. Each complete strict parsed response equals its
+  complete pre-approved manifest object under canonical JSON before
+  publication.
 - OPEC-010 — The deterministic renderer can replace only this RFC's one
   marker-delimited record, re-reads and matches its complete pre-capture digest
   immediately before replacement, and returns no mutable capture result.
@@ -2378,8 +2430,8 @@ equivalence is forbidden.
 | --- | --- |
 | Missing card, approval, fixture, public manifest, pinned runtime, source identity, or separate bearer authority | Zero calls; stop |
 | Missing, malformed, or different decisionVersion, quotaProjectId, fixtureOrganizationId, publicServiceAccountEmails, or quota-project header | Zero calls; stop |
-| Expected response contains a human, group, domain, deleted, public, opaque or non-service-account semantic principal, any unapproved service account, any reserved IAM identity marker anywhere in any key or value other than one of the three exact allowlisted service-account forms, any principalSet field, any unapproved audit-log exemptedMembers identity, any principal-bearing PAB condition, any folder scope, any shared/other organization scope, an organization-attached deny-policy name, an organization scope in an object key, or an embedded/unapproved organization spelling | Zero calls; stop before bearer input |
-| Either expected allowPolicyExplanation does not contain exactly one full resource name for fixtureOrganizationId with determinate state/relevance, visible nonempty policy bindings, and exact binding-explanation cardinality | Zero calls; stop before bearer input |
+| Expected response contains a human, group, domain, deleted, public, opaque or non-service-account semantic principal, any unapproved service account, any reserved IAM identity marker anywhere in any key or value other than one of the three exact allowlisted service-account forms, any principalSet field, any unapproved audit-log exemptedMembers identity, any principal-bearing PAB condition, any malformed percent triplet, any folder scope, any shared/other organization scope, an organization-attached deny-policy name, an organization scope in an object key, or an encoded, embedded, or otherwise unapproved organization spelling | Zero calls; stop before bearer input |
+| Either expected allowPolicyExplanation has an indeterminate aggregate allow state or relevance; any explained allow policy omits its resource, has indeterminate state/relevance, has an empty policy object, omits binding explanations, or has inconsistent binding/explanation cardinality; or the exact full fixture organization does not occur once with nonempty bindings | Zero calls; stop before bearer input |
 | Expected or actual PAB explanation is not exactly NOT_ENFORCED with permitted relevance and an omitted or empty binding/policy list | Zero calls when expected; otherwise stop with no accepted evidence or RFC write |
 | Wrong environment, host, Python flag/path/digest/build linkage, separate runtime-library identity, source/manifest/RFC path or digest, private-input/RFC ownership/mode/link, marker count, or working directory | Zero calls; stop |
 | Wrapper, debugger, profiler, callback, module injection, proxy, token lookup, refresh, replay, retry, redirect, debug trace, or hidden call | Stop; no accepted evidence |
@@ -2448,7 +2500,7 @@ observation. It does not establish accepted provider evidence.
 ~~~text
 CAPTURE STATUS: UNEXECUTED
 DECISION VERSION: 3; UNAPPROVED
-PROGRAM SOURCE: EMBEDDED; 1590 LINES; SHA-256 5937906c78b2e8470104ceffc830b78a256f9e3664807a132b3e5e5b19af635b
+PROGRAM SOURCE: EMBEDDED; 1626 LINES; SHA-256 0c8ebd287bee43c33e0b5aeda4563b45f7f6124ee8c7e3edc592629233350a68
 FRESH PROCESS: NOT STARTED
 PUBLIC MANIFEST: NOT SUPPLIED
 PUBLIC SERVICE ACCOUNTS: NOT SUPPLIED
@@ -2554,9 +2606,9 @@ Reviewers must independently:
 
 - confirm this RFC is the only changed path and the trust boundary stayed
   acquisition/publication only;
-- extract the first Python block exactly and reproduce 1590 LF-terminated
+- extract the first Python block exactly and reproduce 1626 LF-terminated
   lines and SHA-256
-  5937906c78b2e8470104ceffc830b78a256f9e3664807a132b3e5e5b19af635b;
+  0c8ebd287bee43c33e0b5aeda4563b45f7f6124ee8c7e3edc592629233350a68;
 - compile it with exact CPython 3.12.13;
 - run repository-pinned Ruff 0.15.5 check and format check;
 - run an isolated fake-transport harness under an empty LC_ALL=C environment,
@@ -2584,13 +2636,18 @@ Reviewers must independently:
   principal.subject PAB conditions; allowed project resource spellings outside
   principal fields; closed PAB list omission/empty equivalence; every
   nonempty, allowed, denied, unknown, unspecified, or malformed PAB posture; and
-  every complete and bare folder scope; exact full and bare fixture-
-  organization values; missing, duplicate, embedded, other, and malformed
-  fixture-organization values; organization-attached deny-policy names; exact
-  organization values used as object keys; and shared-organization members in
-  arbitrary nested policies; plus missing/empty organization policy bindings,
-  indeterminate organization allow state/relevance, and binding/explanation
-  cardinality mismatch;
+  every complete and bare folder scope; malformed percent triplets; all mixed-
+  case `%2F` slash encodings; percent-encoded URI-unreserved letters;
+  `organizations%2F`; and each encoded scope in an arbitrary value, object key,
+  policy name, and wrong-organization case, with no recursive decoding; exact
+  full and bare fixture-organization values; missing, duplicate, embedded,
+  other, and malformed fixture-organization values; organization-attached
+  deny-policy names; exact organization values used as object keys; and shared-
+  organization members in arbitrary nested policies; plus aggregate
+  ALLOW_ACCESS_STATE_UNKNOWN_INFO and UNKNOWN_CONDITIONAL; unknown state,
+  omitted visibility fields, empty policy body, or binding/explanation
+  mismatch on every non-organization explained policy; and missing/empty
+  organization policy bindings or indeterminate organization state/relevance;
   source/manifest/executable/runtime-library/RFC identity checks; root-owned or
   hard-linked exact executable acceptance; monolithic and separate-runtime
   linkage rules; observed runtime, auth-side ledger/count, and temporary-path
@@ -2641,9 +2698,11 @@ Before publication and review:
   dedicated-organization scope gate over every key and value in both complete
   expected response objects, including the scalar/list/map principal-field
   types, exact three admitted service-account forms, one exact full
-  fixture-organization resource in each allow explanation, and refusal of
-  every folder, other organization, shared-organization member, embedded
-  organization spelling, and organization-attached deny-policy name;
+  fixture-organization resource in each allow explanation, determinate
+  aggregate state and complete visibility/cardinality for every explained
+  allow policy, strict one-pass percent-triplet comparison, and refusal of
+  every folder, encoded/other organization, shared-organization member,
+  embedded organization spelling, and organization-attached deny-policy name;
 - reproduce the exact NOT_ENFORCED, omitted-or-empty-binding, permitted-
   relevance PAB shape for both responses;
 - inspect the one-file diff and prove no secret or unexpected value is
