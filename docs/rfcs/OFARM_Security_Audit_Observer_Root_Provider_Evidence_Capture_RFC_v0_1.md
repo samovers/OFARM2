@@ -153,8 +153,8 @@ Subject to later exact approval, this decision trusts only:
 - the task user to approve one complete live card and declare every manifest
   value suitable for public repository publication;
 - the separate credential authority to materialize one bearer before launch;
-- the exact 1637-line source in section 7.2 at SHA-256
-  d9240eebdcb943d58b4f538f89aff11d5f173daad5f7854001a904eb358a52d3;
+- the exact 1636-line source in section 7.2 at SHA-256
+  5eac3fa79d5214d93c0687bfe22d82fe7977ac7aeef117ae6fcc6870d132c5c1;
 - the exact Darwin host system, kernel release, and machine, CPython 3.12.13
   executable path and digest, runtime build classification, and separately
   linked Python runtime-library path and digest when one exists, all fixed in
@@ -275,10 +275,10 @@ other reserved IAM identity marker refuses even when embedded in an arbitrary
 string key or value. The closed raw marker set is `//iam.googleapis.com/`,
 `allAuthenticatedUsers`, `allUsers`, `deleted:`, `domain:`, `group:`,
 `principal://`, `principalSet://`, `serviceAccount:`, and `user:`.
-After the exact permitted-identity bypass, the three URI-form markers
-`//iam.googleapis.com/`, `principal://`, and `principalSet://` are also matched
-case-insensitively against the one-pass URI comparison view, so encoded
-URI-unreserved characters and host/scheme case cannot hide an IAM target.
+After the exact permitted-identity bypass, every closed identity and
+principal-condition marker is matched case-insensitively against the one-pass
+URI comparison view, so encoded URI-unreserved characters or case variation
+cannot hide an IAM identity or principal condition.
 Bare IAM pool targets, principal.type or principal.subject conditions, folder,
 human email, opaque semantic principal, and unapproved service accounts also
 refuse. This covers Google's current
@@ -287,9 +287,9 @@ without treating resource strings as identities. Every folder spelling
 refuses. Before scope matching, every percent sign must begin one complete
 hexadecimal triplet. A single comparison pass uppercases percent-triplet hex
 digits and decodes only percent-encoded URI-unreserved characters; malformed
-triplets refuse and the comparison is never recursively decoded. Both the
-original string and that comparison view are checked for folder and
-organization scope. The only admitted organization-scope string values are
+triplets refuse and the comparison is never recursively decoded. Folder and
+organization markers are also matched case-insensitively against that
+comparison view. The only admitted organization-scope string values are
 the exact full
 `//cloudresourcemanager.googleapis.com/organizations/<fixtureOrganizationId>`
 and bare `organizations/<fixtureOrganizationId>` values; either spelling as an
@@ -454,10 +454,10 @@ Phase B may execute only the source below. The source-byte boundary is the
 UTF-8 LF sequence beginning with the first f in from __future__ and ending
 with the LF after the last source line. The Markdown fences are excluded.
 
-It is exactly 1637 lines with SHA-256:
+It is exactly 1636 lines with SHA-256:
 
 ~~~text
-d9240eebdcb943d58b4f538f89aff11d5f173daad5f7854001a904eb358a52d3
+5eac3fa79d5214d93c0687bfe22d82fe7977ac7aeef117ae6fcc6870d132c5c1
 ~~~
 
 ~~~python
@@ -537,11 +537,6 @@ FORBIDDEN_PUBLIC_IDENTITY_FRAGMENTS = (
     "principalSet://",
     "serviceAccount:",
     "user:",
-)
-URI_IDENTITY_MARKERS = (
-    "//iam.googleapis.com/",
-    "principal://",
-    "principalSet://",
 )
 FORBIDDEN_PUBLIC_PRINCIPAL_CONDITION_FRAGMENTS = (
     "principal.subject",
@@ -858,20 +853,24 @@ def _validate_public_response(
         elif type(item) is str:
             comparison = _uri_scope_comparison(item)
             folded_comparison = comparison.casefold()
-            if item not in permitted_identities and any(
-                marker.casefold() in folded_comparison
-                for marker in URI_IDENTITY_MARKERS
+            if item not in permitted_identities and (
+                any(
+                    fragment.casefold() in folded_comparison
+                    for fragment in FORBIDDEN_PUBLIC_IDENTITY_FRAGMENTS
+                )
+                or any(
+                    fragment.casefold() in folded_comparison
+                    for fragment in FORBIDDEN_PUBLIC_PRINCIPAL_CONDITION_FRAGMENTS
+                )
             ):
                 _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
             if any(
-                fragment in candidate
-                for candidate in (item, comparison)
+                fragment.casefold() in folded_comparison
                 for fragment in FORBIDDEN_PUBLIC_FOLDER_SCOPE_FRAGMENTS
             ):
                 _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
             if any(
-                fragment in candidate
-                for candidate in (item, comparison)
+                fragment.casefold() in folded_comparison
                 for fragment in CONTROLLED_PUBLIC_ORGANIZATION_SCOPE_FRAGMENTS
             ) and (is_key or item not in permitted_organization_scopes):
                 _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
@@ -2110,8 +2109,8 @@ identity/scope validation.
 The embedded source is not a repository Python path, so hosted structural and
 unit-test gates do not execute it. Reviewers must extract the exact bytes and
 reproduce the section 12 checks. At the recorded line layout, _deny_inventory
-occupies lines 635 through 754 inclusive, 120 lines, and _post occupies lines
-788 through 900 inclusive, 113 lines. They are the only functions over the
+occupies lines 634 through 753 inclusive, 120 lines, and _post occupies lines
+787 through 899 inclusive, 113 lines. They are the only functions over the
 repository's 80-line production-code structural threshold. This explicit
 review exception applies only to the inert embedded artifact; it grants no
 production-code exception.
@@ -2249,11 +2248,12 @@ form:
 `//iam.googleapis.com/`, `allAuthenticatedUsers`, `allUsers`, `deleted:`,
 `domain:`, `group:`, `principal://`, `principalSet://`,
 `serviceAccount:`, and `user:`. After the exact permitted-identity bypass,
-`//iam.googleapis.com/`, `principal://`, and `principalSet://` are also matched
-case-insensitively against the URI comparison view. Every folder scope spelling
-refuses. The source validates every percent triplet and constructs one
+every closed identity and principal-condition marker is matched
+case-insensitively against the URI comparison view. Every folder and
+organization marker is matched case-insensitively against the same view. The
+source validates every percent triplet and constructs one
 nonrecursive URI comparison view by normalizing hex case and decoding only
-URI-unreserved characters. It checks both the original and comparison strings.
+URI-unreserved characters.
 The only admitted organization-scope string values are the exact full and bare
 resource names derived from fixtureOrganizationId; either value as an object
 key, an encoded, embedded, different, or malformed organization spelling, or an
@@ -2517,7 +2517,7 @@ observation. It does not establish accepted provider evidence.
 ~~~text
 CAPTURE STATUS: UNEXECUTED
 DECISION VERSION: 3; UNAPPROVED
-PROGRAM SOURCE: EMBEDDED; 1637 LINES; SHA-256 d9240eebdcb943d58b4f538f89aff11d5f173daad5f7854001a904eb358a52d3
+PROGRAM SOURCE: EMBEDDED; 1636 LINES; SHA-256 5eac3fa79d5214d93c0687bfe22d82fe7977ac7aeef117ae6fcc6870d132c5c1
 FRESH PROCESS: NOT STARTED
 PUBLIC MANIFEST: NOT SUPPLIED
 PUBLIC SERVICE ACCOUNTS: NOT SUPPLIED
@@ -2623,9 +2623,9 @@ Reviewers must independently:
 
 - confirm this RFC is the only changed path and the trust boundary stayed
   acquisition/publication only;
-- extract the first Python block exactly and reproduce 1637 LF-terminated
+- extract the first Python block exactly and reproduce 1636 LF-terminated
   lines and SHA-256
-  d9240eebdcb943d58b4f538f89aff11d5f173daad5f7854001a904eb358a52d3;
+  5eac3fa79d5214d93c0687bfe22d82fe7977ac7aeef117ae6fcc6870d132c5c1;
 - compile it with exact CPython 3.12.13;
 - run repository-pinned Ruff 0.15.5 check and format check;
 - run an isolated fake-transport harness under an empty LC_ALL=C environment,
@@ -2646,21 +2646,27 @@ Reviewers must independently:
   every principalSet://, and unapproved service-account identities; each closed
   raw reserved IAM identity marker embedded in an arbitrary nested nonsemantic
   string value, object key, and semantic principal field; URI-equivalent
-  `//%69am.googleapis.com/`, case-varied `//IAM.GOOGLEAPIS.COM/`, uppercase
-  `PRINCIPAL://IAM.GOOGLEAPIS.COM/`, and uppercase
-  `PRINCIPALSET://IAM.GOOGLEAPIS.COM/` targets in arbitrary values and object
-  keys; all three exact allowlisted service-account forms and one harmless
-  nonidentity control;
+  `//%69am.googleapis.com/`; case-varied `//IAM.GOOGLEAPIS.COM/`, `ALLUSERS`,
+  `AllAuthenticatedUsers`, `USER:opaque`, `GROUP:opaque`,
+  `DOMAIN:customer.example`, `DELETED:opaque`, `SERVICEACCOUNT:opaque`,
+  `PRINCIPAL://IAM.GOOGLEAPIS.COM/`,
+  `PRINCIPALSET://IAM.GOOGLEAPIS.COM/`, and `PRINCIPAL.TYPE` markers in
+  arbitrary values and object keys; all three exact allowlisted
+  service-account forms and one harmless nonidentity control;
   generic workforce, workload, GKE workload, and agent principal:// forms;
   every principalSet:// form; bare workforce/workload pool and project
   principal-set targets at the PAB target path; principal.type and
   principal.subject PAB conditions; allowed project resource spellings outside
   principal fields; closed PAB list omission/empty equivalence; every
   nonempty, allowed, denied, unknown, unspecified, or malformed PAB posture; and
-  every complete and bare folder scope; malformed percent triplets; all mixed-
-  case `%2F` slash encodings; percent-encoded URI-unreserved letters;
-  `organizations%2F`; and each encoded scope in an arbitrary value, object key,
-  policy name, and wrong-organization case, with no recursive decoding; exact
+  every complete and bare folder scope, including `FOLDERS/999999`; malformed
+  percent triplets; all mixed-case `%2F` slash encodings; percent-encoded
+  URI-unreserved letters, including `%4Frganizations/999999`;
+  `ORGANIZATIONS/999999`,
+  `//cloudresourcemanager.googleapis.com/ORGANIZATIONS/999999`, and
+  `policies/cloudresourcemanager.googleapis.com%2FORGANIZATIONS%2F999999/denypolicies/example`;
+  and each encoded scope in an arbitrary value, object key, policy name, and
+  wrong-organization case, with no recursive decoding; exact
   full and bare fixture-organization values; missing, duplicate, embedded,
   other, and malformed fixture-organization values; organization-attached
   deny-policy names; exact organization values used as object keys; and shared-
