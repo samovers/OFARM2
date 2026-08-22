@@ -153,8 +153,8 @@ Subject to later exact approval, this decision trusts only:
 - the task user to approve one complete live card and declare every manifest
   value suitable for public repository publication;
 - the separate credential authority to materialize one bearer before launch;
-- the exact 1626-line source in section 7.2 at SHA-256
-  0c8ebd287bee43c33e0b5aeda4563b45f7f6124ee8c7e3edc592629233350a68;
+- the exact 1637-line source in section 7.2 at SHA-256
+  d9240eebdcb943d58b4f538f89aff11d5f173daad5f7854001a904eb358a52d3;
 - the exact Darwin host system, kernel release, and machine, CPython 3.12.13
   executable path and digest, runtime build classification, and separately
   linked Python runtime-library path and digest when one exists, all fixed in
@@ -272,9 +272,13 @@ exactly one of the service-account email values, serviceAccount members, or
 explicit service-account principal URIs derived from
 publicServiceAccountEmails. A principalSet field is always forbidden. Every
 other reserved IAM identity marker refuses even when embedded in an arbitrary
-string key or value. The closed marker set is `//iam.googleapis.com/`,
+string key or value. The closed raw marker set is `//iam.googleapis.com/`,
 `allAuthenticatedUsers`, `allUsers`, `deleted:`, `domain:`, `group:`,
 `principal://`, `principalSet://`, `serviceAccount:`, and `user:`.
+After the exact permitted-identity bypass, the three URI-form markers
+`//iam.googleapis.com/`, `principal://`, and `principalSet://` are also matched
+case-insensitively against the one-pass URI comparison view, so encoded
+URI-unreserved characters and host/scheme case cannot hide an IAM target.
 Bare IAM pool targets, principal.type or principal.subject conditions, folder,
 human email, opaque semantic principal, and unapproved service accounts also
 refuse. This covers Google's current
@@ -286,9 +290,9 @@ digits and decodes only percent-encoded URI-unreserved characters; malformed
 triplets refuse and the comparison is never recursively decoded. Both the
 original string and that comparison view are checked for folder and
 organization scope. The only admitted organization-scope string values are
-the exact
+the exact full
 `//cloudresourcemanager.googleapis.com/organizations/<fixtureOrganizationId>`
-and `organizations/<fixtureOrganizationId>` values; either spelling as an
+and bare `organizations/<fixtureOrganizationId>` values; either spelling as an
 object key, any embedded or different organization spelling, and every
 organization-attached deny-policy name refuse. Each expected
 allowPolicyExplanation must have determinate aggregate allow state and
@@ -450,10 +454,10 @@ Phase B may execute only the source below. The source-byte boundary is the
 UTF-8 LF sequence beginning with the first f in from __future__ and ending
 with the LF after the last source line. The Markdown fences are excluded.
 
-It is exactly 1626 lines with SHA-256:
+It is exactly 1637 lines with SHA-256:
 
 ~~~text
-0c8ebd287bee43c33e0b5aeda4563b45f7f6124ee8c7e3edc592629233350a68
+d9240eebdcb943d58b4f538f89aff11d5f173daad5f7854001a904eb358a52d3
 ~~~
 
 ~~~python
@@ -533,6 +537,11 @@ FORBIDDEN_PUBLIC_IDENTITY_FRAGMENTS = (
     "principalSet://",
     "serviceAccount:",
     "user:",
+)
+URI_IDENTITY_MARKERS = (
+    "//iam.googleapis.com/",
+    "principal://",
+    "principalSet://",
 )
 FORBIDDEN_PUBLIC_PRINCIPAL_CONDITION_FRAGMENTS = (
     "principal.subject",
@@ -848,6 +857,12 @@ def _validate_public_response(
             pending.extend((nested, False) for nested in item)
         elif type(item) is str:
             comparison = _uri_scope_comparison(item)
+            folded_comparison = comparison.casefold()
+            if item not in permitted_identities and any(
+                marker.casefold() in folded_comparison
+                for marker in URI_IDENTITY_MARKERS
+            ):
+                _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
             if any(
                 fragment in candidate
                 for candidate in (item, comparison)
@@ -2095,8 +2110,8 @@ identity/scope validation.
 The embedded source is not a repository Python path, so hosted structural and
 unit-test gates do not execute it. Reviewers must extract the exact bytes and
 reproduce the section 12 checks. At the recorded line layout, _deny_inventory
-occupies lines 624 through 743 inclusive, 120 lines, and _post occupies lines
-777 through 889 inclusive, 113 lines. They are the only functions over the
+occupies lines 635 through 754 inclusive, 120 lines, and _post occupies lines
+788 through 900 inclusive, 113 lines. They are the only functions over the
 repository's 80-line production-code structural threshold. This explicit
 review exception applies only to the inert embedded artifact; it grants no
 production-code exception.
@@ -2229,17 +2244,19 @@ field, every other principal:// or principalSet:// spelling, bare IAM pool
 targets, principal-bearing PAB conditions, human/group/domain/deleted/public
 values, opaque semantic principals, ancestor scope, and unapproved service
 accounts. Outside those exact admitted identities, every string key and value
-is also
-scanned for every embedded reserved IAM identity marker:
+is also scanned for every embedded reserved IAM identity marker in its raw
+form:
 `//iam.googleapis.com/`, `allAuthenticatedUsers`, `allUsers`, `deleted:`,
 `domain:`, `group:`, `principal://`, `principalSet://`,
-`serviceAccount:`, and `user:`. Every folder scope spelling refuses. The
-source validates every percent triplet and constructs one nonrecursive URI
-comparison view by normalizing hex case and decoding only URI-unreserved
-characters. It checks both the original and comparison strings. The only
-admitted organization-scope string values are the exact full and bare resource
-names derived from fixtureOrganizationId; either value as an object key, an
-encoded, embedded, different, or malformed organization spelling, or an
+`serviceAccount:`, and `user:`. After the exact permitted-identity bypass,
+`//iam.googleapis.com/`, `principal://`, and `principalSet://` are also matched
+case-insensitively against the URI comparison view. Every folder scope spelling
+refuses. The source validates every percent triplet and constructs one
+nonrecursive URI comparison view by normalizing hex case and decoding only
+URI-unreserved characters. It checks both the original and comparison strings.
+The only admitted organization-scope string values are the exact full and bare
+resource names derived from fixtureOrganizationId; either value as an object
+key, an encoded, embedded, different, or malformed organization spelling, or an
 organization-attached deny-policy name refuses. Each expected aggregate allow
 state is determinate. Every explained allow policy has determinate state and
 relevance, a visible nonempty policy object, a binding-explanations list, and
@@ -2384,14 +2401,14 @@ result grants authority, and N1 cannot cure a failed D1.
   explainedResources is explicitly present and empty.
 - OPEC-009 — Both expected responses pass the no-human, controlled-service-
   account gate; admit exactly the dedicated fixture organization and no folder,
-  other organization, shared-organization member, malformed percent triplet,
-  URI-equivalent encoded scope, or unapproved organization spelling; require a
-  determinate aggregate allow state and complete determinate visibility of
-  every explained allow policy; expose that exact organization once in each
-  allow explanation with nonempty bindings; and pass the exact no-applicable-
-  PAB gate before bearer input. Each complete strict parsed response equals its
-  complete pre-approved manifest object under canonical JSON before
-  publication.
+  other organization, shared-organization member, URI-equivalent IAM identity
+  target, malformed percent triplet, URI-equivalent encoded scope, or
+  unapproved organization spelling; require a determinate aggregate allow state
+  and complete determinate visibility of every explained allow policy; expose
+  that exact organization once in each allow explanation with nonempty
+  bindings; and pass the exact no-applicable-PAB gate before bearer input. Each
+  complete strict parsed response equals its complete pre-approved manifest
+  object under canonical JSON before publication.
 - OPEC-010 — The deterministic renderer can replace only this RFC's one
   marker-delimited record, re-reads and matches its complete pre-capture digest
   immediately before replacement, and returns no mutable capture result.
@@ -2430,7 +2447,7 @@ equivalence is forbidden.
 | --- | --- |
 | Missing card, approval, fixture, public manifest, pinned runtime, source identity, or separate bearer authority | Zero calls; stop |
 | Missing, malformed, or different decisionVersion, quotaProjectId, fixtureOrganizationId, publicServiceAccountEmails, or quota-project header | Zero calls; stop |
-| Expected response contains a human, group, domain, deleted, public, opaque or non-service-account semantic principal, any unapproved service account, any reserved IAM identity marker anywhere in any key or value other than one of the three exact allowlisted service-account forms, any principalSet field, any unapproved audit-log exemptedMembers identity, any principal-bearing PAB condition, any malformed percent triplet, any folder scope, any shared/other organization scope, an organization-attached deny-policy name, an organization scope in an object key, or an encoded, embedded, or otherwise unapproved organization spelling | Zero calls; stop before bearer input |
+| Expected response contains a human, group, domain, deleted, public, opaque or non-service-account semantic principal, any unapproved service account, any raw or URI-equivalent/case-varied reserved IAM identity marker anywhere in any key or value other than one of the three exact allowlisted service-account forms, any principalSet field, any unapproved audit-log exemptedMembers identity, any principal-bearing PAB condition, any malformed percent triplet, any folder scope, any shared/other organization scope, an organization-attached deny-policy name, an organization scope in an object key, or an encoded, embedded, or otherwise unapproved organization spelling | Zero calls; stop before bearer input |
 | Either expected allowPolicyExplanation has an indeterminate aggregate allow state or relevance; any explained allow policy omits its resource, has indeterminate state/relevance, has an empty policy object, omits binding explanations, or has inconsistent binding/explanation cardinality; or the exact full fixture organization does not occur once with nonempty bindings | Zero calls; stop before bearer input |
 | Expected or actual PAB explanation is not exactly NOT_ENFORCED with permitted relevance and an omitted or empty binding/policy list | Zero calls when expected; otherwise stop with no accepted evidence or RFC write |
 | Wrong environment, host, Python flag/path/digest/build linkage, separate runtime-library identity, source/manifest/RFC path or digest, private-input/RFC ownership/mode/link, marker count, or working directory | Zero calls; stop |
@@ -2500,7 +2517,7 @@ observation. It does not establish accepted provider evidence.
 ~~~text
 CAPTURE STATUS: UNEXECUTED
 DECISION VERSION: 3; UNAPPROVED
-PROGRAM SOURCE: EMBEDDED; 1626 LINES; SHA-256 0c8ebd287bee43c33e0b5aeda4563b45f7f6124ee8c7e3edc592629233350a68
+PROGRAM SOURCE: EMBEDDED; 1637 LINES; SHA-256 d9240eebdcb943d58b4f538f89aff11d5f173daad5f7854001a904eb358a52d3
 FRESH PROCESS: NOT STARTED
 PUBLIC MANIFEST: NOT SUPPLIED
 PUBLIC SERVICE ACCOUNTS: NOT SUPPLIED
@@ -2606,9 +2623,9 @@ Reviewers must independently:
 
 - confirm this RFC is the only changed path and the trust boundary stayed
   acquisition/publication only;
-- extract the first Python block exactly and reproduce 1626 LF-terminated
+- extract the first Python block exactly and reproduce 1637 LF-terminated
   lines and SHA-256
-  0c8ebd287bee43c33e0b5aeda4563b45f7f6124ee8c7e3edc592629233350a68;
+  d9240eebdcb943d58b4f538f89aff11d5f173daad5f7854001a904eb358a52d3;
 - compile it with exact CPython 3.12.13;
 - run repository-pinned Ruff 0.15.5 check and format check;
 - run an isolated fake-transport harness under an empty LC_ALL=C environment,
@@ -2627,9 +2644,13 @@ Reviewers must independently:
   auditConfigs[].auditLogConfigs[].exemptedMembers values rejecting opaque,
   user, group, domain, allUsers, deleted service-account, generic principal://,
   every principalSet://, and unapproved service-account identities; each closed
-  reserved IAM identity marker embedded in an arbitrary nested nonsemantic
-  string value, object key, and semantic principal field; all three exact
-  allowlisted service-account forms and one harmless nonidentity control;
+  raw reserved IAM identity marker embedded in an arbitrary nested nonsemantic
+  string value, object key, and semantic principal field; URI-equivalent
+  `//%69am.googleapis.com/`, case-varied `//IAM.GOOGLEAPIS.COM/`, uppercase
+  `PRINCIPAL://IAM.GOOGLEAPIS.COM/`, and uppercase
+  `PRINCIPALSET://IAM.GOOGLEAPIS.COM/` targets in arbitrary values and object
+  keys; all three exact allowlisted service-account forms and one harmless
+  nonidentity control;
   generic workforce, workload, GKE workload, and agent principal:// forms;
   every principalSet:// form; bare workforce/workload pool and project
   principal-set targets at the PAB target path; principal.type and
@@ -2700,9 +2721,11 @@ Before publication and review:
   types, exact three admitted service-account forms, one exact full
   fixture-organization resource in each allow explanation, determinate
   aggregate state and complete visibility/cardinality for every explained
-  allow policy, strict one-pass percent-triplet comparison, and refusal of
-  every folder, encoded/other organization, shared-organization member,
-  embedded organization spelling, and organization-attached deny-policy name;
+  allow policy, strict one-pass percent-triplet comparison, exact permitted-
+  identity bypass followed by case-insensitive URI identity-marker matching,
+  and refusal of every folder, encoded/other organization, shared-organization
+  member, URI-equivalent IAM target, embedded organization spelling, and
+  organization-attached deny-policy name;
 - reproduce the exact NOT_ENFORCED, omitted-or-empty-binding, permitted-
   relevance PAB shape for both responses;
 - inspect the one-file diff and prove no secret or unexpected value is
