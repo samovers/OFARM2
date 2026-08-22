@@ -151,8 +151,8 @@ Subject to later exact approval, this decision trusts only:
 - the task user to approve one complete live card and declare every manifest
   value suitable for public repository publication;
 - the separate credential authority to materialize one bearer before launch;
-- the exact 1480-line source in section 7.2 at SHA-256
-  4e3580502400755dda1be1e2a886526c5ffea54f912e568a2b5dfe9bb563c62f;
+- the exact 1470-line source in section 7.2 at SHA-256
+  b566f109c15278b54c964b92855b97e9a6f1f079485845fe057abeb13b632707;
 - the exact Darwin host system, kernel release, and machine, CPython 3.12.13
   executable path and digest, runtime build classification, and separately
   linked Python runtime-library path and digest when one exists, all fixed in
@@ -267,9 +267,11 @@ exemptedMembers, deniedPrincipals, and exceptionPrincipals entry must be
 exactly one of the service-account email values, serviceAccount members, or
 explicit service-account principal URIs derived from
 publicServiceAccountEmails. A principalSet field is always forbidden. Every
-other principal:// or principalSet:// spelling refuses even when embedded in
-an arbitrary string key or value. Bare IAM pool targets, principal.type or
-principal.subject conditions, user, group, domain, deleted, public, folder,
+other reserved IAM identity marker refuses even when embedded in an arbitrary
+string key or value. The closed marker set is `//iam.googleapis.com/`,
+`allAuthenticatedUsers`, `allUsers`, `deleted:`, `domain:`, `group:`,
+`principal://`, `principalSet://`, `serviceAccount:`, and `user:`.
+Bare IAM pool targets, principal.type or principal.subject conditions, folder,
 organization, human email, opaque semantic principal, and unapproved service
 accounts also refuse. This covers Google's current
 [principal identifier vocabulary](https://docs.cloud.google.com/iam/docs/principal-identifiers)
@@ -413,10 +415,10 @@ Phase B may execute only the source below. The source-byte boundary is the
 UTF-8 LF sequence beginning with the first f in from __future__ and ending
 with the LF after the last source line. The Markdown fences are excluded.
 
-It is exactly 1480 lines with SHA-256:
+It is exactly 1470 lines with SHA-256:
 
 ~~~text
-4e3580502400755dda1be1e2a886526c5ffea54f912e568a2b5dfe9bb563c62f
+b566f109c15278b54c964b92855b97e9a6f1f079485845fe057abeb13b632707
 ~~~
 
 ~~~python
@@ -480,17 +482,17 @@ PROJECT_POLICY = re.compile(
     r"policies/cloudresourcemanager\.googleapis\.com%2Fprojects%2F"
     r"([1-9][0-9]*)/denypolicies/[a-z0-9.-]+"
 )
-FORBIDDEN_PUBLIC_IDENTITIES = {"allAuthenticatedUsers", "allUsers"}
-FORBIDDEN_PUBLIC_IDENTITY_PREFIXES = (
+FORBIDDEN_PUBLIC_IDENTITY_FRAGMENTS = (
     "//iam.googleapis.com/",
+    "allAuthenticatedUsers",
+    "allUsers",
     "deleted:",
     "domain:",
     "group:",
-    "user:",
-)
-FORBIDDEN_PUBLIC_IDENTITY_FRAGMENTS = (
     "principal://",
     "principalSet://",
+    "serviceAccount:",
+    "user:",
 )
 FORBIDDEN_PUBLIC_PRINCIPAL_CONDITION_FRAGMENTS = (
     "principal.subject",
@@ -709,21 +711,11 @@ def _validate_public_identity(
 ) -> None:
     if item in permitted_identities:
         return
-    if (
-        item in FORBIDDEN_PUBLIC_IDENTITIES
-        or item.startswith(FORBIDDEN_PUBLIC_IDENTITY_PREFIXES)
-        or any(fragment in item for fragment in FORBIDDEN_PUBLIC_IDENTITY_FRAGMENTS)
-        or any(
-            fragment in item
-            for fragment in FORBIDDEN_PUBLIC_PRINCIPAL_CONDITION_FRAGMENTS
-        )
+    if any(fragment in item for fragment in FORBIDDEN_PUBLIC_IDENTITY_FRAGMENTS) or any(
+        fragment in item for fragment in FORBIDDEN_PUBLIC_PRINCIPAL_CONDITION_FRAGMENTS
     ):
         _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
-    if (
-        ".iam.gserviceaccount.com" in item
-        or item.startswith("serviceAccount:")
-        or "/serviceAccounts/" in item
-    ):
+    if ".iam.gserviceaccount.com" in item or "/serviceAccounts/" in item:
         _stop("UNAPPROVED_PUBLIC_SERVICE_ACCOUNT")
     if "@" in item or required:
         _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
@@ -1911,8 +1903,8 @@ and complete expected-response identity/scope validation.
 The embedded source is not a repository Python path, so hosted structural and
 unit-test gates do not execute it. Reviewers must extract the exact bytes and
 reproduce the section 12 checks. At the recorded line layout, _deny_inventory
-occupies lines 525 through 644 inclusive, 120 lines, and _post occupies lines
-673 through 783 inclusive, 111 lines. They are the only functions over the
+occupies lines 515 through 634 inclusive, 120 lines, and _post occupies lines
+663 through 773 inclusive, 111 lines. They are the only functions over the
 repository's 80-line production-code structural threshold. This explicit
 review exception applies only to the inert embedded artifact; it grants no
 production-code exception.
@@ -2045,9 +2037,12 @@ targets, principal-bearing PAB conditions, human/group/domain/deleted/public
 values, opaque semantic principals, ancestor scope, and unapproved service
 accounts.
 Outside those exact admitted identities, every string key and value is also
-scanned for any embedded `principal://` or `principalSet://` fragment and for
-complete or bare folder and organization scope spellings, including
-`folders/` and `organizations/`.
+scanned for every embedded reserved IAM identity marker:
+`//iam.googleapis.com/`, `allAuthenticatedUsers`, `allUsers`, `deleted:`,
+`domain:`, `group:`, `principal://`, `principalSet://`,
+`serviceAccount:`, and `user:`. Every key and value is also scanned for
+complete or bare folder and organization scope spellings, including `folders/`
+and `organizations/`.
 Both request principals must be in the manifest list. This gate is structural
 and precedes the complete-object canonical-equality gate; it cannot be bypassed
 by approving an unsafe expected object.
@@ -2224,7 +2219,7 @@ equivalence is forbidden.
 | --- | --- |
 | Missing card, approval, fixture, public manifest, pinned runtime, source identity, or separate bearer authority | Zero calls; stop |
 | Missing, malformed, or different decisionVersion, quotaProjectId, publicServiceAccountEmails, or quota-project header | Zero calls; stop |
-| Expected response contains a human, group, domain, deleted, public, opaque or non-service-account semantic principal, any unapproved service account, any principal:// or principalSet:// fragment anywhere in any key or value other than an exact allowlisted service-account principal URI, any principalSet field, any unapproved audit-log exemptedMembers identity, any principal-bearing PAB condition, or any complete or bare folder/organization scope spelling in any key or value | Zero calls; stop before bearer input |
+| Expected response contains a human, group, domain, deleted, public, opaque or non-service-account semantic principal, any unapproved service account, any reserved IAM identity marker anywhere in any key or value other than one of the three exact allowlisted service-account forms, any principalSet field, any unapproved audit-log exemptedMembers identity, any principal-bearing PAB condition, or any complete or bare folder/organization scope spelling in any key or value | Zero calls; stop before bearer input |
 | Expected or actual PAB explanation is not exactly NOT_ENFORCED with permitted relevance and an omitted or empty binding/policy list | Zero calls when expected; otherwise stop with no accepted evidence or RFC write |
 | Wrong environment, host, Python flag/path/digest/build linkage, separate runtime-library identity, source/manifest/RFC path or digest, private-input/RFC ownership/mode/link, marker count, or working directory | Zero calls; stop |
 | Wrapper, debugger, profiler, callback, module injection, proxy, token lookup, refresh, replay, retry, redirect, debug trace, or hidden call | Stop; no accepted evidence |
@@ -2292,7 +2287,7 @@ observation. It does not establish accepted provider evidence.
 ~~~text
 CAPTURE STATUS: UNEXECUTED
 DECISION VERSION: 2; UNAPPROVED
-PROGRAM SOURCE: EMBEDDED; 1480 LINES; SHA-256 4e3580502400755dda1be1e2a886526c5ffea54f912e568a2b5dfe9bb563c62f
+PROGRAM SOURCE: EMBEDDED; 1470 LINES; SHA-256 b566f109c15278b54c964b92855b97e9a6f1f079485845fe057abeb13b632707
 FRESH PROCESS: NOT STARTED
 PUBLIC MANIFEST: NOT SUPPLIED
 PUBLIC SERVICE ACCOUNTS: NOT SUPPLIED
@@ -2396,9 +2391,9 @@ Reviewers must independently:
 
 - confirm this RFC is the only changed path and the trust boundary stayed
   acquisition/publication only;
-- extract the first Python block exactly and reproduce 1480 LF-terminated
+- extract the first Python block exactly and reproduce 1470 LF-terminated
   lines and SHA-256
-  4e3580502400755dda1be1e2a886526c5ffea54f912e568a2b5dfe9bb563c62f;
+  b566f109c15278b54c964b92855b97e9a6f1f079485845fe057abeb13b632707;
 - compile it with exact CPython 3.12.13;
 - run repository-pinned Ruff 0.15.5 check and format check;
 - run an isolated fake-transport harness under an empty LC_ALL=C environment,
@@ -2415,16 +2410,15 @@ Reviewers must independently:
   semantic principal field; nested
   auditConfigs[].auditLogConfigs[].exemptedMembers values rejecting opaque,
   user, group, domain, allUsers, deleted service-account, generic principal://,
-  every principalSet://, and unapproved service-account identities, plus one
-  exact allowlisted serviceAccount member acceptance; unapproved service
-  accounts in values and object keys; generic workforce, workload, GKE
-  workload, and agent principal://
-  forms; every principalSet:// form; principal:// and principalSet:// fragments
-  embedded in arbitrary nonsemantic string values and object keys, plus exact
-  allowlisted service-account principal URI acceptance; bare workforce/workload
-  pool and project principal-set targets at the PAB target path; principal.type
-  and principal.subject PAB conditions; allowed project resource spellings
-  outside principal fields; closed PAB list omission/empty equivalence; every
+  every principalSet://, and unapproved service-account identities; each closed
+  reserved IAM identity marker embedded in an arbitrary nested nonsemantic
+  string value, object key, and semantic principal field; all three exact
+  allowlisted service-account forms and one harmless nonidentity control;
+  generic workforce, workload, GKE workload, and agent principal:// forms;
+  every principalSet:// form; bare workforce/workload pool and project
+  principal-set targets at the PAB target path; principal.type and
+  principal.subject PAB conditions; allowed project resource spellings outside
+  principal fields; closed PAB list omission/empty equivalence; every
   nonempty, allowed, denied, unknown, unspecified, or malformed PAB posture; and
   complete and bare folder/organization scope spellings in policy names,
   arbitrary nonsemantic string values including etag, and object keys;
