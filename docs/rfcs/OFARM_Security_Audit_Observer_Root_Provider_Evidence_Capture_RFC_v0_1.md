@@ -1,6 +1,6 @@
 # OFARM Security-Audit Observer-Root Provider-Evidence Capture — Phase A Contract v0.1
 
-**Status:** Phase A Draft; decision version 2 unapproved; no Phase B evidence
+**Status:** Phase A Draft; decision version 3 unapproved; no Phase B evidence
 call, evidence publication, or Phase B authority
 
 **Contract identity:**
@@ -8,8 +8,8 @@ ofarm2.security-audit-observer-root-provider-evidence-capture.v0.1
 
 **Decision identity:**
 ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-PROVIDER-EVIDENCE-CAPTURE-001,
-proposed version 2; version 1 is superseded after its external fixture
-qualification returned two terminal HTTP 403 responses
+proposed version 3; versions 1 and 2 are superseded after their external
+fixture qualifications returned terminal HTTP 403 responses
 
 **Issue relationship:** issue #192 remains open; this is a separate
 provider-evidence prerequisite for the observer-root attachment-binding
@@ -58,15 +58,17 @@ This decision defines one bounded acquisition:
    pre-approved response object in a canonical public manifest;
 7. bind each returned access tuple to its exact request, inventory every
    relevant resource/policy pair, and publish the unchanged body bytes;
-8. send the exact public quota-project header on both requests and reject any
-   expected response containing a human, group, domain, public principal, or
-   folder/organization scope spelling in any key or value;
+8. send the exact public quota-project header on both requests, bind one exact
+   dedicated ancestor-clean fixture organization, and reject any expected
+   response containing a human, group, domain, public principal, folder, other
+   organization, or unapproved organization-scope spelling in any key or value;
 9. render only this RFC, then leave hosted checks and both exact-head reviews
    as external GitHub records.
 
-Version 2 can establish project evidence only. It cannot establish folder or
-organization behavior. A successful capture transfers evidence, not
-implementation or deployment authority, to PR #322.
+Version 3 can establish project evidence only. Its exact fixture-organization
+visibility is a safety precondition, not organization-behavior evidence. A
+successful capture transfers evidence, not implementation or deployment
+authority, to PR #322.
 
 ## 2. Learning value
 
@@ -151,8 +153,8 @@ Subject to later exact approval, this decision trusts only:
 - the task user to approve one complete live card and declare every manifest
   value suitable for public repository publication;
 - the separate credential authority to materialize one bearer before launch;
-- the exact 1470-line source in section 7.2 at SHA-256
-  b566f109c15278b54c964b92855b97e9a6f1f079485845fe057abeb13b632707;
+- the exact 1590-line source in section 7.2 at SHA-256
+  5937906c78b2e8470104ceffc830b78a256f9e3664807a132b3e5e5b19af635b;
 - the exact Darwin host system, kernel release, and machine, CPython 3.12.13
   executable path and digest, runtime build classification, and separately
   linked Python runtime-library path and digest when one exists, all fixed in
@@ -197,7 +199,7 @@ Before any provider call, one canonical compact UTF-8 JSON manifest must be
 approved and published in the complete live card. It has exactly these
 members, with no others:
 
-- contractId, decisionId, decisionVersion exactly 2, launchProtocolId, and
+- contractId, decisionId, decisionVersion exactly 3, launchProtocolId, and
   manifestSchema at their exact constants from section 7.2;
 - maxPublishableBodyBytes exactly 131072; the same fixed value also bounds
   each canonical request body;
@@ -211,6 +213,8 @@ members, with no others:
 - rfcPath and rfcPreCaptureSha256;
 - quotaProjectId, the controlled public project ID sent in the exact
   x-goog-user-project header;
+- fixtureOrganizationId, the positive-decimal public ID of the dedicated
+  ancestor-clean non-production organization containing both fixture projects;
 - publicServiceAccountEmails, a nonempty sorted unique list of the only
   controlled service-account email values that may occur anywhere in either
   complete response;
@@ -272,32 +276,42 @@ string key or value. The closed marker set is `//iam.googleapis.com/`,
 `allAuthenticatedUsers`, `allUsers`, `deleted:`, `domain:`, `group:`,
 `principal://`, `principalSet://`, `serviceAccount:`, and `user:`.
 Bare IAM pool targets, principal.type or principal.subject conditions, folder,
-organization, human email, opaque semantic principal, and unapproved service
-accounts also refuse. This covers Google's current
+human email, opaque semantic principal, and unapproved service accounts also
+refuse. This covers Google's current
 [principal identifier vocabulary](https://docs.cloud.google.com/iam/docs/principal-identifiers)
-without treating arbitrary project resource strings as identities. Every
-string key and value rejects complete and bare folder/organization scope
-spellings, including `folders/` and `organizations/` fragments. The two request
-principals must also be members of the public-service-account list. Canonical
-equality then prevents the live response from adding any identity or
-ancestor-scope value that was not validated before bearer input.
+without treating resource strings as identities. Every folder spelling
+refuses. The only admitted organization-scope string values are the exact
+`//cloudresourcemanager.googleapis.com/organizations/<fixtureOrganizationId>`
+and `organizations/<fixtureOrganizationId>` values; either spelling as an
+object key, any embedded or different organization spelling, and every
+organization-attached deny-policy name refuse. The exact full organization
+resource must occur exactly once inside each expected
+allowPolicyExplanation. Its allow state and relevance must be determinate, its
+nonempty policy bindings visible, and its binding-explanation cardinality
+exact. The two request principals must also be members of the public-service-
+account list. Canonical equality then prevents the live response from adding
+any identity or ancestor-scope value that was not validated before bearer
+input.
 
 The complete live card must also declare that all projects, resources,
 principals, policy IDs, members, conditions, policy bodies, and response
 objects are controlled non-production data approved for public GitHub
-publication; that both fixtures are clean at every relevant ancestor; and that
-the reader has complete visibility of every relevant deny policy. It must also
-declare that quotaProjectId names the controlled D1 fixture project; the reader
-has Service Usage Consumer there; each fixture project IAM allow policy has no
-human, group, domain, deleted, or public member; and every permitted service
-account is controlled non-production data. This RFC does not discover,
-provision, or mutate those facts.
+publication; that fixtureOrganizationId names one dedicated non-production
+organization; that both fixture projects are its direct children with no
+folder ancestor; and that the reader has complete visibility of every relevant
+allow and deny policy. The organization and both project IAM allow policies
+must contain only service accounts admitted by publicServiceAccountEmails,
+with no human, group, domain, deleted, public, principal-set, or unrelated
+member. The reader must have Security Reviewer and Deny Reviewer on exactly
+that fixture organization and Service Usage Consumer on quotaProjectId. Every
+permitted service account must be controlled non-production data. This RFC
+does not discover, provision, or mutate those facts.
 
 The manifest contains no token, authorization header, credential path,
 credential subject, private key, client secret, cookie, or materialization
 mechanism.
 
-### 5.6 Failed version-1 qualification and version-2 visibility precondition
+### 5.6 Failed qualification history and version-3 ancestor precondition
 
 On 2026-08-21 the task user separately authorized exactly two read-only
 fixture-qualification calls outside decision version 1, D1 then N1, solely to
@@ -314,41 +328,54 @@ removed.
 
 Google's current
 [Policy Troubleshooter instructions](https://docs.cloud.google.com/policy-intelligence/docs/troubleshoot-access)
-require a quota project on REST requests and describe Security Reviewer,
-Deny Reviewer, and Service Usage Consumer visibility. The version-1 source
+require a quota project on REST requests and Security Reviewer and Deny
+Reviewer on the organization that contains the resource. The version-1 source
 omitted x-goog-user-project, and its dedicated reader lacked Security Reviewer.
 Because both calls used that same source and identity, the terminal response
-does not isolate one defect as the sole cause.
+did not isolate one defect as the sole cause.
 
-Version 2 closes the request defect by sending the exact manifest
-quotaProjectId on both calls. Its public-safety design permits Security Reviewer
-only on the two fixture projects, Deny Reviewer only at the containing
-organization for complete deny-policy visibility, and Service Usage Consumer
-only on quotaProjectId. It forbids Security Reviewer on a folder or
-organization and forbids Browser, Organization Administrator, PAB viewer or
-administrator, and every other role that would reveal unrelated ancestor IAM
-members. The two fixture project policies must contain only the controlled
-service accounts admitted by publicServiceAccountEmails. Human administrative
-bindings must remain outside those project policies; a controlled fixture-admin
-service account may appear only when it is in publicServiceAccountEmails.
+Version 2 added the exact quota-project header but intentionally granted
+Security Reviewer only on the two fixture projects. On 2026-08-22 two separate
+exactly authorized version-2 replacement runs each sent D1 once from RFC head
+fc264956f7c55ec0b7a7343183b00db7e8a32d7e. Each used the same 398-byte request
+at SHA-256
+9ea63b198d772a7a72e68bb1547e0523c0842420411d6717bf3ef7ccbeff3564
+and received HTTP 403 with the same 126-byte body at SHA-256
+40f3d33677ad0f26654065ef873c25baab52a98dd9a074af065d901e3e942baa.
+Each run stopped before N1. The second followed a separate fixture-IAM
+prerequisite that verified the enabled API, project Security Reviewer, project
+Service Usage Consumer, organization Deny Reviewer, and successful controlled
+reader credential issuance. No expected object, evidence, or publication was
+produced, and all private response and credential material was removed.
 
-Google documents organization-level Security Reviewer for full allow-policy
-troubleshooting. This decision does not need or claim complete allow- or PAB-
-policy visibility. A separately authorized replacement qualification must
-therefore prove that the narrower reader obtains successful determinate deny
-responses with the exact version-2 header and request shape and the exact
-no-applicable-PAB shape above. If either call is not HTTP 200, if deny
-visibility is incomplete, if PAB state is unknown or any PAB binding is
-visible, or if either complete response fails the identity/scope allowlist,
-version 2 remains blocked. Organization-wide Security Reviewer is not an
-allowed workaround.
+The repeated exact response bytes equal Google's generic
+`PERMISSION_DENIED` object. The remaining mismatch is structural: Google's
+documented Security Reviewer scope is the containing organization, while
+version 2 forbids that scope. Granting it in the existing shared organization
+would make unrelated ancestor IAM identities visible and would contradict the
+closed publication allowlist. Version 2 is therefore superseded rather than
+weakened with a shared-organization exception.
 
-Any replacement qualification remains outside Phase B and needs a new exact
-task-user authorization for exactly D1 then N1, without retry, evidence use, or
-publication. It must use the same fixtures, reader, quota project, endpoint,
-headers, and request bodies intended for the live manifest. Its private
-responses may be used only to construct the complete public expected objects
-and must then be removed. This RFC and its publication authorize no such call.
+Version 3 requires one separately provisioned dedicated ancestor-clean
+non-production organization. Both fixture projects must be direct children
+with no folder ancestor. The organization and both project IAM allow policies
+may contain only controlled service accounts admitted by
+publicServiceAccountEmails. The reader has Security Reviewer and Deny Reviewer
+on exactly that organization and Service Usage Consumer on quotaProjectId.
+fixtureOrganizationId binds the exact ancestor into the manifest, response
+safety gate, record, and live card. Both expected allowPolicyExplanation
+objects must expose exactly that organization resource, while every folder,
+other organization, unapproved organization spelling, and unapproved identity
+refuses before bearer input.
+
+Any version-3 replacement qualification remains outside Phase B and needs a
+new exact task-user authorization for exactly D1 then N1, without retry,
+evidence use, or publication. It must use the future dedicated fixtures,
+reader, quota project, endpoint, headers, and request bodies intended for the
+live manifest. Its private responses may be used only to construct the
+complete public expected objects and must then be removed. This RFC and its
+publication authorize no such call, fixture provisioning, organization
+creation, IAM change, or credential act.
 
 ### 5.7 Completed unauthenticated Phase A schema check
 
@@ -378,13 +405,13 @@ controlled response.
 
 | Decision | Sole authority | Forbidden substitute |
 | --- | --- | --- |
-| Replacement fixture qualification | New exact task-user authorization for one private D1 then N1 pair using the version-2 reader, quota project, headers, and bodies | This RFC, the failed version-1 calls, generic go, or Phase B approval |
+| Replacement fixture qualification | New exact task-user authorization for one private D1 then N1 pair using the version-3 dedicated-organization reader, quota project, headers, and bodies | This RFC, any failed version-1/version-2 call, generic go, or Phase B approval |
 | Begin capture | Exact later task-user approval after one complete live card | This Draft, generic go, review, credential availability, or PR #322 approval |
-| Public inputs | Exact complete canonical version-2 manifest, exact source, and literal hashes in the approved card | Discovery, defaults, unsafe qualification output, response-selected values, or caller improvisation |
+| Public inputs | Exact complete canonical version-3 manifest, exact source, and literal hashes in the approved card | Discovery, defaults, unsafe qualification output, response-selected values, or caller improvisation |
 | Authentication | One bearer already materialized by separate authority, read hidden from /dev/tty after public input removal | ADC, metadata, STS, impersonation, file, environment, refresh, replay, or command |
 | Process identity | Exact Darwin host/release/machine, pinned executable and separate runtime-library identities, build kind, fresh minimal env, -I -S -B, source path/digest, and launch vector | Wrapper, inherited process, preloaded module, alternate interpreter, plugin, or adapter |
 | Network effects | Exact source; fixed D1 then N1 direct HTTPS requests; exact public x-goog-user-project value; zero auth-side calls | Missing or different quota project, proxy, debug trace, redirect, retry, discovery, replay, or hidden call |
-| Publication safety | Public-service-account and project-only scope validation followed by canonical equality to each complete expected response object | Human/group/domain/ancestor data, human spot check, mutable inspector, redaction, excerpt, or permissive schema |
+| Publication safety | Closed public-service-account validation plus one exact dedicated fixture-organization scope followed by canonical equality to each complete expected response object | Shared-organization, unrelated-member, human/group/domain, folder/other-ancestor data, human spot check, mutable inspector, redaction, excerpt, or permissive schema |
 | Rendering | Exact renderer in the same source, one marker-delimited RFC replacement, immutable JSON bytes, and atomic replace | External formatter, mutable result callback, second file, log, or manual copy |
 | Reviews | Two external GitHub review objects bound to the immutable evidence commit | Review IDs embedded into that commit, self-attestation, or a later attestation commit |
 | Consumer authority | PR #322's separately governed decision and approval | This capture or its reviews |
@@ -415,10 +442,10 @@ Phase B may execute only the source below. The source-byte boundary is the
 UTF-8 LF sequence beginning with the first f in from __future__ and ending
 with the LF after the last source line. The Markdown fences are excluded.
 
-It is exactly 1470 lines with SHA-256:
+It is exactly 1590 lines with SHA-256:
 
 ~~~text
-b566f109c15278b54c964b92855b97e9a6f1f079485845fe057abeb13b632707
+5937906c78b2e8470104ceffc830b78a256f9e3664807a132b3e5e5b19af635b
 ~~~
 
 ~~~python
@@ -437,14 +464,14 @@ import termios
 from datetime import datetime, timezone
 from typing import NoReturn
 
-PROGRAM_ID = "ofarm2.issue192.provider-evidence-capture.v2"
-RECORD_SCHEMA = "ofarm2.issue192.provider-evidence-record.v2"
-RENDERER_ID = "ofarm2.issue192.provider-evidence-rfc-renderer.v2"
-MANIFEST_SCHEMA = "ofarm2.issue192.provider-evidence-publication-manifest.v2"
-LAUNCH_PROTOCOL_ID = "ofarm2.issue192.provider-evidence-fresh-process.v2"
+PROGRAM_ID = "ofarm2.issue192.provider-evidence-capture.v3"
+RECORD_SCHEMA = "ofarm2.issue192.provider-evidence-record.v3"
+RENDERER_ID = "ofarm2.issue192.provider-evidence-rfc-renderer.v3"
+MANIFEST_SCHEMA = "ofarm2.issue192.provider-evidence-publication-manifest.v3"
+LAUNCH_PROTOCOL_ID = "ofarm2.issue192.provider-evidence-fresh-process.v3"
 CONTRACT_ID = "ofarm2.security-audit-observer-root-provider-evidence-capture.v0.1"
 DECISION_ID = "ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-PROVIDER-EVIDENCE-CAPTURE-001"
-DECISION_VERSION = 2
+DECISION_VERSION = 3
 RFC_RELATIVE_PATH = (
     "docs/rfcs/OFARM_Security_Audit_Observer_Root_Provider_Evidence_Capture_RFC_v0_1.md"
 )
@@ -468,6 +495,7 @@ SHA256 = re.compile(r"[0-9a-f]{64}")
 MODE = re.compile(r"[0-7]{4}")
 CF_USER_TEXT_ENCODING = re.compile(r"0x[0-9A-F]+:0x0:0x0")
 PROJECT_ID = re.compile(r"[a-z][a-z0-9-]{4,28}[a-z0-9]")
+ORGANIZATION_ID = re.compile(r"[1-9][0-9]*")
 SERVICE_ACCOUNT_EMAIL = re.compile(
     r"[a-z][a-z0-9-]{0,62}@[a-z][a-z0-9-]{4,28}[a-z0-9]"
     r"\.iam\.gserviceaccount\.com"
@@ -498,12 +526,14 @@ FORBIDDEN_PUBLIC_PRINCIPAL_CONDITION_FRAGMENTS = (
     "principal.subject",
     "principal.type",
 )
-FORBIDDEN_PUBLIC_SCOPE_FRAGMENTS = (
+FORBIDDEN_PUBLIC_FOLDER_SCOPE_FRAGMENTS = (
     "//cloudresourcemanager.googleapis.com/folders/",
-    "//cloudresourcemanager.googleapis.com/organizations/",
     "policies/cloudresourcemanager.googleapis.com%2Ffolders%2F",
-    "policies/cloudresourcemanager.googleapis.com%2Forganizations%2F",
     "folders/",
+)
+CONTROLLED_PUBLIC_ORGANIZATION_SCOPE_FRAGMENTS = (
+    "//cloudresourcemanager.googleapis.com/organizations/",
+    "policies/cloudresourcemanager.googleapis.com%2Forganizations%2F",
     "organizations/",
 )
 PUBLIC_PRINCIPAL_FIELDS = {
@@ -521,6 +551,7 @@ MANIFEST_MEMBERS = (
     "d1Request",
     "decisionId",
     "decisionVersion",
+    "fixtureOrganizationId",
     "hostMachine",
     "hostRelease",
     "hostSystem",
@@ -748,7 +779,11 @@ def _validate_principal_field(
         _validate_public_identity(identity, permitted_identities, required=True)
 
 
-def _validate_public_response(value: object, service_accounts: list[str]) -> None:
+def _validate_public_response(
+    value: object,
+    service_accounts: list[str],
+    fixture_organization_id: str,
+) -> None:
     permitted_identities = set(service_accounts)
     permitted_identities.update(
         "serviceAccount:" + account for account in service_accounts
@@ -757,22 +792,87 @@ def _validate_public_response(value: object, service_accounts: list[str]) -> Non
         "principal://iam.googleapis.com/projects/-/serviceAccounts/" + account
         for account in service_accounts
     )
-    pending = [value]
+    permitted_organization_scopes = {
+        "//cloudresourcemanager.googleapis.com/organizations/"
+        + fixture_organization_id,
+        "organizations/" + fixture_organization_id,
+    }
+    pending = [(value, False)]
     while pending:
-        item = pending.pop()
+        item, is_key = pending.pop()
         if type(item) is dict:
             for key, nested in item.items():
                 if key == "principalSet":
                     _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
                 if key in PUBLIC_PRINCIPAL_FIELDS:
                     _validate_principal_field(key, nested, permitted_identities)
-                pending.extend((key, nested))
+                pending.extend(((key, True), (nested, False)))
         elif type(item) is list:
-            pending.extend(item)
+            pending.extend((nested, False) for nested in item)
         elif type(item) is str:
-            if any(fragment in item for fragment in FORBIDDEN_PUBLIC_SCOPE_FRAGMENTS):
+            if any(
+                fragment in item for fragment in FORBIDDEN_PUBLIC_FOLDER_SCOPE_FRAGMENTS
+            ):
+                _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
+            if any(
+                fragment in item
+                for fragment in CONTROLLED_PUBLIC_ORGANIZATION_SCOPE_FRAGMENTS
+            ) and (is_key or item not in permitted_organization_scopes):
                 _stop("UNSAFE_PUBLIC_RESPONSE_IDENTITY_OR_SCOPE")
             _validate_public_identity(item, permitted_identities)
+
+
+def _validate_fixture_organization_visibility(
+    value: object,
+    fixture_organization_id: str,
+) -> None:
+    expected = (
+        "//cloudresourcemanager.googleapis.com/organizations/" + fixture_organization_id
+    )
+    document = _members(
+        value,
+        ("allowAccessState", "explainedPolicies", "relevance"),
+    )
+    policies = document["explainedPolicies"]
+    if (
+        document["relevance"] not in RELEVANCE
+        or type(policies) is not list
+        or not policies
+    ):
+        _stop("FIXTURE_ORGANIZATION_VISIBILITY_REQUIRED")
+    matches = []
+    for value_item in policies:
+        item = _members(
+            value_item,
+            (
+                "allowAccessState",
+                "bindingExplanations",
+                "fullResourceName",
+                "policy",
+                "relevance",
+            ),
+        )
+        if item["fullResourceName"] == expected:
+            matches.append(item)
+    if len(matches) != 1:
+        _stop("FIXTURE_ORGANIZATION_VISIBILITY_REQUIRED")
+    match = matches[0]
+    policy = match["policy"]
+    bindings = policy.get("bindings") if type(policy) is dict else None
+    explanations = match["bindingExplanations"]
+    if (
+        match["allowAccessState"]
+        not in {
+            "ALLOW_ACCESS_STATE_GRANTED",
+            "ALLOW_ACCESS_STATE_NOT_GRANTED",
+        }
+        or match["relevance"] not in RELEVANCE
+        or type(bindings) is not list
+        or not bindings
+        or type(explanations) is not list
+        or len(explanations) != len(bindings)
+    ):
+        _stop("FIXTURE_ORGANIZATION_VISIBILITY_REQUIRED")
 
 
 def _validate_pab_explanation(value: object) -> None:
@@ -1063,6 +1163,7 @@ def _validate_response(
     parsed: object,
     request_access: dict[str, object],
     expected_pairs: list[list[str]],
+    fixture_organization_id: str,
 ) -> tuple[dict[str, object], dict[str, object]]:
     response = _members(
         parsed,
@@ -1075,6 +1176,10 @@ def _validate_response(
         ),
     )
     outputs = _bind_access_tuple(response["accessTuple"], request_access)
+    _validate_fixture_organization_visibility(
+        response["allowPolicyExplanation"],
+        fixture_organization_id,
+    )
     _validate_pab_explanation(response["pabPolicyExplanation"])
     inventory = _deny_inventory(
         label,
@@ -1088,6 +1193,7 @@ def _post(
     label: str,
     bearer_token: str,
     quota_project_id: str,
+    fixture_organization_id: str,
     request_body: bytes,
     request_access: dict[str, object],
     expected_pairs: list[list[str]],
@@ -1166,6 +1272,7 @@ def _post(
             parsed,
             request_access,
             expected_pairs,
+            fixture_organization_id,
         )
         if _canonical(parsed) != _canonical(expected_response):
             _stop(label + "_UNAPPROVED_RESPONSE")
@@ -1241,6 +1348,43 @@ def _validate_runtime_manifest(document: dict[str, object]) -> None:
         _stop("WRONG_PYTHON_RUNTIME_LINKAGE")
 
 
+def _validate_expected_responses(
+    document: dict[str, object],
+    public_service_accounts: list[str],
+    fixture_organization_id: str,
+    d1_access: dict[str, object],
+    n1_access: dict[str, object],
+    expected_pairs: list[list[str]],
+) -> None:
+    d1_response = document["d1ExpectedResponse"]
+    n1_response = document["n1ExpectedResponse"]
+    for response in (d1_response, n1_response):
+        _validate_public_response(
+            response,
+            public_service_accounts,
+            fixture_organization_id,
+        )
+    _validate_response(
+        "D1",
+        d1_response,
+        d1_access,
+        expected_pairs,
+        fixture_organization_id,
+    )
+    _validate_response(
+        "N1",
+        n1_response,
+        n1_access,
+        [],
+        fixture_organization_id,
+    )
+    if (
+        len(_canonical(d1_response)) > MAX_BODY_BYTES
+        or len(_canonical(n1_response)) > MAX_BODY_BYTES
+    ):
+        _stop("EXPECTED_RESPONSE_OVER_PUBLICATION_BOUND")
+
+
 def _capture_plan(
     manifest: dict[str, object],
 ) -> tuple[
@@ -1271,6 +1415,12 @@ def _capture_plan(
     quota_project_id = _text(document["quotaProjectId"], "INVALID_QUOTA_PROJECT_ID")
     if PROJECT_ID.fullmatch(quota_project_id) is None:
         _stop("INVALID_QUOTA_PROJECT_ID")
+    fixture_organization_id = _text(
+        document["fixtureOrganizationId"],
+        "INVALID_FIXTURE_ORGANIZATION_ID",
+    )
+    if ORGANIZATION_ID.fullmatch(fixture_organization_id) is None:
+        _stop("INVALID_FIXTURE_ORGANIZATION_ID")
     public_service_accounts = _public_service_accounts(
         document["publicServiceAccountEmails"]
     )
@@ -1286,20 +1436,14 @@ def _capture_plan(
         _stop("IDENTICAL_D1_N1_REQUESTS")
     if len(d1_body) > MAX_BODY_BYTES or len(n1_body) > MAX_BODY_BYTES:
         _stop("REQUEST_OVER_BOUND")
-    _validate_public_response(document["d1ExpectedResponse"], public_service_accounts)
-    _validate_public_response(document["n1ExpectedResponse"], public_service_accounts)
-    _validate_response(
-        "D1",
-        document["d1ExpectedResponse"],
+    _validate_expected_responses(
+        document,
+        public_service_accounts,
+        fixture_organization_id,
         d1_access,
+        n1_access,
         expected_pairs,
     )
-    _validate_response("N1", document["n1ExpectedResponse"], n1_access, [])
-    if (
-        len(_canonical(document["d1ExpectedResponse"])) > MAX_BODY_BYTES
-        or len(_canonical(document["n1ExpectedResponse"])) > MAX_BODY_BYTES
-    ):
-        _stop("EXPECTED_RESPONSE_OVER_PUBLICATION_BOUND")
     return document, d1_body, d1_access, n1_body, n1_access, expected_pairs
 
 
@@ -1422,6 +1566,7 @@ def run_capture(
                 "D1",
                 bearer_token,
                 document["quotaProjectId"],
+                document["fixtureOrganizationId"],
                 d1_body,
                 d1_access,
                 expected_pairs,
@@ -1432,6 +1577,7 @@ def run_capture(
                 "N1",
                 bearer_token,
                 document["quotaProjectId"],
+                document["fixtureOrganizationId"],
                 n1_body,
                 n1_access,
                 [],
@@ -1459,6 +1605,7 @@ def run_capture(
             "reviewObjectsStored": "EXTERNAL_GITHUB_RECORDS",
             "status": "PENDING_EXTERNAL_EXACT_HEAD_REVIEWS",
         },
+        "fixtureOrganizationId": document["fixtureOrganizationId"],
         "launchProtocolId": LAUNCH_PROTOCOL_ID,
         "policyTroubleshooterCallLedger": ledger,
         "programId": PROGRAM_ID,
@@ -1897,14 +2044,15 @@ if __name__ == "__main__":
 This program is the launcher verifier, runtime verifier, manifest verifier,
 response safety gate, evidence recorder, failure recorder, and RFC renderer.
 There is no executable wrapper, imported project module, inspector callback,
-or separate renderer. Version 2 also owns quota-project header construction
-and complete expected-response identity/scope validation.
+or separate renderer. Version 3 also owns quota-project header construction,
+the exact fixture-organization binding, and complete expected-response
+identity/scope validation.
 
 The embedded source is not a repository Python path, so hosted structural and
 unit-test gates do not execute it. Reviewers must extract the exact bytes and
 reproduce the section 12 checks. At the recorded line layout, _deny_inventory
-occupies lines 515 through 634 inclusive, 120 lines, and _post occupies lines
-663 through 773 inclusive, 111 lines. They are the only functions over the
+occupies lines 588 through 707 inclusive, 120 lines, and _post occupies lines
+741 through 853 inclusive, 113 lines. They are the only functions over the
 repository's 80-line production-code structural threshold. This explicit
 review exception applies only to the inert embedded artifact; it grants no
 production-code exception.
@@ -1941,7 +2089,8 @@ The script itself revalidates:
 - source and manifest ownership, regular-file type, single link, modes,
   bounded sizes, exact hashes, same private directory, directory mode, and
   resolution outside the repository worktree;
-- canonical manifest bytes and every expected response semantic;
+- canonical manifest bytes, the exact dedicated fixture organization, and
+  every expected response semantic;
 - the real pinned executable path and complete executable SHA-256, the exact
   build classification, and the complete path and SHA-256 of a framework or
   shared Python runtime library when present;
@@ -2035,14 +2184,18 @@ publicServiceAccountEmails manifest member. It rejects every principalSet
 field, every other principal:// or principalSet:// spelling, bare IAM pool
 targets, principal-bearing PAB conditions, human/group/domain/deleted/public
 values, opaque semantic principals, ancestor scope, and unapproved service
-accounts.
-Outside those exact admitted identities, every string key and value is also
+accounts. Outside those exact admitted identities, every string key and value
+is also
 scanned for every embedded reserved IAM identity marker:
 `//iam.googleapis.com/`, `allAuthenticatedUsers`, `allUsers`, `deleted:`,
 `domain:`, `group:`, `principal://`, `principalSet://`,
-`serviceAccount:`, and `user:`. Every key and value is also scanned for
-complete or bare folder and organization scope spellings, including `folders/`
-and `organizations/`.
+`serviceAccount:`, and `user:`. Every folder scope spelling refuses. The
+only admitted organization-scope string values are the exact full and bare
+resource names derived from fixtureOrganizationId; either value as an object
+key, an embedded/different organization spelling, or an organization-attached
+deny-policy name refuses. The exact full organization resource must occur once
+inside each expected allowPolicyExplanation with determinate state/relevance,
+visible nonempty policy bindings, and exact binding-explanation cardinality.
 Both request principals must be in the manifest list. This gate is structural
 and precedes the complete-object canonical-equality gate; it cannot be bypassed
 by approving an unsafe expected object.
@@ -2128,7 +2281,7 @@ UNAPPROVED
   -> PUBLIC_INPUTS_PREPARED
   -> FRESH_PROCESS_AND_IDENTITIES_VERIFIED
   -> PUBLIC_MANIFEST_AND_EXPECTED_RESPONSES_VALIDATED
-  -> PUBLIC_IDENTITIES_AND_PROJECT_ONLY_SCOPE_VALIDATED
+  -> PUBLIC_IDENTITIES_AND_DEDICATED_ORGANIZATION_SCOPE_VALIDATED
   -> PUBLIC_TEMPORARY_INPUTS_REMOVED
   -> HIDDEN_PREMATERIALIZED_BEARER_RECEIVED
   -> D1_SENT_AND_FROZEN
@@ -2161,10 +2314,10 @@ result grants authority, and N1 cannot cure a failed D1.
   pinned executable digest, exact Darwin host and runtime linkage, -I -S -B,
   the minimal permitted environment, exact source digest, no wrapper, and no
   application-module injection path.
-- OPEC-003 — The source and canonical version-2 public manifest, including
-  decisionVersion, quotaProjectId, and publicServiceAccountEmails, are
-  private-mode non-secret temporary inputs; their removal and path absence are
-  observed before the hidden bearer read.
+- OPEC-003 — The source and canonical version-3 public manifest, including
+  decisionVersion, quotaProjectId, fixtureOrganizationId, and
+  publicServiceAccountEmails, are private-mode non-secret temporary inputs;
+  their removal and path absence are observed before the hidden bearer read.
 - OPEC-004 — HTTP debug output is disabled and terminal echo is disabled and
   pending input flushed before the bearer prompt; the bearer has no argument,
   environment, file, return, logging, digest, or publication path. No secure
@@ -2180,9 +2333,13 @@ result grants authority, and N1 cannot cure a failed D1.
 - OPEC-008 — N1 is determinate NOT_DENIED evidence only when
   explainedResources is explicitly present and empty.
 - OPEC-009 — Both expected responses pass the no-human, controlled-service-
-  account, project-only scope gate and the exact no-applicable-PAB gate before
-  bearer input, and each complete strict parsed response equals its complete
-  pre-approved manifest object under canonical JSON before publication.
+  account gate; admit exactly the dedicated fixture organization and no folder,
+  other organization, shared-organization member, or unapproved organization
+  spelling; expose that exact organization once in each allow explanation with
+  determinate state/relevance, visible nonempty bindings, and exact explanation
+  cardinality; and pass the exact no-applicable-PAB gate before bearer input.
+  Each complete strict parsed response equals its complete pre-approved
+  manifest object under canonical JSON before publication.
 - OPEC-010 — The deterministic renderer can replace only this RFC's one
   marker-delimited record, re-reads and matches its complete pre-capture digest
   immediately before replacement, and returns no mutable capture result.
@@ -2191,8 +2348,10 @@ result grants authority, and N1 cannot cure a failed D1.
   to that unchanged commit.
 - OPEC-012 — The run performs no provider mutation, credential act, fixture
   provisioning, production acceptance, parser change, runtime integration, or
-  authority transfer to PR #322. Organization-wide allow-policy visibility is
-  forbidden and cannot be used to clear a qualification or capture failure.
+  authority transfer to PR #322. Organization visibility is admitted only for
+  the exact dedicated ancestor-clean fixture organization; shared-organization
+  or unrelated-member visibility cannot clear a qualification or capture
+  failure.
 
 ### 9.2 Mandatory D1 derivation
 
@@ -2218,8 +2377,9 @@ equivalence is forbidden.
 | Condition | Required result |
 | --- | --- |
 | Missing card, approval, fixture, public manifest, pinned runtime, source identity, or separate bearer authority | Zero calls; stop |
-| Missing, malformed, or different decisionVersion, quotaProjectId, publicServiceAccountEmails, or quota-project header | Zero calls; stop |
-| Expected response contains a human, group, domain, deleted, public, opaque or non-service-account semantic principal, any unapproved service account, any reserved IAM identity marker anywhere in any key or value other than one of the three exact allowlisted service-account forms, any principalSet field, any unapproved audit-log exemptedMembers identity, any principal-bearing PAB condition, or any complete or bare folder/organization scope spelling in any key or value | Zero calls; stop before bearer input |
+| Missing, malformed, or different decisionVersion, quotaProjectId, fixtureOrganizationId, publicServiceAccountEmails, or quota-project header | Zero calls; stop |
+| Expected response contains a human, group, domain, deleted, public, opaque or non-service-account semantic principal, any unapproved service account, any reserved IAM identity marker anywhere in any key or value other than one of the three exact allowlisted service-account forms, any principalSet field, any unapproved audit-log exemptedMembers identity, any principal-bearing PAB condition, any folder scope, any shared/other organization scope, an organization-attached deny-policy name, an organization scope in an object key, or an embedded/unapproved organization spelling | Zero calls; stop before bearer input |
+| Either expected allowPolicyExplanation does not contain exactly one full resource name for fixtureOrganizationId with determinate state/relevance, visible nonempty policy bindings, and exact binding-explanation cardinality | Zero calls; stop before bearer input |
 | Expected or actual PAB explanation is not exactly NOT_ENFORCED with permitted relevance and an omitted or empty binding/policy list | Zero calls when expected; otherwise stop with no accepted evidence or RFC write |
 | Wrong environment, host, Python flag/path/digest/build linkage, separate runtime-library identity, source/manifest/RFC path or digest, private-input/RFC ownership/mode/link, marker count, or working directory | Zero calls; stop |
 | Wrapper, debugger, profiler, callback, module injection, proxy, token lookup, refresh, replay, retry, redirect, debug trace, or hidden call | Stop; no accepted evidence |
@@ -2246,9 +2406,10 @@ A successful record contains:
 - record, program, launch-protocol, renderer, manifest, source, executable,
   runtime-build, optional separate runtime-library, and pre-capture RFC
   identities;
-- decision ID/version, the complete public service-account allowlist, and the
-  exact public quota project bound to the top-level record, both request
-  records, and both provider-call ledger entries;
+- decision ID/version, the complete public service-account allowlist, the exact
+  dedicated fixture organization bound to the top-level record and both
+  expected allow explanations, and the exact public quota project bound to the
+  top-level record, both request records, and both provider-call ledger entries;
 - the observed executable and optional runtime-library byte lengths, digests,
   owners, groups, modes, and link counts;
 - actual runtime environment keys and count, Python implementation, version,
@@ -2286,12 +2447,13 @@ observation. It does not establish accepted provider evidence.
 
 ~~~text
 CAPTURE STATUS: UNEXECUTED
-DECISION VERSION: 2; UNAPPROVED
-PROGRAM SOURCE: EMBEDDED; 1470 LINES; SHA-256 b566f109c15278b54c964b92855b97e9a6f1f079485845fe057abeb13b632707
+DECISION VERSION: 3; UNAPPROVED
+PROGRAM SOURCE: EMBEDDED; 1590 LINES; SHA-256 5937906c78b2e8470104ceffc830b78a256f9e3664807a132b3e5e5b19af635b
 FRESH PROCESS: NOT STARTED
 PUBLIC MANIFEST: NOT SUPPLIED
 PUBLIC SERVICE ACCOUNTS: NOT SUPPLIED
 QUOTA PROJECT: NOT SUPPLIED
+FIXTURE ORGANIZATION: NOT SUPPLIED
 TEMPORARY INPUT REMOVAL: NOT PERFORMED
 BEARER INPUT: NOT REQUESTED
 AUTH SIDE CALLS: NOT PERFORMED
@@ -2318,12 +2480,12 @@ for the two complete pre-approved response objects:
 - N1 explicitly carried an empty explainedResources array; and
 - the exact frozen response bytes were published.
 
-It also establishes that both expected response objects passed the version-2
-path-aware fixture-only identity, project-only scope, and closed PAB gates
-before bearer input and that both requests used the exact public
-quotaProjectId. It does not establish that allow-policy visibility was
-complete or that PAB behavior beyond the exact no-applicable state is
-supported.
+It also establishes that both expected response objects passed the version-3
+path-aware fixture-only identity, exact dedicated-organization scope, and
+closed PAB gates before bearer input; exposed the exact fixture organization
+once in each allow explanation; and used the exact public quotaProjectId. It
+does not establish organization behavior, broader allow-policy semantics, or
+PAB behavior beyond the exact no-applicable state.
 
 It does not establish folder or organization behavior, broader project
 behavior, behavior under incomplete policy visibility, credential identity,
@@ -2340,10 +2502,10 @@ commit, push, PR-description mutation, review reply, thread resolution, merge,
 or Phase B. Each remote Phase A publication action requires task-user
 authorization.
 
-The two failed calls in section 5.6 occurred under a separate, exhausted
-qualification authorization outside this decision. Recording their safe
-confirmation metadata here does not convert them into evidence or authorize a
-replacement qualification.
+The failed version-1 and version-2 calls in section 5.6 occurred under
+separate, exhausted qualification authorizations outside this decision.
+Recording their safe confirmation metadata here does not convert them into
+evidence or authorize a replacement qualification.
 
 ### 11.2 Prospective Phase B
 
@@ -2376,7 +2538,8 @@ or generated artifact.
 
 Even after PR #323 merges, PR #322 remains blocked until it separately:
 
-1. imports the immutable complete evidence and its project-only limitation;
+1. imports the immutable complete project-attachment evidence and its exact
+   dedicated-fixture-organization limitation;
 2. passes its own hosted checks;
 3. receives two zero-Blocker exact-head reviews; and
 4. displays and receives approval for its own complete implementation card.
@@ -2391,9 +2554,9 @@ Reviewers must independently:
 
 - confirm this RFC is the only changed path and the trust boundary stayed
   acquisition/publication only;
-- extract the first Python block exactly and reproduce 1470 LF-terminated
+- extract the first Python block exactly and reproduce 1590 LF-terminated
   lines and SHA-256
-  b566f109c15278b54c964b92855b97e9a6f1f079485845fe057abeb13b632707;
+  5937906c78b2e8470104ceffc830b78a256f9e3664807a132b3e5e5b19af635b;
 - compile it with exact CPython 3.12.13;
 - run repository-pinned Ruff 0.15.5 check and format check;
 - run an isolated fake-transport harness under an empty LC_ALL=C environment,
@@ -2404,7 +2567,8 @@ Reviewers must independently:
   effectiveTags present/absent; unknown
   N1; omitted N1 resources; omitted D1 outer resources; omitted D1 resource
   visibility; attachment mismatch; nonempty N1; unapproved complete response;
-  missing/malformed/different quota project; missing or stale decision version;
+  missing/malformed/different quota project or fixture organization; missing
+  or stale decision version;
   unsorted, duplicate, malformed, or incomplete public service-account lists;
   human/group/domain/deleted/public identities; opaque entries in every
   semantic principal field; nested
@@ -2420,8 +2584,13 @@ Reviewers must independently:
   principal.subject PAB conditions; allowed project resource spellings outside
   principal fields; closed PAB list omission/empty equivalence; every
   nonempty, allowed, denied, unknown, unspecified, or malformed PAB posture; and
-  complete and bare folder/organization scope spellings in policy names,
-  arbitrary nonsemantic string values including etag, and object keys;
+  every complete and bare folder scope; exact full and bare fixture-
+  organization values; missing, duplicate, embedded, other, and malformed
+  fixture-organization values; organization-attached deny-policy names; exact
+  organization values used as object keys; and shared-organization members in
+  arbitrary nested policies; plus missing/empty organization policy bindings,
+  indeterminate organization allow state/relevance, and binding/explanation
+  cardinality mismatch;
   source/manifest/executable/runtime-library/RFC identity checks; root-owned or
   hard-linked exact executable acceptance; monolithic and separate-runtime
   linkage rules; observed runtime, auth-side ledger/count, and temporary-path
@@ -2468,10 +2637,13 @@ Before publication and review:
   cardinality, exact project derivations, and explicit empty N1 array;
 - compare each complete parsed response to its complete expected manifest
   object;
-- reproduce the path-aware no-human, public-service-account-only, project-only
-  scope gate over every key and value in both complete expected response
-  objects, including the scalar/list/map principal-field types and exact three
-  admitted service-account forms;
+- reproduce the path-aware no-human, public-service-account-only, exact
+  dedicated-organization scope gate over every key and value in both complete
+  expected response objects, including the scalar/list/map principal-field
+  types, exact three admitted service-account forms, one exact full
+  fixture-organization resource in each allow explanation, and refusal of
+  every folder, other organization, shared-organization member, embedded
+  organization spelling, and organization-attached deny-policy name;
 - reproduce the exact NOT_ENFORCED, omitted-or-empty-binding, permitted-
   relevance PAB shape for both responses;
 - inspect the one-file diff and prove no secret or unexpected value is
@@ -2489,9 +2661,9 @@ this RFC, that the review sequence is circular, or that this PR crosses its
 primary trust boundary.
 
 Provisioning, credential custody, wider provider support, parser design,
-runtime integration, deployment, folder/organization capture, and issue
-closure remain separate decisions unless the finding proves this capture
-cannot stay bounded without one of them.
+runtime integration, deployment, folder or organization-behavior evidence,
+and issue closure remain separate decisions unless the finding proves this
+capture cannot stay bounded without one of them.
 
 ## 13. Proposed approval boundary
 
@@ -2509,13 +2681,15 @@ displayed in this same Codex task. The card must include:
   verified monolithic-linkage result, manifest bytes/digest, working directory,
   RFC path/pre-capture digest, and launch vector;
 - the complete public manifest, including both full expected response objects;
-- the controlled non-production publication, exact quota project, permitted
-  public service accounts, project-scoped Security Reviewer, deny-only ancestor
-  visibility, complete deny-visibility declarations, and exact closed
-  no-applicable-PAB expected-response shapes;
-- the exhausted version-1 qualification result and the separate successful
-  version-2 qualification authority/reference that supplied the expected
-  objects, without private response-storage or credential details;
+- the controlled non-production publication, exact quota project, exact
+  dedicated fixture organization, direct-child fixture projects, no folders,
+  permitted public service accounts, organization-scoped Security Reviewer and
+  Deny Reviewer, Service Usage Consumer on the quota project, complete
+  allow/deny visibility declarations, absence of shared or unrelated members,
+  and exact closed no-applicable-PAB expected-response shapes;
+- the exhausted version-1 and version-2 qualification results and the separate
+  successful version-3 qualification authority/reference that supplied the
+  expected objects, without private response-storage or credential details;
 - the separate non-secret bearer-authority reference, without materialization
   details;
 - all twelve OPEC invariants, the two-call budget, renderer boundary, external
@@ -2527,7 +2701,7 @@ displayed in this same Codex task. The card must include:
 The required exact approval form is:
 
 ~~~text
-I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-PROVIDER-EVIDENCE-CAPTURE-001 version 2.
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-OBSERVER-ROOT-PROVIDER-EVIDENCE-CAPTURE-001 version 3.
 ~~~
 
 Approval is recognized only when that sentence is the exact entire later
@@ -2537,8 +2711,9 @@ message supplies it.
 That approval would authorize only the finite Phase B sequence in section
 11.2. It would not authorize bearer materialization, lookup, refresh, replay,
 fixture provisioning, provider mutation, production access, folder or
-organization capture, production support acceptance, PR #322 implementation,
-runtime integration, deployment, release, issue closure, or a security waiver.
+organization-behavior evidence, production support acceptance, PR #322
+implementation, runtime integration, deployment, release, issue closure, or a
+security waiver.
 
 ## 14. Stop rule and dependency handoff
 
@@ -2546,9 +2721,11 @@ Stop before any provider call if the complete card or exact approval is absent;
 if any live-card public value is unsafe; if source, manifest, runtime,
 executable, repository, RFC, environment, file, or marker identity differs; if
 the bearer requires any unauthorized materialization path; if either controlled
-fixture, exact quota project, public-service-account list, or deny-visibility
-declaration is absent; if any response value crosses the project-only public
-scope; or if a wrapper, proxy, debug
+fixture, exact quota project, exact dedicated fixture organization, direct-
+child/no-folder declaration, public-service-account list, complete allow/deny
+visibility declaration, or no-unrelated-member declaration is absent; if any
+response value crosses the exact dedicated-organization public scope; or if a
+wrapper, proxy, debug
 trace, retry, replay, redirect, callback, or other call path exists.
 
 After a call, enforce section 9 without retry, redaction, inference,
@@ -2562,8 +2739,9 @@ record contains anything outside the complete manifest allowlist. Stop before
 merge unless E is unchanged, hosted checks pass on E, and two independent
 external reviews of E report zero demonstrated in-scope Blockers.
 
-Only the merged immutable record and its explicit project-only limitation may
-be handed to PR #322. That handoff is evidence, not authority.
+Only the merged immutable record and its explicit dedicated-fixture-
+organization limitation may be handed to PR #322. That handoff is evidence,
+not authority.
 
 ## 15. Current disposition
 
@@ -2575,28 +2753,31 @@ be handed to PR #322. That handoff is evidence, not authority.
   reported zero demonstrated source-and-contract Blockers on that predecessor
   head. It did not reproduce live provider execution.
 - The task user later approved decision version 1, but no Phase B evidence call
-  occurred. The separately authorized qualification in section 5.6 returned
-  two terminal HTTP 403 responses and exhausted its own budget. That result
-  invalidated the predecessor request/reader assumptions without producing
-  evidence.
-- This successor contract is proposed version 2. It adds the exact public
-  quota-project header, binds decisionVersion and quotaProjectId into the
-  manifest and record, and adds a structural no-human, controlled-service-
-  account, project-only publication gate. It also requires a successful
-  separately authorized replacement qualification before a live card.
-- Version-1 approval and predecessor reviews cannot authorize or review this
-  successor source. The actual published successor head must be identified by
-  the external PR description, pass hosted checks, and receive two new
-  independent exact-head zero-Blocker reviews before a version-2 live card.
+  occurred. The separately authorized version-1 and version-2 qualifications
+  in section 5.6 returned four terminal HTTP 403 responses across their exact
+  bounded call ledgers. Those results invalidated the predecessor request and
+  reader-scope assumptions without producing evidence.
+- This successor contract is proposed version 3. It retains the exact public
+  quota-project header and adds fixtureOrganizationId, organization visibility
+  in both expected allow explanations, organization-scoped Security Reviewer
+  and Deny Reviewer on one dedicated ancestor-clean fixture organization, and
+  a structural no-human, controlled-service-account, no-shared-organization
+  publication gate. It requires separately authorized provisioning and a
+  successful separately authorized replacement qualification before a live
+  card.
+- Version-1 approval and every predecessor review cannot authorize or review
+  this successor source. The actual published successor head must be identified
+  by the external PR description, pass hosted checks, and receive two new
+  independent exact-head zero-Blocker reviews before a version-3 live card.
 - Git and GitHub, rather than a self-referential claim inside this RFC, are
   authoritative for any successor published head and its review status. The PR
   description and external review objects must identify the actual remote head
   before that head is considered reviewed.
 - Provider iam:troubleshoot calls under this decision: zero.
-- External fixture-qualification calls: exactly two failed calls recorded in
-  section 5.6; neither is evidence and neither authorizes a retry.
-- Google/provider credentials used under decision version 2: none.
+- External fixture-qualification calls: exactly four failed calls recorded in
+  section 5.6; none is evidence and none authorizes a retry.
+- Google/provider credentials used under decision version 3: none.
 - Captured responses and observed attachment kinds: none.
-- Decision version-2 approval and Phase B authority: absent.
+- Decision version-3 approval and Phase B authority: absent.
 - PR #322 authority changed: none.
 - Primary trust-boundary scope: retained.
