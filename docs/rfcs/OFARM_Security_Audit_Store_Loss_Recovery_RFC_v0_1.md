@@ -3,7 +3,7 @@
 **Status:** Phase A design published for review; Phase B implementation,
 deployment, destructive cleanup, and production operation are not authorized
 
-**Draft pull request:** pending creation
+**Draft pull request:** https://github.com/samovers/OFARM2/pull/324
 
 **Contract identity:**
 ofarm2.security-audit-store-loss-recovery.v0.1
