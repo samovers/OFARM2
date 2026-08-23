@@ -46,17 +46,19 @@ these facts into one fail-closed transition:
    version zero;
 4. the migrated target contained no operational event, quota, high-water, or
    used overflow-receipt state;
-5. the loss interval began at an externally witnessed conservative time and
+5. the effectful audit-control connection reached that same provisioned and
+   migrated database and PostgreSQL system before it read a clock or appended;
+6. the loss interval began at an externally witnessed conservative time and
    ended at the replacement database's clock while producer routes remained
    unpublished;
-6. exactly one unknown-count gap became durable; and
-7. no success result was emitted before the final state was verified.
+7. exactly one unknown-count gap became durable; and
+8. no success result was emitted before the final state was verified.
 
 The missing binding permits unsafe operator improvisation. An operator could
 append a gap to an old but currently empty store, publish a fresh store before
-the gap is durable, retry a non-idempotent maintenance append after an
-ambiguous commit, or mistake a partially recreated target for a recovered
-service.
+the gap is durable, point the effectful control route at another exact audit
+store, retry a non-idempotent maintenance append after an ambiguous commit, or
+mistake a partially recreated target for a recovered service.
 
 This decision establishes one fixed, one-shot recovery operation. It:
 
@@ -69,14 +71,17 @@ This decision establishes one fixed, one-shot recovery operation. It:
 4. invokes the existing migration runner once and requires previous version
    zero, the complete applied-version tuple, and the exact final version;
 5. proves the exact fresh-state inventory before the gap append;
-6. obtains the interval end from PostgreSQL clock_timestamp under the exact
-   audit-control login with synchronous_commit on;
-7. invokes only append_audit_gap(loss_start, database_end, 0, true), at most
+6. binds the effectful audit-control transaction to the same database, system
+   identifier, and supported PostgreSQL version proven by provisioning and
+   migration, with exact writable-primary transaction posture;
+7. obtains the interval end from PostgreSQL clock_timestamp under that bound
+   exact audit-control login with synchronous_commit on;
+8. invokes only append_audit_gap(loss_start, database_end, 0, true), at most
    once;
-8. performs one bounded read-only final observation, including after a commit
+9. performs one bounded read-only final observation, including after a commit
    ambiguity, and succeeds only if the replacement store contains exactly the
    one expected gap and no producer/quota activity; and
-9. emits one canonical non-secret success report only after that observation.
+10. emits one canonical non-secret success report only after that observation.
 
 The operation never drops, deletes, truncates, restores, copies, repairs, or
 adopts a database, role, event, or history. An external DBA must already have
@@ -157,6 +162,8 @@ work.
 - one conservative disclosure interval with unknown event count;
 - no producer access before the disclosure is durably verified;
 - no duplicate maintenance append after commit ambiguity;
+- no mutation of a different structurally valid audit store through a
+  misdirected control route;
 - separation of DBA, migrator, and audit-control capabilities;
 - all PostgreSQL DSNs and login passwords;
 - bounded non-sensitive diagnostics and output;
@@ -172,8 +179,9 @@ work.
 - provision_service and its create-only-or-read-only-verify behavior;
 - migrate_service and its exact migration identity, transaction, ledger, and
   final-structure checks;
-- PostgreSQL transaction semantics, session_user, synchronous_commit, and
-  clock_timestamp;
+- PostgreSQL transaction semantics, session_user, current_user,
+  current_database, pg_control_system, pg_is_in_recovery, fixed version and
+  transaction settings, synchronous_commit, and clock_timestamp;
 - the immutable append_audit_gap(timestamp with time zone, timestamp with time
   zone, bigint, boolean) function;
 - an external security-operations authority that declares loss and supplies a
@@ -237,7 +245,8 @@ append success.
 | Proof this invocation created the target | returned ProvisioningReport.created is exactly true |
 | Migration started from version zero and completed | exact MigrationRunReport from this invocation |
 | Fresh operational-data posture | fixed admin read-only inventory after migration |
-| Exact structural compatibility | existing audit-readiness verifier over the fixed readiness route |
+| Exact structural compatibility | migration runner's final structural verification on the database and system identifier bound to this invocation |
+| Effectful control-route target and transaction posture | exact same-transaction identity row matched to the provisioning report, migration report, fixed service specification, and supported PostgreSQL version policy |
 | Interval end and event observed time | replacement PostgreSQL clock_timestamp |
 | Gap event kind, producer, component, count posture, and retention | append_audit_gap and migration constraints |
 | Clock monotonicity throughout recovery | external deployment evidence; never a process-clock or fresh-database self-attestation |
@@ -250,10 +259,10 @@ second source of truth. The external loss start is not copied into another
 mutable authority before use. The final report describes the database state;
 it does not grant publication authority by itself.
 
-The runner receives the exact admin, migrator, control, and readiness routes
-and the exact provisioning password map as one bound invocation object. It
-does not accept role names or arbitrary mappings from command-line arguments.
-The existing provisioner rejects missing, extra, or wrong role-password keys.
+The runner receives the exact admin, migrator, and control routes and the exact
+provisioning password map as one bound invocation object. It does not accept
+role names or arbitrary mappings from command-line arguments. The existing
+provisioner rejects missing, extra, or wrong role-password keys.
 
 ## 6. State machine and ordering
 
@@ -266,14 +275,18 @@ The runner has these closed states:
 3. CREATED — the exact report proves this invocation created the target.
 4. MIGRATING — the existing authoritative migration runner has been entered.
 5. MIGRATED_EMPTY — migration and the fixed fresh-state observation succeeded.
-6. GAP_PRE_COMMIT — the control transaction is open and no COMMIT was sent.
-7. GAP_COMMIT_IN_FLIGHT — COMMIT was sent and acknowledgement is not yet known.
-8. VERIFYING — no further mutation is permitted; one final read-only
+6. CONTROL_BINDING — the control transaction is open, and only its exact
+   target-identity and transaction-posture query is permitted; no clock read or
+   append has occurred.
+7. GAP_PRE_COMMIT — the control transaction is target-bound and no COMMIT was
+   sent.
+8. GAP_COMMIT_IN_FLIGHT — COMMIT was sent and acknowledgement is not yet known.
+9. VERIFYING — no further mutation is permitted; one final read-only
    observation is in progress.
-9. RECOVERED — the exact final state is proven and one success report exists.
-10. QUARANTINED — recovery did not succeed and the target must not be
+10. RECOVERED — the exact final state is proven and one success report exists.
+11. QUARANTINED — recovery did not succeed and the target must not be
     published.
-11. OUTCOME_UNKNOWN — the final observation cannot prove the one-gap state
+12. OUTCOME_UNKNOWN — the final observation cannot prove the one-gap state
     after COMMIT became ambiguous; this is a terminal quarantined state.
 
 RECOVERED, QUARANTINED, and OUTCOME_UNKNOWN are terminal. OUTCOME_UNKNOWN is a
@@ -301,8 +314,7 @@ connection has connect_timeout = 5 seconds. Provisioning and migration routes
 use statement_timeout = 300,000 milliseconds and lock_timeout = 5,000
 milliseconds. The control route and both admin inventory observations use
 statement_timeout = 2,000 milliseconds and lock_timeout = 250 milliseconds.
-The readiness route uses statement_timeout = 5,000 milliseconds and
-lock_timeout = 250 milliseconds. No timeout is caller-selectable.
+No timeout is caller-selectable.
 
 Those settings bound connection establishment and PostgreSQL statement and
 lock waits. They do not impose a wall-clock deadline on Python cleanup,
@@ -373,12 +385,51 @@ the operation is not deployable and must not be invoked.
 ### 6.5 Gap transaction
 
 The runner opens one non-autocommit control connection with fixed bounded
-connection, statement, and lock timeouts and synchronous_commit on. It checks
-the effective session_user and synchronous_commit setting.
+connection, statement, and lock timeouts. It begins one explicit READ COMMITTED
+READ WRITE transaction and enters CONTROL_BINDING. The first query in that
+transaction is exactly one target-identity and transaction-posture observation:
+
+~~~sql
+SELECT SESSION_USER::text,
+       CURRENT_USER::text,
+       pg_catalog.current_database()::text,
+       pg_catalog.current_setting('server_version_num')::integer,
+       pg_catalog.current_setting('server_version')::text,
+       control.system_identifier::text,
+       pg_catalog.pg_is_in_recovery(),
+       pg_catalog.current_setting('transaction_read_only')::text,
+       pg_catalog.current_setting('transaction_isolation')::text,
+       pg_catalog.current_setting('synchronous_commit')::text
+FROM pg_catalog.pg_control_system() AS control
+~~~
+
+The result must be exactly one row and must prove all of these facts before
+the state may move to GAP_PRE_COMMIT:
+
+- SESSION_USER and CURRENT_USER are both exactly
+  ofarm_security_audit_control_login;
+- current_database equals the fixed audit database and the database named by
+  both this invocation's provisioning and migration reports;
+- system_identifier equals the exact identifier in both reports;
+- server_version_num equals both reports and
+  SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM;
+- server_version equals SUPPORTED_POSTGRESQL_SERVER_VERSION;
+- pg_is_in_recovery is false;
+- transaction_read_only is off;
+- transaction_isolation is read committed; and
+- synchronous_commit is on.
+
+The provisioning and migration report identities must already agree before
+the control connection is opened. A missing, duplicate, malformed, or
+different identity row is proven pre-mutation: the transaction rolls back,
+the target enters QUARANTINED, and no clock or append query is permitted. This
+query binds only the effectful route to the already admitted target; it does
+not become a second structural verifier.
 
 Inside one transaction it:
 
-1. reads one clock_timestamp as interval_end;
+1. after the identity admission above, reads one clock_timestamp as
+   interval_end on the same connection and transaction;
 2. refuses if interval_end is not finite and strictly after loss_start;
 3. invokes exactly:
 
@@ -403,7 +454,8 @@ also moves to VERIFYING but records that the acknowledgement was ambiguous.
 ### 6.6 Final observation and ambiguity
 
 The runner performs exactly one new repeatable-read, read-only admin
-observation. Success requires:
+observation on the database and PostgreSQL system identifier already bound by
+this invocation's provisioning and migration reports. Success requires:
 
 - exactly one operational event total;
 - that event has the exact event ID returned before COMMIT when that identity
@@ -426,9 +478,11 @@ observation. Success requires:
   is_called = false; and
 - the migration identity remains exact.
 
-After that fixed admin observation, the existing audit-readiness verifier runs
-once over the fixed readiness route. RECOVERED requires its exact
-structural-compatibility report as well as the one-event observation.
+RECOVERED requires that exact target-bound one-event observation. The migration
+runner already performed the authoritative final structural verification on
+the same database and system identifier before the control route was admitted.
+There is no separate final readiness call: its version-only public report would
+be redundant and would not independently identify the target.
 
 If COMMIT acknowledgement was ambiguous but this exact one-event state is
 visible, the operation may return RECOVERED. The fresh-target invariant and
@@ -545,8 +599,10 @@ deployment monotonic-clock premise owns that fact.
 ### SLR-006 — one fixed mutation
 
 After migration, one admitted invocation calls only append_audit_gap with the
-fixed audit-control authority, fixed start/end sources, event count zero, and
-count-unknown true, at most once.
+fixed audit-control authority on the database and PostgreSQL system identifier
+proven by this invocation, fixed start/end sources, event count zero, and
+count-unknown true, at most once. The control transaction admits that identity
+before it reads the interval end or attempts the mutation.
 
 ### SLR-007 — no publication before verified durability
 
@@ -571,18 +627,18 @@ refuses recovery.
 ### SLR-010 — fixed authority and secret separation
 
 Only the fixed admin route may provision and observe operational state, the
-fixed migrator route may migrate, the fixed audit-control route may append,
-and the fixed readiness route may run the existing structural verifier. The
-command never uses producer, reader, export, retention, HMAC, KMS, tenant, or
-break-glass authority and never emits a secret.
+fixed migrator route may migrate, and the fixed audit-control route may append
+only after its same-transaction identity matches the provisioned and migrated
+target. The command never uses producer, reader, readiness, export, retention,
+HMAC, KMS, tenant, or break-glass authority and never emits a secret.
 
 ### SLR-011 — bounded database work, call counts, and diagnostics
 
 The operation has fixed connection and statement budgets, one provision call,
-one migration call, two fixed admin inventory observations, one fixed final
-readiness verification, one append, one commit, no loop or retry, bounded
-result shapes, fixed diagnostics, and one canonical success object. It makes
-no wall-clock termination claim for operating-system close or output writes;
+one migration call, two fixed admin inventory observations, one fixed control
+identity observation, one append, one commit, no loop or retry, bounded result
+shapes, fixed diagnostics, and one canonical success object. It makes no
+wall-clock termination claim for operating-system close or output writes;
 failure or short-write paths never become success.
 
 ### SLR-012 — one trust boundary and exact paths
@@ -604,7 +660,7 @@ break-glass path, or deployment activation is changed.
 | SLR-007 | Make the append commit acknowledge, then make final observation fail. | no stdout success and target remains quarantined |
 | SLR-008 | Commit the gap but drop the acknowledgement; separately keep the original transaction unresolved while the final read sees zero rows. | exact one visible event may recover; zero or uncertainty becomes OUTCOME_UNKNOWN with no retry |
 | SLR-009 | Let a producer append between observations; separately advance the access-clock sequence through the accepted access path and roll back before an AUDIT_ACCESS row remains. | final event or exact sequence check refuses recovery; no false success |
-| SLR-010 | Point one DSN at the wrong session user or inject canary secrets into DSNs, passwords, and raised exceptions. | fixed refusal, no traceback or canary in output |
+| SLR-010 | Provision and migrate exact service A, create a separate exact service B, point only the control DSN at B, and separately use a wrong session/current user or inject canary secrets into DSNs, passwords, and raised exceptions. | same-transaction control identity refuses before the clock read or append; A and B both retain zero events; no traceback or canary in output |
 | SLR-011 | Expire connect/statement/lock budgets; separately make close, stdout write, or flush fail or short-write. | bounded database refusal and fixed call count; cleanup/output failure is never success; no indefinite-OS-call deadline is claimed |
 | SLR-012 | Add a migration, drop helper, provider client, tenant file, workflow, or unlisted path. | mechanical path check blocks Phase B and merge |
 
@@ -637,8 +693,7 @@ registry, callback selected from configuration, or optional action.
 A new deployment/postgresql/run_security_audit_store_loss.py:
 
 - accepts only --loss-start, --release-identity, and --execution-id;
-- loads the existing fixed admin, migrator, control, and readiness DSN
-  environment names;
+- loads the existing fixed admin, migrator, and control DSN environment names;
 - loads one fixed environment name for each login password required by
   SECURITY_AUDIT_PROVISIONING_SPEC;
 - rejects missing values before database work;
@@ -655,8 +710,7 @@ parser.
 The new module composes, but does not copy or weaken:
 
 - provisioning.py for target creation and exact role/database posture;
-- migration_runner.py and migration_sets.py for schema authority;
-- readiness.py for the final exact structural-compatibility observation;
+- migration_runner.py and migration_sets.py for target-bound schema authority;
 - the accepted migration's append_audit_gap for gap contents and retention;
   and
 - PostgreSQL for session identity, clock, transaction, and durability.
@@ -685,6 +739,9 @@ around the accepted primitives is sufficient.
 - **Loss-start sources of truth:** one external declaration value.
 - **Interval-end sources of truth:** one replacement PostgreSQL clock read.
 - **Gap mutation points:** one existing append_audit_gap call.
+- **Effectful-target binding:** one identity row on the same control transaction
+  before its clock read or append, compared only with existing reports and
+  fixed version policy.
 - **Final-state authorities:** one fixed read-only database observation.
 - **Publication authorities introduced:** none.
 - **Destructive authorities introduced:** none.
@@ -801,6 +858,8 @@ would:
 - permit migration from a nonzero version or accept a migration no-op;
 - add a caller-selected database, role, migration, function, event kind,
   component, producer, interval end, count, retry, timeout, or action;
+- omit or weaken the same-transaction control-route target admission before
+  the clock read and append;
 - replace the external conservative start or PostgreSQL end authority;
 - remove the external monotonic-clock premise, permit observed_at before the
   captured interval end, or weaken the exact purge-deadline comparison;
@@ -865,11 +924,11 @@ identity. Neither is justified for the accepted V1 no-restore posture.
 | SLR-003 | existing migration loader/runner plus report validator | nonzero, no-op, partial, wrong digest/identity | complete from-zero report | seam tests plus live migration |
 | SLR-004 | fixed fresh-state query | each dynamic table/receipt/sequence dirty in turn | exact migration-created inventory | live PostgreSQL parametrized state tests |
 | SLR-005 | request validator, control clock query, append-result validator, and final verifier | malformed/future/equal times; observed_at before interval_end; wrong purge deadline | external start, database end, observable nonregression, unknown count | deterministic time tests and live SQL capture |
-| SLR-006 | gap transaction state machine | exceptions at every statement/commit phase | one exact function call maximum | call-recording seam and live event assertion |
+| SLR-006 | gap transaction state machine | exceptions at every statement/commit phase | one target-bound exact function call maximum | call-recording seam and live event assertion |
 | SLR-007 | final verifier and CLI renderer | final read unavailable after acknowledged commit | no output before exact one-gap proof | subprocess output and live publication-gate documentation test |
 | SLR-008 | commit phase plus one final observation | lost acknowledgement with zero/one/multiple rows | exact one may recover; otherwise terminal unknown | deterministic transaction seam tests |
 | SLR-009 | final-state query | injected producer/retention/second-gap row; rolled-back access after nontransactional sequence advance | sole expected gap, unused quota state, and never-called access sequence | live PostgreSQL hostile tests |
-| SLR-010 | fixed route carrier and sanitizer | wrong session user and canary secret exceptions | exact user per phase; fixed outputs | seam, subprocess, and live role tests |
+| SLR-010 | fixed route carrier, same-transaction control identity, and sanitizer | two exact services with control misdirected to the second; wrong current/session user; canary secret exceptions | exact database/system/version/user/posture before clock or append; fixed outputs | seam, subprocess, live role tests, and live two-service zero-event refusal |
 | SLR-011 | fixed runner and command | database timeout expiry; cleanup/output failure and short-write faults | bounded database calls, fixed call counts, and no false success | deterministic budget and subprocess tests |
 | SLR-012 | path allowlist | base-to-head path diff | only approved files | mechanical diff and conformance checks |
 
@@ -897,8 +956,10 @@ If version 1 is later approved, the smallest implementation evidence is:
    bytes;
 2. live PostgreSQL proof of same-invocation creation, exact migration from
    zero, empty-state checks, one unknown gap, old-row absence, rerun refusal,
-   wrong-role refusal, rolled-back access-sequence activity, and no
-   backup/replica/CDC capability;
+   wrong-role refusal, same-transaction control-target binding, two exact
+   services with the control route misdirected to the second and zero events
+   in both, rolled-back access-sequence activity, and no backup/replica/CDC
+   capability;
 3. the existing PostgreSQL provisioning, migration, structural, live-gap,
    runtime, and audit-contract regression suites affected by composition;
 4. architecture and review-baseline inventory checks;
@@ -931,15 +992,19 @@ implementation choices and do not authorize expansion of this pull request.
 ### 14.2 Review disposition
 
 - **Blockers:** review
-  https://github.com/samovers/OFARM2/pull/324#pullrequestreview-5001965255
-  found two on head 575c97d38be477e9fcacc080ae200902c63668a1:
-  observable clock rollback and omission of the final access-clock sequence
-  check. Both are corrected in this revision; exact-head re-review remains
-  required.
+  https://github.com/samovers/OFARM2/pull/324#pullrequestreview-5002030992
+  confirmed the two earlier blockers were closed on head
+  acfbf26a9731393f995f5e0f413ac6a5a0135990 and found one remaining wrong-target
+  control-route counterexample. This revision adds exact same-transaction
+  target admission before the clock read or append; exact-head re-review
+  remains required.
 - **Follow-ups:** the remaining issue #192 criteria listed in section 11.5.
-- **Preferences:** the same review's non-blocking timeout concern is resolved
-  by narrowing SLR-011 to the executable database and failure boundaries
-  rather than adding an OS watchdog.
+- **Preferences:** review 5002030992's final-readiness concern is resolved by
+  deleting that redundant, non-target-identifying call; the migration runner's
+  target-bound structural verification remains authoritative. Review
+  5001965255's non-blocking timeout concern remains resolved by narrowing
+  SLR-011 to the executable database and failure boundaries rather than adding
+  an OS watchdog.
 - **Provisional posture:** repository operation not provisional; external
   deployment composition provisional and unauthorized.
 
