@@ -182,13 +182,17 @@ work.
   absent before invocation, without presenting restored history;
 - a deployment authority that keeps every replacement route and credential
   unpublished until the exact success report is accepted;
+- deployment evidence that the replacement PostgreSQL clock remains
+  non-regressing throughout the recovery operation;
 - protected secret injection for the fixed DSNs and exact provisioning login
   password map; and
 - the exact package bytes at the reviewed release.
 
 The external authorities are deployment prerequisites, not self-attestations
 created by this command. This repository operation validates the target state
-it can observe and refuses to claim more.
+it can observe and refuses to claim more. A fresh target has no earlier durable
+database-clock high-water, so the repository operation cannot prove that the
+clock did not regress before its first observation.
 
 ### 4.3 Untrusted actors and inputs
 
@@ -236,6 +240,7 @@ append success.
 | Exact structural compatibility | existing audit-readiness verifier over the fixed readiness route |
 | Interval end and event observed time | replacement PostgreSQL clock_timestamp |
 | Gap event kind, producer, component, count posture, and retention | append_audit_gap and migration constraints |
+| Clock monotonicity throughout recovery | external deployment evidence; never a process-clock or fresh-database self-attestation |
 | Gap durability acknowledgement | synchronous commit plus final read-only observation |
 | Whether producers may be published | external deployment authority consuming exact success only |
 | Public result bytes | one fixed canonical renderer |
@@ -298,6 +303,16 @@ milliseconds. The control route and both admin inventory observations use
 statement_timeout = 2,000 milliseconds and lock_timeout = 250 milliseconds.
 The readiness route uses statement_timeout = 5,000 milliseconds and
 lock_timeout = 250 milliseconds. No timeout is caller-selectable.
+
+Those settings bound connection establishment and PostgreSQL statement and
+lock waits. They do not impose a wall-clock deadline on Python cleanup,
+operating-system connection close, or stdout/stderr writes. This decision adds
+no process watchdog or signal authority. A blocked cleanup or output write can
+withhold completion indefinitely, but cannot complete the canonical success
+report or success exit, cause a second mutation, or cause a retry. Focused
+tests cover timeout expiry,
+ordinary failures, short writes, and flush failures; they do not claim to
+execute an indefinitely blocked OS call.
 
 ### 6.3 Creation and migration
 
@@ -372,8 +387,9 @@ SELECT *
 FROM ofarm_security.append_audit_gap(loss_start, interval_end, 0, true)
 ~~~
 
-4. validates the exact three-field non-nil event identity result and governed
-   30-day purge timestamp;
+4. validates the exact three-field non-nil event identity result, requires its
+   finite observed_at to be greater than or equal to interval_end, and
+   requires purge_after to equal observed_at plus exactly 30 days;
 5. moves to GAP_COMMIT_IN_FLIGHT immediately before COMMIT; and
 6. sends COMMIT once.
 
@@ -397,14 +413,17 @@ observation. Success requires:
 - component = AUDIT_CONTROL;
 - interval_start equals the supplied loss start;
 - interval_end equals the database end captured by this invocation;
+- observed_at is finite and greater than or equal to interval_end;
+- purge_after equals observed_at plus exactly 30 days;
 - interval_event_count is null;
 - interval_count_unknown is true;
 - correlation HMAC fields, reason, access fields, retention-operation fields,
   and affected producer/component are null;
-- event-format, redaction, retention, observed-at, purge-after, and
-  fingerprint shape remain exact;
+- event-format, redaction, retention, and fingerprint shape remain exact;
 - zero quota-bucket and zero quota-high-water rows;
-- all 512 overflow receipts remain unused; and
+- all 512 overflow receipts remain unused;
+- operational_security_access_clock_high_water still has last_value = 0 and
+  is_called = false; and
 - the migration identity remains exact.
 
 After that fixed admin observation, the existing audit-readiness verifier runs
@@ -509,12 +528,19 @@ high-water rows, used overflow receipts, or access-clock observations. Static
 lock and receipt slots and the migration ledger have only their exact
 migration-created state.
 
-### SLR-005 — conservative closed interval
+### SLR-005 — conservative closed interval and observable nonregression
 
 The external authority supplies the only interval start. PostgreSQL supplies
-the only interval end, which is finite and strictly later. No request,
-environment fallback, process clock, or caller can supply the end or a known
-count. The append always represents count unknown.
+the only interval end, which is finite and strictly later. The append result
+and final row must have finite observed_at greater than or equal to that end
+and purge_after exactly 30 days later. No request, environment fallback,
+process clock, or caller can supply the end or a known count. The append always
+represents count unknown.
+
+The repository operation detects a clock rollback between its interval-end
+read and the append function's observed-at read. It does not claim to detect a
+rollback before the first read on a newly created database; the external
+deployment monotonic-clock premise owns that fact.
 
 ### SLR-006 — one fixed mutation
 
@@ -537,7 +563,10 @@ every other result is terminal OUTCOME_UNKNOWN and quarantined.
 ### SLR-009 — no unrelated activity
 
 Final success proves exactly one AUDIT_GAP and no producer, access, retention,
-overflow, quota, or second-gap state. Any unrelated activity refuses recovery.
+overflow, quota, or second-gap state. The nontransactional access-clock
+sequence must remain in its exact never-called posture, including when an
+access transaction advanced it and later rolled back. Any unrelated activity
+refuses recovery.
 
 ### SLR-010 — fixed authority and secret separation
 
@@ -547,12 +576,14 @@ and the fixed readiness route may run the existing structural verifier. The
 command never uses producer, reader, export, retention, HMAC, KMS, tenant, or
 break-glass authority and never emits a secret.
 
-### SLR-011 — bounded work and diagnostics
+### SLR-011 — bounded database work, call counts, and diagnostics
 
 The operation has fixed connection and statement budgets, one provision call,
 one migration call, two fixed admin inventory observations, one fixed final
 readiness verification, one append, one commit, no loop or retry, bounded
-result shapes, fixed diagnostics, and one canonical success object.
+result shapes, fixed diagnostics, and one canonical success object. It makes
+no wall-clock termination claim for operating-system close or output writes;
+failure or short-write paths never become success.
 
 ### SLR-012 — one trust boundary and exact paths
 
@@ -568,13 +599,13 @@ break-glass path, or deployment activation is changed.
 | SLR-002 | Invoke against an existing drifted target or absent database with leftover governed roles. | existing provisioner refuses; no repair, drop, or cleanup call exists |
 | SLR-003 | Use a route with a partial ledger, wrong migration digest, wrong server identity, or a migration report that begins above zero. | no append and no success |
 | SLR-004 | Start a fixed command seam against a created target containing one event, quota row, high-water row, used overflow receipt, or called access sequence. | fresh-state observation refuses before append |
-| SLR-005 | Supply a naive, non-UTC, infinite, equal-to-end, or future loss start; separately return a regressing database clock. | refuse without append; no process-time fallback |
+| SLR-005 | Supply a naive, non-UTC, infinite, equal-to-end, or future loss start; separately return append observed_at earlier than the captured interval end or a wrong purge deadline. | refuse before COMMIT with no process-time fallback; pre-first-read monotonicity remains an external deployment premise |
 | SLR-006 | Record every SQL call while the database returns ordinary errors before and after append. | at most one exact append call; no alternate function or second mutation |
 | SLR-007 | Make the append commit acknowledge, then make final observation fail. | no stdout success and target remains quarantined |
 | SLR-008 | Commit the gap but drop the acknowledgement; separately keep the original transaction unresolved while the final read sees zero rows. | exact one visible event may recover; zero or uncertainty becomes OUTCOME_UNKNOWN with no retry |
-| SLR-009 | Let a producer append between the empty check and final observation in a deployment that violated quarantine. | final count/kind check refuses recovery; no false success |
+| SLR-009 | Let a producer append between observations; separately advance the access-clock sequence through the accepted access path and roll back before an AUDIT_ACCESS row remains. | final event or exact sequence check refuses recovery; no false success |
 | SLR-010 | Point one DSN at the wrong session user or inject canary secrets into DSNs, passwords, and raised exceptions. | fixed refusal, no traceback or canary in output |
-| SLR-011 | Make connect, execute, commit, close, stdout write, or flush block/fail at each supported phase. | fixed timeout/call count; no loop; output failure is never success |
+| SLR-011 | Expire connect/statement/lock budgets; separately make close, stdout write, or flush fail or short-write. | bounded database refusal and fixed call count; cleanup/output failure is never success; no indefinite-OS-call deadline is claimed |
 | SLR-012 | Add a migration, drop helper, provider client, tenant file, workflow, or unlisted path. | mechanical path check blocks Phase B and merge |
 
 These cases use the fixed command, runner, provisioner, migration runner, and
@@ -771,6 +802,8 @@ would:
 - add a caller-selected database, role, migration, function, event kind,
   component, producer, interval end, count, retry, timeout, or action;
 - replace the external conservative start or PostgreSQL end authority;
+- remove the external monotonic-clock premise, permit observed_at before the
+  captured interval end, or weaken the exact purge-deadline comparison;
 - append a known count or anything other than one COUNT_UNKNOWN gap;
 - retry after any append attempt or treat zero rows after ambiguity as safe to
   retry;
@@ -778,6 +811,7 @@ would:
   background worker, or generic plugin seam;
 - publish producer routes, change runtime readiness, distribute credentials,
   or authorize deployment;
+- omit the final never-called access-clock sequence check;
 - change provisioning, migration, structural-verification, or accepted
   migration code;
 - add another trust boundary or any path outside the allowlist;
@@ -805,7 +839,9 @@ The deployment composition is provisional and unauthorized:
 - an independently controlled system must declare loss, authorize any old
   target removal, inject fresh credentials, quarantine the new routes, and
   accept the success report before publication;
-- no such deployment system or production invocation is created here; and
+- no such deployment system or production invocation is created here;
+- that system must prove the replacement PostgreSQL clock remains
+  non-regressing throughout the recovery operation; and
 - before deployment, AI-attested task approval must be replaced by an
   independently human-controlled and independently verifiable approval or
   signing system.
@@ -828,13 +864,13 @@ identity. Neither is justified for the accepted V1 no-restore posture.
 | SLR-002 | fixed protocol surface and CLI | drifted/partial target; method inventory | no destructive method or SQL | architecture check and source review |
 | SLR-003 | existing migration loader/runner plus report validator | nonzero, no-op, partial, wrong digest/identity | complete from-zero report | seam tests plus live migration |
 | SLR-004 | fixed fresh-state query | each dynamic table/receipt/sequence dirty in turn | exact migration-created inventory | live PostgreSQL parametrized state tests |
-| SLR-005 | request validator and control clock query | malformed/future/equal/regressing times | external start, database end, unknown count | deterministic time tests and live SQL capture |
+| SLR-005 | request validator, control clock query, append-result validator, and final verifier | malformed/future/equal times; observed_at before interval_end; wrong purge deadline | external start, database end, observable nonregression, unknown count | deterministic time tests and live SQL capture |
 | SLR-006 | gap transaction state machine | exceptions at every statement/commit phase | one exact function call maximum | call-recording seam and live event assertion |
 | SLR-007 | final verifier and CLI renderer | final read unavailable after acknowledged commit | no output before exact one-gap proof | subprocess output and live publication-gate documentation test |
 | SLR-008 | commit phase plus one final observation | lost acknowledgement with zero/one/multiple rows | exact one may recover; otherwise terminal unknown | deterministic transaction seam tests |
-| SLR-009 | final-state query | injected producer/access/retention/second-gap row | sole expected gap and unused quota state | live PostgreSQL hostile test |
+| SLR-009 | final-state query | injected producer/retention/second-gap row; rolled-back access after nontransactional sequence advance | sole expected gap, unused quota state, and never-called access sequence | live PostgreSQL hostile tests |
 | SLR-010 | fixed route carrier and sanitizer | wrong session user and canary secret exceptions | exact user per phase; fixed outputs | seam, subprocess, and live role tests |
-| SLR-011 | fixed runner and command | blocking/failing calls and output faults | bounded call counts and exit surface | deterministic budget and subprocess tests |
+| SLR-011 | fixed runner and command | database timeout expiry; cleanup/output failure and short-write faults | bounded database calls, fixed call counts, and no false success | deterministic budget and subprocess tests |
 | SLR-012 | path allowlist | base-to-head path diff | only approved files | mechanical diff and conformance checks |
 
 ### 13.1 Phase A gates
@@ -856,11 +892,13 @@ counterexample.
 
 If version 1 is later approved, the smallest implementation evidence is:
 
-1. focused unit and subprocess tests for validation, call budgets, state,
-   ambiguity, sanitizer, and report bytes;
+1. focused unit and subprocess tests for validation, database timeout expiry,
+   call budgets, state, ambiguity, sanitizer, output failures, and report
+   bytes;
 2. live PostgreSQL proof of same-invocation creation, exact migration from
    zero, empty-state checks, one unknown gap, old-row absence, rerun refusal,
-   wrong-role refusal, and no backup/replica/CDC capability;
+   wrong-role refusal, rolled-back access-sequence activity, and no
+   backup/replica/CDC capability;
 3. the existing PostgreSQL provisioning, migration, structural, live-gap,
    runtime, and audit-contract regression suites affected by composition;
 4. architecture and review-baseline inventory checks;
@@ -883,7 +921,8 @@ Before deployment, external owners still must define:
 - who authorizes destructive disposal of the lost or failed unpublished
   target;
 - how replacement credentials and routes remain quarantined until success;
-  and
+- how deployment proves the replacement PostgreSQL clock remains
+  non-regressing throughout recovery; and
 - how the success report gates route publication.
 
 Those are explicit deployment prerequisites. They are not unresolved Phase B
@@ -891,9 +930,16 @@ implementation choices and do not authorize expansion of this pull request.
 
 ### 14.2 Review disposition
 
-- **Blockers:** none known before independent Phase A review.
+- **Blockers:** review
+  https://github.com/samovers/OFARM2/pull/324#pullrequestreview-5001965255
+  found two on head 575c97d38be477e9fcacc080ae200902c63668a1:
+  observable clock rollback and omission of the final access-clock sequence
+  check. Both are corrected in this revision; exact-head re-review remains
+  required.
 - **Follow-ups:** the remaining issue #192 criteria listed in section 11.5.
-- **Preferences:** none recorded.
+- **Preferences:** the same review's non-blocking timeout concern is resolved
+  by narrowing SLR-011 to the executable database and failure boundaries
+  rather than adding an OS watchdog.
 - **Provisional posture:** repository operation not provisional; external
   deployment composition provisional and unauthorized.
 
