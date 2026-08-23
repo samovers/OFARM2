@@ -42,7 +42,7 @@ _PYTHON_SOURCE_SNAPSHOT_RFC_SHA256 = (
 MAX_FUNCTION_LINES = 80
 MAX_TEST_LINES = 800
 TEST_MODULE_BUDGETS = {
-    "kernel/tests/test_security_audit_store_loss.py": 1_325,
+    "kernel/tests/test_security_audit_store_loss.py": 1_700,
 }
 SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH = (
     "deployment/postgresql/security_audit_observer_root_admission.py"

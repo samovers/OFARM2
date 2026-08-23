@@ -6,9 +6,12 @@ import inspect
 import json
 import os
 import secrets
+import subprocess
+import sys
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from time import monotonic
 from uuid import UUID, uuid4
 
 import psycopg.conninfo
@@ -76,6 +79,10 @@ OBSERVED_AT = INTERVAL_END + timedelta(microseconds=1)
 PURGE_AFTER = OBSERVED_AT + timedelta(days=30)
 EVENT_ID = UUID("018f0f2a-6a38-7d9b-a4c8-33e9f27b2f6d")
 SYSTEM_IDENTIFIER = "7654321098765432109"
+QUERY_IDENTITY = (
+    "ofarm_security.query_operational_security_events"
+    "(uuid, timestamptz, uuid, integer, bigint)"
+)
 
 
 class _Cursor:
@@ -138,6 +145,11 @@ class _Harness:
         self.fail_query: str | None = None
         self.lose_witness_at: str | None = None
         self.close_failure: str | None = None
+        self.fresh_state = store_loss._EXPECTED_FRESH_STATE
+        self.interval_end = INTERVAL_END
+        self.observed_at = OBSERVED_AT
+        self.purge_after = PURGE_AFTER
+        self.admission_identities: dict[str, tuple[str, str]] = {}
 
     def random_bytes(self, length: int) -> bytes:
         self.random_calls += 1
@@ -222,13 +234,28 @@ class _Harness:
                 "off",
                 "read committed",
             )
+        elif kind == "migrator":
+            user, read_only, isolation = (
+                "ofarm_migrator",
+                "off",
+                "read committed",
+            )
+        elif kind == "admin":
+            user, read_only, isolation = "ofarm", "off", "read committed"
         else:
             user, read_only, isolation = "ofarm", "on", "repeatable read"
+        session_user, current_user = self.admission_identities.get(
+            kind, (user, user)
+        )
         counts = (0, 0, 0) if self.lose_witness_at == kind else (2, 1, 1)
         return (
-            user,
-            user,
-            SECURITY_AUDIT_PROVISIONING_SPEC.database_name,
+            session_user,
+            current_user,
+            (
+                "postgres"
+                if kind == "admin"
+                else SECURITY_AUDIT_PROVISIONING_SPEC.database_name
+            ),
             SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
             SUPPORTED_POSTGRESQL_SERVER_VERSION,
             SYSTEM_IDENTIFIER,
@@ -245,13 +272,13 @@ class _Harness:
         return (
             1,
             EVENT_ID,
-            OBSERVED_AT,
-            PURGE_AFTER,
+            self.observed_at,
+            self.purge_after,
             "AUDIT_GAP",
             "SECURITY_OPERATIONS_V1",
             "AUDIT_CONTROL",
             LOSS_START,
-            INTERVAL_END,
+            self.interval_end,
             None,
             True,
             "OFARM_PRETENANT_SECURITY_EVENT_V1",
@@ -287,14 +314,14 @@ class _Harness:
         if query.startswith("BEGIN TRANSACTION"):
             return _Cursor([])
         if query == store_loss.FRESH_STATE_SQL:
-            return _Cursor([store_loss._EXPECTED_FRESH_STATE])
+            return _Cursor([self.fresh_state])
         if query == store_loss.LEDGER_SQL:
             return _Cursor(self.ledger_rows())
         if query == store_loss.CLOCK_SQL:
-            return _Cursor([(INTERVAL_END,)])
+            return _Cursor([(self.interval_end,)])
         if query == store_loss.APPEND_GAP_SQL:
             self.append_calls += 1
-            return _Cursor([(EVENT_ID, OBSERVED_AT, PURGE_AFTER)])
+            return _Cursor([(EVENT_ID, self.observed_at, self.purge_after)])
         if query == store_loss.FINAL_STATE_SQL:
             return _Cursor([self.final_row()])
         raise AssertionError(f"unexpected fixed SQL: {query[:80]}")
@@ -424,6 +451,152 @@ def test_existing_target_is_not_adopted_or_migrated() -> None:
     assert harness.migrate_calls == harness.append_calls == 0
     assert [connection.kind for connection in harness.connections] == ["witness"]
     assert harness.connections[0].closed is True
+
+
+@pytest.mark.parametrize(
+    ("index", "dirty_value"),
+    (
+        (0, 1),
+        (1, 1),
+        (2, 1),
+        (3, 255),
+        (4, 1),
+        (5, 254),
+        (6, 511),
+        (7, 1),
+        (8, 1),
+        (9, 1),
+        (10, 254),
+        (11, 1),
+        (12, True),
+    ),
+    ids=(
+        "event",
+        "quota-bucket",
+        "quota-high-water",
+        "identity-lock-count",
+        "identity-lock-min",
+        "identity-lock-max",
+        "receipt-count",
+        "used-receipt",
+        "receipt-pair-count",
+        "receipt-slot-min",
+        "receipt-slot-max",
+        "access-clock-value",
+        "access-clock-called",
+    ),
+)
+def test_each_dirty_fresh_state_field_refuses_before_control(
+    index: int,
+    dirty_value: object,
+) -> None:
+    harness = _Harness()
+    state = list(harness.fresh_state)
+    state[index] = dirty_value
+    harness.fresh_state = tuple(state)
+
+    with pytest.raises(SecurityAuditStoreLossRefused):
+        _run(harness)
+
+    assert harness.append_calls == 0
+    assert [connection.kind for connection in harness.connections] == [
+        "witness", "fresh"
+    ]
+    assert all(
+        query != store_loss.CLOCK_SQL
+        for connection in harness.connections
+        for query, _parameters in connection.commands
+    )
+
+
+@pytest.mark.parametrize(
+    "interval_end",
+    (LOSS_START, LOSS_START - timedelta(microseconds=1)),
+    ids=("equal-start", "before-start"),
+)
+def test_nonadvancing_database_end_rolls_back_without_append(
+    interval_end: datetime,
+) -> None:
+    harness = _Harness()
+    harness.interval_end = interval_end
+
+    with pytest.raises(SecurityAuditStoreLossRefused):
+        _run(harness)
+
+    control = harness.connections[2]
+    assert harness.append_calls == control.commit_calls == 0
+    assert control.rollback_calls == 1
+    assert len(harness.connections) == 3
+
+
+@pytest.mark.parametrize("failure", ("clock-regression", "purge-deadline"))
+def test_invalid_append_clock_or_purge_rolls_back_without_retry(
+    failure: str,
+) -> None:
+    harness = _Harness()
+    if failure == "clock-regression":
+        harness.observed_at = INTERVAL_END - timedelta(microseconds=1)
+        harness.purge_after = harness.observed_at + timedelta(days=30)
+    else:
+        harness.purge_after = PURGE_AFTER + timedelta(microseconds=1)
+
+    with pytest.raises(SecurityAuditStoreLossRefused):
+        _run(harness)
+
+    control = harness.connections[2]
+    assert harness.append_calls == 1
+    assert control.commit_calls == 0
+    assert control.rollback_calls == 1
+    assert len(harness.connections) == 3
+
+
+def _test_witness() -> provisioning_module._StoreLossLiveWitness:
+    return provisioning_module._StoreLossLiveWitness(
+        control_database_oid=5,
+        backend_pid=451,
+        system_identifier=SYSTEM_IDENTIFIER,
+        server_version_num=SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
+        server_version=SUPPORTED_POSTGRESQL_SERVER_VERSION,
+        bigint_classid=1,
+        bigint_objid=2,
+        integer_pair_classid=3,
+        integer_pair_objid=4,
+    )
+
+
+@pytest.mark.parametrize(
+    ("stage", "protected_sql"),
+    (("fresh", store_loss.FRESH_STATE_SQL), ("control", store_loss.CLOCK_SQL)),
+    ids=("wrong-admin", "wrong-control"),
+)
+def test_wrong_admin_or_control_identity_refuses_before_protected_sql(
+    stage: str,
+    protected_sql: str,
+) -> None:
+    harness = _Harness()
+    harness.admission_identities[stage] = ("wrong_login", "wrong_role")
+
+    with pytest.raises(SecurityAuditStoreLossRefused):
+        _run(harness)
+
+    connection = harness.connections[-1]
+    assert all(query != protected_sql for query, _parameters in connection.commands)
+    assert harness.append_calls == 0
+
+
+def test_wrong_migrator_identity_refuses_before_migration_transaction() -> None:
+    harness = _Harness()
+    harness.admission_identities["migrator"] = ("wrong_login", "wrong_login")
+    connection = _Connection(harness, "migrator")
+
+    with pytest.raises(MigrationTargetError, match="migrator route posture"):
+        migration_runner_module._require_store_loss_migrator_admission(
+            connection,
+            _test_witness(),
+        )
+
+    assert len(connection.commands) == 1
+    assert "WITH witness_locks AS" in connection.commands[0][0]
 
 
 @pytest.mark.parametrize(
@@ -620,6 +793,53 @@ def test_cli_diagnostic_failure_preserves_the_closed_exit(stderr: _Output) -> No
     ) == 2
 
 
+def _run_command(
+    argv: tuple[str, ...],
+    environment: dict[str, str],
+) -> subprocess.CompletedProcess[bytes]:
+    controlled_environment = {
+        "PATH": os.environ.get("PATH", ""),
+        "PYTHONPATH": str(PACKAGE_ROOT),
+    }
+    controlled_environment.update(environment)
+    return subprocess.run(
+        (
+            sys.executable,
+            "-m",
+            "deployment.postgresql.run_security_audit_store_loss",
+            *argv,
+        ),
+        cwd=PACKAGE_ROOT,
+        env=controlled_environment,
+        capture_output=True,
+        timeout=90,
+        check=False,
+    )
+
+
+def test_actual_command_process_refuses_invalid_input() -> None:
+    result = _run_command((), {})
+    assert result.returncode == 2
+    assert result.stdout == b""
+    assert result.stderr == b"security-audit store-loss recovery command is invalid\n"
+
+
+def test_actual_command_process_sanitizes_database_failure() -> None:
+    environment = _cli_environment()
+    environment[STORE_LOSS_ADMIN_DSN_ENVIRONMENT] = (
+        "host=127.0.0.1 port=1 user=ofarm password=SECRET-SUBPROCESS-CANARY"
+    )
+    result = _run_command(_cli_argv(), environment)
+    assert result.returncode == 3
+    assert result.stdout == b""
+    assert result.stderr == (
+        b"security-audit store-loss recovery was refused; "
+        b"keep the target quarantined\n"
+    )
+    assert b"SECRET" not in result.stderr
+    assert b"Traceback" not in result.stderr
+
+
 def test_public_owner_apis_and_production_sql_have_no_destructive_surface() -> None:
     assert tuple(inspect.signature(provision_service).parameters) == (
         "admin_dsn", "spec", "login_passwords"
@@ -659,6 +879,57 @@ def _database_dsn(
     parameters = psycopg.conninfo.conninfo_to_dict(admin_dsn)
     parameters.update(dbname=database_name, user=user, password=password)
     return psycopg.conninfo.make_conninfo(**parameters)
+
+
+def _live_inputs(
+    admin_dsn: str,
+    *,
+    execution_id: UUID,
+    release_identity: str,
+) -> tuple[StoreLossRecoveryRequest, StoreLossRecoverySecrets]:
+    spec = SECURITY_AUDIT_PROVISIONING_SPEC
+    passwords = tuple(
+        (role, f"store-loss-{index}-{secrets.token_urlsafe(32)}")
+        for index, role in enumerate(spec.required_password_role_names)
+    )
+    password_map = dict(passwords)
+    return (
+        StoreLossRecoveryRequest(
+            loss_start=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            release_identity=release_identity,
+            execution_id=execution_id,
+        ),
+        StoreLossRecoverySecrets(
+            admin_dsn=admin_dsn,
+            migrator_dsn=_database_dsn(
+                admin_dsn,
+                spec.database_name,
+                "ofarm_migrator",
+                password_map["ofarm_migrator"],
+            ),
+            control_dsn=_database_dsn(
+                admin_dsn,
+                spec.database_name,
+                "ofarm_security_audit_control_login",
+                password_map["ofarm_security_audit_control_login"],
+            ),
+            login_passwords=passwords,
+        ),
+    )
+
+
+def _command_environment(
+    secret_carrier: StoreLossRecoverySecrets,
+) -> dict[str, str]:
+    environment = {
+        STORE_LOSS_ADMIN_DSN_ENVIRONMENT: secret_carrier.admin_dsn,
+        STORE_LOSS_MIGRATOR_DSN_ENVIRONMENT: secret_carrier.migrator_dsn,
+        STORE_LOSS_CONTROL_DSN_ENVIRONMENT: secret_carrier.control_dsn,
+    }
+    password_map = dict(secret_carrier.login_passwords)
+    for role_name, environment_name in STORE_LOSS_PASSWORD_ENVIRONMENTS:
+        environment[environment_name] = password_map[role_name]
+    return environment
 
 
 def _assert_live_service_absent(admin_dsn: str) -> None:
@@ -728,34 +999,10 @@ def test_live_recovery_creates_one_gap_and_rerun_is_read_only_refused(
     admin_dsn = _live_admin_dsn()
     _assert_live_service_absent(admin_dsn)
     spec = SECURITY_AUDIT_PROVISIONING_SPEC
-    passwords = tuple(
-        (
-            role,
-            f"store-loss-{index}-{secrets.token_urlsafe(32)}",
-        )
-        for index, role in enumerate(spec.required_password_role_names)
-    )
-    password_map = dict(passwords)
-    secret_carrier = StoreLossRecoverySecrets(
-        admin_dsn=admin_dsn,
-        migrator_dsn=_database_dsn(
-            admin_dsn,
-            spec.database_name,
-            "ofarm_migrator",
-            password_map["ofarm_migrator"],
-        ),
-        control_dsn=_database_dsn(
-            admin_dsn,
-            spec.database_name,
-            "ofarm_security_audit_control_login",
-            password_map["ofarm_security_audit_control_login"],
-        ),
-        login_passwords=passwords,
-    )
-    request = StoreLossRecoveryRequest(
-        loss_start=datetime(2026, 1, 1, tzinfo=timezone.utc),
-        release_identity="ofarm-tests/store-loss-live",
+    request, secret_carrier = _live_inputs(
+        admin_dsn,
         execution_id=UUID("018f0f2a-6a38-7d9b-a4c8-33e9f27b2f6e"),
+        release_identity="ofarm-tests/store-loss-live",
     )
     witness_admissions: list[tuple[str, str]] = []
     original_assertion = (
@@ -824,6 +1071,139 @@ def test_live_recovery_creates_one_gap_and_rerun_is_read_only_refused(
             ).fetchone() == (1,)
     finally:
         _destroy_live_test_service(admin_dsn)
+
+
+def test_actual_command_process_recovers_live_service() -> None:
+    admin_dsn = _live_admin_dsn()
+    _assert_live_service_absent(admin_dsn)
+    request, secret_carrier = _live_inputs(
+        admin_dsn,
+        execution_id=UUID("018f0f2a-6a38-7d9b-a4c8-33e9f27b2f72"),
+        release_identity="ofarm-tests/store-loss-subprocess",
+    )
+    argv = (
+        "--loss-start",
+        "2026-01-01T00:00:00.000000Z",
+        "--release-identity",
+        request.release_identity,
+        "--execution-id",
+        str(request.execution_id),
+    )
+    try:
+        result = _run_command(argv, _command_environment(secret_carrier))
+        assert result.returncode == 0
+        assert result.stderr == b""
+        document = json.loads(result.stdout)
+        assert document["schema"] == store_loss.STORE_LOSS_REPORT_SCHEMA
+        assert document["outcome"] == "RECOVERED"
+        assert document["countUnknown"] is True
+        assert document["migrationExecutionId"] == str(request.execution_id)
+        assert result.stdout.endswith(b"\n")
+        for _role_name, password in secret_carrier.login_passwords:
+            assert password.encode() not in result.stdout
+    finally:
+        _destroy_live_test_service(admin_dsn)
+
+
+def test_live_rolled_back_access_sequence_refuses_after_one_gap(
+    monkeypatch,
+) -> None:
+    admin_dsn = _live_admin_dsn()
+    _assert_live_service_absent(admin_dsn)
+    request, secret_carrier = _live_inputs(
+        admin_dsn,
+        execution_id=UUID("018f0f2a-6a38-7d9b-a4c8-33e9f27b2f73"),
+        release_identity="ofarm-tests/store-loss-access-rollback",
+    )
+    original_fresh_observation = store_loss._observe_fresh_state
+
+    def observe_then_rollback_access(
+        dependencies,
+        invocation,
+        witness,
+        migration_set,
+    ) -> None:
+        original_fresh_observation(
+            dependencies,
+            invocation,
+            witness,
+            migration_set,
+        )
+        with psycopg.connect(secret_carrier.control_dsn) as control:
+            access = control.execute(
+                """
+                SELECT * FROM ofarm_security.commit_audit_access_intent(
+                    'OPERATIONAL_DIAGNOSTIC_QUERY_V1', %s,
+                    NULL, NULL, 10, 100000
+                )
+                """,
+                (QUERY_IDENTITY,),
+            ).fetchone()
+            assert access[0] is not None
+            control.rollback()
+        target_admin_dsn = _database_dsn(
+            admin_dsn,
+            SECURITY_AUDIT_PROVISIONING_SPEC.database_name,
+            "ofarm",
+            psycopg.conninfo.conninfo_to_dict(admin_dsn)["password"],
+        )
+        with psycopg.connect(target_admin_dsn, autocommit=True) as admin:
+            assert admin.execute(
+                "SELECT pg_catalog.count(*) FROM "
+                "ofarm_security.operational_security_event"
+            ).fetchone() == (0,)
+            assert admin.execute(
+                "SELECT last_value > 0, is_called FROM "
+                "ofarm_security.operational_security_access_clock_high_water"
+            ).fetchone() == (True, True)
+
+    monkeypatch.setattr(
+        store_loss,
+        "_observe_fresh_state",
+        observe_then_rollback_access,
+    )
+    try:
+        with pytest.raises(SecurityAuditStoreLossRefused):
+            store_loss.SecurityAuditStoreLossRecoveryRunner().run(
+                request,
+                secret_carrier,
+            )
+        parameters = psycopg.conninfo.conninfo_to_dict(admin_dsn)
+        parameters["dbname"] = SECURITY_AUDIT_PROVISIONING_SPEC.database_name
+        with psycopg.connect(
+            psycopg.conninfo.make_conninfo(**parameters),
+            autocommit=True,
+        ) as admin:
+            assert admin.execute(
+                """
+                SELECT event_kind::text, pg_catalog.count(*)::bigint
+                FROM ofarm_security.operational_security_event
+                GROUP BY event_kind
+                ORDER BY event_kind
+                """
+            ).fetchall() == [("AUDIT_GAP", 1)]
+            assert admin.execute(
+                "SELECT last_value > 0, is_called FROM "
+                "ofarm_security.operational_security_access_clock_high_water"
+            ).fetchone() == (True, True)
+    finally:
+        _destroy_live_test_service(admin_dsn)
+
+
+def test_live_short_route_enforces_actual_statement_timeout() -> None:
+    admin_dsn = _live_admin_dsn()
+    short_dsn = store_loss._bounded_dsn(
+        admin_dsn,
+        "postgres",
+        store_loss.STORE_LOSS_SHORT_OPTIONS,
+    )
+    with psycopg.connect(short_dsn, autocommit=True) as connection:
+        started = monotonic()
+        with pytest.raises(psycopg.Error) as raised:
+            connection.execute("SELECT pg_catalog.pg_sleep(10)")
+        elapsed = monotonic() - started
+    assert raised.value.sqlstate == "57014"
+    assert 1.0 <= elapsed < 8.0
 
 
 def _hostile_passwords() -> dict[str, str]:

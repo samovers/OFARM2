@@ -14561,6 +14561,21 @@
       "sourcePath": "kernel/tests/test_security_audit_runtime.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_actual_command_process_recovers_live_service",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_actual_command_process_refuses_invalid_input",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_actual_command_process_sanitizes_database_failure",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_ambiguous_commit_recovers_only_from_the_one_exact_final_event",
       "sourceModule": "kernel.tests.test_security_audit_store_loss",
       "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
@@ -14641,6 +14656,71 @@
       "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_each_dirty_fresh_state_field_refuses_before_control[access-clock-called]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_each_dirty_fresh_state_field_refuses_before_control[access-clock-value]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_each_dirty_fresh_state_field_refuses_before_control[event]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_each_dirty_fresh_state_field_refuses_before_control[identity-lock-count]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_each_dirty_fresh_state_field_refuses_before_control[identity-lock-max]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_each_dirty_fresh_state_field_refuses_before_control[identity-lock-min]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_each_dirty_fresh_state_field_refuses_before_control[quota-bucket]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_each_dirty_fresh_state_field_refuses_before_control[quota-high-water]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_each_dirty_fresh_state_field_refuses_before_control[receipt-count]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_each_dirty_fresh_state_field_refuses_before_control[receipt-pair-count]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_each_dirty_fresh_state_field_refuses_before_control[receipt-slot-max]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_each_dirty_fresh_state_field_refuses_before_control[receipt-slot-min]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_each_dirty_fresh_state_field_refuses_before_control[used-receipt]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_every_supplied_dsn_replaces_database_timeouts_and_options",
       "sourceModule": "kernel.tests.test_security_audit_store_loss",
       "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
@@ -14657,6 +14737,16 @@
     },
     {
       "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_failed_final_observation_never_retries_the_append[True]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_invalid_append_clock_or_purge_rolls_back_without_retry[clock-regression]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_invalid_append_clock_or_purge_rolls_back_without_retry[purge-deadline]",
       "sourceModule": "kernel.tests.test_security_audit_store_loss",
       "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
     },
@@ -14691,6 +14781,16 @@
       "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_live_rolled_back_access_sequence_refuses_after_one_gap",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_live_short_route_enforces_actual_statement_timeout",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_lost_or_split_witness_refuses_each_runner_owned_connection[control-0-3]",
       "sourceModule": "kernel.tests.test_security_audit_store_loss",
       "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
@@ -14706,6 +14806,16 @@
       "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_nonadvancing_database_end_rolls_back_without_append[before-start]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_nonadvancing_database_end_rolls_back_without_append[equal-start]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_public_owner_apis_and_production_sql_have_no_destructive_surface",
       "sourceModule": "kernel.tests.test_security_audit_store_loss",
       "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
@@ -14717,6 +14827,21 @@
     },
     {
       "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_success_holds_one_witness_and_emits_one_exact_report",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_wrong_admin_or_control_identity_refuses_before_protected_sql[wrong-admin]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_wrong_admin_or_control_identity_refuses_before_protected_sql[wrong-control]",
+      "sourceModule": "kernel.tests.test_security_audit_store_loss",
+      "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_store_loss.py::test_wrong_migrator_identity_refuses_before_migration_transaction",
       "sourceModule": "kernel.tests.test_security_audit_store_loss",
       "sourcePath": "kernel/tests/test_security_audit_store_loss.py"
     },
@@ -17151,8 +17276,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "64a3442d649ae68af4221b20d9d90c7dc8bbc6b791aff2d9a5eead720b03d567",
-  "entryCount": 3430,
+  "entriesSha256": "c898b680252908a55ff517be96e32de44384671e9fc2278a920e12975a7dc850",
+  "entryCount": 3455,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
