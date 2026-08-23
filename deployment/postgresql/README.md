@@ -708,6 +708,70 @@ This command is not a scheduler or drain loop. It makes no deployment,
 readiness, continuity, lossless-retention, legal-hold, backup, replica, WAL,
 vacuum, media-sanitization, or physical-erasure claim.
 
+## One-shot security-audit store-loss recovery
+
+The store-loss command rebuilds only one absent, unpublished security-audit
+service. Before invocation, external authorities must have declared the old
+service lost, made the fixed target database and every governed `ofarm_*` role
+absent, kept every replacement credential and route quarantined from
+producers/readers/maintenance jobs, and supplied a conservative loss-start
+timestamp. Deployment evidence must separately establish a non-regressing
+replacement PostgreSQL clock throughout the operation.
+
+The command uses these fixed secret environment names:
+
+```text
+OFARM_SECURITY_AUDIT_PG_ADMIN_DSN
+OFARM_SECURITY_AUDIT_MIGRATOR_DSN
+OFARM_SECURITY_AUDIT_CONTROL_PG_DSN
+OFARM_SECURITY_AUDIT_MIGRATOR_LOGIN_PASSWORD
+OFARM_SECURITY_AUTHENTICATION_PRODUCER_LOGIN_PASSWORD
+OFARM_SECURITY_REQUEST_ROUTER_PRODUCER_LOGIN_PASSWORD
+OFARM_SECURITY_AUDIT_CONTROL_LOGIN_PASSWORD
+OFARM_SECURITY_AUDIT_READER_LOGIN_PASSWORD
+OFARM_SECURITY_AUDIT_RETENTION_LOGIN_PASSWORD
+OFARM_SECURITY_AUDIT_READINESS_LOGIN_PASSWORD
+```
+
+Invoke it once with only the externally witnessed start, the bounded release
+identity, and one canonical non-nil migration UUID:
+
+```bash
+python -m deployment.postgresql.run_security_audit_store_loss \
+  --loss-start '2026-08-23T08:00:00.000000Z' \
+  --release-identity '<printable-release-id>' \
+  --execution-id '<canonical-non-nil-uuid>'
+```
+
+One runner-owned admin session holds two nonpersistent advisory locks before
+creation starts and through final observation. Every provisioner, migration,
+fresh-state, control, and final-observation connection must see those exact
+locks locally before its first authoritative observation or effect. Recovery
+requires `created = true`, the complete authoritative migration set applied
+from version zero, exact migration-created empty state, one fixed
+`append_audit_gap(start, database_end, 0, true)` call, and one final exact
+one-gap observation. Database name, version, migration history, and system
+identifier alone cannot substitute for the live locks because a promoted
+physical clone can retain all four.
+
+Exit `0` is the only recovered result and emits one canonical ASCII JSON line.
+The other closed exits are:
+
+- exit `2`: invalid arguments or incomplete fixed secrets before PostgreSQL;
+- exit `3`: recovery refused or cleanup failed; keep the target quarantined;
+- exit `4`: append outcome unknown; keep the target quarantined and do not
+  retry; and
+- exit `5`: the database state recovered but complete report delivery failed;
+  keep the target quarantined and do not retry.
+
+There is no supported rerun, repair, adoption, or in-command cleanup path. A
+failed or incomplete target remains quarantined until a separately authorized
+DBA inspects and, if approved, removes it. The report is evidence for an
+external publication authority; it does not publish a route, distribute a
+credential, authorize deployment, or claim that the old service was destroyed.
+The command adds no backup, restore, replica, WAL, CDC, history import, tenant
+recovery, or production operation.
+
 ## One-shot correlation-HMAC version-1 retirement
 
 The correlation-HMAC retirement command is a fixed technical primitive for
