@@ -3,6 +3,7 @@
 ## Status
 
 - **Parent issue:** #192
+- **Draft pull request:** #325
 - **Decision:**
   ISSUE192-SECURITY-AUDIT-ONE-OPERATION-ADMISSION-001, proposed version 1
 - **Phase:** Phase A design only; unapproved
@@ -252,6 +253,9 @@ signatures.
 No role receives SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, or
 TRIGGER on this relation. Only the owner function may access it.
 
+The relation and both version-4 functions are owned by
+ofarm_security_audit_owner.
+
 ### 6.3 Clock wrapper
 
 Version 4 creates:
@@ -372,7 +376,9 @@ class SecurityAuditOperationAdmission:
     def __init__(
         self,
         observer_public_key: bytes,
-        connection_factory: ConnectionFactory = psycopg.connect,
+        connection_factory: _ConnectionFactory = cast(
+            _ConnectionFactory, psycopg.connect
+        ),
     ) -> None: ...
 
     def admit(
@@ -386,6 +392,20 @@ class SecurityAuditOperationAdmission:
 The constructor creates one SecurityAuditDualApprovalVerifier. admit invokes
 that verifier itself. The method accepts no time, operation, digest, interval,
 cursor, role, retry, or effect callback.
+
+`_ConnectionFactory` is a private Protocol and is not exported.
+
+Before opening a connection, admit performs this closed preflight:
+
+- control_conninfo is an exact str, is nonempty after stripping, and parses
+  with psycopg.conninfo.conninfo_to_dict;
+- authority_receipt_bytes is an exact bytes value from 1 through 16,384 bytes;
+  and
+- approval_bundle_bytes is an exact bytes value from 1 through 16,384 bytes.
+
+These carrier bounds restate the merged verifier's public Phase A contract;
+they do not parse or authenticate either carrier. Any later verifier-bound
+change is a stop-and-reauthorize condition here.
 
 The returned dataclass is a normalized in-process handoff, not a serializable
 authorization token. A future credential lifecycle must call admit in the
@@ -408,7 +428,10 @@ The runner opens one control connection with:
 - application_name fixed by code.
 
 Caller-supplied conninfo options are removed and replaced by the fixed
-options. There is no export conninfo and no second connection.
+options. Preflight rebuilds the parsed conninfo after removing
+connect_timeout, options, and application_name with
+psycopg.conninfo.make_conninfo, then supplies all three from code-owned
+connection arguments. There is no export conninfo and no second connection.
 
 ### 7.3 State machine
 
@@ -429,8 +452,6 @@ dependency failure is UNAVAILABLE.
 After CONTROL_OPEN and before CONSUME_SUBMITTED, invalid carrier, signature,
 approval, or validity is REFUSED after rollback. A connection, statement, or
 malformed database-result failure is UNAVAILABLE after rollback.
-
-REPLAYED and CONFLICT are REFUSED and never commit an admission mutation.
 
 After CONSUME_SUBMITTED, REPLAYED and CONFLICT are REFUSED after rollback. A
 connection, statement, or malformed database-result failure before commit is
@@ -477,6 +498,12 @@ the same outward class. Neither exposes whether an operation ID exists.
 SecurityAuditAdmissionOutcomeUnknown contains no operation ID, digest,
 conninfo, carrier, database text, cause, context, or retry instruction beyond
 the fixed message that the operation must not be retried.
+
+The exact public exception messages are:
+
+    security-audit operation admission was refused
+    security-audit operation admission is unavailable
+    security-audit operation admission outcome is unknown; do not retry this operation
 
 ### 7.6 Failure hygiene
 
