@@ -24,8 +24,9 @@ unknown-count evidence gap before that store may be published to producers
 **Maximum final pull request boundary:** this RFC; one fixed deployment-layer
 recovery runner; one fixed command adapter; focused unit and live-PostgreSQL
 tests, including the existing physical-clone hostile harness; minimal operator
-documentation; architecture-budget registration; and the mechanically
-regenerated review-baseline test inventory only
+documentation; narrowly scoped private store-loss admission support in the
+existing provisioner and migration runner; architecture-budget registration;
+and the mechanically regenerated review-baseline test inventory only
 
 ## 1. Problem and goal
 
@@ -43,15 +44,16 @@ these facts into one fail-closed transition:
 1. the target database and every governed audit role were absent when this
    invocation started;
 2. one runner-owned, nonpersistent witness remained present on the exact live
-   PostgreSQL server from before creation through effectful-route admission;
+   PostgreSQL server from before creation through final observation;
 3. this invocation, rather than an earlier deployment, created the target;
 4. this invocation applied the complete authoritative migration set from
    version zero;
 5. the migrated target contained no operational event, quota, high-water, or
    used overflow-receipt state;
-6. the effectful audit-control connection reached that same live server,
-   provisioned database, and PostgreSQL system before it read a clock or
-   appended;
+6. every separate provisioning, migration, fresh-observation, effectful
+   control, and final-observation connection proved locally that it reached
+   that still-witnessed live server before its first authoritative observation
+   or effect;
 7. the loss interval began at an externally witnessed conservative time and
    ended at the replacement database's clock while producer routes remained
    unpublished;
@@ -72,23 +74,31 @@ This decision establishes one fixed, one-shot recovery operation. It:
 2. uses only the checked-in security-audit provisioning specification and
    authoritative migration set;
 3. establishes one runner-owned, server-local, nonpersistent live-instance
-   witness on the fixed admin server before provisioning;
-4. invokes the existing non-destructive provisioner and requires its report to
-   say created = true;
-5. invokes the existing migration runner once and requires previous version
-   zero, the complete applied-version tuple, and the exact final version;
-6. proves the exact fresh-state inventory before the gap append;
-7. binds the effectful audit-control transaction to that still-live witness and
-   the same database, system identifier, and supported PostgreSQL version
-   proven by provisioning and migration, with exact writable-primary
+   witness on the fixed admin server before provisioning and retains it through
+   final observation;
+4. invokes the existing non-destructive provisioner through one private fixed
+   store-loss mode, requires every connection it opens to admit that witness
+   locally before target observation or effect, and requires its report to say
+   created = true;
+5. invokes the existing migration runner once through one private fixed
+   store-loss mode, requires its infrastructure-observation and migrator
+   connections to admit that witness locally before observation or mutation,
+   and requires previous version zero, the complete applied-version tuple, and
+   the exact final version;
+6. proves the exact fresh-state inventory only after that observation
+   connection locally admits the witness;
+7. binds the effectful audit-control transaction to that same still-live
+   witness and the same database, system identifier, and supported PostgreSQL
+   version proven by provisioning and migration, with exact writable-primary
    transaction posture;
 8. obtains the interval end from PostgreSQL clock_timestamp under that bound
    exact audit-control login with synchronous_commit on;
 9. invokes only append_audit_gap(loss_start, database_end, 0, true), at most
    once;
 10. performs one bounded read-only final observation, including after a commit
-   ambiguity, and succeeds only if the replacement store contains exactly the
-   one expected gap and no producer/quota activity; and
+   ambiguity, admits the still-held witness on that exact connection before
+   accepting state, and succeeds only if the replacement store contains
+   exactly the one expected gap and no producer/quota activity; and
 11. emits one canonical non-secret success report only after that observation.
 
 The operation never drops, deletes, truncates, restores, copies, repairs, or
@@ -161,11 +171,12 @@ while the original store remains intact, with no independently witnessed loss
 start and no fresh replacement target, remains separate #192 crash-witness
 work.
 
-The ephemeral advisory-lock witness proves only that the effectful control
-connection reaches the same live PostgreSQL postmaster observed before this
-invocation created its replacement target. It does not prove uninterrupted
-history, witness the loss start, identify or destroy the old store, attest a
-host, or authorize backup, restore, replication, or promotion.
+The ephemeral advisory-lock witness proves only that each connection whose
+observation or effect is authoritative for this invocation reaches the same
+live PostgreSQL postmaster observed before this invocation created its
+replacement target. It does not prove uninterrupted history, witness the loss
+start, identify or destroy the old store, attest a host, or authorize backup,
+restore, replication, or promotion.
 
 ## 4. Trust model
 
@@ -178,8 +189,9 @@ host, or authorize backup, restore, replication, or promotion.
 - one conservative disclosure interval with unknown event count;
 - no producer access before the disclosure is durably verified;
 - no duplicate maintenance append after commit ambiguity;
-- no mutation of a different structurally valid audit store through a
-  misdirected control route;
+- no observation or mutation of a different structurally valid audit store is
+  accepted through any separately opened provisioner, migrator, control, or
+  inventory route;
 - no promoted physical clone is mistaken for the exact live server admitted by
   this invocation;
 - separation of DBA, migrator, and audit-control capabilities;
@@ -194,9 +206,11 @@ host, or authorize backup, restore, replication, or promotion.
 - the existing fixed SECURITY_AUDIT_PROVISIONING_SPEC;
 - the authoritative SECURITY_AUDIT_SERVICE migration set loaded from the
   checked-out package;
-- provision_service and its create-only-or-read-only-verify behavior;
+- provision_service and its create-only-or-read-only-verify behavior, with its
+  public entry point unchanged and one private fixed store-loss admission mode;
 - migrate_service and its exact migration identity, transaction, ledger, and
-  final-structure checks;
+  final-structure checks, with its public entry point unchanged and one private
+  fixed store-loss admission mode;
 - Python's operating-system-backed cryptographic random-byte generator;
 - PostgreSQL session advisory-lock and pg_locks semantics, including that the
   locks are server-local, end with their session, and are not WAL-replayed;
@@ -263,17 +277,17 @@ append success.
 | Exact migration membership, order, bytes, and final version | authoritative SECURITY_AUDIT_SERVICE migration set |
 | Permission to declare this a store-loss attempt | external security-operations authority |
 | Conservative interval start | exact canonical timestamp supplied by that external authority |
-| Exact live PostgreSQL server for this invocation | one runner-owned admin session holding two internal server-local advisory locks from before provisioning through control admission |
-| Target and governed-role absence before creation | existing provision_service observation under the external DBA route |
+| Exact live PostgreSQL server for this invocation | one runner-owned admin session holding two internal server-local advisory locks from before provisioning through final observation, plus one exact connection-local lock observation on every authoritative connection |
+| Target and governed-role absence before creation | existing provision_service observation under the external DBA route after that exact admin connection admits the live witness |
 | Proof this invocation created the target | returned ProvisioningReport.created is exactly true |
-| Migration started from version zero and completed | exact MigrationRunReport from this invocation |
-| Fresh operational-data posture | fixed admin read-only inventory after migration |
-| Exact structural compatibility | migration runner's final structural verification on the database and system identifier bound to this invocation |
+| Migration started from version zero and completed | exact MigrationRunReport from this invocation after its infrastructure and migrator connections each admit the live witness |
+| Fresh operational-data posture | fixed admin read-only inventory after that exact observation connection admits the live witness |
+| Exact structural compatibility | migration runner's final structural verification on the locally witnessed database and system identifier bound to this invocation |
 | Effectful control-route live server, target, and transaction posture | exact same-transaction witness and identity row matched to the runner-owned live session, provisioning report, migration report, fixed service specification, and supported PostgreSQL version policy |
 | Interval end and event observed time | replacement PostgreSQL clock_timestamp |
 | Gap event kind, producer, component, count posture, and retention | append_audit_gap and migration constraints |
 | Clock monotonicity throughout recovery | external deployment evidence; never a process-clock or fresh-database self-attestation |
-| Gap durability acknowledgement | synchronous commit plus final read-only observation |
+| Gap durability acknowledgement | synchronous commit plus final read-only observation whose exact connection first admits the still-held live witness |
 | Whether producers may be published | external deployment authority consuming exact success only |
 | Public result bytes | one fixed canonical renderer |
 
@@ -299,19 +313,25 @@ The runner has these closed states:
    side effect is two nonblocking session advisory-lock attempts.
 3. WITNESS_HELD — the exact live server identity and both advisory locks are
    held by that runner-owned session; no provisioning has begun.
-4. PROVISIONING — the existing create-or-verify provisioner has been entered.
+4. PROVISIONING — the existing create-or-verify provisioner's private
+   store-loss mode has been entered; each connection must admit the witness
+   locally before its first authoritative target observation or effect.
 5. CREATED — the exact report proves this invocation created the target.
-6. MIGRATING — the existing authoritative migration runner has been entered.
-7. MIGRATED_EMPTY — migration and the fixed fresh-state observation succeeded.
+6. MIGRATING — the existing authoritative migration runner's private
+   store-loss mode has been entered; its infrastructure and migrator
+   connections must admit the witness locally before authoritative work.
+7. MIGRATED_EMPTY — migration and a locally witnessed fixed fresh-state
+   observation succeeded.
 8. CONTROL_BINDING — the control transaction is open, and only its exact
    live-witness, target-identity, and transaction-posture query is permitted;
    no clock read or append has occurred.
 9. GAP_PRE_COMMIT — the control transaction is live-server- and target-bound,
-   the witness session has been closed, and no COMMIT was sent.
+   the witness session remains held, and no COMMIT was sent.
 10. GAP_COMMIT_IN_FLIGHT — COMMIT was sent and acknowledgement is not yet known.
-11. VERIFYING — no further mutation is permitted; one final read-only
-   observation is in progress.
-12. RECOVERED — the exact final state is proven and one success report exists.
+11. VERIFYING — no further mutation is permitted; the witness remains held and
+   one final read-only observation is in progress.
+12. RECOVERED — the exact final state is proven, the witness session has been
+   closed, and one success report exists.
 13. QUARANTINED — recovery did not succeed and the target must not be
     published.
 14. OUTCOME_UNKNOWN — the final observation cannot prove the one-gap state
@@ -342,8 +362,9 @@ connection has connect_timeout = 5 seconds. Provisioning and migration routes
 use statement_timeout = 300,000 milliseconds and lock_timeout = 5,000
 milliseconds. The witness route, control route, and both admin inventory
 observations use statement_timeout = 2,000 milliseconds and lock_timeout = 250
-milliseconds. No timeout is caller-selectable. The witness lock calls are
-nonblocking regardless of lock_timeout.
+milliseconds. The fixed connection-local witness assertion runs inside each
+owning connection's existing bounded statement budget. No timeout is caller-
+selectable. The witness lock calls are nonblocking regardless of lock_timeout.
 
 Those settings bound connection establishment and PostgreSQL statement and
 lock waits. They do not impose a wall-clock deadline on Python cleanup,
@@ -413,17 +434,56 @@ runner never resamples or retries. Closing the session also releases a first
 lock if the second attempt refused.
 
 After both calls succeed, the runner enters WITNESS_HELD. It keeps that exact
-session open but sends it no further database command before control admission.
-Provisioning, migration, and observations use their already fixed separate
-routes. A lost witness session is not re-established; the later control query
-will refuse because its server-local locks are absent.
+session open through final observation and sends it no further database
+command. Provisioning, migration, and observations retain their already fixed
+separate routes, but route equality, database name, PostgreSQL version, and
+system identifier are not treated as proof that two separately opened
+connections reached one live postmaster.
 
-Only after WITNESS_HELD does the runner call provision_service exactly once
-with:
+The witness observation becomes one private immutable carrier containing only
+the control-database OID, witness backend PID, system identifier, exact numeric
+and textual PostgreSQL versions, and both exact pg_locks addresses. It is
+constructed only by the recovery runner after both locks are held. It cannot be
+supplied by a command caller, rendered, persisted, or used with the tenant
+service.
+
+provisioning.py owns the carrier shape and one private, fixed connection-local
+assertion. That assertion executes the exact query specified in section 6.5 on
+the connection being admitted. It requires the retained system identifier and
+versions, writable-primary posture, exactly two granted ExclusiveLock rows for
+the retained control-database OID and backend PID, and exactly one row at each
+retained advisory-lock address. It returns the same row's session user, current
+user, current database, and transaction settings so the owning phase can apply
+its already fixed role, database, and transaction-posture rules. No caller-
+supplied SQL, predicate, callback, expected identity, or optional action is
+accepted.
+
+The assertion is available only through private store-loss entry points in
+provisioning.py and migration_runner.py and directly to the fixed recovery
+runner's fresh, control, and final observations. The public provision_service,
+verify_service_infrastructure, and migrate_service signatures and behavior
+remain unchanged. A lost witness session is not re-established, resampled, or
+retried; the next connection-local assertion refuses because its server-local
+locks are absent.
+
+Only after WITNESS_HELD does the runner invoke the existing provisioner exactly
+once through its private security-audit store-loss entry point with:
 
 - the fixed admin route;
 - SECURITY_AUDIT_PROVISIONING_SPEC; and
-- the exact fixed login-password map.
+- the exact fixed login-password map; and
+- the private live-witness carrier.
+
+That entry point permits only SECURITY_AUDIT_PROVISIONING_SPEC. On the owning
+admin connection, the fixed witness assertion runs after fixed session-setting
+commands but before DBA acceptance, the provisioning lock, absence checks, or
+role/database creation. On each separately opened target connection used to
+configure or verify the service, it runs after transaction/session setup but
+before target identity or catalog state is accepted and before any DDL. A
+connection that cannot see the exact locks refuses before its own relevant
+observation or effect. Earlier effects on a correctly witnessed connection are
+not adopted or repaired if a later connection refuses; the target becomes
+quarantined.
 
 Any exception or report with created other than true enters QUARANTINED. An
 existing target, even if perfectly verified and empty, is not adopted. The
@@ -431,9 +491,16 @@ report's system identifier and numeric PostgreSQL version must equal the
 witness observation.
 
 The runner then loads the authoritative audit migration set from the package
-and calls migrate_service exactly once. The report must bind the expected
-audit migration-service identity, the expected audit provisioning-service
-identity from the preceding report, and the same provisioning digest,
+and invokes the existing migration runner exactly once through its private
+security-audit store-loss entry point. That entry point accepts only the
+authoritative audit pair and the private live-witness carrier. Its fixed admin
+infrastructure observation runs once without the general migration runner's
+busy retry and asserts the witness on both its separately opened admin and
+target connections before accepting infrastructure state. Its migrator
+connection asserts the witness before target identity, the migration lock,
+migration SQL, or ledger observation or mutation. The report must bind the
+expected audit migration-service identity, the expected audit provisioning-
+service identity from the preceding report, and the same provisioning digest,
 database, system identifier, and numeric PostgreSQL version. Those target
 fields must also equal the retained live-witness server observation. The report
 must prove:
@@ -451,8 +518,13 @@ unpublished target under separately authorized DBA control.
 
 ### 6.4 Fresh-state observation
 
-Under the fixed admin route, one repeatable-read, read-only transaction checks
-the exact migrated target and system identifier and requires:
+Under the fixed admin route, one repeatable-read, read-only transaction first
+executes the section 6.5 connection-local witness assertion on that exact
+connection. The returned row must also prove the same external superuser as
+SESSION_USER and CURRENT_USER, the fixed audit database, the retained system
+identifier and versions, writable-primary server posture, transaction read
+only on, and transaction isolation repeatable read. Only then may the same
+transaction check the exact migrated target and require:
 
 - zero operational_security_event rows;
 - zero operational_security_quota_bucket rows;
@@ -468,8 +540,9 @@ The migration report already includes the migration runner's accepted final
 structure check. The new admin query does not copy the existing readiness
 verifier's catalog rules.
 
-The transaction returns counts and booleans only. It never returns event
-contents, credentials, role passwords, or SQL text. Any unexpected state
+The transaction returns counts and booleans only after local witness admission.
+It never returns event contents, credentials, role passwords, or SQL text. Any
+unexpected state
 enters QUARANTINED before the gap append.
 
 This check proves fresh migrated database state. The separate deployment
@@ -479,13 +552,12 @@ the operation is not deployable and must not be invoked.
 
 ### 6.5 Gap transaction
 
-The runner opens one non-autocommit control connection with fixed bounded
-connection, statement, and lock timeouts. It begins one explicit READ COMMITTED
-READ WRITE transaction and enters CONTROL_BINDING. The first query in that
-transaction is exactly one live-witness, target-identity, and
-transaction-posture observation. Its six bind parameters are the two signed
-32-bit lock-table halves for each internal key, followed by the witness control-
-database OID and backend PID:
+The following is the one exact connection-local witness assertion used by every
+authoritative connection in this operation. Its six bind parameters are the
+two signed 32-bit lock-table halves for each internal key, followed by the
+witness control-database OID and backend PID. Each owning phase validates the
+same row's fixed role, database, and transaction posture before performing or
+accepting its own work:
 
 ~~~sql
 WITH witness_locks AS (
@@ -524,6 +596,12 @@ FROM pg_catalog.pg_control_system() AS control
 CROSS JOIN witness_locks
 ~~~
 
+The runner opens one non-autocommit control connection with fixed bounded
+connection, statement, and lock timeouts. It begins one explicit READ COMMITTED
+READ WRITE transaction and enters CONTROL_BINDING. The assertion above is the
+first query in that transaction and is also its target-identity and
+transaction-posture observation.
+
 The result must be exactly one row and must prove all of these facts before
 the state may move to GAP_PRE_COMMIT:
 
@@ -553,13 +631,13 @@ the system-identifier comparison. A promoted physical clone may share that
 identifier but fails the live lock observation because advisory locks are not
 WAL-replayed.
 
-After the exact row is admitted, the runner closes the witness session and
-drops its in-memory witness references before moving to GAP_PRE_COMMIT. A close
-or cleanup failure rolls back the control transaction and quarantines before
-any clock or append query. The already-open control connection remains bound to
-the same live server for the rest of its transaction. This query binds only the
-effectful route to the already admitted live server and target; it does not
-become a second structural verifier or persistent recovery authority.
+After the exact row is admitted, the runner moves to GAP_PRE_COMMIT but retains
+the untouched witness session and private carrier through final observation.
+The already-open control connection remains bound to the same live server for
+the rest of its transaction. This query binds the effectful route locally to
+the same live server already admitted on every earlier authoritative
+connection; it does not become a second structural verifier or persistent
+recovery authority.
 
 Inside one transaction it:
 
@@ -589,8 +667,13 @@ also moves to VERIFYING but records that the acknowledgement was ambiguous.
 ### 6.6 Final observation and ambiguity
 
 The runner performs exactly one new repeatable-read, read-only admin
-observation on the database and PostgreSQL system identifier already bound by
-this invocation's provisioning and migration reports. Success requires:
+observation. The section 6.5 assertion is the first query on that exact
+connection and must still see the held witness. Its row must also prove the
+same external superuser as SESSION_USER and CURRENT_USER, the fixed audit
+database, the retained and reported system identifier and versions,
+writable-primary server posture, transaction read only on, and transaction
+isolation repeatable read. Only then may the same transaction accept database
+state. Success requires:
 
 - exactly one operational event total;
 - that event has the exact event ID returned before COMMIT when that identity
@@ -613,21 +696,28 @@ this invocation's provisioning and migration reports. Success requires:
   is_called = false; and
 - the migration identity remains exact.
 
-RECOVERED requires that exact target-bound one-event observation. The migration
-runner already performed the authoritative final structural verification on
-the same database and system identifier before the control route was admitted.
+RECOVERED requires that exact locally witnessed, target-bound one-event
+observation. The migration runner already performed the authoritative final
+structural verification on the same locally witnessed database before the
+control route was admitted.
 There is no separate final readiness call: its version-only public report would
 be redundant and would not independently identify the target.
+
+After the final transaction returns that exact state, the runner closes the
+witness session, confirms the close completed without an ordinary failure, and
+drops all in-memory witness references before entering RECOVERED. A close or
+cleanup failure withholds success and enters QUARANTINED even though the gap may
+already be durable. The operation does not retry or compensate.
 
 If COMMIT acknowledgement was ambiguous but this exact one-event state is
 visible, the operation may return RECOVERED. The fresh-target invariant and
 one-append maximum make that observation conclusive.
 
-Zero rows, multiple rows, a different row, an unavailable final observation,
-or any other difference enters OUTCOME_UNKNOWN after an ambiguous COMMIT and
-QUARANTINED otherwise. The operation never retries to turn zero rows into one:
-the original server transaction might still become visible after the
-observation.
+Absent witness locks, a different live server, zero rows, multiple rows, a
+different row, an unavailable final observation, or any other difference
+enters OUTCOME_UNKNOWN after an ambiguous COMMIT and QUARANTINED otherwise. The
+operation never retries to turn zero rows into one: the original server
+transaction might still become visible after the observation.
 
 ### 6.7 Output and cleanup
 
@@ -741,7 +831,10 @@ fixed audit-control authority on the exact live server, database, and
 PostgreSQL system identifier proven by this invocation, fixed start/end
 sources, event count zero, and count-unknown true, at most once. The control
 transaction admits the still-live server-local witness and target identity
-before it reads the interval end or attempts the mutation.
+before it reads the interval end or attempts the mutation. Every earlier
+authoritative provisioner, migrator, and fresh-state connection, and the later
+final-observation connection, admits the same witness locally before its own
+observation or effect.
 
 ### SLR-007 — no publication before verified durability
 
@@ -766,30 +859,42 @@ refuses recovery.
 ### SLR-010 — fixed authority and secret separation
 
 Only the fixed admin route may provision and observe operational state, the
-fixed migrator route may migrate, and the fixed audit-control route may append
-only after its same-transaction live witness and identity match the provisioned
-and migrated target. The runner-owned witness session uses the existing
-external DBA route only to observe its fixed control-server posture and acquire
-two internal nonblocking session locks; it is never a caller capability or a
-general admin seam. The command never uses producer, reader, readiness, export,
-retention, HMAC, KMS, tenant, or break-glass authority and never emits a secret
-or witness value.
+fixed migrator route may migrate, and the fixed audit-control route may append.
+Every separately opened authoritative connection must first see the same exact
+server-local witness on itself and satisfy its fixed role, database, version,
+system, primary, and transaction-posture checks. The runner-owned witness
+session uses the existing external DBA route only to observe its fixed control-
+server posture and acquire two internal nonblocking session locks; it is never
+a caller capability or a general admin seam. The two private store-loss entry
+points accept no caller callback, SQL, selector, or tenant mode and leave the
+normal provisioning and migration APIs unchanged. The command never uses
+producer, reader, readiness, export, retention, HMAC, KMS, tenant, or break-
+glass authority and never emits a secret or witness value.
 
 ### SLR-011 — bounded database work, call counts, and diagnostics
 
 The operation has fixed connection and statement budgets, one provision call,
 one migration call, one witness identity observation, two nonblocking witness
-lock attempts, two fixed admin inventory observations, one fixed control
-identity-and-witness observation, one append, one commit, no loop or retry,
-bounded result shapes, fixed diagnostics, and one canonical success object. It
-makes no wall-clock termination claim for operating-system close or output
-writes; failure or short-write paths never become success.
+lock attempts, at most nine fixed connection-local witness assertions, two
+fixed admin inventory observations, one append, one commit, no recovery retry,
+bounded result shapes, fixed diagnostics, and one canonical success object. A
+successful creation path uses the nine assertions exactly once each: three
+provisioner connections, two migration infrastructure-observation connections,
+one migrator connection, and the fresh, control, and final connections. The
+private migration mode performs its infrastructure observation once rather
+than using the general busy retry. It makes no wall-clock termination claim for
+operating-system close or output writes; failure or short-write paths never
+become success.
 
 ### SLR-012 — one trust boundary and exact paths
 
-The pull request changes only this contract's store-loss-recovery allowlist. No
-migration, provisioning authority, tenant path, provider integration,
-break-glass path, or deployment activation is changed.
+The pull request changes only this contract's store-loss-recovery allowlist.
+The provisioner and migration runner may add only the exact private connection-
+local witness carrier, assertion, and fixed security-audit store-loss entry
+points described here; their public entry points, normal behavior, target
+creation rules, migration authority, and tenant paths remain unchanged. No
+numbered migration, provider integration, break-glass path, or deployment
+activation is changed.
 
 ## 8. Production-reachable negative cases
 
@@ -804,13 +909,20 @@ break-glass path, or deployment activation is changed.
 | SLR-007 | Make the append commit acknowledge, then make final observation fail. | no stdout success and target remains quarantined |
 | SLR-008 | Commit the gap but drop the acknowledgement; separately keep the original transaction unresolved while the final read sees zero rows. | exact one visible event may recover; zero or uncertainty becomes OUTCOME_UNKNOWN with no retry |
 | SLR-009 | Let a producer append between observations; separately advance the access-clock sequence through the accepted access path and roll back before an AUDIT_ACCESS row remains. | final event or exact sequence check refuses recovery; no false success |
-| SLR-010 | Provision and migrate exact service A while its witness session is held. First point only the control DSN at independently initialized exact service B. Separately clone A physically, promote clone B, and point only the control DSN at it. Also lose the witness session, use a wrong session/current user, or inject canary secrets and witness values into failures. | independent B fails target identity; promoted clone B and a lost witness fail the exact live-lock observation; every case refuses before the clock read or append; A and B both retain zero events; no traceback, canary, or witness value in output |
+| SLR-010 | Hold the witness on A while separately routing the provisioner admin effect, provisioner target configuration/verification, migration infrastructure observation, migrator effect, fresh observation, control transaction, or final observation to B. Exercise both independently initialized B and promoted physical-lineage B, including equal system identifier/version. Also lose the witness session, use a wrong session/current user, or inject canary secrets and witness values into failures. | every connection-local mismatch refuses before that connection's first relevant observation or effect; the provisioner-admin-on-B case refuses before creation; the migrator-on-B case refuses before migration SQL or ledger mutation; fresh/final B is never certified; control B never reads the clock or appends; stage snapshots prove no mutation on either server in every pre-effect case; no traceback, canary, or witness value in output |
 | SLR-011 | Expire connect/statement/lock budgets; separately make close, stdout write, or flush fail or short-write. | bounded database refusal and fixed call count; cleanup/output failure is never success; no indefinite-OS-call deadline is claimed |
 | SLR-012 | Add a migration, drop helper, provider client, tenant file, workflow, or unlisted path. | mechanical path check blocks Phase B and merge |
 
 These cases use the fixed command, runner, provisioner, migration runner, and
 real PostgreSQL routes. Private-field mutation and impossible database states
 are not acceptance evidence.
+
+The split-route matrix must deterministically select each separate connection,
+not merely reject a DSN string. Rejecting load_balance_hosts=random is
+insufficient because one hostname may resolve to multiple addresses or a
+connection-level load balancer may select different promoted servers. The
+physical-clone harness supplies two live servers with the same system
+identifier; connection-local pg_locks admission is the deciding evidence.
 
 ## 9. Proposed architecture and smallest change
 
@@ -820,8 +932,9 @@ A new deployment/postgresql/security_audit_store_loss.py owns:
 
 - one immutable StoreLossRecoveryRequest;
 - one immutable fixed secret/route carrier;
-- one private, in-memory live-witness carrier that cannot be supplied by a
-  caller or rendered;
+- construction and lifetime of one private, in-memory live-witness carrier
+  whose fixed shape and assertion are owned by provisioning.py and which
+  cannot be supplied by a caller or rendered;
 - one StoreLossRecoveryReport;
 - closed refusal and outcome-unknown error kinds;
 - exact timestamp and report rendering helpers;
@@ -855,26 +968,35 @@ parser.
 
 The new module composes, but does not copy or weaken:
 
-- provisioning.py for target creation and exact role/database posture;
-- migration_runner.py and migration_sets.py for target-bound schema authority;
+- provisioning.py for target creation, exact role/database posture, and the
+  private store-loss connection-local witness assertion;
+- migration_runner.py and migration_sets.py for target-bound schema authority,
+  with one private fixed store-loss entry point that invokes that assertion;
 - the accepted migration's append_audit_gap for gap contents and retention;
   and
 - PostgreSQL for server-local session advisory locks, global pg_locks
   observation, session identity, clock, transaction, and durability.
 
 The runner adds only the missing cross-step admission state machine and fixed
-fresh/final observations. It does not introduce a second provisioner,
-migrator, append function, or structural verifier.
+fresh/final observations. The two existing owner modules add only private
+store-loss entry points that apply one exact read-only assertion before their
+own connections act; their public APIs and normal or tenant behavior do not
+change. The design does not introduce a second provisioner, migrator, append
+function, or structural verifier.
 
 ### 9.4 Why this is the minimum coherent solution
 
 Calling the existing tools manually is insufficient because no durable fact
-binds their separate reports to one unpublished target and one append attempt.
+binds their separate reports to one unpublished target and one append attempt,
+and a report comparison after an effect cannot prove where the effect's own
+connection ran.
 Database name, version, migration ledger, and PostgreSQL system identifier are
 copied by a physical backup, so they identify physical lineage rather than one
 live postmaster. The runner-owned session locks add only the missing live-server
 fact: they are shared-memory state on the admitted server and are not
-WAL-replayed to a clone.
+WAL-replayed to a clone. Requiring every authoritative connection to observe
+those locks locally closes multi-host, multi-address, connection-balancer, and
+promoted-clone split routes without parsing or trusting DSN appearance.
 
 Allowing rerun would require an idempotent recovery identity in a forward
 migration or an external durable receipt authority. Neither is needed when a
@@ -891,29 +1013,37 @@ around the accepted primitives is sufficient.
 - **Migration sources of truth:** one authoritative audit migration set.
 - **Live-server witnesses:** one runner-owned admin session holding exactly two
   internal session locks in PostgreSQL's two non-overlapping advisory key
-  spaces from before provisioning through control admission.
+  spaces from before provisioning through final observation.
+- **Connection-local admissions:** one fixed read-only assertion, executed once
+  on each authoritative connection before its first relevant observation or
+  effect; no caller predicate or generic hook.
 - **Loss-start sources of truth:** one external declaration value.
 - **Interval-end sources of truth:** one replacement PostgreSQL clock read.
 - **Gap mutation points:** one existing append_audit_gap call.
-- **Effectful-target binding:** one identity row on the same control transaction
-  before its clock read or append, compared only with the live witness,
-  existing reports, and fixed version policy.
-- **Final-state authorities:** one fixed read-only database observation.
+- **Effectful-target binding:** the same fixed assertion on every effect-owning
+  connection, including one identity row on the control transaction before its
+  clock read or append, compared only with the live witness, existing reports,
+  and fixed version policy.
+- **Final-state authorities:** one locally witnessed fixed read-only database
+  observation.
 - **Publication authorities introduced:** none.
 - **Destructive authorities introduced:** none.
 - **Persistent recovery state introduced:** none.
 - **Clone, backup, or restore authority introduced:** none; clone creation is
   confined to the existing disposable hostile-test harness.
 - **Generic selectors or registries introduced:** none.
-- **Loops, schedulers, retries, or background workers introduced:** none.
+- **Recovery retries, schedulers, or background workers introduced:** none; the
+  accepted finite migration iteration remains owned by migration_runner.py.
 - **Duplicated correlated fields:** the final observation compares the bound
   request and database-returned event identity; it creates no second mutable
   authority.
 - **Compatibility surfaces:** none. Existing or partial targets refuse.
 - **Deletions:** none; no production store-loss operation exists to replace.
-- **Clean rewrite assessment:** a new small module is clearer than adding
-  store-loss branches to provisioning, migration, live-process gap, runtime,
-  or readiness modules. Those owners remain unchanged.
+- **Clean rewrite assessment:** one new small runner plus narrow private
+  admission entry points in the connection-owning provisioner and migration
+  runner is smaller than a new connection framework. Runtime, readiness,
+  migrations, public provisioning/migration APIs, and tenant behavior remain
+  unchanged.
 
 The deliberate cost is availability: any non-success can require external
 cleanup of an unpublished target. That is smaller and safer than a recovery
@@ -928,12 +1058,16 @@ The final implementation may change only:
 1. docs/rfcs/OFARM_Security_Audit_Store_Loss_Recovery_RFC_v0_1.md
 2. deployment/postgresql/security_audit_store_loss.py
 3. deployment/postgresql/run_security_audit_store_loss.py
-4. deployment/postgresql/README.md
-5. kernel/tests/test_security_audit_store_loss.py
-6. kernel/tests/test_postgresql_audit_migration.py
-7. kernel/tests/test_postgresql_physical_clone.py
-8. conformance/rewrite_architecture_check.py
-9. conformance/review_baseline_test_inventory.json
+4. deployment/postgresql/provisioning.py
+5. deployment/postgresql/migration_runner.py
+6. deployment/postgresql/README.md
+7. kernel/tests/test_security_audit_store_loss.py
+8. kernel/tests/test_postgresql_provisioning.py
+9. kernel/tests/test_postgresql_migration_runner.py
+10. kernel/tests/test_postgresql_audit_migration.py
+11. kernel/tests/test_postgresql_physical_clone.py
+12. conformance/rewrite_architecture_check.py
+13. conformance/review_baseline_test_inventory.json
 
 The Phase A review head changes only path 1. Phase B may use a strict subset of
 the remaining paths. The inventory changes only if focused tests add collected
@@ -944,8 +1078,8 @@ nodes.
 Every unlisted path is immutable, especially:
 
 - security_audit/migrations/**;
-- deployment/postgresql/provisioning.py, provisioning_specs.py,
-  migration_runner.py, migration_sets.py, readiness.py, and audit_contract.py;
+- deployment/postgresql/provisioning_specs.py, migration_sets.py, readiness.py,
+  and audit_contract.py;
 - all kernel production runtime, audit client, live-gap, health, HMAC,
   authentication, request-router, binder, tenant, and API modules;
 - every tenant migration, role, database, credential, and repository;
@@ -956,6 +1090,15 @@ Every unlisted path is immutable, especially:
 No accepted numbered migration may be edited. A demonstrated need for an
 idempotent recovery identity or new database function requires a new decision
 and forward migration, not an amendment hidden in this pull request.
+
+Within provisioning.py and migration_runner.py, Phase B may add only the
+private immutable witness carrier, the exact section 6.5 read-only assertion,
+fixed security-audit store-loss entry points, and mechanical plumbing that
+ensures the assertion runs on every connection named in sections 6.3 through
+6.6. Their public function signatures, ordinary and tenant call paths,
+provisioning specification, DDL, migration SQL, ledger semantics, retry
+behavior outside the private store-loss mode, reports, and exception surfaces
+are immutable.
 
 ### 11.3 Dependencies
 
@@ -1022,9 +1165,12 @@ would:
   component, producer, interval end, count, retry, timeout, or action;
 - omit or weaken the same-transaction control-route target admission before
   the clock read and append;
+- omit, delay, make optional, or move off-connection any required provisioner,
+  migration-infrastructure, migrator, fresh, control, or final witness
+  assertion;
 - omit, expose, retry, persist, or weaken the runner-owned live-server witness,
   allow provisioning before both locks are held, or permit the witness session
-  to disappear before control admission;
+  to disappear before final observation;
 - replace the external conservative start or PostgreSQL end authority;
 - remove the external monotonic-clock premise, permit observed_at before the
   captured interval end, or weaken the exact purge-deadline comparison;
@@ -1036,8 +1182,10 @@ would:
 - publish producer routes, change runtime readiness, distribute credentials,
   or authorize deployment;
 - omit the final never-called access-clock sequence check;
-- change provisioning, migration, structural-verification, or accepted
-  migration code;
+- change provisioning, migration, or structural-verification behavior beyond
+  the exact private store-loss carrier, assertion, fixed entry points, and
+  mechanical connection plumbing allowed in section 11.2, or change any
+  accepted migration code;
 - add another trust boundary or any path outside the allowlist;
 - name a different draft pull request;
 - materially change a permitted effect, non-effect, authority, invariant,
@@ -1074,8 +1222,9 @@ Evidence requiring redesign includes inability to keep replacement
 credentials unpublished, a requirement to recover without discarding failed
 fresh targets, a requirement to preserve audit history, a provider where
 provision_service cannot prove same-invocation creation, inability to retain
-one admin witness session through control admission, or a requirement to
-reconcile ambiguous commits without a conclusive fresh-store observation.
+one admin witness session through final observation or expose its server-local
+locks to every authoritative connection, or a requirement to reconcile
+ambiguous commits without a conclusive fresh-store observation.
 
 The likely upgrade path would be a separately approved external recovery
 receipt authority or forward migration carrying an idempotent recovery
@@ -1085,16 +1234,16 @@ identity. Neither is justified for the accepted V1 no-restore posture.
 
 | ID | Owning implementation | Negative test | Acceptance evidence | Smallest verification |
 | --- | --- | --- | --- | --- |
-| SLR-001 | recovery runner plus existing provision_service | exact pre-existing target | created = true from same call | focused seam test and live PostgreSQL rerun refusal |
+| SLR-001 | recovery runner plus existing provisioner's private fixed store-loss entry point | exact pre-existing target; provisioner admin split route | created = true from same locally witnessed call | focused seam test and live PostgreSQL rerun/split-route refusal |
 | SLR-002 | fixed protocol surface and CLI | drifted/partial target; method inventory | no destructive method or SQL | architecture check and source review |
-| SLR-003 | existing migration loader/runner plus report validator | nonzero, no-op, partial, wrong digest/identity | complete from-zero report | seam tests plus live migration |
+| SLR-003 | existing migration loader/runner private fixed store-loss entry point plus report validator | nonzero, no-op, partial, wrong digest/identity; infrastructure or migrator split route | complete locally witnessed from-zero report | seam tests plus live migration and pre-effect split-route refusal |
 | SLR-004 | fixed fresh-state query | each dynamic table/receipt/sequence dirty in turn | exact migration-created inventory | live PostgreSQL parametrized state tests |
 | SLR-005 | request validator, control clock query, append-result validator, and final verifier | malformed/future/equal times; observed_at before interval_end; wrong purge deadline | external start, database end, observable nonregression, unknown count | deterministic time tests and live SQL capture |
 | SLR-006 | witness plus gap transaction state machine | lost witness; exceptions at every statement/commit phase | one live-server- and target-bound exact function call maximum | call-recording seam and live event assertion |
 | SLR-007 | final verifier and CLI renderer | final read unavailable after acknowledged commit | no output before exact one-gap proof | subprocess output and live publication-gate documentation test |
 | SLR-008 | commit phase plus one final observation | lost acknowledgement with zero/one/multiple rows | exact one may recover; otherwise terminal unknown | deterministic transaction seam tests |
 | SLR-009 | final-state query | injected producer/retention/second-gap row; rolled-back access after nontransactional sequence advance | sole expected gap, unused quota state, and never-called access sequence | live PostgreSQL hostile tests |
-| SLR-010 | private live-witness carrier, fixed route carrier, same-transaction control admission, and sanitizer | independent exact service; promoted same-system-identifier physical clone; lost witness; wrong current/session user; canary or witness-value exceptions | exact two-lock live witness plus database/system/version/user/posture before clock or append; fixed outputs | seam, subprocess, live role tests, independent-service refusal, and existing physical-clone harness extension with zero events in both stores |
+| SLR-010 | private live-witness carrier and assertion, fixed route carrier, private provision/migration entry points, locally admitted fresh/final observations, same-transaction control admission, and sanitizer | each authoritative connection split independently between two exact servers, including a promoted same-system-identifier physical clone; lost witness; wrong current/session user; canary or witness-value exceptions | exact two-lock witness plus database/system/version/user/posture on every authoritative connection before its relevant observation or effect; fixed outputs | deterministic connection-selection seam, subprocess and live role tests, independently initialized service refusal, and physical-clone split-route matrix with pre-effect snapshots of both servers |
 | SLR-011 | fixed runner and command | database timeout expiry; cleanup/output failure and short-write faults | bounded database calls, fixed call counts, and no false success | deterministic budget and subprocess tests |
 | SLR-012 | path allowlist | base-to-head path diff | only approved files | mechanical diff and conformance checks |
 
@@ -1122,17 +1271,23 @@ If version 1 is later approved, the smallest implementation evidence is:
    bytes;
 2. live PostgreSQL proof of same-invocation creation, exact migration from
    zero, empty-state checks, one unknown gap, old-row absence, rerun refusal,
-   wrong-role refusal, same-transaction control-target binding, witness-session
-   loss, one independently initialized exact service and one promoted physical
-   clone with the same system identifier, the control route misdirected to each
-   second server in turn, zero events in both source and destination, rolled-
-   back access-sequence activity, and no production backup/replica/CDC
-   capability;
-3. the existing PostgreSQL provisioning, migration, structural, live-gap,
+   wrong-role refusal, same-transaction control-target binding, and witness-
+   session loss;
+3. one independently initialized exact service and one promoted physical clone
+   with the same system identifier, with deterministic separate misdirection
+   of the provisioner admin connection, each provisioner target connection,
+   both migration infrastructure-observation connections, the migrator
+   connection, fresh observation, control transaction, and final observation;
+   each pre-effect case snapshots both servers and proves neither changed, the
+   control case proves no clock or append on the wrong server, and fresh/final
+   cases refuse rather than certify the wrong server;
+4. rolled-back access-sequence activity and proof that no production backup,
+   replica, restore, promotion, or CDC capability was added;
+5. the existing PostgreSQL provisioning, migration, structural, live-gap,
    runtime, and audit-contract regression suites affected by composition;
-4. architecture and review-baseline inventory checks;
-5. full package conformance and git diff checks; and
-6. exact base-to-head path allowlist enforcement.
+6. architecture and review-baseline inventory checks;
+7. full package conformance and git diff checks; and
+8. exact base-to-head path allowlist enforcement.
 
 No destructive real-service rehearsal or production invocation is authorized
 by repository tests. Test-only disposable service teardown remains test
@@ -1160,15 +1315,25 @@ implementation choices and do not authorize expansion of this pull request.
 ### 14.2 Review disposition
 
 - **Blockers:** review
-  https://github.com/samovers/OFARM2/pull/324#pullrequestreview-5002195277
-  confirmed every earlier blocker was closed on head
-  95cbd256b5d1b12ec1e8f7106aee7ed17dd5d1fe and found one remaining promoted-
-  physical-clone counterexample. This revision adds the exact runner-owned
-  non-WAL live-server witness before provisioning and binds it into the first
-  control-transaction query before the clock read or append; exact-head
-  re-review remains required.
+  https://github.com/samovers/OFARM2/pull/324#pullrequestreview-5002294311 on
+  head 242380bef61f4a97ead053077690eac679dc35bb closed the prior control-route
+  promoted-clone blocker but found that provisioning, migration, and inventory
+  connections could still split across promoted servers sharing system
+  identifier and version. This revision requires the exact witness assertion
+  on every authoritative connection before its own relevant observation or
+  effect, retains the witness through final observation, adds only private
+  fixed store-loss entry points to the connection-owning modules, and adds the
+  complete split-route hostile matrix. Exact-head re-review remains required.
+- **Narrow review:** comment
+  https://github.com/samovers/OFARM2/pull/324#issuecomment-5385799267 found zero
+  blockers in its narrower source-contract/authority review of head 242380be,
+  but did not address the formal review's separate-connection counterexample;
+  it therefore does not close review 5002294311.
+- **Hosted gate:** head 242380be failed the arm64 unsupported-sanitizer step and
+  skipped the canonical index. The corrected head must pass all hosted gates;
+  this RFC does not change the unrelated native-verifier boundary.
 - **Follow-ups:** the remaining issue #192 criteria listed in section 11.5.
-- **Preferences:** review 5002195277 records none. Review 5002030992's final-
+- **Preferences:** review 5002294311 records none. Review 5002030992's final-
   readiness concern remains resolved by deleting that redundant, non-target-
   identifying call; the migration runner's target-bound structural
   verification remains authoritative. Review 5001965255's non-blocking timeout
