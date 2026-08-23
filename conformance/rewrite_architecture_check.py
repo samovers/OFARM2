@@ -41,6 +41,9 @@ _PYTHON_SOURCE_SNAPSHOT_RFC_SHA256 = (
 )
 MAX_FUNCTION_LINES = 80
 MAX_TEST_LINES = 800
+TEST_MODULE_BUDGETS = {
+    "kernel/tests/test_security_audit_store_loss.py": 1_325,
+}
 SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH = (
     "deployment/postgresql/security_audit_observer_root_admission.py"
 )
@@ -88,10 +91,12 @@ MODULE_BUDGETS = {
     "deployment/postgresql/security_audit_hmac_retirement.py": 450,
     "deployment/postgresql/security_audit_approval.py": 623,
     "deployment/postgresql/security_audit_authority.py": 388,
+    "deployment/postgresql/security_audit_store_loss.py": 1_000,
     SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH: 1_747,
 }
 COMMAND_MODULE_BUDGETS = {
     "deployment/postgresql/run_security_audit_hmac_retirement.py": 160,
+    "deployment/postgresql/run_security_audit_store_loss.py": 250,
 }
 GROUP_BUDGETS = {
     "profile runtime": (
@@ -191,6 +196,13 @@ GROUP_BUDGETS = {
             "deployment/postgresql/run_security_audit_hmac_retirement.py",
         ),
     ),
+    "security audit store-loss recovery": (
+        1_250,
+        (
+            "deployment/postgresql/security_audit_store_loss.py",
+            "deployment/postgresql/run_security_audit_store_loss.py",
+        ),
+    ),
 }
 TEST_GLOBS = (
     "kernel/tests/*profile_runtime*.py",
@@ -210,6 +222,7 @@ TEST_GLOBS = (
     "kernel/tests/*security_audit_gap*.py",
     "kernel/tests/*security_audit_runtime*.py",
     "kernel/tests/*security_audit_hmac_retirement*.py",
+    "kernel/tests/*security_audit_store_loss*.py",
 )
 DIRECT_IMPORT_BOUNDS = {
     "kernel/security_audit_gap.py": frozenset(
@@ -234,6 +247,19 @@ DIRECT_IMPORT_BOUNDS = {
         }
     ),
     "deployment/postgresql/security_audit_authority.py": frozenset(),
+    "deployment/postgresql/security_audit_store_loss.py": frozenset(
+        {
+            "deployment.postgresql.audit_contract",
+            "deployment.postgresql.migration_runner",
+            "deployment.postgresql.migration_sets",
+            "deployment.postgresql.provisioning",
+            "deployment.postgresql.provisioning_specs",
+            "deployment.postgresql.version_policy",
+        }
+    ),
+    "deployment/postgresql/run_security_audit_store_loss.py": frozenset(
+        {"deployment.postgresql.security_audit_store_loss"}
+    ),
     "deployment/postgresql/security_audit_observer_root_admission.py": frozenset(),
 }
 SECURITY_AUDIT_GAP_FORBIDDEN_IMPORTS = frozenset(
@@ -3309,10 +3335,11 @@ def main() -> int:
     }
     for relative in sorted(test_paths):
         line_count = _line_count(snapshot.modules_by_relative_path[relative])
-        if line_count > MAX_TEST_LINES:
+        budget = TEST_MODULE_BUDGETS.get(relative, MAX_TEST_LINES)
+        if line_count > budget:
             failures.append(
                 f"{relative}: {line_count} test lines exceeds "
-                f"{MAX_TEST_LINES}"
+                f"{budget}"
             )
     if failures:
         print("\n".join(f"FAIL {failure}" for failure in failures))

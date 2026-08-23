@@ -1,6 +1,6 @@
 # OFARM Security-Audit Store-Loss Recovery — Phase A Contract v0.1
 
-**Status:** Phase A design published for review; Phase B implementation,
+**Status:** decision version 1 approved for Phase B repository implementation;
 deployment, destructive cleanup, and production operation are not authorized
 
 **Draft pull request:** https://github.com/samovers/OFARM2/pull/324

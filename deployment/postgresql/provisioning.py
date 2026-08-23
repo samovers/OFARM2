@@ -158,6 +158,164 @@ class _PostgresIdentity:
     server_version: str
 
 
+@dataclass(frozen=True, slots=True)
+class _StoreLossLiveWitness:
+    """Private identity of two runner-held locks on one live postmaster."""
+
+    control_database_oid: int
+    backend_pid: int
+    system_identifier: str
+    server_version_num: int
+    server_version: str
+    bigint_classid: int
+    bigint_objid: int
+    integer_pair_classid: int
+    integer_pair_objid: int
+
+    def __post_init__(self) -> None:
+        signed_int4 = range(-(2**31), 2**31)
+        if (
+            type(self.control_database_oid) is not int
+            or self.control_database_oid <= 0
+            or type(self.backend_pid) is not int
+            or self.backend_pid <= 0
+            or type(self.system_identifier) is not str
+            or not self.system_identifier
+            or type(self.server_version_num) is not int
+            or self.server_version_num != SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM
+            or type(self.server_version) is not str
+            or self.server_version != SUPPORTED_POSTGRESQL_SERVER_VERSION
+            or any(
+                type(value) is not int or value not in signed_int4
+                for value in (
+                    self.bigint_classid,
+                    self.bigint_objid,
+                    self.integer_pair_classid,
+                    self.integer_pair_objid,
+                )
+            )
+        ):
+            raise ProvisioningTargetError("store-loss live witness is malformed")
+
+
+@dataclass(frozen=True, slots=True)
+class _StoreLossWitnessAdmission:
+    session_user: str
+    current_user: str
+    database_name: str
+    transaction_read_only: str
+    transaction_isolation: str
+    synchronous_commit: str
+
+
+_STORE_LOSS_WITNESS_ASSERTION_SQL = """
+WITH witness_locks AS (
+    SELECT pg_catalog.count(*)::integer AS total_lock_count,
+           pg_catalog.count(*) FILTER (
+               WHERE held.classid = %s::pg_catalog.int4::pg_catalog.oid
+                 AND held.objid = %s::pg_catalog.int4::pg_catalog.oid
+                 AND held.objsubid = 1
+           )::integer AS bigint_lock_count,
+           pg_catalog.count(*) FILTER (
+               WHERE held.classid = %s::pg_catalog.int4::pg_catalog.oid
+                 AND held.objid = %s::pg_catalog.int4::pg_catalog.oid
+                 AND held.objsubid = 2
+           )::integer AS integer_pair_lock_count
+    FROM pg_catalog.pg_locks AS held
+    WHERE held.locktype = 'advisory'
+      AND held.database::bigint = %s::bigint
+      AND held.pid = %s::integer
+      AND held.mode = 'ExclusiveLock'
+      AND held.granted
+)
+SELECT SESSION_USER::text,
+       CURRENT_USER::text,
+       pg_catalog.current_database()::text,
+       pg_catalog.current_setting('server_version_num')::integer,
+       pg_catalog.current_setting('server_version')::text,
+       control.system_identifier::text,
+       pg_catalog.pg_is_in_recovery(),
+       pg_catalog.current_setting('transaction_read_only')::text,
+       pg_catalog.current_setting('transaction_isolation')::text,
+       pg_catalog.current_setting('synchronous_commit')::text,
+       witness_locks.total_lock_count,
+       witness_locks.bigint_lock_count,
+       witness_locks.integer_pair_lock_count
+FROM pg_catalog.pg_control_system() AS control
+CROSS JOIN witness_locks
+"""
+
+
+def _assert_security_audit_store_loss_witness(
+    connection: psycopg.Connection,
+    witness: _StoreLossLiveWitness,
+) -> _StoreLossWitnessAdmission:
+    """Admit one connection only while both exact runner locks remain local."""
+
+    if type(witness) is not _StoreLossLiveWitness:
+        raise ProvisioningTargetError("store-loss live witness is malformed")
+    parameters = (
+        witness.bigint_classid,
+        witness.bigint_objid,
+        witness.integer_pair_classid,
+        witness.integer_pair_objid,
+        witness.control_database_oid,
+        witness.backend_pid,
+    )
+    try:
+        cursor = connection.execute(
+            _STORE_LOSS_WITNESS_ASSERTION_SQL,
+            parameters,
+        )
+        row = cursor.fetchone()
+        second_row = cursor.fetchone()
+    except psycopg.Error as exc:
+        raise ProvisioningTargetError(
+            "store-loss live witness is unavailable"
+        ) from exc
+    if (
+        type(row) is not tuple
+        or len(row) != 13
+        or second_row is not None
+        or any(type(row[index]) is not str for index in (0, 1, 2, 4, 5, 7, 8, 9))
+        or type(row[3]) is not int
+        or type(row[6]) is not bool
+        or any(type(row[index]) is not int for index in (10, 11, 12))
+        or row[3] != witness.server_version_num
+        or row[4] != witness.server_version
+        or row[5] != witness.system_identifier
+        or row[6] is not False
+        or tuple(row[10:13]) != (2, 1, 1)
+    ):
+        raise ProvisioningTargetError("store-loss live witness differs")
+    return _StoreLossWitnessAdmission(
+        session_user=row[0],
+        current_user=row[1],
+        database_name=row[2],
+        transaction_read_only=row[7],
+        transaction_isolation=row[8],
+        synchronous_commit=row[9],
+    )
+
+
+def _require_store_loss_admin_admission(
+    admission: _StoreLossWitnessAdmission,
+    *,
+    database_name: str,
+    transaction_read_only: str,
+    transaction_isolation: str,
+) -> None:
+    if (
+        admission.session_user != admission.current_user
+        or not admission.session_user
+        or admission.database_name != database_name
+        or admission.transaction_read_only != transaction_read_only
+        or admission.transaction_isolation != transaction_isolation
+        or admission.synchronous_commit != "on"
+    ):
+        raise ProvisioningTargetError("store-loss admin route posture differs")
+
+
 def _provisioning_lock_key() -> tuple[int, int]:
     digest = hashlib.sha256(
         b"OFARM_POSTGRESQL_CLUSTER_PROVISIONING_LOCK_V1\x00"
@@ -476,12 +634,24 @@ def _configure_target(
     admin_dsn: str,
     spec: ProvisioningSpec,
     expected_identity: _PostgresIdentity,
+    store_loss_witness: _StoreLossLiveWitness | None = None,
 ) -> None:
     with psycopg.connect(
         _target_dsn(admin_dsn, spec.database_name), autocommit=True
     ) as target:
         for assignment in CATALOG_OUTPUT_SETTING_ASSIGNMENTS:
             target.execute(f"SET {assignment}")
+        if store_loss_witness is not None:
+            admission = _assert_security_audit_store_loss_witness(
+                target,
+                store_loss_witness,
+            )
+            _require_store_loss_admin_admission(
+                admission,
+                database_name=spec.database_name,
+                transaction_read_only="off",
+                transaction_isolation="read committed",
+            )
         _target_identity(target, spec, expected_identity)
         _require_database_inventory(target, spec, target_exists=True)
         initial_large_object_differences = (
@@ -4283,6 +4453,7 @@ def _verify_locked(
     created: bool,
     expected_identity: _PostgresIdentity,
     allow_migration_objects: bool,
+    store_loss_witness: _StoreLossLiveWitness | None = None,
 ) -> ProvisioningReport:
     with psycopg.connect(
         _target_dsn(admin_dsn, spec.database_name), autocommit=True
@@ -4293,6 +4464,17 @@ def _verify_locked(
             )
             for assignment in CATALOG_OUTPUT_SETTING_ASSIGNMENTS:
                 target.execute(f"SET LOCAL {assignment}")
+            if store_loss_witness is not None:
+                admission = _assert_security_audit_store_loss_witness(
+                    target,
+                    store_loss_witness,
+                )
+                _require_store_loss_admin_admission(
+                    admission,
+                    database_name=spec.database_name,
+                    transaction_read_only="on",
+                    transaction_isolation="repeatable read",
+                )
             identity = _target_identity(target, spec, expected_identity)
             admission, admission_differences = (
                 _tenant_binding_admission_classification(target, spec)
@@ -4346,24 +4528,28 @@ def _verify_locked(
     )
 
 
-def provision_service(
+def _provision_service(
     admin_dsn: str,
     spec: ProvisioningSpec,
     *,
     login_passwords: Mapping[str, str] | None = None,
+    store_loss_witness: _StoreLossLiveWitness | None = None,
 ) -> ProvisioningReport:
-    """Create a provably new target or read-only verify an existing target.
-
-    Credentials are required only on the creation path and are never returned.
-    If creation is interrupted, the partial target is intentionally not
-    repairable by this function; an external DBA must destroy the disposable
-    target and start again.
-    """
-
     _require_fixed_spec(spec)
     with psycopg.connect(admin_dsn, autocommit=True) as admin:
         for assignment in CATALOG_OUTPUT_SETTING_ASSIGNMENTS:
             admin.execute(f"SET {assignment}")
+        if store_loss_witness is not None:
+            admission = _assert_security_audit_store_loss_witness(
+                admin,
+                store_loss_witness,
+            )
+            _require_store_loss_admin_admission(
+                admission,
+                database_name=_CONTROL_DATABASE,
+                transaction_read_only="off",
+                transaction_isolation="read committed",
+            )
         admin_identity = _require_dba(admin, spec)
         lock_key = _acquire_lock(admin)
         try:
@@ -4400,7 +4586,10 @@ def provision_service(
                 _create_cluster_roles(admin, spec, passwords)
                 _create_database(admin, spec)
                 _configure_target(
-                    admin_dsn, spec, admin_identity
+                    admin_dsn,
+                    spec,
+                    admin_identity,
+                    store_loss_witness,
                 )
                 created = True
             return _verify_locked(
@@ -4409,9 +4598,49 @@ def provision_service(
                 created=created,
                 expected_identity=admin_identity,
                 allow_migration_objects=False,
+                store_loss_witness=store_loss_witness,
             )
         finally:
             _release_lock(admin, lock_key)
+
+
+def provision_service(
+    admin_dsn: str,
+    spec: ProvisioningSpec,
+    *,
+    login_passwords: Mapping[str, str] | None = None,
+) -> ProvisioningReport:
+    """Create a provably new target or read-only verify an existing target.
+
+    Credentials are required only on the creation path and are never returned.
+    If creation is interrupted, the partial target is intentionally not
+    repairable by this function; an external DBA must destroy the disposable
+    target and start again.
+    """
+
+    return _provision_service(
+        admin_dsn,
+        spec,
+        login_passwords=login_passwords,
+    )
+
+
+def _provision_security_audit_store_loss(
+    admin_dsn: str,
+    *,
+    login_passwords: Mapping[str, str],
+    witness: _StoreLossLiveWitness,
+) -> ProvisioningReport:
+    """Create the fixed audit target while admitting every owned connection."""
+
+    if type(witness) is not _StoreLossLiveWitness:
+        raise ProvisioningTargetError("store-loss live witness is malformed")
+    return _provision_service(
+        admin_dsn,
+        SECURITY_AUDIT_PROVISIONING_SPEC,
+        login_passwords=login_passwords,
+        store_loss_witness=witness,
+    )
 
 
 def _verify_existing_service(
@@ -4419,11 +4648,23 @@ def _verify_existing_service(
     spec: ProvisioningSpec,
     *,
     allow_migration_objects: bool,
+    store_loss_witness: _StoreLossLiveWitness | None = None,
 ) -> ProvisioningReport:
     _require_fixed_spec(spec)
     with psycopg.connect(admin_dsn, autocommit=True) as admin:
         for assignment in CATALOG_OUTPUT_SETTING_ASSIGNMENTS:
             admin.execute(f"SET {assignment}")
+        if store_loss_witness is not None:
+            admission = _assert_security_audit_store_loss_witness(
+                admin,
+                store_loss_witness,
+            )
+            _require_store_loss_admin_admission(
+                admission,
+                database_name=_CONTROL_DATABASE,
+                transaction_read_only="off",
+                transaction_isolation="read committed",
+            )
         admin_identity = _require_dba(admin, spec)
         lock_key = _acquire_lock(admin)
         try:
@@ -4436,6 +4677,7 @@ def _verify_existing_service(
                 created=False,
                 expected_identity=admin_identity,
                 allow_migration_objects=allow_migration_objects,
+                store_loss_witness=store_loss_witness,
             )
         finally:
             _release_lock(admin, lock_key)
@@ -4465,6 +4707,29 @@ def verify_service_infrastructure(
         admin_dsn,
         spec,
         allow_migration_objects=True,
+    )
+    return ProvisioningInfrastructureReport(
+        service_identity=report.service_identity,
+        provisioning_spec_digest=report.provisioning_spec_digest,
+        database_name=report.database_name,
+        system_identifier=report.system_identifier,
+        server_version_num=report.server_version_num,
+    )
+
+
+def _verify_security_audit_service_infrastructure_for_store_loss(
+    admin_dsn: str,
+    witness: _StoreLossLiveWitness,
+) -> ProvisioningInfrastructureReport:
+    """Observe fixed audit infrastructure once through locally admitted routes."""
+
+    if type(witness) is not _StoreLossLiveWitness:
+        raise ProvisioningTargetError("store-loss live witness is malformed")
+    report = _verify_existing_service(
+        admin_dsn,
+        SECURITY_AUDIT_PROVISIONING_SPEC,
+        allow_migration_objects=True,
+        store_loss_witness=witness,
     )
     return ProvisioningInfrastructureReport(
         service_identity=report.service_identity,

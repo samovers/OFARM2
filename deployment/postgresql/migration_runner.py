@@ -38,7 +38,10 @@ from deployment.postgresql.migration_sets import (
 from deployment.postgresql.provisioning import (
     ProvisioningError,
     ProvisioningInfrastructureReport,
+    _StoreLossLiveWitness,
+    _assert_security_audit_store_loss_witness,
     _tenant_selection_v8_post_source_locked_differences,
+    _verify_security_audit_service_infrastructure_for_store_loss,
     migration_locked_differences,
     verify_service_infrastructure,
 )
@@ -493,6 +496,46 @@ def _observe_infrastructure(
             raise MigrationTargetError(
                 "admin provisioning route is unavailable"
             ) from None
+
+
+def _observe_store_loss_infrastructure(
+    admin_dsn: str,
+    witness: _StoreLossLiveWitness,
+) -> ProvisioningInfrastructureReport:
+    try:
+        return _verify_security_audit_service_infrastructure_for_store_loss(
+            admin_dsn,
+            witness,
+        )
+    except ProvisioningError as exc:
+        raise MigrationTargetError(str(exc)) from exc
+    except psycopg.Error:
+        raise MigrationTargetError(
+            "admin provisioning route is unavailable"
+        ) from None
+
+
+def _require_store_loss_migrator_admission(
+    connection: psycopg.Connection,
+    witness: _StoreLossLiveWitness,
+) -> None:
+    try:
+        admission = _assert_security_audit_store_loss_witness(
+            connection,
+            witness,
+        )
+    except ProvisioningError as exc:
+        raise MigrationTargetError(str(exc)) from exc
+    if (
+        admission.session_user != "ofarm_migrator"
+        or admission.current_user != "ofarm_migrator"
+        or admission.database_name
+        != SECURITY_AUDIT_PROVISIONING_SPEC.database_name
+        or admission.transaction_read_only != "off"
+        or admission.transaction_isolation != "read committed"
+        or admission.synchronous_commit != "on"
+    ):
+        raise MigrationTargetError("store-loss migrator route posture differs")
 
 
 def _target_identity(
@@ -2172,6 +2215,7 @@ def _migrate_service(
     release_identity: str,
     execution_id: UUID,
     verify_final_structure: bool,
+    store_loss_witness: _StoreLossLiveWitness | None = None,
 ) -> MigrationRunReport:
     """Shared executor after the public or synthetic preflight boundary."""
 
@@ -2184,7 +2228,15 @@ def _migrate_service(
     if not isinstance(migrator_dsn, str) or not migrator_dsn:
         raise MigrationInputError("migrator_dsn must be non-empty")
 
-    infrastructure = _observe_infrastructure(admin_dsn, spec)
+    if store_loss_witness is None:
+        infrastructure = _observe_infrastructure(admin_dsn, spec)
+    else:
+        if spec is not SECURITY_AUDIT_PROVISIONING_SPEC:
+            raise MigrationInputError("store-loss migration service is not fixed")
+        infrastructure = _observe_store_loss_infrastructure(
+            admin_dsn,
+            store_loss_witness,
+        )
     try:
         connection = psycopg.connect(migrator_dsn, autocommit=True)
     except psycopg.Error as exc:
@@ -2195,6 +2247,11 @@ def _migrate_service(
     observed_head_execution_id: UUID | None = None
     identity: _TargetIdentity
     with connection:
+        if store_loss_witness is not None:
+            _require_store_loss_migrator_admission(
+                connection,
+                store_loss_witness,
+            )
         identity = _target_identity(connection, infrastructure)
         while True:
             _begin_and_lock(connection, spec)
@@ -2485,6 +2542,39 @@ def migrate_service(
         release_identity=release_identity,
         execution_id=execution_id,
         verify_final_structure=True,
+    )
+
+
+def _migrate_security_audit_store_loss(
+    *,
+    admin_dsn: str,
+    migrator_dsn: str,
+    migration_set: MigrationSet,
+    release_identity: str,
+    execution_id: UUID,
+    witness: _StoreLossLiveWitness,
+) -> MigrationRunReport:
+    """Run the fixed audit history once through locally admitted connections."""
+
+    if type(witness) is not _StoreLossLiveWitness:
+        raise MigrationInputError("store-loss live witness is malformed")
+    _require_fixed_pair(
+        SECURITY_AUDIT_PROVISIONING_SPEC,
+        migration_set,
+    )
+    try:
+        require_authoritative_migration_set(migration_set)
+    except MigrationSetError as exc:
+        raise MigrationInputError(str(exc)) from exc
+    return _migrate_service(
+        admin_dsn=admin_dsn,
+        migrator_dsn=migrator_dsn,
+        spec=SECURITY_AUDIT_PROVISIONING_SPEC,
+        migration_set=migration_set,
+        release_identity=release_identity,
+        execution_id=execution_id,
+        verify_final_structure=True,
+        store_loss_witness=witness,
     )
 
 
