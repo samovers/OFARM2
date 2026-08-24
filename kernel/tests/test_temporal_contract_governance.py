@@ -30,6 +30,12 @@ _SELECTION_STORAGE_V8_CATALOG_SOURCE_SHA256 = (
 _SELECTION_STORAGE_V9_CATALOG_SOURCE_SHA256 = (
     "sha256:625935c7342205e1561ed5148826b4e6c866b13a1b4bff33fbc58c5c02f1420c"
 )
+_SECURITY_AUDIT_V3_CATALOG_DIGEST = (
+    "sha256:d897f0a02f851b37f64d883d384e2fa01ee356160553ffb5061f24de4581c074"
+)
+_SECURITY_AUDIT_V4_CATALOG_DIGEST = (
+    "sha256:c5129cccd8ce3e53f427f69963792b40b1d70181577a8d03b370a0a8af1272c8"
+)
 _GCRC_FORBIDDEN_V0_1 = (
     "contracts/candidates/temporal_coordinate/"
     "OFARM_TemporalCoordinate_schema_v0_1.json",
@@ -330,6 +336,18 @@ def _selection_storage_catalog_source(*, classified: bool) -> bytes:
         temporal.SELECTION_STORAGE_ABSENT_CATALOG_PIN
     )
     current = (PACKAGE_ROOT / relative_path).read_bytes()
+    audit_v3_digest = _SECURITY_AUDIT_V3_CATALOG_DIGEST.encode("utf-8")
+    audit_v4_digest = _SECURITY_AUDIT_V4_CATALOG_DIGEST.encode("utf-8")
+    audit_digest_counts = (
+        current.count(audit_v3_digest),
+        current.count(audit_v4_digest),
+    )
+    if audit_digest_counts == (0, 1):
+        current = current.replace(audit_v4_digest, audit_v3_digest)
+    elif audit_digest_counts != (1, 0):
+        raise AssertionError(
+            "current security-audit catalog source is not exact V3 or V4"
+        )
     v7_digest = _SELECTION_STORAGE_V7_CATALOG_DIGEST.encode("utf-8")
     v8_digest = _SELECTION_STORAGE_V8_CATALOG_DIGEST.encode("utf-8")
     v9_digest = _SELECTION_STORAGE_V9_CATALOG_DIGEST.encode("utf-8")
