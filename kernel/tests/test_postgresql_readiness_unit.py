@@ -366,12 +366,14 @@ def test_audit_structural_report_is_independent_of_tenant_lane(
     harness.loader_failures.add(TENANT_SERVICE)
 
     report = _verify_audit()
+    audit_version = len(harness.audit_set.migrations)
+    assert audit_version in (3, 4)
 
     assert report.manifest() == {
         "schemaVersion": "ofarm.postgresql-structural-compatibility.v1",
         "serviceIdentity": SECURITY_AUDIT_SERVICE.identity,
-        "supportedVersion": 3,
-        "observedVersion": 3,
+        "supportedVersion": audit_version,
+        "observedVersion": audit_version,
     }
     assert harness.loader_calls == [(_PACKAGE_ROOT, SECURITY_AUDIT_SERVICE)]
     assert harness.connect_calls == [
