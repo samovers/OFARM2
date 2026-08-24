@@ -216,7 +216,10 @@ def _seed_historical_reason(
 
 def test_vocabulary_migration_is_additive_and_bounded():
     migration_set = load_migration_set(PACKAGE_ROOT, SECURITY_AUDIT_SERVICE)
-    initial, operations, vocabulary = migration_set.migrations
+    assert tuple(
+        migration.filename for migration in migration_set.migrations[3:]
+    ) in ((), ("0004_temporary_export_lifecycle.sql",))
+    initial, operations, vocabulary = migration_set.migrations[:3]
     source = vocabulary.source_bytes.decode("utf-8")
 
     assert initial.source_sha256 == \
