@@ -493,6 +493,12 @@ def _expected_contract() -> SecurityAuditContract:
                 "ofarm_security_audit_control",
             ),
             _public_function(
+                "consume_temporary_export_approval",
+                ("uuid", "uuid", "bigint", "bigint", "bigint"),
+                "boolean",
+                "ofarm_security_audit_control",
+            ),
+            _public_function(
                 "append_audit_gap",
                 ("timestamptz", "timestamptz", "bigint", "boolean"),
                 "ofarm_security.operational_security_event_identity",

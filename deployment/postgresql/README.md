@@ -97,7 +97,8 @@ The only accepted migrations are:
 - `kernel/migrations/0009_runtime_bundle_global_content_retention.sql`;
 - `security_audit/migrations/0001_initial.sql`;
 - `security_audit/migrations/0002_hmac_v2_operations.sql`; and
-- `security_audit/migrations/0003_outcome_reason_vocabulary.sql`.
+- `security_audit/migrations/0003_outcome_reason_vocabulary.sql`; and
+- `security_audit/migrations/0004_temporary_export_lifecycle.sql`.
 
 `migration_sets.py` carries a literal reviewed filename, source SHA-256, source
 byte length, prefix digest, and complete set digest for each service. A
@@ -358,6 +359,8 @@ The security-audit migration establishes a separate, non-tenant lane with:
 - HMAC V2 for fresh appends, exact committed-identity V1 retries, and bounded
   control observations for overflow closure and key-retention deadlines;
 - declared gap markers and an exact empty-store recreation posture; and
+- one bounded owner-only temporary-export approval-consumption relation and
+  one control-only first-use function; and
 - distinct ingest, control, reader, retention, readiness, and deliberately
   absent recovery/break-glass capabilities.
 
@@ -481,8 +484,8 @@ copied after disclosure.
 
 ## Library-only security-audit bounded export page
 
-`security_audit_export.py` is a bounded export-page library primitive for a
-later, separately approved break-glass lifecycle. It has no standalone export
+`security_audit_export.py` is the bounded export-page library primitive composed
+by the approved `security_audit_break_glass.py` lifecycle. It has no standalone export
 command, module entry point, scheduler, endpoint, output sink, or documented
 operator invocation. The library accepts only two complete raw conninfo
 strings and either no cursor or one already validated immutable cursor. It
@@ -492,7 +495,7 @@ acknowledged, and requests exactly one descending page with at most 2,048
 event rows and an 8,388,608-byte database-encoded event ceiling.
 
 The control route still must authenticate exactly as
-`ofarm_security_audit_control_login`. The future lifecycle must supply an
+`ofarm_security_audit_control_login`. The lifecycle supplies an
 already-created exact `ofarm_security_audit_export_login` route with the
 existing export-capability membership. This library does not create or receive
 a separate temporary export credential parameter, create or change a role,
@@ -519,16 +522,16 @@ unknown commit outcome or any failure after acknowledged intent must not be
 retried automatically. A repeated invocation is a new caller action outside
 this primitive, not a resume or reconciliation.
 
-This primitive proves only one bounded export page. It does not prove dual
-approval, approval currentness or single use, temporary-login expiry or
-cleanup, structural closure, runtime health, protected output delivery,
-external clock fencing, deployment readiness, or completion of issue #192.
-Those remain prerequisites for a future operator-facing lifecycle.
+This primitive alone proves only one bounded export page. It does not prove
+dual approval, currentness, single use, temporary-login cleanup, or structural
+closure; the approved lifecycle adds those properties around the call. Neither
+primitive proves runtime health, protected output delivery, external clock
+certification, deployment readiness, or completion of issue #192.
 
 ## Library-only security-audit dual-approval verification
 
-`security_audit_approval.py` is a side-effect-free verifier for a later,
-separately approved break-glass lifecycle. Trusted composition constructs it
+`security_audit_approval.py` is the side-effect-free verifier composed by the
+approved `security_audit_break_glass.py` lifecycle. Trusted composition constructs it
 with one exact Ed25519 observer public key. A caller then supplies one bounded
 canonical observer-signed authority receipt, one bounded canonical approval
 bundle, and trusted current Unix time in microseconds. The verifier accepts
@@ -539,7 +542,7 @@ approver IDs, key IDs, and independence domains in the presented receipt.
 
 Success is one private immutable normalized evidence value. It contains no
 private key, signature, public key, raw carrier, credential, output, or
-consumption claim. It is not a bearer grant: a later admission boundary must
+consumption claim. It is not a bearer grant: the lifecycle admission boundary
 receive and reverify the original carrier bytes with admission-owned time and
 atomically consume the exact operation and approval digest before creating any
 credential. Repeated verification here is deliberately equal and
@@ -552,8 +555,44 @@ provide a command or module entry point. Removing a key from newly issued
 receipts is therefore fully effective only after older signed receipts expire;
 every accepted receipt and request is capped at five minutes. Immediate
 revocation, production observer-root composition, durable admission,
-temporary-login lifecycle, protected delivery, deployment readiness, and
-issue #192 closure remain separate trust boundaries.
+protected delivery, deployment readiness, and issue #192 closure remain
+separate trust boundaries.
+
+## Security-audit temporary export lifecycle
+
+`security_audit_break_glass.py` closes one fixed, library-only V1 operation. A
+trusted caller supplies the observer public key, one private carrier containing
+the exact administrator and control routes, and the original signed authority
+receipt and approval bundle. The lifecycle observes authority time directly,
+verifies exact normal structure and the request's migration-1 store UUID,
+reverifies the original carriers against the maximum of certified authority
+time and database-owned non-regressing time, and durably consumes the operation
+at most once through migration 4.
+
+Only after acknowledged consumption does it generate a memory-only password
+and create the fixed `ofarm_security_audit_export_login`. The role has `LOGIN`,
+`NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `INHERIT`, `NOREPLICATION`,
+`NOBYPASSRLS`, connection limit one, the request expiry as `VALID UNTIL`, the
+fixed defensive role settings, and only the existing export-capability
+membership. The lifecycle derives the export route privately, invokes the
+bounded export runner exactly once, disables login, terminates its sessions,
+revokes membership, drops the role, and verifies exact normal structure before
+constructing the private buffered-page result.
+
+Commit ambiguity never returns a credential or page. The role transaction is
+resolved by exact catalog inspection: an exact role is closed, an absent role
+requires normal structure, and any drift quarantines the operation. The fixed
+closure-only call removes an absent or expired exact-shape role and verifies
+closure. It pins the observed expiry and SCRAM verifier, so a concurrent role
+replacement is quarantined instead of closed. It refuses an unexpired or
+drifted role and cannot consume an approval, create a role, or export.
+
+The module has no command, endpoint, scheduler, output sink, provider call,
+production observer-root admission, or deployment-readiness decision. Its
+buffered result remains private until cleanup and structural closure succeed.
+Protected output custody, certification of the shared authority-time domain,
+and reviewed recovery evidence for fresh replacement-store migration UUIDs
+remain explicit production prerequisites outside PR #328.
 
 ## Library-only security-audit authority-receipt issuance
 

@@ -35,7 +35,7 @@ from deployment.postgresql.tenant_contract import derive_ed25519_key_id
 
 
 AUTHORITY_SCHEMA = "ofarm.security-audit-break-glass-authority-receipt.v1"
-REQUEST_SCHEMA = "ofarm.security-audit-break-glass-export-request.v1"
+REQUEST_SCHEMA = "ofarm.security-audit-break-glass-export-request.v2"
 STATEMENT_SCHEMA = "ofarm.security-audit-break-glass-export-approval.v1"
 BUNDLE_SCHEMA = "ofarm.security-audit-break-glass-approval-bundle.v1"
 VERIFIED_SCHEMA = "ofarm.security-audit-break-glass-verified-approval.v1"
@@ -46,6 +46,7 @@ AUTHORITY_DOMAIN = (
 APPROVAL_DOMAIN = b"OFARM_SECURITY_AUDIT_BREAK_GLASS_EXPORT_APPROVAL_V1\x00"
 OPERATION_ID = "123e4567-e89b-42d3-a456-426614174000"
 OTHER_OPERATION_ID = "223e4567-e89b-42d3-a456-426614174000"
+STORE_MIGRATION_EXECUTION_ID = "018f39f1-a8f1-7a3c-8400-123456789abc"
 CANONICAL_CURSOR = (
     "2026-08-17T12:34:56.123456Z/"
     "123e4567-e89b-42d3-a456-426614174000"
@@ -202,6 +203,7 @@ def _material(
         "operationId": OPERATION_ID,
         "purpose": EXPORT_ACCESS_PURPOSE_IDENTITY,
         "schemaVersion": REQUEST_SCHEMA,
+        "storeMigrationExecutionId": STORE_MIGRATION_EXECUTION_ID,
     }
     request_document.update(request_updates or {})
     request_payload = _canonical(request_document)
@@ -327,6 +329,8 @@ def test_real_ed25519_success_returns_exact_private_normalized_evidence():
 
     assert result.schema_version == VERIFIED_SCHEMA
     assert str(result.operation_id) == OPERATION_ID
+    assert str(result.store_migration_execution_id) == \
+        STORE_MIGRATION_EXECUTION_ID
     assert result.authority_receipt_digest == _digest(
         material.authority_receipt_bytes
     )
@@ -664,6 +668,9 @@ def test_currentness_boundaries_and_still_valid_older_receipt_are_honest():
         {"cursor": "not-a-cursor"},
         {"operationId": OPERATION_ID.upper()},
         {"operationId": "123e4567-e89b-12d3-a456-426614174000"},
+        {"storeMigrationExecutionId": STORE_MIGRATION_EXECUTION_ID.upper()},
+        {"storeMigrationExecutionId": "00000000-0000-0000-0000-000000000000"},
+        {"storeMigrationExecutionId": True},
     ],
     ids=(
         "purpose",
@@ -676,6 +683,9 @@ def test_currentness_boundaries_and_still_valid_older_receipt_are_honest():
         "cursor",
         "uuid-case",
         "uuid-version",
+        "store-uuid-case",
+        "store-uuid-nil",
+        "store-uuid-type",
     ),
 )
 def test_fixed_request_substitution_refuses(request_updates):

@@ -167,6 +167,11 @@ def test_public_function_identities_and_capability_grants_are_exact():
             "timestamptz, uuid, integer, bigint)"
         ):
             "ofarm_security_audit_control",
+        (
+            "ofarm_security.consume_temporary_export_approval("
+            "uuid, uuid, bigint, bigint, bigint)"
+        ):
+            "ofarm_security_audit_control",
         "ofarm_security.append_audit_gap(timestamptz, timestamptz, bigint, boolean)":
             "ofarm_security_audit_control",
         "ofarm_security.mark_overflow_count_unknown(text, text, timestamptz)":
@@ -280,7 +285,7 @@ def test_manifest_is_canonical_ascii_and_has_domain_separated_golden_digest():
     assert json.loads(without_digest) == contract.manifest_without_digest()
     assert json.loads(canonical) == contract.manifest()
     assert contract.digest == \
-        "sha256:4807acc1b06366b5594c539ca9b8da86dc1dcbcbcead48e761fca9f6be9342e2"
+        "sha256:19c797f1d9de06b555c737ee666a6f4cecba5091a7c5dc8851ba40af37f66e81"
     assert contract.digest == "sha256:" + hashlib.sha256(
         SECURITY_AUDIT_CONTRACT_DIGEST_POLICY.encode("ascii")
         + b"\x00"
