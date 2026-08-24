@@ -19,6 +19,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 from google.cloud import kms_v1
 
 from conformance import rewrite_architecture_check
+from deployment.postgresql import security_audit_approval
 from deployment.postgresql import security_audit_authority
 from deployment.postgresql.audit_contract import (
     EXPORT_ACCESS_PURPOSE_IDENTITY,
@@ -45,7 +46,8 @@ from kernel.signing_authority import SigningAuthority
 
 MANIFEST_SCHEMA = "ofarm.security-audit-break-glass-approver-manifest.v1"
 AUTHORITY_SCHEMA = "ofarm.security-audit-break-glass-authority-receipt.v1"
-REQUEST_SCHEMA = "ofarm.security-audit-break-glass-export-request.v1"
+REQUEST_SCHEMA_V1 = "ofarm.security-audit-break-glass-export-request.v1"
+REQUEST_SCHEMA_V2 = "ofarm.security-audit-break-glass-export-request.v2"
 STATEMENT_SCHEMA = "ofarm.security-audit-break-glass-export-approval.v1"
 BUNDLE_SCHEMA = "ofarm.security-audit-break-glass-approval-bundle.v1"
 AUDIENCE = "ofarm.security-audit-break-glass-export.v1"
@@ -61,6 +63,7 @@ NOW_US = 1_000_000
 LIFETIME_US = 300_000_000
 MAX_UNIX_US = 9_223_372_036_854_775_807
 OPERATION_ID = "123e4567-e89b-42d3-a456-426614174000"
+STORE_MIGRATION_EXECUTION_ID = "018f39f1-a8f1-7a3c-8400-123456789abc"
 _DEFAULT_RESPONSE = object()
 
 
@@ -289,22 +292,27 @@ def _approval_bundle(
     *,
     request_expires_us: int = NOW_US + 100_000_000,
 ) -> bytes:
-    request = _canonical(
-        {
-            "audience": AUDIENCE,
-            "authorityReceiptDigest": _digest(receipt),
-            "cursor": None,
-            "expiresAtUnixMicroseconds": request_expires_us,
-            "functionIdentity": EXPORT_FUNCTION_IDENTITY,
-            "maxBytes": EXPORT_MAX_BYTES,
-            "maxPages": 1,
-            "maxRows": EXPORT_MAX_ROWS,
-            "notBeforeUnixMicroseconds": NOW_US,
-            "operationId": OPERATION_ID,
-            "purpose": EXPORT_ACCESS_PURPOSE_IDENTITY,
-            "schemaVersion": REQUEST_SCHEMA,
-        }
-    )
+    request_schema = security_audit_approval._EXPORT_REQUEST_SCHEMA
+    if request_schema not in (REQUEST_SCHEMA_V1, REQUEST_SCHEMA_V2):
+        raise AssertionError("authority fixture request schema is unknown")
+    request_document = {
+        "audience": AUDIENCE,
+        "authorityReceiptDigest": _digest(receipt),
+        "cursor": None,
+        "expiresAtUnixMicroseconds": request_expires_us,
+        "functionIdentity": EXPORT_FUNCTION_IDENTITY,
+        "maxBytes": EXPORT_MAX_BYTES,
+        "maxPages": 1,
+        "maxRows": EXPORT_MAX_ROWS,
+        "notBeforeUnixMicroseconds": NOW_US,
+        "operationId": OPERATION_ID,
+        "purpose": EXPORT_ACCESS_PURPOSE_IDENTITY,
+        "schemaVersion": request_schema,
+    }
+    if request_schema == REQUEST_SCHEMA_V2:
+        request_document["storeMigrationExecutionId"] = \
+            STORE_MIGRATION_EXECUTION_ID
+    request = _canonical(request_document)
     request_digest = _digest(request)
     approvals = []
     for item in approvers[:2]:
