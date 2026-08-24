@@ -13,10 +13,12 @@
 - PRs #322 and #323 are deployment/provider-evidence follow-ups and are not
   dependencies of this decision.
 - Exact-head review of `7e30f9c7b66fef14ddea2b4c55015a2cd34c24db`
-  demonstrated two corrections incorporated here: verifier currentness cannot
-  use the audit database clock alone, and replacement-store migration UUID
+  demonstrated four corrections incorporated here: verifier currentness cannot
+  use the audit database clock alone; replacement-store migration UUID
   freshness is an external recovery prerequisite rather than a database-proven
-  property.
+  property; migration 4 must update every literal release and catalog authority;
+  and request expiry is the admission/new-authentication deadline rather than a
+  false claim that PostgreSQL terminates an already authenticated session.
 
 This contract does not authorize Phase B, merge, deployment, production
 operation, database mutation, role creation, credential issuance, provider
@@ -46,7 +48,8 @@ This decision establishes one closed V1 operation:
 1. bind the signed request to the current audit store's immutable migration-1
    execution UUID;
 2. reverify the original authority receipt and dual-approval bundle using the
-   existing verifier and database-owned non-regressing time;
+   existing verifier and the exact maximum of fresh certified authority time
+   and database-owned non-regressing time;
 3. durably consume the still-live operation at most once in that store;
 4. create one exact expiring `ofarm_security_audit_export_login` with a
    memory-only random password and only the existing export capability;
@@ -183,11 +186,13 @@ stop for a new external non-rewindable or consensus-backed authority.
 | --- | --- | --- |
 | Store incarnation | Migration-1 `schema_migration.execution_id` on the selected audit database, after trusted recovery composition proves the external fresh-UUID prerequisite | DSN text, database OID alone, an unvalidated caller UUID, target epoch, provider fixture |
 | Approval authenticity and independence | Merged PR #319 verifier under the composition-pinned observer public key | parsed JSON, operator assertion, database row, public result constructor |
-| Approval currentness | Exact maximum of one fresh observation from the composition-certified authority-time domain and the selected store's immediate non-regressing access-clock high-water, used as verifier `now_us`; the consume function then rechecks its own database observation | either clock alone, caller time, receipt issue time, an externally supplied maximum, or an uncertified Python wall clock |
+| Approval currentness | Verifier `now_us` is the exact maximum of one fresh certified authority-time observation and the selected store's immediate non-regressing high-water; immediately before consumption, a second fresh authority-time observation enters the consume function, which derives the final exact maximum with its own database high-water | either clock alone, operation-caller time, receipt issue time, an externally precomputed maximum, or an uncertified Python wall clock |
 | First use while valid | First acknowledged insert by the migration-4 consume function | returned SQL row before commit, role presence, retry, follow-up inference |
 | Export scope | Signed request plus the existing committed `AUDIT_ACCESS` intent and export function | temporary LOGIN, admin privilege, caller-selected SQL |
 | Temporary credential | Exact PostgreSQL role catalog state created by the closed lifecycle | password possession as approval, environment text, a pre-existing role |
-| Window end | Earliest enforced request/access expiry, followed by session termination, revoke, and drop | process success flag or `VALID UNTIL` without cleanup |
+| Approval-admission deadline | Signed request expiry checked by the verifier-time maximum and consume function | role presence, access-intent expiry, or caller assertion |
+| New-authentication deadline | Temporary LOGIN `VALID UNTIL`, no later than signed request expiry | claim that `VALID UNTIL` terminates an authenticated session |
+| Bounded disclosure deadline | Existing committed access-intent expiry, at most 300 seconds after its database cut; normal execution closes sooner | request expiry as a session killer, process success flag, or an unbounded session |
 | Closure | Exact absence of the temporary LOGIN plus the accepted structural verifier's complete normal result | attempted cleanup, role expiry alone, partial catalog checks |
 | Positive handoff | One private closed-lifecycle result constructed only after closure | consumed row, export result before cleanup, serialized admission token |
 
@@ -253,15 +258,33 @@ One forward migration 4 adds one owner-only relation containing only:
 
 The relation holds at most 1,024 still-live operations. The consume function:
 
+```text
+ofarm_security.consume_temporary_export_approval(
+    operation_id uuid,
+    store_migration_execution_id uuid,
+    valid_from_unix_microseconds bigint,
+    valid_until_unix_microseconds bigint,
+    authority_now_unix_microseconds bigint
+) -> boolean
+```
+
+It returns one nonnull `true` only for the staged first insert. That returned
+value is not authority before explicit transaction commit acknowledgement. The
+function:
+
 1. is executable only by the existing audit-control capability;
 2. verifies exact `session_user` through the existing control posture;
 3. verifies the supplied store UUID equals migration 1's immutable UUID;
-4. takes one non-regressing database-clock observation;
-5. requires `valid_from <= now < valid_until` and a lifetime no greater than
-   the already accepted five minutes;
+4. receives one type- and range-checked authority-time integer from the private
+   lifecycle path, takes its own non-regressing database-clock observation, and
+   derives their exact maximum internally;
+5. requires `valid_from <= maximum < valid_until`, a lifetime no greater than
+   the already accepted five minutes, and `valid_until` no later than five
+   minutes after its own database high-water; a leading authority clock may
+   therefore refuse early but cannot create long-lived consumption rows;
 6. takes one transaction-scoped lock on this relation before cleanup, count,
    and insert, without using any raw or advisory-lock authority;
-7. deletes only rows with `valid_until <= now`;
+7. deletes only rows with `valid_until <= maximum`;
 8. refuses if 1,024 live rows remain;
 9. inserts the operation UUID once; and
 10. returns a positive first-use result only for that insert.
@@ -272,7 +295,10 @@ operation ledger or a general evidence digest.
 
 The function owns no role, password, export, output, retry, or cleanup effect.
 A compromised control credential can burn IDs or fill the bounded relation for
-at most the approval lifetime; it cannot create the export LOGIN or read data.
+at most five database-clock minutes, including by supplying a false
+authority-time argument; it cannot turn that row into verifier success, create
+the export LOGIN, or read data. Certification of the authority-time argument is
+owned by the private lifecycle composition, not self-attested by SQL.
 
 ### 6.3 Closed operation states
 
@@ -299,8 +325,11 @@ Ordering rules:
 2. Observe fresh certified authority time and the immediate non-regressing
    database high-water, derive their exact maximum, and verify the original
    carriers with that value.
-3. Call the consume function with only the normalized private values and
-   acknowledge its transaction commit before generating a password.
+3. Immediately observe certified authority time again, call the consume
+   function with that private observation and the other normalized values, and
+   acknowledge its transaction commit before generating a password. The
+   function combines that observation with its own database high-water, so a
+   delay through authority expiry refuses before consumption.
 4. A consume-commit exception is terminal outcome-unknown. Do not create a
    role and do not retry the approval automatically.
 5. Generate one high-entropy password in memory. Do not return, serialize,
@@ -322,7 +351,32 @@ Ordering rules:
 Role creation, disable, revoke, terminate, and drop are never public reusable
 helpers. They exist only inside this lifecycle's private state machine.
 
-### 6.4 Failure and crash posture
+### 6.4 Admission and bounded disclosure deadlines
+
+The signed request expiry is the last instant at which this lifecycle may
+verify and consume the approval or authenticate a new temporary session. It is
+not represented as a PostgreSQL session-termination mechanism. `VALID UNTIL`
+is checked during password authentication and does not terminate a session
+that authenticated before expiry.
+
+After acknowledged pre-expiry consumption, the existing export runner commits
+one separate access intent with its accepted database-owned lifetime of at most
+300 seconds. That access intent is the sole post-admission disclosure deadline.
+It may expire later than the signed request because the existing function and
+runner accept no request-expiry argument. This decision accepts that smaller
+direct composition rather than widening the existing access protocol.
+
+Normal execution invokes one page immediately and then disables, terminates,
+revokes, drops, and verifies before handoff. If the process dies after a session
+authenticated, the holder can call only the same precommitted bounded page
+while that access intent remains current. It cannot select another cursor,
+cut, page, row ceiling, byte ceiling, tenant surface, or HMAC key. Once the
+access intent expires, the export function refuses; the exact stale LOGIN still
+keeps readiness false until the closure-only operation removes it. The maximum
+post-admission disclosure interval is therefore explicit and fixed, not
+silently equated with request expiry.
+
+### 6.5 Failure and crash posture
 
 - Before acknowledged consumption: refuse with no credential effect.
 - Consumption outcome unknown: burn the attempt; no credential effect.
@@ -332,10 +386,12 @@ helpers. They exist only inside this lifecycle's private state machine.
   complete expected temporary shape is present, close it; if absent, verify
   normal structure; any other shape quarantines and refuses.
 - Export refusal or failure: close the LOGIN and expose no page.
-- Process exit while LOGIN exists: `VALID UNTIL` and the export function's
-  intent expiry bound new access, while structural readiness remains false.
-  The fixed closure-only operation may close only an expired, exact-shape stale
-  LOGIN. An unexpired or drifted LOGIN is never repaired or replaced.
+- Process exit while LOGIN exists: `VALID UNTIL` blocks new password
+  authentication after request expiry; it does not kill an existing session.
+  The export function's access-intent expiry bounds that session's disclosure,
+  while structural readiness remains false. The fixed closure-only operation
+  may close only an expired, exact-shape stale LOGIN. An unexpired or drifted
+  LOGIN is never repaired or replaced.
 - Page buffered but cleanup or structural verification fails: expose no page;
   the operation remains consumed and readiness remains false.
 - Post-closure output failure belongs to the later output-custody boundary and
@@ -349,7 +405,9 @@ helpers. They exist only inside this lifecycle's private state machine.
 - `TEL-002` — Approval authenticity, independence, bounds, and currentness are
   reverified from the original carriers before consumption or role effects,
   with verifier `now_us` equal to the exact maximum of fresh certified
-  authority time and the immediate database high-water.
+  authority time and the immediate database high-water; final consumption uses
+  a second fresh authority observation and the consume function's own
+  database-high-water maximum.
 - `TEL-003` — At most one acknowledged consume commit exists for an operation
   while its approval can authorize; the live-consumption relation never
   exceeds 1,024 rows.
@@ -378,6 +436,10 @@ helpers. They exist only inside this lifecycle's private state machine.
   lock. Without that external proof, the replacement is ineligible.
 - `TEL-012` — No provider evidence, root provisioning, output sink, backup,
   replica, clone, failover, scheduler, or tenant authority enters this PR.
+- `TEL-013` — Request expiry ends approval admission and new temporary
+  authentication. An already authenticated session is bounded by the one
+  committed access intent for at most 300 seconds and cannot widen unique data;
+  restored compatibility still requires explicit closure.
 
 ## 8. Production-reachable negative cases
 
@@ -387,6 +449,7 @@ helpers. They exist only inside this lifecycle's private state machine.
 | TEL-001, TEL-011 | Attempt to publish or use an empty replacement with a reused UUID, no retained predecessor UUID, or no successful report binding the freshly generated UUID. | Replacement remains ineligible; trusted composition does not construct or call the lifecycle. |
 | TEL-002 | Supply reordered JSON, a substituted receipt, one repeated approver, or an expired request. | Fixed refusal; no consume call or role SQL. |
 | TEL-002 | Issue at authority time 12:00 with 12:05 expiry, then execute at authority time 12:30 while database high-water is 12:03. | Exact maximum is 12:30; fixed verifier refusal; no consume call or role SQL. |
+| TEL-002 | Verify just before expiry, then delay the consume call until certified authority time reaches expiry while the database still lags. | The consume function's final maximum is expired; no insert or role SQL. |
 | TEL-003 | Start two lifecycle calls with the same valid carriers. | One consume commit at most; the other refuses and creates no LOGIN. |
 | TEL-003 | Present 1,025 distinct concurrently live approvals. | First 1,024 may consume; the next refuses until expiry cleanup. |
 | TEL-004 | Drop the control connection during consume commit. | Outcome unknown, no password generation, no role SQL, no retry. |
@@ -398,6 +461,7 @@ helpers. They exist only inside this lifecycle's private state machine.
 | TEL-010 | Raise exceptions containing canary carriers, DSNs, passwords, and page bytes at every dependency boundary. | Only the fixed lifecycle error is externally observable. |
 | TEL-011 | Reuse a lost-store approval on a fresh empty replacement with the same role names and credentials. | New migration-1 UUID refuses the request. |
 | TEL-012 | Attempt to require Policy Troubleshooter, a KMS mutation, a provider call, or output destination. | Stop as a Follow-up or new decision; no scope expansion. |
+| TEL-013 | Consume and authenticate immediately before request expiry, then terminate the lifecycle process while that session exists. | No new authentication after request expiry; the existing session can retrieve only its equal committed page until access-intent expiry, then the function refuses; readiness remains false until closure. |
 
 Physical-clone replay is not a negative test for this decision because backup,
 replica, restore, and clone promotion are unsupported production entries in V1.
@@ -428,6 +492,15 @@ The smallest database addition is one forward migration with:
   part of exact readiness; and
 - no new role, raw table grant, extension, provisioning manifest, or immutable
   migration edit.
+
+That migration is not authoritative by directory presence. The same Phase B
+commit must add its literal filename, source digest, byte length, prefix digest,
+and set digest to `deployment/postgresql/migration_sets.py`; add the new closed
+consume function to the complete `audit_contract.py` callable/grant contract;
+update the external audit catalog-verifier digest in `catalog_identity.py`; and
+update their focused golden tests. These are required mechanical release and
+verification effects of migration 4 inside the database-migration half of the
+section-11.2 exception, not additional authority boundaries.
 
 The request-schema correction is a pre-deployment replacement, not a
 compatibility layer. Schema v1 request acceptance is removed. Authority
@@ -480,14 +553,19 @@ The prospective Phase B maximum path set is:
 
 1. `docs/rfcs/OFARM_Security_Audit_Temporary_Export_Lifecycle_RFC_v0_1.md`
 2. `security_audit/migrations/0004_temporary_export_lifecycle.sql`
-3. `deployment/postgresql/security_audit_approval.py`
-4. `deployment/postgresql/security_audit_break_glass.py`
-5. `deployment/postgresql/README.md`
-6. `kernel/tests/test_security_audit_approval.py`
-7. `kernel/tests/test_security_audit_break_glass.py`
-8. `kernel/tests/test_postgresql_audit_migration.py`
-9. `conformance/rewrite_architecture_check.py`
-10. `conformance/review_baseline_test_inventory.json`
+3. `deployment/postgresql/migration_sets.py`
+4. `deployment/postgresql/audit_contract.py`
+5. `deployment/postgresql/catalog_identity.py`
+6. `deployment/postgresql/security_audit_approval.py`
+7. `deployment/postgresql/security_audit_break_glass.py`
+8. `deployment/postgresql/README.md`
+9. `kernel/tests/test_migration_sets.py`
+10. `kernel/tests/test_postgresql_audit_contract.py`
+11. `kernel/tests/test_security_audit_approval.py`
+12. `kernel/tests/test_security_audit_break_glass.py`
+13. `kernel/tests/test_postgresql_audit_migration.py`
+14. `conformance/rewrite_architecture_check.py`
+15. `conformance/review_baseline_test_inventory.json`
 
 No other path is authorized by this proposed contract.
 
@@ -505,11 +583,12 @@ or safely reviewable capability. Splitting them was the direct cause of the
 PR #325–#327 prerequisite chain: the database half produced no operation, while
 the credential half could not safely act without first-use state.
 
-The added audit risk is that reviewers must assess forward DDL, consumption
-durability, role effects, and cleanup ordering together. The compensating
-controls are the exact ten-path cap, no new provisioning role or raw grant, one
-primary state machine, invariant traceability, and one unconstrained exact-head
-review followed only by affected-invariant review.
+The added audit risk is that reviewers must assess forward DDL, literal
+migration/contract/catalog release identities, consumption durability, role
+effects, and cleanup ordering together. The compensating controls are the exact
+fifteen-path cap, no new provisioning role or raw grant, one primary state
+machine, invariant traceability, and one unconstrained exact-head review
+followed only by affected-invariant review.
 
 The architect's later Phase B approval must expressly approve this exception.
 A generic `go`, review success, CI success, or approval of a predecessor
@@ -559,7 +638,7 @@ composition, not Phase B implementation claims.
 | Invariant | Owning implementation | Negative evidence | Smallest verification |
 | --- | --- | --- | --- |
 | TEL-001, TEL-011 | request v2 parser; migration-ledger observation; external replacement-eligibility prerequisite | old-store, reused-UUID, missing-evidence, and mismatched-route attempts | focused parser tests, fresh-store PostgreSQL test, and reviewed recovery-evidence stop check |
-| TEL-002 | merged verifier called with the exact certified-authority-time/database-high-water maximum | malformed, substituted, duplicate, expired, lagging-database, leading-database, and clock-regression cases | focused real-Ed25519 vectors, exact maximum/call-order tests, and forbidden caller-clock architecture checks |
+| TEL-002 | merged verifier plus migration-4 consume function, each using its own exact certified-authority-time/database-high-water maximum | malformed, substituted, duplicate, expired, lagging-database, leading-database, delayed-consume, and clock-regression cases | focused real-Ed25519 vectors, both exact-maximum/call-order tests, and forbidden operation-caller-clock architecture checks |
 | TEL-003 | migration-4 consume function | equal concurrency, capacity, expiry cleanup | live PostgreSQL serialization and 1,024-row bound tests |
 | TEL-004 | lifecycle pre-effect states | commit ambiguity and controlled refusal | dependency call-count and no-role-effect tests |
 | TEL-005 | private role transaction | pre-existing/drifted role and widened grants | live catalog/ACL tests under admin and export identities |
@@ -567,13 +646,17 @@ composition, not Phase B implementation claims.
 | TEL-008, TEL-009 | private cleanup and structural gate | termination/revoke/drop/verify failures; stale role | live crash-boundary and full structural-report tests |
 | TEL-010 | fixed lifecycle errors and private secret carriers | injected canaries at every dependency boundary | formatted-exception and observability-sink assertions |
 | TEL-012 | path/import architecture checks | provider/output/epoch/lock imports or calls | exact path set, forbidden-symbol checks, Ruff, package contract |
+| TEL-013 | existing access-intent expiry plus lifecycle cleanup | authenticated session surviving request expiry and process exit | fixed-window direct-call test, post-intent-expiry refusal, and stale-role structural test |
 
 Required Phase B verification:
 
 - focused unit and live PostgreSQL tests for every table row above;
 - exact verifier-time tests proving a lagging database cannot extend authority
-  validity, a leading database only refuses early, regression refuses, and no
-  caller-supplied clock or maximum reaches the verifier;
+  validity, a leading database only refuses early, delayed consumption refuses,
+  regression refuses, and no operation-caller clock or precomputed maximum
+  reaches either currentness decision;
+- literal migration-set, complete audit-contract, and external catalog-anchor
+  golden tests for migration 4;
 - existing approval, export, store-loss, migration, provisioning, and structural
   suites unchanged except for the deliberate request-schema replacement;
 - two real concurrent lifecycle attempts with one positive consume at most;
@@ -603,7 +686,8 @@ epoch, retained channel, or witness-lock subsystem in this PR.
 Current disposition:
 
 - Blockers: none demonstrated after affected-invariant review of the
-  authority-time and replacement-eligibility corrections.
+  authority-time, replacement-eligibility, literal release-authority, and
+  admission/disclosure-deadline corrections.
 - Follow-ups: protected output, crash-operation evidence, final cross-slice
   hostile evidence, production prerequisite evidence for certified authority
   time and fresh recovery UUIDs, and provider evidence before any PR #321
