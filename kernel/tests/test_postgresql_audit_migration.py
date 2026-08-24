@@ -50,6 +50,10 @@ QUERY_IDENTITY = (
     "ofarm_security.query_operational_security_events"
     "(uuid, timestamptz, uuid, integer, bigint)"
 )
+CONSUME_TEMPORARY_EXPORT_APPROVAL_SQL = (
+    "SELECT ofarm_security.consume_temporary_export_approval("
+    "%s, %s, %s, %s, %s)"
+)
 LIVE_PHYSICAL_REPLICATION_GATE = (
     "NOT EXISTS (\n"
     "            SELECT 1\n"
@@ -585,7 +589,9 @@ def test_authoritative_audit_migration_installs_exact_public_functions():
         assert f"TO {function.capability_role};" in combined_source
     assert sources[0].count("SECURITY DEFINER") == 10
     assert sources[1].count("SECURITY DEFINER") == 2
+    assert sources[3].count("SECURITY DEFINER") == 1
     assert all("FROM PUBLIC;" in source for source in sources[:2])
+    assert "FROM PUBLIC;" in sources[3]
 
 
 def test_migrated_audit_structure_observes_exact_ready_contract(
@@ -593,8 +599,8 @@ def test_migrated_audit_structure_observes_exact_ready_contract(
 ):
     state = migrated_audit_service
     report = state["report"]
-    assert report.applied_versions == (1, 2, 3)
-    assert report.final_version == 3
+    assert report.applied_versions == (1, 2, 3, 4)
+    assert report.final_version == 4
     assert report.migration_set_digest == state["migration_set"].digest
 
     with psycopg.connect(
@@ -607,7 +613,7 @@ def test_migrated_audit_structure_observes_exact_ready_contract(
     assert row[0] == SECURITY_AUDIT_CONTRACT.identity
     assert row[1] == SECURITY_AUDIT_CONTRACT.digest
     assert row[8] == SECURITY_AUDIT_PROVISIONING_SPEC.digest
-    assert row[9] == 3
+    assert row[9] == 4
     assert row[10] == state["migration_set"].digest
     assert row[11:] == (True, False)
 
@@ -904,6 +910,225 @@ def test_migrated_audit_structure_observes_exact_ready_contract(
         "tenant_id", "tenant_ref", "party_ref", "actor_ref", "subject",
         "issuer", "request_id", "message", "details", "payload",
     }
+
+
+def _temporary_export_window(state):
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        return admin.execute(
+            "SELECT execution_id, "
+            "pg_catalog.floor(EXTRACT(EPOCH FROM pg_catalog.clock_timestamp()) "
+            "* 1000000)::pg_catalog.int8 "
+            "FROM ofarm_security.schema_migration WHERE version = 1"
+        ).fetchone()
+
+
+def test_temporary_export_consumption_is_first_use_store_bound_and_closed(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    store_id, now_us = _temporary_export_window(state)
+    operation_id = uuid4()
+    arguments = (
+        operation_id,
+        store_id,
+        now_us - 1_000_000,
+        now_us + 60_000_000,
+        now_us - 5_000_000,
+    )
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login")
+    ) as control:
+        assert control.execute(
+            CONSUME_TEMPORARY_EXPORT_APPROVAL_SQL, arguments
+        ).fetchone() == (True,)
+        control.commit()
+        assert control.execute(
+            CONSUME_TEMPORARY_EXPORT_APPROVAL_SQL, arguments
+        ).fetchone() == (False,)
+        control.commit()
+
+    with psycopg.connect(state["target_admin_dsn"]) as admin:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            admin.execute(
+                CONSUME_TEMPORARY_EXPORT_APPROVAL_SQL,
+                (uuid4(), store_id, now_us, now_us + 1_000_000, now_us),
+            )
+        admin.rollback()
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login")
+    ) as control:
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            control.execute(
+                CONSUME_TEMPORARY_EXPORT_APPROVAL_SQL,
+                (
+                    uuid4(),
+                    uuid4(),
+                    now_us - 1_000_000,
+                    now_us + 60_000_000,
+                    now_us,
+                ),
+            )
+        control.rollback()
+        for invalid_window in (
+            (now_us + 60_000_000, now_us + 120_000_000, now_us),
+            (now_us - 60_000_000, now_us, now_us),
+            (now_us, now_us + 300_000_001, now_us),
+            (
+                now_us + 60_000_000,
+                now_us + 301_000_000,
+                now_us + 60_000_000,
+            ),
+        ):
+            with pytest.raises(psycopg.errors.InvalidParameterValue):
+                control.execute(
+                    CONSUME_TEMPORARY_EXPORT_APPROVAL_SQL,
+                    (uuid4(), store_id, *invalid_window),
+                )
+            control.rollback()
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            "DELETE FROM "
+            "ofarm_security.temporary_export_approval_consumption"
+        )
+
+
+def test_equal_concurrent_consumption_has_one_acknowledged_first_use(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    store_id, now_us = _temporary_export_window(state)
+    operation_id = uuid4()
+    start = Barrier(2)
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            "ALTER ROLE ofarm_security_audit_control_login "
+            "CONNECTION LIMIT 2"
+        )
+
+    def consume():
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_control_login")
+        ) as control:
+            start.wait(timeout=5)
+            result = control.execute(
+                CONSUME_TEMPORARY_EXPORT_APPROVAL_SQL,
+                (
+                    operation_id,
+                    store_id,
+                    now_us - 1_000_000,
+                    now_us + 60_000_000,
+                    now_us,
+                ),
+            ).fetchone()[0]
+            control.commit()
+            return result
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = tuple(executor.map(lambda _index: consume(), range(2)))
+        assert sorted(results) == [False, True]
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            assert admin.execute(
+                "SELECT pg_catalog.count(*) FROM "
+                "ofarm_security.temporary_export_approval_consumption"
+            ).fetchone() == (1,)
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                "DELETE FROM "
+                "ofarm_security.temporary_export_approval_consumption"
+            )
+            admin.execute(
+                "ALTER ROLE ofarm_security_audit_control_login "
+                "CONNECTION LIMIT 1"
+            )
+
+
+def test_temporary_export_consumption_refuses_the_1025th_live_operation(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    store_id, now_us = _temporary_export_window(state)
+    consumed_at = datetime.fromtimestamp(
+        now_us / 1_000_000, tz=timezone.utc
+    )
+    valid_until = consumed_at + timedelta(minutes=4)
+    with psycopg.connect(state["target_admin_dsn"]) as admin:
+        admin.cursor().executemany(
+            "INSERT INTO "
+            "ofarm_security.temporary_export_approval_consumption "
+            "(operation_id, valid_until, consumed_at) VALUES (%s, %s, %s)",
+            tuple(
+                (UUID(int=index), valid_until, consumed_at)
+                for index in range(1, 1025)
+            ),
+        )
+        admin.commit()
+    try:
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_control_login")
+        ) as control:
+            with pytest.raises(psycopg.errors.ProgramLimitExceeded):
+                control.execute(
+                    CONSUME_TEMPORARY_EXPORT_APPROVAL_SQL,
+                    (
+                        uuid4(),
+                        store_id,
+                        now_us - 1_000_000,
+                        now_us + 60_000_000,
+                        now_us,
+                    ),
+                )
+            control.rollback()
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            assert admin.execute(
+                "SELECT pg_catalog.count(*) FROM "
+                "ofarm_security.temporary_export_approval_consumption"
+            ).fetchone() == (1024,)
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                "DELETE FROM "
+                "ofarm_security.temporary_export_approval_consumption"
+            )
+
+
+def test_temporary_consumption_relation_is_owner_only_and_function_is_control_only(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        relation_grantees = admin.execute(
+            "SELECT COALESCE(grantee.rolname, 'PUBLIC') "
+            "FROM pg_catalog.pg_class AS class "
+            "CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE("
+            "class.relacl, pg_catalog.acldefault('r', class.relowner))) AS acl "
+            "LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee "
+            "WHERE class.oid = 'ofarm_security."
+            "temporary_export_approval_consumption'::pg_catalog.regclass "
+            "AND acl.grantee <> class.relowner"
+        ).fetchall()
+        function_grantees = admin.execute(
+            "SELECT COALESCE(grantee.rolname, 'PUBLIC') "
+            "FROM pg_catalog.pg_proc AS routine "
+            "CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE("
+            "routine.proacl, pg_catalog.acldefault('f', routine.proowner))) AS acl "
+            "LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee "
+            "WHERE routine.oid = 'ofarm_security."
+            "consume_temporary_export_approval(uuid,uuid,bigint,bigint,bigint)'::"
+            "pg_catalog.regprocedure AND acl.grantee <> routine.proowner "
+            "AND acl.privilege_type = 'EXECUTE'"
+        ).fetchall()
+    assert relation_grantees == []
+    assert function_grantees == [("ofarm_security_audit_control",)]
 
 
 def test_pretenant_append_is_attributed_bounded_and_exactly_idempotent(

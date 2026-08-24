@@ -2256,6 +2256,11 @@
       "sourcePath": "kernel/tests/test_migration_sets.py"
     },
     {
+      "nodeid": "kernel/tests/test_migration_sets.py::test_security_audit_v4_pins_temporary_export_consumption_release",
+      "sourceModule": "kernel.tests.test_migration_sets",
+      "sourcePath": "kernel/tests/test_migration_sets.py"
+    },
+    {
       "nodeid": "kernel/tests/test_migration_sets.py::test_services_have_distinct_fixed_migration_and_ledger_identities",
       "sourceModule": "kernel.tests.test_migration_sets",
       "sourcePath": "kernel/tests/test_migration_sets.py"
@@ -2831,6 +2836,11 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_equal_concurrent_consumption_has_one_acknowledged_first_use",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_exact_overflow_receipt_survives_close_through_marker_retention",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
@@ -2942,6 +2952,21 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_structural_readiness_refuses_role_attribute_and_membership_drift",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_temporary_consumption_relation_is_owner_only_and_function_is_control_only",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_temporary_export_consumption_is_first_use_store_bound_and_closed",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_temporary_export_consumption_refuses_the_1025th_live_operation",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
@@ -11431,6 +11456,21 @@
       "sourcePath": "kernel/tests/test_security_audit_approval.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_approval.py::test_fixed_request_substitution_refuses[store-uuid-case]",
+      "sourceModule": "kernel.tests.test_security_audit_approval",
+      "sourcePath": "kernel/tests/test_security_audit_approval.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_approval.py::test_fixed_request_substitution_refuses[store-uuid-nil]",
+      "sourceModule": "kernel.tests.test_security_audit_approval",
+      "sourcePath": "kernel/tests/test_security_audit_approval.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_approval.py::test_fixed_request_substitution_refuses[store-uuid-type]",
+      "sourceModule": "kernel.tests.test_security_audit_approval",
+      "sourcePath": "kernel/tests/test_security_audit_approval.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_approval.py::test_fixed_request_substitution_refuses[uuid-case]",
       "sourceModule": "kernel.tests.test_security_audit_approval",
       "sourcePath": "kernel/tests/test_security_audit_approval.py"
@@ -11744,6 +11784,66 @@
       "nodeid": "kernel/tests/test_security_audit_authority.py::test_valid_issuance_uses_no_direct_effect_builtins",
       "sourceModule": "kernel.tests.test_security_audit_authority",
       "sourcePath": "kernel/tests/test_security_audit_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_architecture_surface_rejects_public_injection_and_caller_time",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_invalid_carriers_refuse_before_database_work",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_ambiguous_login_commit_is_inspected_closed_and_returns_no_page",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_ambiguous_login_commit_with_failed_resolution_quarantines",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_closure_only_does_not_close_concurrent_replacement",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_closure_only_refuses_unexpired_and_closes_expired_exact_role",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_consume_commit_ambiguity_is_terminal_and_creates_no_role",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_export_failure_closes_role_and_never_exposes_canary_page",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_one_page_is_released_only_after_role_drop_and_replay_refuses",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_store_substitution_and_preexisting_role_refuse_before_consumption",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_public_surface_has_no_dependency_time_random_or_export_injection",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_secret_and_closed_page_carriers_do_not_render_contents",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
     {
       "nodeid": "kernel/tests/test_security_audit_client.py::test_ambiguous_commit_retries_once_with_identical_parameters",
@@ -17276,8 +17376,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "c898b680252908a55ff517be96e32de44384671e9fc2278a920e12975a7dc850",
-  "entryCount": 3455,
+  "entriesSha256": "eb2abf85d39ec6f1f03f7fc808375a706726a116beb5693e65e8730044fdc7ce",
+  "entryCount": 3475,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

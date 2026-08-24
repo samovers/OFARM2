@@ -1,14 +1,20 @@
-# OFARM Security-Audit Temporary Export Lifecycle — Phase A Contract v0.1
+# OFARM Security-Audit Temporary Export Lifecycle — Decision v1
 
 ## Status
 
 - Parent: issue #192.
 - Decision: `ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001`,
-  proposed version 1.
+  version 1.
 - Reviewed base: `5f51f80981599a0da4678d555a02a648b84a2304`.
 - Draft PR: https://github.com/samovers/OFARM2/pull/328.
 - Initial publication head: `8ba39994f18112de5c45304b44cb19f80f05f572`.
-- Phase A scope: this RFC only.
+- Phase A scope was this RFC only. Phase B is authorized only inside the exact
+  section-11.1 path set.
+- Architect approval recorded 2026-08-24: “I approve OFARM2 decision
+  ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001 version 1, including
+  the section 11.2 cross-boundary exception combining the bounded forward
+  consumption migration with the temporary export credential lifecycle in PR
+  #328.”
 - Supersedes the unimplemented designs in draft PRs #325, #326, and #327.
 - PRs #322 and #323 are deployment/provider-evidence follow-ups and are not
   dependencies of this decision.
@@ -20,9 +26,10 @@
   and request expiry is the admission/new-authentication deadline rather than a
   false claim that PostgreSQL terminates an already authenticated session.
 
-This contract does not authorize Phase B, merge, deployment, production
-operation, database mutation, role creation, credential issuance, provider
-calls, IAM changes, or export disclosure.
+That exact approval authorizes Phase B implementation and conditional merge in
+PR #328, including the section-11.2 exception. It does not authorize deployment,
+production operation, provider calls, IAM changes, protected output delivery,
+or export disclosure outside the closed lifecycle result.
 
 ## 1. Problem and goal
 
@@ -390,8 +397,10 @@ silently equated with request expiry.
   authentication after request expiry; it does not kill an existing session.
   The export function's access-intent expiry bounds that session's disclosure,
   while structural readiness remains false. The fixed closure-only operation
-  may close only an expired, exact-shape stale LOGIN. An unexpired or drifted
-  LOGIN is never repaired or replaced.
+  may close only an expired, exact-shape stale LOGIN. It pins the observed
+  expiry and SCRAM verifier through closure, so a concurrent replacement is
+  quarantined rather than disabled or dropped. An unexpired or drifted LOGIN
+  is never repaired or replaced.
 - Page buffered but cleanup or structural verification fails: expose no page;
   the operation remains consumed and readiness remains false.
 - Post-closure output failure belongs to the later output-custody boundary and
@@ -547,7 +556,8 @@ The primary trust boundary is the temporary dual-approved security-audit
 export authority window, from fresh carrier verification through credential
 closure and private page handoff.
 
-Phase A changes only this RFC.
+Phase A changed only this RFC. Authorized Phase B remains limited to the path
+set below.
 
 The prospective Phase B maximum path set is:
 
@@ -569,7 +579,7 @@ The prospective Phase B maximum path set is:
 
 No other path is authorized by this proposed contract.
 
-### 11.2 Exact exception requiring architect approval
+### 11.2 Exact approved cross-boundary exception
 
 Phase B would combine two normally separate authorities inside one PR:
 
@@ -590,9 +600,11 @@ fifteen-path cap, no new provisioning role or raw grant, one primary state
 machine, invariant traceability, and one unconstrained exact-head review
 followed only by affected-invariant review.
 
-The architect's later Phase B approval must expressly approve this exception.
-A generic `go`, review success, CI success, or approval of a predecessor
-decision is insufficient.
+The architect expressly approved this exception on 2026-08-24 using the exact
+decision/version and exception wording recorded in Status. That approval does
+not expand the fifteen-path cap or authorize any provider, output-custody,
+deployment, or production authority. A generic `go`, review success, CI
+success, or approval of a predecessor decision would not have been sufficient.
 
 ### 11.3 Dependencies and follow-ups
 
@@ -694,20 +706,23 @@ Current disposition:
   production use.
 - Preferences: none.
 
-Phase B remains gated on explicit architect approval of both decision version
-1 and the section-11.2 cross-boundary exception.
+The Phase B gate was satisfied on 2026-08-24 by explicit architect approval of
+decision version 1 and the section-11.2 cross-boundary exception. All remaining
+merge gates in this section and the exact path boundary remain binding.
 
 Merge stop rule: after Phase B is expressly authorized, merge only when every
 approved invariant passes, exact-head hosted checks pass, and no demonstrated
 in-scope Blocker remains. New ideas, Preferences, hypothetical clone/failover
 risks, and deployment hardening remain Follow-ups and do not reopen review.
 
-## 15. Phase A stop
+## 15. Phase B approval record
 
-Stop after publishing and reviewing this RFC. Phase B requires a later exact
-approval that names:
+Phase A stopped after publishing and reviewing this RFC. Phase B required an
+exact approval that named:
 
 `ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001 version 1`
 
-and expressly approves the section-11.2 cross-boundary exception. No other
-wording authorizes implementation.
+and expressly approved the section-11.2 cross-boundary exception. The architect
+provided that exact approval on 2026-08-24, as quoted in Status. Implementation
+and conditional merge are therefore authorized only for PR #328 and only
+inside the section-11.1 path set.

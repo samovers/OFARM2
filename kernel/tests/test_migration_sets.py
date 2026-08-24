@@ -131,6 +131,28 @@ def test_checked_in_migration_release_has_one_literal_authority(service, expecte
     )
 
 
+def test_security_audit_v4_pins_temporary_export_consumption_release():
+    migration_set = load_authoritative_migration_set(
+        PACKAGE_ROOT,
+        SECURITY_AUDIT_SERVICE,
+    )
+    migration = migration_set.migrations[3]
+
+    assert migration.filename == "0004_temporary_export_lifecycle.sql"
+    assert migration.source_sha256 == \
+        "sha256:390fd96d498ab3d392a57135fb336a266350b3c6330eec749b7d07cbd3e77650"
+    assert migration.byte_length == 17_122
+    assert migration_set.prefix_digest(4) == \
+        "sha256:ac9c85a5766a072fa516ee15d607511fc0b5cf2b0651eb3d9087a5c086eb5b2c"
+    assert migration_set.digest == migration_set.prefix_digest(4)
+    assert b"LOCK TABLE" in migration.source_bytes
+    assert b"IN EXCLUSIVE MODE" in migration.source_bytes
+    assert b"advisory" not in migration.source_bytes
+    assert b"CREATE ROLE" not in migration.source_bytes
+    assert b"store_migration_execution_id" in migration.source_bytes
+    assert b"v_live_count >= 1024" in migration.source_bytes
+
+
 def test_tenant_v5_is_verifier_only_and_pins_the_closed_admission_transition():
     migration_set = load_authoritative_migration_set(
         PACKAGE_ROOT,

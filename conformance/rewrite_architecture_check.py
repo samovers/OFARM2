@@ -89,7 +89,8 @@ MODULE_BUDGETS = {
     "kernel/security_audit_gap.py": 720,
     "kernel/security_audit_runtime.py": 250,
     "deployment/postgresql/security_audit_hmac_retirement.py": 450,
-    "deployment/postgresql/security_audit_approval.py": 623,
+    "deployment/postgresql/security_audit_approval.py": 640,
+    "deployment/postgresql/security_audit_break_glass.py": 1_250,
     "deployment/postgresql/security_audit_authority.py": 388,
     "deployment/postgresql/security_audit_store_loss.py": 1_000,
     SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH: 1_747,
@@ -244,6 +245,14 @@ DIRECT_IMPORT_BOUNDS = {
         {
             "deployment.postgresql.audit_contract",
             "deployment.postgresql.security_audit_access",
+        }
+    ),
+    "deployment/postgresql/security_audit_break_glass.py": frozenset(
+        {
+            "deployment.postgresql.catalog_identity",
+            "deployment.postgresql.migration_sets",
+            "deployment.postgresql.security_audit_approval",
+            "deployment.postgresql.security_audit_export",
         }
     ),
     "deployment/postgresql/security_audit_authority.py": frozenset(),
@@ -2669,6 +2678,117 @@ def _check_security_audit_approval_surface(
     ]
 
 
+def _security_audit_break_glass_violations(tree: ast.Module) -> list[str]:
+    violations = []
+    classes = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef)
+        and node.name == "SecurityAuditBreakGlassRunner"
+    ]
+    if len(classes) != 1:
+        return ["production runner class inventory differs"]
+    methods = {
+        node.name: node
+        for node in classes[0].body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    expected = {
+        "__init__": ("self", "observer_public_key"),
+        "run": (
+            "self",
+            "secret_carrier",
+            "authority_receipt_bytes",
+            "approval_bundle_bytes",
+        ),
+        "close_expired": ("self", "secret_carrier"),
+    }
+    for name, arguments in expected.items():
+        method = methods.get(name)
+        if method is None:
+            violations.append(f"production {name} method is absent")
+            continue
+        observed = tuple(
+            argument.arg
+            for argument in (
+                *method.args.posonlyargs,
+                *method.args.args,
+                *method.args.kwonlyargs,
+            )
+        )
+        if (
+            observed != arguments
+            or method.args.vararg is not None
+            or method.args.kwarg is not None
+            or method.args.defaults
+            or method.args.kw_defaults
+        ):
+            violations.append(f"production {name} dependency surface differs")
+        for node in ast.walk(method):
+            if isinstance(node, ast.Name) and node.id == \
+                    "_run_security_audit_break_glass_for_testing":
+                violations.append(
+                    f"production {name} reaches the private test seam"
+                )
+    run = methods.get("run")
+    if run is not None:
+        attributes = {
+            node.attr
+            for node in ast.walk(run)
+            if isinstance(node, ast.Attribute)
+        }
+        names = {
+            node.id for node in ast.walk(run) if isinstance(node, ast.Name)
+        }
+        if "time_ns" not in attributes:
+            violations.append("production run does not bind direct authority time")
+        if "token_bytes" not in attributes:
+            violations.append("production run does not bind direct randomness")
+        if "SecurityAuditExportRunner" not in names:
+            violations.append("production run does not bind the fixed export runner")
+    forbidden_names = {
+        "boto3",
+        "google",
+        "kms_v1",
+        "os",
+        "subprocess",
+        "threading",
+        "open",
+        "print",
+    }
+    for node in ast.walk(tree):
+        name = None
+        if isinstance(node, ast.Name):
+            name = node.id
+        elif isinstance(node, ast.Attribute):
+            name = node.attr
+        if name in forbidden_names:
+            violations.append(
+                f"{node.lineno}: prohibited lifecycle surface {name!r}"
+            )
+    private_seams = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_run_security_audit_break_glass_for_testing"
+    ]
+    if len(private_seams) != 1:
+        violations.append("private deterministic lifecycle seam differs")
+    return sorted(set(violations))
+
+
+def _check_security_audit_break_glass_surface(
+    snapshot: PythonSourceSnapshotV1,
+    trees: collections.abc.Mapping[str, ast.Module],
+) -> list[str]:
+    relative = "deployment/postgresql/security_audit_break_glass.py"
+    module = snapshot.modules_by_relative_path[relative].module_name
+    return [
+        f"{relative}:{violation}"
+        for violation in _security_audit_break_glass_violations(trees[module])
+    ]
+
+
 def _authority_time_payload_is_exact(tree: ast.Module) -> bool:
     functions = [
         node
@@ -3304,6 +3424,7 @@ def main() -> int:
     failures.extend(_check_direct_import_bounds(snapshot))
     failures.extend(_check_security_audit_gap_surface(snapshot, trees))
     failures.extend(_check_security_audit_approval_surface(snapshot, trees))
+    failures.extend(_check_security_audit_break_glass_surface(snapshot, trees))
     failures.extend(_check_security_audit_authority_surface(snapshot, trees))
     failures.extend(_check_security_audit_observer_root_surface(snapshot, trees))
     for relative, budget in MODULE_BUDGETS.items():

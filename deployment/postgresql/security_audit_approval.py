@@ -35,7 +35,7 @@ from deployment.postgresql.security_audit_access import (
 _AUTHORITY_RECEIPT_SCHEMA = (
     "ofarm.security-audit-break-glass-authority-receipt.v1"
 )
-_EXPORT_REQUEST_SCHEMA = "ofarm.security-audit-break-glass-export-request.v1"
+_EXPORT_REQUEST_SCHEMA = "ofarm.security-audit-break-glass-export-request.v2"
 _APPROVAL_STATEMENT_SCHEMA = (
     "ofarm.security-audit-break-glass-export-approval.v1"
 )
@@ -87,6 +87,7 @@ _EXPORT_REQUEST_MEMBERS = (
     "operationId",
     "purpose",
     "schemaVersion",
+    "storeMigrationExecutionId",
 )
 _APPROVAL_STATEMENT_MEMBERS = (
     "approverId",
@@ -125,6 +126,7 @@ class _Authority:
 @dataclass(frozen=True, slots=True)
 class _ExportRequest:
     operation_id: UUID
+    store_migration_execution_id: UUID
     digest: str
     not_before_us: int
     expires_at_us: int
@@ -145,6 +147,7 @@ class _Approval:
 class _VerifiedSecurityAuditApproval:
     schema_version: str
     operation_id: UUID
+    store_migration_execution_id: UUID
     authority_receipt_digest: str
     request_digest: str
     approval_digest: str
@@ -291,6 +294,15 @@ def _uuid_v4(value: object) -> UUID:
     return parsed
 
 
+def _non_nil_uuid(value: object) -> UUID:
+    if type(value) is not str:
+        raise ValueError
+    parsed = UUID(value)
+    if str(parsed) != value or parsed.int == 0:
+        raise ValueError
+    return parsed
+
+
 def _cursor(value: object) -> SecurityAuditAccessCursor | None:
     if value is None:
         return None
@@ -431,6 +443,9 @@ def _request(
         raise ValueError
     return _ExportRequest(
         operation_id=_uuid_v4(document["operationId"]),
+        store_migration_execution_id=_non_nil_uuid(
+            document["storeMigrationExecutionId"]
+        ),
         digest=_digest(payload),
         not_before_us=not_before_us,
         expires_at_us=expires_at_us,
@@ -560,6 +575,7 @@ def _verify(
     return _VerifiedSecurityAuditApproval(
         schema_version=_VERIFIED_APPROVAL_SCHEMA,
         operation_id=request.operation_id,
+        store_migration_execution_id=request.store_migration_execution_id,
         authority_receipt_digest=authority.digest,
         request_digest=request.digest,
         approval_digest=_digest(bundle_carrier),
