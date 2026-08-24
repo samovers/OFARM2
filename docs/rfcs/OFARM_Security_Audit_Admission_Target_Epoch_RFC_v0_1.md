@@ -3,7 +3,7 @@
 ## Status
 
 - **Parent issue:** #192
-- **Draft pull request:** pending publication
+- **Draft pull request:** https://github.com/samovers/OFARM2/pull/326
 - **Decision:** ISSUE192-SECURITY-AUDIT-ADMISSION-TARGET-EPOCH-001,
   proposed version 1
 - **Phase:** Phase A design only; unapproved
