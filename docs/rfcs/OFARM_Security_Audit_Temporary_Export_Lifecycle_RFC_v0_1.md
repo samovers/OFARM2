@@ -12,6 +12,11 @@
 - Supersedes the unimplemented designs in draft PRs #325, #326, and #327.
 - PRs #322 and #323 are deployment/provider-evidence follow-ups and are not
   dependencies of this decision.
+- Exact-head review of `7e30f9c7b66fef14ddea2b4c55015a2cd34c24db`
+  demonstrated two corrections incorporated here: verifier currentness cannot
+  use the audit database clock alone, and replacement-store migration UUID
+  freshness is an external recovery prerequisite rather than a database-proven
+  property.
 
 This contract does not authorize Phase B, merge, deployment, production
 operation, database mutation, role creation, credential issuance, provider
@@ -111,21 +116,35 @@ evidence remain later #192 work.
 - the migration-1 `execution_id` as the store-incarnation identifier inside
   the V1 no-clone boundary;
 - the existing non-regressing audit access clock;
+- one deployment-certified UTC Unix-microsecond authority-time domain that is
+  non-regressing and is observed inside production as
+  `time.time_ns() // 1000`, with the same domain required for authority-receipt
+  issuance;
 - the merged PR #319 verifier and existing PR #318 export runner;
 - PostgreSQL transaction commit, role catalog, `VALID UNTIL`, function ACLs,
   and exact structural verifier;
 - trusted deployment composition that pins one observer public key, one audit
   admin route, and one audit-control route to one selected audit service; and
+- trusted recovery composition that preserves the predecessor migration-1
+  execution UUID, generates a fresh CSPRNG-backed UUID for every empty
+  recreation, and admits the replacement route only after the successful
+  store-loss report proves the current UUID and external comparison proves it
+  differs from the predecessor; and
 - the security operator and database administrator for this break-glass act.
 
-The database and authority clocks retain ADR 0001's existing operating-system
-clock prerequisite. Clock regression refuses; this decision adds no new clock
-claim.
+The certified authority-time source and fresh replacement UUID are explicit
+external prerequisites, not facts self-attested by the audit database. If the
+clock certification, common issuance domain, predecessor UUID, fresh UUID
+generation, or successful recovery evidence is absent or ambiguous, trusted
+composition must not construct this lifecycle. The database clock retains ADR
+0001's operating-system prerequisite. Any observed clock regression refuses.
 
 ### 4.3 Untrusted inputs and actors
 
 - authority-receipt bytes, approval-bundle bytes, cursor values, UUID text,
   and every other external carrier;
+- caller-supplied time, clock claims, recovery-freshness claims, and recovery
+  reports before trusted composition validates them;
 - the holder of the temporary export credential;
 - PostgreSQL rows and catalog observations until completely validated;
 - connection failures, cancellation, ambiguous commit, process exit, and
@@ -143,6 +162,8 @@ The following are out of scope for this V1 decision:
 
 - compromise of the trusted deployment selector, security operator, database
   administrator, observer private key, or both independent approvers;
+- deliberate falsification by the trusted authority-time or recovery
+  prerequisite owner;
 - superuser mutation of the migration ledger, consumption relation, role
   catalog, or structural verifier;
 - a backup, replica, restored database, promoted physical clone, or two active
@@ -160,9 +181,9 @@ stop for a new external non-rewindable or consensus-backed authority.
 
 | Decision | Sole authority | Forbidden substitute |
 | --- | --- | --- |
-| Store incarnation | Migration-1 `schema_migration.execution_id` on the selected audit database | DSN text, database OID alone, caller label, target epoch, provider fixture |
+| Store incarnation | Migration-1 `schema_migration.execution_id` on the selected audit database, after trusted recovery composition proves the external fresh-UUID prerequisite | DSN text, database OID alone, an unvalidated caller UUID, target epoch, provider fixture |
 | Approval authenticity and independence | Merged PR #319 verifier under the composition-pinned observer public key | parsed JSON, operator assertion, database row, public result constructor |
-| Approval currentness | Existing database-owned non-regressing access-clock observation used as verifier `now_us` and rechecked by the consume function | caller time, receipt issue time alone, Python wall clock |
+| Approval currentness | Exact maximum of one fresh observation from the composition-certified authority-time domain and the selected store's immediate non-regressing access-clock high-water, used as verifier `now_us`; the consume function then rechecks its own database observation | either clock alone, caller time, receipt issue time, an externally supplied maximum, or an uncertified Python wall clock |
 | First use while valid | First acknowledged insert by the migration-4 consume function | returned SQL row before commit, role presence, retry, follow-up inference |
 | Export scope | Signed request plus the existing committed `AUDIT_ACCESS` intent and export function | temporary LOGIN, admin privilege, caller-selected SQL |
 | Temporary credential | Exact PostgreSQL role catalog state created by the closed lifecycle | password possession as approval, environment text, a pre-existing role |
@@ -195,11 +216,32 @@ Trusted pre-approval inspection obtains the migration-1 UUID read-only from
 the selected audit store. Execution obtains it again through the admin route
 and refuses before consumption if it differs from the signed request.
 
-An empty replacement store receives a new migration-1 execution UUID through
-the accepted migration runner. An approval signed for the lost store therefore
-cannot be consumed on the replacement. A physical clone would copy the UUID;
-physical clones are forbidden in V1 and are not normalized into supported
-behavior here.
+The accepted store-loss runner takes its migration execution UUID from the
+recovery request and validates only canonical non-nil shape. It does not prove
+global freshness. Empty-recreation eligibility therefore has this external
+prerequisite: trusted recovery composition must retain the predecessor
+migration-1 UUID, generate a fresh CSPRNG-backed UUID after loss, require it to
+differ, and bind the proved current UUID in the successful store-loss recovery
+report before the replacement route becomes eligible. Reuse, missing
+predecessor evidence, a caller assertion without the successful report, or
+ambiguity makes the replacement ineligible and stops this lifecycle before
+carrier verification.
+
+Given that prerequisite, an approval signed for the lost store cannot be
+consumed on the replacement. This is a conditional V1 trust premise, not a
+machine guarantee made by the migration runner or this lifecycle. A physical
+clone would copy the UUID; physical clones are forbidden in V1 and are not
+normalized into supported behavior here.
+
+Before each verifier call, the production lifecycle obtains one fresh
+`time.time_ns() // 1000` observation from the composition-certified
+authority-time domain and one immediate non-regressing audit access-clock
+high-water from the selected database. It passes the exact integer maximum to
+the merged verifier. Neither value nor the maximum is accepted from the
+operation caller or carriers. A lagging database therefore cannot extend a
+receipt; a leading database may only refuse it early. If production cannot
+prove that its observation uses the same certified non-regressing domain
+required for receipt issuance, there is no supported lifecycle entry.
 
 ### 6.2 Bounded active-consumption state
 
@@ -254,7 +296,9 @@ Ordering rules:
 
 1. Validate carrier byte bounds, trusted routes, observer key, store UUID, and
    exact normal structure before any approval consumption or role effect.
-2. Observe non-regressing database time and verify the original carriers.
+2. Observe fresh certified authority time and the immediate non-regressing
+   database high-water, derive their exact maximum, and verify the original
+   carriers with that value.
 3. Call the consume function with only the normalized private values and
    acknowledge its transaction commit before generating a password.
 4. A consume-commit exception is terminal outcome-unknown. Do not create a
@@ -300,9 +344,12 @@ helpers. They exist only inside this lifecycle's private state machine.
 ## 7. Invariants and acceptance criteria
 
 - `TEL-001` — Every accepted request is canonical schema v2 and binds the exact
-  migration-1 execution UUID observed again on the selected audit store.
+  migration-1 execution UUID observed again on the selected audit store, whose
+  eligibility already depends on externally proven fresh-UUID recovery.
 - `TEL-002` — Approval authenticity, independence, bounds, and currentness are
-  reverified from the original carriers before consumption or role effects.
+  reverified from the original carriers before consumption or role effects,
+  with verifier `now_us` equal to the exact maximum of fresh certified
+  authority time and the immediate database high-water.
 - `TEL-003` — At most one acknowledged consume commit exists for an operation
   while its approval can authorize; the live-consumption relation never
   exceeds 1,024 rows.
@@ -324,9 +371,11 @@ helpers. They exist only inside this lifecycle's private state machine.
 - `TEL-010` — Ordinary failures emit only fixed non-sensitive outcomes and do
   not render carriers, keys, passwords, DSNs, SQL, page bytes, database rows,
   exception text, causes, contexts, tracebacks, or local variables.
-- `TEL-011` — Store replacement changes the signed store UUID and therefore
-  refuses every approval for the lost store without an epoch service, external
-  ledger, or advisory witness lock.
+- `TEL-011` — For every supported replacement entry, trusted recovery
+  composition has already proven a fresh migration-1 UUID different from the
+  predecessor; the signed UUID therefore refuses approvals for the lost store
+  without an epoch service, database self-attestation, or advisory witness
+  lock. Without that external proof, the replacement is ineligible.
 - `TEL-012` — No provider evidence, root provisioning, output sink, backup,
   replica, clone, failover, scheduler, or tenant authority enters this PR.
 
@@ -334,8 +383,10 @@ helpers. They exist only inside this lifecycle's private state machine.
 
 | Invariant | Supported entry and counterexample | Required outcome |
 | --- | --- | --- |
-| TEL-001 | Execute a validly signed request for the previous store after PR #324 empty recreation. | Store UUID mismatch before consumption; no LOGIN. |
+| TEL-001 | Execute a validly signed request for the previous store after an eligible PR #324 empty recreation with a proved fresh migration UUID. | Store UUID mismatch before consumption; no LOGIN. |
+| TEL-001, TEL-011 | Attempt to publish or use an empty replacement with a reused UUID, no retained predecessor UUID, or no successful report binding the freshly generated UUID. | Replacement remains ineligible; trusted composition does not construct or call the lifecycle. |
 | TEL-002 | Supply reordered JSON, a substituted receipt, one repeated approver, or an expired request. | Fixed refusal; no consume call or role SQL. |
+| TEL-002 | Issue at authority time 12:00 with 12:05 expiry, then execute at authority time 12:30 while database high-water is 12:03. | Exact maximum is 12:30; fixed verifier refusal; no consume call or role SQL. |
 | TEL-003 | Start two lifecycle calls with the same valid carriers. | One consume commit at most; the other refuses and creates no LOGIN. |
 | TEL-003 | Present 1,025 distinct concurrently live approvals. | First 1,024 may consume; the next refuses until expiry cleanup. |
 | TEL-004 | Drop the control connection during consume commit. | Outcome unknown, no password generation, no role SQL, no retry. |
@@ -356,6 +407,13 @@ replica, restore, and clone promotion are unsupported production entries in V1.
 Phase B introduces one direct module,
 `deployment/postgresql/security_audit_break_glass.py`. It owns one private
 state machine and calls the accepted verifier and export runner directly.
+
+Production construction observes authority time directly through
+`time.time_ns()` and accepts no clock, clock callback, precomputed maximum, or
+recovery-freshness evidence from an operation caller. A private deterministic
+test seam may substitute time; architecture checks must prove production does
+not call it. Target eligibility and certified-time installation remain trusted
+deployment/recovery prerequisites, not new provider or database authority.
 
 It does not introduce a framework, service locator, generic credential
 manager, public admission result, reusable role helper, target object, epoch,
@@ -384,11 +442,13 @@ authorize, and unsupported clones remain unsupported.
 
 Authoritative sources of truth:
 
-1. one migration-1 UUID for store incarnation;
-2. one verifier result from original signed carriers;
-3. one bounded consumption relation for still-live first use;
-4. one fixed PostgreSQL role for the temporary window; and
-5. one complete structural verifier for closure.
+1. one externally proven eligible migration-1 UUID for store incarnation;
+2. one exact currentness maximum from certified authority time and database
+   high-water;
+3. one verifier result from original signed carriers;
+4. one bounded consumption relation for still-live first use;
+5. one fixed PostgreSQL role for the temporary window; and
+6. one complete structural verifier for closure.
 
 Authoritative positive transition points:
 
@@ -488,12 +548,18 @@ would invalidate the migration-1 UUID authority and require a new design. The
 likely upgrade would use a separately governed non-rewindable external store
 identity and consumption authority; it must not be anticipated in V1 code.
 
+The design is unavailable, rather than provisional, when deployment cannot
+certify one non-regressing authority-time domain shared with receipt issuance
+or recovery cannot preserve the predecessor UUID and prove fresh CSPRNG-backed
+replacement generation. Those are explicit stop conditions before production
+composition, not Phase B implementation claims.
+
 ## 13. Traceability and verification
 
 | Invariant | Owning implementation | Negative evidence | Smallest verification |
 | --- | --- | --- | --- |
-| TEL-001, TEL-011 | request v2 parser; migration-ledger observation | old-store and mismatched-route requests | focused verifier tests plus fresh-store PostgreSQL test |
-| TEL-002 | merged verifier called with database time | malformed, substituted, duplicate, expired carriers | focused real-Ed25519 vectors and exact call-order tests |
+| TEL-001, TEL-011 | request v2 parser; migration-ledger observation; external replacement-eligibility prerequisite | old-store, reused-UUID, missing-evidence, and mismatched-route attempts | focused parser tests, fresh-store PostgreSQL test, and reviewed recovery-evidence stop check |
+| TEL-002 | merged verifier called with the exact certified-authority-time/database-high-water maximum | malformed, substituted, duplicate, expired, lagging-database, leading-database, and clock-regression cases | focused real-Ed25519 vectors, exact maximum/call-order tests, and forbidden caller-clock architecture checks |
 | TEL-003 | migration-4 consume function | equal concurrency, capacity, expiry cleanup | live PostgreSQL serialization and 1,024-row bound tests |
 | TEL-004 | lifecycle pre-effect states | commit ambiguity and controlled refusal | dependency call-count and no-role-effect tests |
 | TEL-005 | private role transaction | pre-existing/drifted role and widened grants | live catalog/ACL tests under admin and export identities |
@@ -505,6 +571,9 @@ identity and consumption authority; it must not be anticipated in V1 code.
 Required Phase B verification:
 
 - focused unit and live PostgreSQL tests for every table row above;
+- exact verifier-time tests proving a lagging database cannot extend authority
+  validity, a leading database only refuses early, regression refuses, and no
+  caller-supplied clock or maximum reaches the verifier;
 - existing approval, export, store-loss, migration, provisioning, and structural
   suites unchanged except for the deliberate request-schema replacement;
 - two real concurrent lifecycle attempts with one positive consume at most;
@@ -525,13 +594,24 @@ requires another store identity, provider authority, output sink, role,
 provisioning manifest, or background process is a Follow-up or a new decision,
 not an in-scope fix.
 
+Production use has two explicit prerequisites outside this Phase B code
+boundary: certification of the shared authority-time domain and reviewed
+recovery evidence proving every empty replacement's fresh migration UUID. Their
+absence is a stop condition, not an invitation for a provider fixture, target
+epoch, retained channel, or witness-lock subsystem in this PR.
+
 Current disposition:
 
-- Blockers: exact-head Phase A review and explicit architect approval of both
-  decision version 1 and the section-11.2 cross-boundary exception are pending.
+- Blockers: none demonstrated after affected-invariant review of the
+  authority-time and replacement-eligibility corrections.
 - Follow-ups: protected output, crash-operation evidence, final cross-slice
-  hostile evidence, and provider evidence before any PR #321 production use.
+  hostile evidence, production prerequisite evidence for certified authority
+  time and fresh recovery UUIDs, and provider evidence before any PR #321
+  production use.
 - Preferences: none.
+
+Phase B remains gated on explicit architect approval of both decision version
+1 and the section-11.2 cross-boundary exception.
 
 Merge stop rule: after Phase B is expressly authorized, merge only when every
 approved invariant passes, exact-head hosted checks pass, and no demonstrated
