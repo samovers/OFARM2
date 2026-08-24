@@ -1,11 +1,11 @@
-# OFARM Security-Audit Admission Target Epoch — Phase A Contract v0.2
+# OFARM Security-Audit Admission Target Epoch — Phase A Contract v0.3
 
 ## Status
 
 - **Parent issue:** #192
 - **Draft pull request:** https://github.com/samovers/OFARM2/pull/326
 - **Decision:** ISSUE192-SECURITY-AUDIT-ADMISSION-TARGET-EPOCH-001,
-  proposed version 2
+  proposed version 3
 - **Phase:** Phase A design correction only; unapproved
 - **Reviewed base:**
   5f51f80981599a0da4678d555a02a648b84a2304, the merge commit for PR #324
@@ -21,6 +21,38 @@
   focused tests; minimal deployment documentation; architecture registration;
   and mechanical review-inventory regeneration
 - **Phase B:** not authorized
+
+### Version-3 correction
+
+Exact-head independent review 5394628149 demonstrated that version 2 derived
+verifier `now_us` from the admitted database's nonregressing high-water while
+receipt issuance and expiry used the separately certified Python authority-time
+domain. An arbitrarily lagging database clock could therefore extend a
+five-minute receipt by the unbounded lag.
+
+Version 3 removes that unsafe use of database time as the sole currentness
+value without assuming clock synchronization. While the same lease and
+retained transaction remain held, the target-epoch module derives verifier
+`now_us` as the exact maximum of:
+
+1. one fresh nonregressing `time.time_ns() // 1000` observation through the
+   same certified authority-time gate used for issuance; and
+2. the immediate nonregressing audit-access-clock high-water observed from the
+   admitted retained channel.
+
+The maximum cannot lag the certified issuer domain. A database clock that
+lags cannot extend validity, while a database clock that leads may only refuse
+a receipt early. Neither input is caller supplied, and no skew premise is
+introduced.
+
+The same review found one stale instruction to open a second control
+connection and an impossible requirement for a future credential-effect role
+to read the control-only epoch function. Version 3 changes the instruction to
+the first retained-channel borrow. It also proves a future effect connection's
+binding by composing its local live-witness/server/database assertion with
+control-channel epoch assertions before and after the effect. The effect role
+receives no audit-control membership, epoch-function grant, activation
+authority, or other credential authority from this decision.
 
 ### Version-2 correction
 
@@ -88,8 +120,9 @@ break-glass composition may use to:
 2. keep one live target witness and the only audit-control channel held on the
    same connection for the complete installed lifetime;
 3. serialize every audit-control transaction through that retained channel
-   and prove on every separately owned effect connection that the same
-   witness, database, server, epoch, and structural contract remain present;
+   and prove that every separately owned effect connection sees the same
+   witness, database, and live server while retained-channel assertions bind
+   it to the exact immutable epoch;
 4. prevent per-operation callers from supplying a target, route, connection,
    epoch, witness, lease, time, activation record, or positive result;
 5. serialize authority-receipt issuance with quiescence so the retirement
@@ -119,8 +152,8 @@ Within the stated trust model, an ACTIVE target-epoch installation means:
 - one module-owned audit-control session currently holds the capsule-derived
   live witness on that exact postmaster and is the only control channel;
 - every governed control transaction uses that retained session, while every
-  separately owned effect connection sees the witness locally and matches the
-  exact epoch row; and
+  separately owned effect connection sees the witness and database/server
+  locally and is bracketed by exact retained-channel epoch checks; and
 - replacement activation cannot make a pre-cutoff signed approval current.
 
 It does not mean PostgreSQL elected a global primary. Cross-process and
@@ -261,6 +294,9 @@ editing that boundary and proposes a separate prerequisite or follow-up.
 - the exact production target-epoch module and Python process-lock semantics;
 - Python `time.time_ns()` as the module's sole production observation of that
   certified authority-time domain;
+- the exact fail-closed verifier-time maximum of one fresh observation from
+  that authority-time domain and the admitted retained channel's immediate
+  nonregressing audit-access-clock high-water, without a clock-skew claim;
 - SHA-256 preimage and collision resistance, strict canonical JSON, and exact
   integer arithmetic;
 - PostgreSQL 17 session advisory locks, `pg_locks`, transactions,
@@ -330,7 +366,7 @@ than claiming an unavailable orderly report exists.
 | Cross-process exclusivity | External deployment authority's exclusive material attachment and predecessor termination | epoch row, nonce digest, advisory lock, PID, hostname, DNS, or process-local singleton |
 | Store-local epoch identity | One immutable singleton row created by migration 4 and bound to the exact capsule and nonce digests | caller UUID, table emptiness, schema version, or recovery report alone |
 | Live postmaster | One retained module-owned audit-control backend holding both nonce-derived advisory locks through the separately provisioned closed wrapper | system identifier, database OID, server version, connection success, raw routine grant to the control role, or a lock acquired independently on another clone |
-| Operation target | Retained fixed-route audit-control channel, plus the connection-local witness and epoch assertion on every separately owned effect connection | supplied connection, factory, pool, lease, result, or parsed capsule |
+| Operation target | Retained fixed-route audit-control channel and its exact epoch assertion, plus the same local witness and database/server assertion on every separately owned effect connection before and after effect | direct epoch access from an effect role, supplied connection, factory, pool, lease, result, or parsed capsule |
 | Authority issuance time | Target-epoch module's sole `time.time_ns() // 1000` observation under its issuance gate | receipt caller, wall clock outside the certified domain, KMS response, database clock, or token timestamp |
 | Successfully released receipt expiry | Exact issuance `now_us + 300_000_000`, registered under the gate before bytes leave the wrapper | KMS completion, caller report, log, or later receipt parsing |
 | Orderly cutoff | First governed authority-time observation after issuance and all target leases are blocked and drained | unrelated operator timestamp or database wall clock |
@@ -338,8 +374,8 @@ than claiming an unavailable orderly report exists.
 | Replacement not-before | Exact cutoff plus 300,000,000 microseconds, also not less than every registered successful receipt expiry | sleep duration, store emptiness, process uptime, or operator assertion alone |
 | Replacement database floor | Existing nonregressing access clock observed at or beyond not-before in the activation transaction | fresh sequence initial value, `clock_timestamp()` without floor persistence, or process time alone |
 | Replacement activation | Acknowledged synchronous commit of one exact epoch row while the new live witness remains held | SQL returned row, recovery success alone, route publication, or ambiguous commit |
-| Approval validity and consumption | Merged verifier and later PR #325, after this private lease is held and verifier `now_us` is obtained from the admitted target's nonregressing access-clock observation | target-epoch row, lease itself, caller time, process time, or replacement-store initial sequence value |
-| Future credential effect | Separate later credential decision while this same private lease remains held and its effect connection passes the live assertion | lease serialization, row presence, caller token, or prior admission result |
+| Approval validity and consumption | Merged verifier and later PR #325, after this private lease and retained transaction are held, with verifier `now_us` equal to the exact maximum of the target-epoch module's fresh certified authority-time observation and the admitted channel's immediate nonregressing access-clock high-water | either clock input alone, target-epoch row, lease itself, caller time, process time outside the target-epoch gate, or replacement-store initial sequence value |
+| Future credential effect | Separate later credential decision while this same private lease remains held, the effect connection passes its local witness/database/server assertion, and retained-channel epoch checks bracket the effect | audit-control membership for the effect role, direct epoch access, lease serialization, row presence, caller token, or prior admission result |
 
 There is no database-only or advisory-lock-only global singleton claim.
 
@@ -612,6 +648,14 @@ It does not activate, update, delete, advance time, issue a lease, return a
 public boolean, or authorize an operation. Row presence is negative
 store-local state until the target-epoch module also proves its live witness.
 
+A separately owned future credential-effect connection does not call this
+function and receives no audit-control membership or epoch-observation grant.
+The retained control channel observes the immutable epoch immediately before
+and after the effect. The effect connection locally proves the same witness,
+database, and live server. Their conjunction binds the effect to the retained
+channel's epoch without moving database authority into the credential
+boundary.
+
 ### 7.5 Activation commit and ambiguity
 
 The private activation runner commits with `synchronous_commit=on` while the
@@ -717,18 +761,28 @@ use after context exit. It can:
 - enter the exact transaction posture on that channel, assert the witness,
   target, epoch, role, and structural contract before mutation, and reassert
   after acknowledged commit;
-- keep that retained transaction bound while PR #325 invokes its exact
-  migration-5 nonregressing access-clock wrapper and passes the observed high
-  water directly as verifier `now_us`; and
+- keep that retained transaction bound while its fixed private method invokes
+  PR #325's exact migration-5 nonregressing access-clock wrapper, takes one
+  fresh nonregressing certified authority-time observation, and supplies the
+  exact maximum of those two values as verifier `now_us`; and
 - assert that a separately owned future fixed credential-effect connection
-  reaches the same witness, database, server, and epoch while leaving that
-  connection's role and effect policy to the credential boundary.
+  reaches the same witness, database, and live server while the retained
+  channel asserts the exact immutable epoch before and after the effect,
+  leaving that connection's role and effect policy to the credential boundary.
 
-The last method is not a generic connection-authority API. It is private,
-accepts only a real psycopg connection inside the future closed composition,
-performs the exact fixed SQL assertion, and never returns a reusable positive
-value. A caller-supplied fake or per-operation connection is not production
-reachable.
+The verifier-time method accepts no clock or high-water input. It runs the
+fixed database observation itself on the retained transaction, observes
+authority time only through the module's monotonic gate, validates both exact
+non-boolean integer domains, and computes `max(authority_now_us,
+database_high_water_us)` without offset, tolerance, or caller arithmetic.
+
+The effect-connection method is not a generic connection-authority API. It is
+private, accepts only a real psycopg connection inside the future closed
+composition, performs the exact fixed local witness/server/database assertion,
+and never returns a reusable positive value. The retained channel performs the
+epoch precheck before that method and the epoch postcheck after the effect; no
+success escapes if either check fails. A caller-supplied fake or per-operation
+connection is not production reachable.
 
 The retained-channel context may yield the real psycopg connection only to the
 exact later allowlisted private consumer while the module's channel mutex is
@@ -774,15 +828,22 @@ lock addresses. The raw nonce and DSN are not fields on a returned carrier.
 Every activation transaction, operation transaction, verifier-clock
 observation, issuance precheck, issuance postcheck, and final retirement
 observation uses the retained channel and the same fixed connection-local SQL
-assertion. Every separately owned future credential-effect connection runs
-that assertion locally before and after its effect. The assertion proves:
+assertion. Every separately owned future credential-effect connection runs a
+narrower local assertion before and after its effect. The retained-channel
+assertion proves:
 
 - the witness backend is present on that server;
 - it holds exactly the two expected granted exclusive session locks in the two
   namespaces and no duplicate matching lock;
 - current database, OID, system identifier, version, primary/read-write
   posture, and exact epoch row match; and
-- the connection's separately owned role and transaction requirements hold.
+- the audit-control role and transaction requirements hold.
+
+The effect connection's local assertion proves its separately owned role and
+transaction posture, the same database/server identity, and the same retained
+witness backend and locks. It does not read the epoch relation or call the
+control-only observation function. The retained channel proves the immutable
+epoch before and after the effect while the same lease remains counted.
 
 A connection routed to an independently initialized service or promoted
 physical clone cannot see the retained backend locks and refuses before its
@@ -851,6 +912,23 @@ The external deployment authority must certify that this system UTC source
 does not regress across every process allowed to issue and, for abrupt loss,
 the post-termination cutoff observer. Without that evidence, production
 activation is forbidden. The repository does not manufacture the premise.
+
+The database high-water remains a separate clock domain. It is never used
+alone as verifier `now_us` and is not assumed synchronized with authority time.
+For the one future verifier call, the private lease method first observes the
+immediate nonregressing database high-water inside the retained transaction,
+then takes one fresh `time.time_ns() // 1000` observation through this same
+module gate. A regression against the module's greatest authority-time
+observation terminally quarantines the installation. The method supplies only:
+
+```text
+max(authority_now_us, database_high_water_us)
+```
+
+This value is at least the fresh certified authority time that shares the
+issuer's domain, so database lag cannot extend receipt validity. A database
+lead can only make verification refuse early. The method accepts no time,
+offset, skew bound, or high-water value from PR #325 or an operation caller.
 
 ### 9.2 Issuance ordering
 
@@ -978,11 +1056,11 @@ connection performs its specified live pre- and post-assertions while that
 lease remains held. A lost or mismatched witness quarantines the process and
 no private success escapes.
 
-PR #325 must hold this context from before its control connection opens through
-its synchronous consumption commit. A later credential lifecycle must keep
-the same context open through credential creation, use, revocation,
-termination, drop, and structural closure as its own decision specifies. This
-RFC grants none of those effects.
+PR #325 must hold this context from before its first borrow of the retained
+channel through its synchronous consumption commit. A later credential
+lifecycle must keep the same context open through credential creation, use,
+revocation, termination, drop, and structural closure as its own decision
+specifies. This RFC grants none of those effects.
 
 ### 10.4 Orderly quiescence
 
@@ -1104,8 +1182,9 @@ state only the store-local claim.
   acquired through the separately provisioned closed wrapper on the retained
   capsule-pinned control channel.
 - `ATE-007` — every audit-control transaction uses the retained witness
-  channel, and every separately owned effect connection proves the same live
-  witness and epoch before its first authority observation or effect.
+  channel; every separately owned effect connection proves the same live
+  witness and database/server locally, while retained-channel epoch checks
+  bracket its effect under the same counted lease.
 - `ATE-008` — a promoted physical clone with equal stored identity and epoch
   fails the original witness assertion.
 - `ATE-009` — witness loss is terminal for the installed process.
@@ -1123,8 +1202,9 @@ state only the store-local claim.
 - `ATE-016` — replacement activation requires both authority time and durable
   database clock floor at or beyond not-after.
 - `ATE-017` — no predecessor receipt or request can become current on the
-  replacement store because replacement eligibility and verifier `now_us`
-  share the target-owned nonregressing floor.
+  replacement store because replacement eligibility reaches both the
+  certified authority-time barrier and the target-owned nonregressing database
+  floor, while verifier `now_us` is at least both fresh observations.
 - `ATE-018` — ACTIVE follows acknowledged synchronous epoch-row commit and
   fresh reobservation only.
 - `ATE-019` — activation ambiguity returns no authority and is never retried in
@@ -1132,8 +1212,10 @@ state only the store-local claim.
 - `ATE-020` — PR #325 receives only the private held lease and a scoped borrow
   of the retained control channel, never activation inputs, a new connection,
   or a positive public value.
-- `ATE-021` — future credential effect must remain inside the same held lease;
-  this decision performs no credential effect.
+- `ATE-021` — future credential effect must remain inside the same held lease
+  and use the composed local-witness and retained-channel epoch proof; this
+  decision grants no credential role or database authority and performs no
+  credential effect.
 - `ATE-022` — operation IDs are not falsely claimed globally unique across
   lost stores.
 - `ATE-023` — no cloud or KMS client is constructed and no signing policy,
@@ -1143,8 +1225,9 @@ state only the store-local claim.
 - `ATE-024` — every failure and output is fixed and contains no protected
   target or activation detail.
 - `ATE-025` — the only production dual-approval verifier call receives
-  `now_us` directly from the admitted target's nonregressing access-clock
-  observation while this lease remains held.
+  `now_us` as the exact maximum of a fresh target-epoch authority-time
+  observation and the admitted channel's immediate nonregressing access-clock
+  high-water while this lease and retained transaction remain held.
 - `ATE-026` — Phase B is unavailable until the separate witness-lock
   provisioning prerequisite is approved, merged, and concretely pinned; this
   decision changes no provisioning role, ACL, connection limit, or credential.
@@ -1183,20 +1266,26 @@ Focused tests must prove:
     start;
 14. in-flight issuance, admission, and cleanup delay retirement rather than
     escaping the count;
-15. only exact `time.time_ns() // 1000` values reach issuer `now_us`;
-16. time regression quarantines without receipt release;
-17. a KMS-normal receipt is withheld until post-witness recheck and expiry
+15. only exact `time.time_ns() // 1000` values reach issuer `now_us`, and only
+    the private lease's closed derivation supplies verifier `now_us`;
+16. verifier `now_us` is the exact maximum of one fresh nonregressing
+    authority-time observation and the immediate retained-channel database
+    high-water; a lagging database cannot extend validity, a leading database
+    only refuses early, and caller-supplied clock or high-water values refuse;
+17. authority-time regression quarantines without receipt release or verifier
+    invocation;
+18. a KMS-normal receipt is withheld until post-witness recheck and expiry
     registration;
-18. a pre-registration failure adds no expiry, while cleanup failure after
+19. a pre-registration failure adds no expiry, while cleanup failure after
     registration returns no bytes and conservatively retains that expiry;
-19. finish observes cutoff only after the count reaches zero, while an early
+20. finish observes cutoff only after the count reaches zero, while an early
     finish refuses immediately without changing the cutoff;
-20. replacement not-after equals the exact five-minute bound and greatest
+21. replacement not-after equals the exact five-minute bound and greatest
     registered expiry;
-21. early replacement activation refuses without sleep, retry, or epoch row;
-22. lease and witness cleanup failure cannot become retirement or success;
-23. no secret or canary reaches errors, reports, logs, or output; and
-24. architecture, import, path, and line budgets are exact.
+22. early replacement activation refuses without sleep, retry, or epoch row;
+23. lease and witness cleanup failure cannot become retirement or success;
+24. no secret or canary reaches errors, reports, logs, or output; and
+25. architecture, import, path, and line budgets are exact.
 
 ### 13.2 Live PostgreSQL evidence
 
@@ -1220,8 +1309,10 @@ Against isolated PostgreSQL 17 services, Phase B must prove:
    keys without holding either witness lock;
 9. two activation processes using the same control credential and nonce yield
    exactly one retained one-slot channel and at most one live witness;
-10. every control operation reuses that retained channel and every separately
-    owned effect connection observes the retained witness and exact row;
+10. every control operation reuses that retained channel; every separately
+    owned effect connection observes the retained witness and exact
+    database/server locally while retained-channel exact-row observations
+    bracket the effect under the same lease;
 11. losing the retained channel makes the next assertion fail before effect;
 12. retain the channel on A and route each separately owned effect connection
     independently to initialized B; B cannot see A's live locks and no
@@ -1248,8 +1339,9 @@ Before PR #325 can enter Phase B, its amended exact head must prove:
 - it accepts no target or connection input and opens no control connection;
 - it borrows only the retained serialized channel through the held lease;
 - the lease remains held through synchronous consumption commit;
-- its verifier `now_us` is the immediate target-epoch-observed nonregressing
-  floor from that retained channel;
+- its verifier `now_us` comes only from the lease's closed exact maximum of a
+  fresh certified authority-time observation and the immediate retained-channel
+  nonregressing database high-water;
 - migration 5 preserves the immutable epoch row and structural contract; and
 - every clone, witness-loss, quiescing, retired, and replacement-before-floor
   case reaches no private committed state.
@@ -1258,7 +1350,9 @@ Before any production receipt composition, a separate exact decision must
 prove that all issuer calls go through this wrapper and that the observer
 public key comes from the approved observer-root composition. Before any
 credential composition, its decision must prove the effect connection is
-admitted by the same held lease.
+admitted by the same held lease, locally sees the same witness and
+database/server, and is bracketed by exact retained-channel epoch checks. It
+must not assume direct epoch-function access or audit-control membership.
 
 ### 13.4 Repository evidence
 
@@ -1371,12 +1465,15 @@ An in-scope Blocker demonstrates that:
 - replacement can activate before the exact maximum expiry or without a
   durable database floor;
 - old approvals can become current on an empty replacement;
-- a production verifier can receive `now_us` from outside the admitted
-  target's nonregressing clock observation;
+- a production verifier can receive `now_us` other than the exact maximum of
+  the target-epoch module's fresh certified authority-time observation and the
+  admitted channel's immediate nonregressing database high-water;
 - the issuance wrapper can own a second count decrement or return bytes before
   successful-release linearization;
 - PR #325 can receive activation inputs or a caller-supplied lease;
-- future credential effect can outlive or bypass the same lease;
+- future credential effect can outlive or bypass the same lease, omit its
+  local witness/database/server assertion, omit either retained-channel epoch
+  bracket, or gain audit-control authority from this decision;
 - the new migration changes an earlier migration or weakens structural or
   store-loss proof;
 - a failure, ambiguous commit, witness loss, or clock regression can return
@@ -1464,13 +1561,16 @@ would:
   or observer-root contract;
 - implement observer-root composition, KMS construction, credential effects,
   export, output, or deployment operation;
+- grant a future effect role audit-control membership or direct epoch-function
+  authority in this decision;
 - change an earlier migration or more than the exact mechanical store-loss
   zero-row assertion;
 - add a second epoch row, mutation, reset, repair, fallback, retry, polling, or
   automatic wait path;
 - add a public positive surface or serialize a lease/witness;
-- call the merged verifier with a clock not obtained from the target-owned
-  nonregressing observation while the same lease is held;
+- call the merged verifier with a value other than the exact closed
+  authority-time/database-high-water maximum while the same lease and retained
+  transaction are held;
 - exceed the exact path or budget boundary;
 - authorize Phase B without the complete live card; or
 - claim production readiness or close issue #192.
@@ -1496,14 +1596,14 @@ Before a live decision card may be displayed:
 5. every current-head review correction must be reflected in the RFC; and
 6. the complete card must name the exact head, reviewed base, path boundary,
    pinned provisioning prerequisite, capsule/nonce contract, migration 4,
-   one-slot retained channel, live witness, issuance cutoff, verifier floor,
-   replacement floor, private interface, evidence, budgets, exclusions, and
-   stop conditions.
+   one-slot retained channel, live witness, issuance cutoff, conservative
+   verifier-time maximum, replacement floor, private interface, evidence,
+   budgets, exclusions, and stop conditions.
 
 Only after all six gates may the live card display this exact approval form:
 
 ```text
-I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-ADMISSION-TARGET-EPOCH-001 version 2.
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-ADMISSION-TARGET-EPOCH-001 version 3.
 ```
 
 That exact entire later task-user message after the complete live card would
@@ -1518,7 +1618,9 @@ credentials, export, output, merge, or issue closure.
 - Reviewed base: 5f51f80981599a0da4678d555a02a648b84a2304.
 - Superseded version-1 Phase A head:
   d8339ccce1f4505c7ebe0b07272ca40fea09162a.
-- Current decision: proposed version 2, unapproved.
+- Superseded version-2 Phase A head:
+  72182473c50defacec6782c69cd31008246e70d4.
+- Current decision: proposed version 3, unapproved.
 - Primary trust boundary: target selection, live epoch lease, quiescence, and
   replacement activation for security-audit break-glass authority.
 - PR boundary: one Phase A RFC now; the exact fourteen-path maximum for a
@@ -1531,16 +1633,18 @@ credentials, export, output, merge, or issue closure.
 - Control topology: the accepted one-slot control LOGIN supplies one retained,
   serialized channel; no later control connection opens.
 - Clone-drift proof: separate protected nonce plus retained live witness on the
-  control channel and local observation from every separately owned effect
-  connection.
+  control channel, local witness/database/server observation from every
+  separately owned effect connection, and retained-channel epoch brackets.
 - Issuance cutoff: same target-epoch time gate that supplies issuer `now_us`,
   after new work is blocked and in-flight work drains.
 - Replacement barrier: cutoff plus exactly 300,000,000 microseconds, no less
   than every successfully released receipt expiry.
 - Replacement floor: both governed authority time and durable database
   high-water at or beyond the barrier.
-- Verifier floor: PR #325 must use the immediate nonregressing observation from
-  the retained admitted target while the same lease is held.
+- Verifier currentness: PR #325 must use the exact maximum of a fresh certified
+  target-epoch authority-time observation and the immediate admitted-channel
+  nonregressing database high-water while the same lease and retained
+  transaction are held.
 - Production module ceiling: 1,300 physical lines with exact finished-count
   registration.
 - PR #325: unchanged, conditional, draft, and not card-eligible.
