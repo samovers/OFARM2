@@ -983,10 +983,15 @@ service. Tests prove the architecture checker detects each bypass.
 Likewise, no future production source may call
 `SecurityAuditDualApprovalVerifier.verify` with caller time, process time, or
 an unbound database observation. Only PR #325's exact later private admission
-wrapper may call it, while holding this lease, with `now_us` obtained directly
-from the admitted retained channel's nonregressing access-clock observation.
-The architecture checker must bind that call site and data flow; this decision
-does not move approval consumption into the target-epoch module.
+wrapper may call it, while holding this lease and retained transaction, with
+`now_us` obtained only from the held target-epoch lease's closed
+verifier-currentness method. That method computes the exact maximum of one
+fresh certified authority-time observation and the admitted retained channel's
+immediate nonregressing access-clock high-water. Passing the raw database
+high-water alone, the authority-time observation alone, or a caller-computed
+maximum is forbidden. The architecture checker must bind that exact call site,
+method call, and data flow; this decision does not move approval consumption
+into the target-epoch module.
 
 This decision does not construct the observer root, KMS client, key resource,
 or approver manifest and does not call KMS in Phase A or its own activation.
@@ -1426,13 +1431,16 @@ touching a fifteenth path.
 The architecture checker must prohibit direct production calls to
 `SecurityAuditAuthorityReceiptIssuer.issue` outside the target-epoch wrapper,
 direct production calls to `SecurityAuditDualApprovalVerifier.verify` outside
-PR #325's exact governed wrapper or with a value not obtained from the held
-lease's immediate target-clock observation, raw advisory-routine calls instead
-of the pinned provisioning wrapper, any `psycopg.connect` call after the one
-activation call site, operation access to activation inputs, arbitrary
-connection factories, channel close or retention by a borrower, clock
-injection, route discovery, sleeps, retries, fallback targets, mutable epoch
-rows, public lease construction, and protected-value output.
+PR #325's exact governed wrapper or with a value not returned directly by the
+held target-epoch lease's closed verifier-currentness method while the same
+lease and retained transaction remain held, any raw database-high-water-only,
+authority-time-only, or caller-computed-maximum verifier input, raw
+advisory-routine calls instead of the pinned provisioning wrapper, any
+`psycopg.connect` call after the one activation call site, operation access to
+activation inputs, arbitrary connection factories, channel close or retention
+by a borrower, clock injection, route discovery, sleeps, retries, fallback
+targets, mutable epoch rows, public lease construction, and protected-value
+output.
 
 The 1,300-line ceiling is re-derived from the current 968-line store-loss
 runner and 1,747-line observer-root admission module. It is a ceiling, not a
