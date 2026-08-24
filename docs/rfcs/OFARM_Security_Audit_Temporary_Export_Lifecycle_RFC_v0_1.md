@@ -6,6 +6,8 @@
 - Decision: `ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001`,
   proposed version 1.
 - Reviewed base: `5f51f80981599a0da4678d555a02a648b84a2304`.
+- Draft PR: https://github.com/samovers/OFARM2/pull/328.
+- Initial publication head: `8ba39994f18112de5c45304b44cb19f80f05f572`.
 - Phase A scope: this RFC only.
 - Supersedes the unimplemented designs in draft PRs #325, #326, and #327.
 - PRs #322 and #323 are deployment/provider-evidence follow-ups and are not
