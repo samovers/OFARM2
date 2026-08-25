@@ -26,6 +26,11 @@
   `761cc164d0e3cdc38b9c0398c2b304bb967c4c62`.
 - Decision-v4 PostgreSQL authentication-semantics Blockers:
   https://github.com/samovers/OFARM2/pull/333#pullrequestreview-5018892448.
+- Superseded initial decision-v5 review head:
+  `b3fdb2b0b036391faaa5c084a43f81e6f2d5b3a3`.
+- Decision-v5 PostgreSQL source-provenance Blocker and bounded review
+  clarifications:
+  https://github.com/samovers/OFARM2/pull/333#pullrequestreview-5019281156.
 - Phase A changes only this RFC. Phase B is not authorized before the exact
   task-user approval required by `AGENTS.md`.
 - This version supersedes decision v4. Version 4 correctly bounded later
@@ -37,6 +42,13 @@
   timestamp quantum, and reserves the independently bounded authority-clock
   advance of a complete password-authentication exchange. Version 4 was never
   approved and its task-user card is withdrawn.
+- The initial version-5 head correctly established that formula, but cited an
+  unrelated PostgreSQL development commit rather than the supported server
+  release. This corrected version-5 text pins the same semantics to PostgreSQL
+  `REL_17_10`, matching repository version policy, and makes the already
+  required verification boundaries explicit. It changes no authority,
+  formula, invariant, or path envelope, so the decision remains version 5.
+  The earlier version-5 task-user card is withdrawn pending exact-head review.
 - Version 3 had already superseded version 2, whose `A3 -> H3` order could
   double-count inter-observation delay. Every predecessor card remains
   withdrawn.
@@ -157,7 +169,8 @@ composition remains ineligible and unavailable.
   accepted only when `clock_regressed` is exactly false so its returned value
   is the observing connection's live PostgreSQL `clock_timestamp()` rather
   than a stored high-water;
-- PostgreSQL 17 password authentication, its strict
+- the repository-supported PostgreSQL 17.10 release, upstream tag
+  `REL_17_10`, its strict
   `VALID UNTIL < database_now` expiry comparison, and its server-side
   `authentication_timeout` covering verifier retrieval through the complete
   SCRAM exchange and `AuthenticationOk` result;
@@ -230,7 +243,7 @@ cannot supply these distinct authority-host/database/timer premises.
 | Consumption | Existing acknowledged migration-4 consume commit using the second accepted raw authority observation | verifier success, returned SQL row before commit, retry inference |
 | Differential-clock growth reserve `U` | Source-fixed 1,000,000 microseconds, admissible for production only with current independent evidence for the exact authority host and PostgreSQL route over every interval up to 300 seconds | caller/configured value, missing or stale evidence, another host/route, KMS/database evidence, an NTP label alone |
 | Complete-authentication reserve `T` | Source-fixed 61,000,000 microseconds of maximum authority-clock advance from verifier retrieval through `AuthenticationOk` or timeout, admissible only when current independent evidence binds the exact PostgreSQL build, route, hooks, timer topology, and `authentication_timeout <= 60 seconds` | client or configured reserve, connect timeout, statement timeout, an unverified/default setting, another server or route |
-| PostgreSQL timestamp quantum `Q` | Source-fixed 1 microsecond matching PostgreSQL 17 `timestamptz` precision and compensating for its strict `VALID UNTIL < database_now` expiry comparison | zero, caller precision, host-language datetime assumption, changing the comparison premise without source evidence |
+| PostgreSQL timestamp quantum `Q` | Source-fixed 1 microsecond matching PostgreSQL 17.10 `timestamptz` precision and compensating for its strict `VALID UNTIL < database_now` expiry comparison | zero, caller precision, host-language datetime assumption, changing the comparison premise without source evidence |
 | Live database deadline origin `H3` | Same-connection `_observe_nonregressing_access_clock()` result accepted only when `clock_regressed` is exactly false, proving the returned value is that connection's live `clock_timestamp()` | cached preflight `H1`, stored sequence high-water, direct sequence read, a regressed-clock result, later database observation |
 | Remaining complete-authentication authority | `raw_remaining = signed_expiry - max(A3, H3)` followed by `safe_remaining = raw_remaining - U - T - Q` | raw remaining without every reserve, signed absolute expiry copied directly to PostgreSQL, either clock alone |
 | PostgreSQL role deadline | `H3 + safe_remaining`, derived after `H3`, then `A3`, and retained unchanged for every exact-state comparison | authority-domain timestamp chosen directly, caller deadline, recomputation on commit ambiguity, a later database observation |
@@ -324,27 +337,37 @@ database is already at `1`, leaving `0.999999` seconds rather than the
 zero-delay `2.999999` seconds. Delay still moves the absolute cutoff earlier
 by one second and shortens the interval from role creation by two seconds.
 
-The post-`A3` bound is exact. Define the observed conservative divergence as
-`G3 = A3 - H3`. Because the accepted database clock is nonregressing and `H3`
-precedes `A3`, this is no smaller than the actual authority-minus-database
-divergence at `A3`. For every later instant `t` through authority expiry,
-verifier retrieval, or the latest possible password-authentication result,
-deployment eligibility must independently prove:
+The post-`A3` bound is exact. The external deployment premise is stated over
+real instants, not over the two sampled values. For every pair `r1 <= r2`
+whose interval is no longer than 300 seconds, independent evidence for the
+exact authority host and selected PostgreSQL route must prove:
 
 ```text
-(A(t) - H(t)) - G3 <= U
+(A(r2) - H(r2)) - (A(r1) - H(r1)) <= U
 U = 1_000_000 microseconds
 ```
 
-This bound includes authority-clock forward steps, authority-over-database
-rate or slew, and cross-host synchronization uncertainty. Let `E` be signed
-authority expiry. The derived deadline is:
+Let the database observation occur at real instant `r1`, so `H3 = H(r1)`, and
+the later authority observation occur at `r2`, so `A3 = A(r2)`. Define the
+observed conservative divergence as `G3 = A3 - H3`. Because the accepted
+database clock is nonregressing, `H(r2) >= H3`, and therefore
+`G3 >= A(r2) - H(r2)`. Applying the interval premise from `r2` to every later
+relevant instant `t` through authority expiry, verifier retrieval, or the
+latest possible password-authentication result derives:
+
+```text
+(A(t) - H(t)) - G3 <= U
+```
+
+The premise and derivation include authority-clock forward steps,
+authority-over-database rate or slew, and cross-host synchronization
+uncertainty. Let `E` be signed authority expiry. The derived deadline is:
 
 ```text
 D = H3 + E - max(A3, H3) - U - T - Q
 ```
 
-PostgreSQL 17 returns the stored verifier whenever its lookup time `s` has
+PostgreSQL 17.10 returns the stored verifier whenever its lookup time `s` has
 `H(s) <= D`; it treats the password as expired only when `D < H(s)`. The
 differential bound gives `A(s) - H(s) <= G3 + U`, so every admitted lookup
 satisfies:
@@ -384,26 +407,41 @@ which independent evidence bounds authority-clock advance by at most 61
 seconds from verifier retrieval through `AuthenticationOk` or timeout. This
 extra second must cover timer granularity, scheduling, authority slew, and
 common-mode forward steps that the authority/database divergence bound alone
-cannot see. `connect_timeout`, `statement_timeout`, a default-value assertion,
-and a measurement against another server do not satisfy this premise.
+cannot see. The lifecycle's five-second client `connect_timeout` is an
+availability control, not the authoritative server cutoff; a stalled or
+descheduled client, client crash, or network partition cannot make it replace
+the server-side `T` premise. A query `statement_timeout`, a default-value
+assertion, and a measurement against another server do not satisfy this
+premise.
 
-`Q` is exactly one PostgreSQL 17 `timestamptz` microsecond. It exists because
+`Q` is exactly one PostgreSQL 17.10 `timestamptz` microsecond. It exists because
 PostgreSQL accepts equality at `VALID UNTIL`; it is not a configurable safety
 margin.
 
-The design evidence is pinned to upstream PostgreSQL 17 source commit
-`a4eb938b33557193d90c1b396afd2c274e28b07e`: `crypt.c` performs the strict
-expiry comparison, `auth.c` retrieves the verifier before `CheckSASLAuth`, and
-`postinit.c` enables `AuthenticationTimeout` before `ClientAuthentication` and
-disables it only after that function returns. PostgreSQL 17 documentation
-defines `timestamptz` resolution as one microsecond and
-`authentication_timeout` as the maximum time allowed to complete client
-authentication. These references establish the Phase A model; they do not
-replace the future evidence binding the exact deployed build and configuration.
+Repository policy in `deployment/postgresql/version_policy.py` fixes supported
+server version `17.10` and `server_version_num = 170010`. The design evidence
+is therefore pinned to the matching upstream PostgreSQL tag `REL_17_10`, commit
+[`25c49f3a4a742ba283f5cc43cc7f1d361552e917`](https://github.com/postgres/postgres/commit/25c49f3a4a742ba283f5cc43cc7f1d361552e917).
+In [`src/backend/libpq/crypt.c::get_role_password`](https://github.com/postgres/postgres/blob/25c49f3a4a742ba283f5cc43cc7f1d361552e917/src/backend/libpq/crypt.c),
+PostgreSQL performs the strict expiry comparison. In
+[`src/backend/libpq/auth.c::CheckPWChallengeAuth`](https://github.com/postgres/postgres/blob/25c49f3a4a742ba283f5cc43cc7f1d361552e917/src/backend/libpq/auth.c),
+it retrieves the verifier before entering `CheckSASLAuth`. In
+[`src/backend/utils/init/postinit.c::PerformAuthentication`](https://github.com/postgres/postgres/blob/25c49f3a4a742ba283f5cc43cc7f1d361552e917/src/backend/utils/init/postinit.c),
+it uses the internal timeout slot named `STATEMENT_TIMEOUT` for
+`AuthenticationTimeout`, enables that timer before `ClientAuthentication`, and
+disables it only after that function returns. The lifecycle's startup option
+`statement_timeout=5000` applies to authenticated statements after this phase;
+it is independent of, and cannot shorten or replace, the server authentication
+timer. PostgreSQL 17.10 documentation defines `timestamptz` resolution as one
+microsecond and `authentication_timeout` as the maximum time allowed to
+complete client authentication. These references establish the Phase A model;
+they do not replace future evidence binding the exact deployed build,
+configuration, route, and timer behavior.
 
 Future deployment evidence must be independently controlled and verifiable.
-It binds the exact lifecycle authority host; PostgreSQL 17 build, system, HBA
-route, loaded authentication hooks, effective `authentication_timeout`, and
+It binds the exact lifecycle authority host; PostgreSQL 17.10 build, system,
+HBA route, loaded authentication hooks, effective `authentication_timeout`,
+authentication-timer slot behavior, post-authentication query timeout, and
 timer source; clock and virtualization topology; measurement error;
 observation interval; issuance time; and evidence expiry. It must conclude
 both `U <= 1_000_000` microseconds over every interval up to 300 seconds and
@@ -428,14 +466,20 @@ Observation delay and admissible differential growth are reserved rather than
 added. Greater growth or complete-authentication advance invalidates
 deployment eligibility instead of widening a source constant.
 
-This security bound does not guarantee availability. Because consumption is
-already acknowledged, a short-lived request or slow transaction may be spent
-before `raw_remaining > U + T + Q` leaves a usable authentication window.
-PostgreSQL's authentication timeout bounds only password authentication, not
-role creation, connection setup before its server timer, export execution, or
-output delivery. Phase B must demonstrate the consumed fail-closed outcome for
-an exhausted combined reserve and record prompt use of the accepted maximum
-300-second request lifetime as operational guidance.
+This security bound does not guarantee availability. The exact reserve floor
+is `U + T + Q = 62_000_001` microseconds, or `62.000001` seconds. Because
+consumption is already acknowledged, `raw_remaining <= 62.000001` seconds is
+a consumed failure and creates no role. Even a maximum 300-second request can
+leave at most `237.999999` seconds usable after `A3`, and every preceding
+operation reduces that window. PostgreSQL's authentication timeout bounds only
+password authentication, not role creation, connection setup before its server
+timer, export execution, or output delivery. This paragraph is the
+authoritative operational guidance for this correction: request the full
+allowed 300-second lifetime and invoke the approved lifecycle promptly. Phase
+B must demonstrate the exhausted-reserve outcome. No additional operations or
+deployment-document path is added; production remains non-deployable until a
+separate follow-up supplies and approves the exact clock and authentication
+evidence.
 
 The expected derived role shape is retained across LOGIN commit ambiguity so
 the existing exact-state resolution, closure, and quarantine behavior remains
@@ -494,7 +538,7 @@ import the private type.
   `raw_remaining <= U + T + Q` or unrepresentable result refuses before role
   SQL. Every later exact-state comparison uses the identical derived value.
 - `TELC-005` — Production composition is ineligible unless current independent
-  evidence for the exact authority host and PostgreSQL 17 route proves both
+  evidence for the exact authority host and PostgreSQL 17.10 route proves both
   that authority-minus-database divergence grows by at most `U` and that the
   exact server timeout and timer topology limit authority-clock advance from
   verifier retrieval through `AuthenticationOk` or timeout to at most `T`.
@@ -565,11 +609,15 @@ creating a new framework. It checks class inventory, export surface, sole
 construction ordering, the exact `H3 -> A3 -> derive -> role SQL` source
 ordering and provenance, all three fixed reserves and the exact formula,
 recovery use of the returned expected role, and repository-wide private-symbol
-references using the already authenticated Python source snapshot. The
-private-symbol rule is limited to Python AST `Name`, `Attribute`, and
-`ImportFrom` references; the checker may contain the symbol as a string
-constant without accusing itself. It also proves that no checked-in non-test
-production module imports, references, or calls
+references using the already authenticated Python source snapshot. Both the
+private-symbol rule and runner-composition rule are limited to Python AST
+`Name`, `Attribute`, and `ImportFrom` references; calls are covered through
+their `Name` or `Attribute` function expression. String constants, including
+the checker's own inventory strings, do not count as references. For these
+rules, a test module is identified only when its repository-relative path has
+a `tests` component or its basename matches `test_*.py`; classification does
+not depend on the checker's current `TEST_GLOBS`. The runner rule proves that
+no other checked-in non-test module imports, references, or calls
 `SecurityAuditBreakGlassRunner`; this PR cannot create the production
 composition whose external clock and authentication-timer evidence is still
 absent.
@@ -581,6 +629,15 @@ four private concepts and direct evidence. The repository-wide 80-line
 function maximum and every other module or group budget remain unchanged. A
 larger increase stops for a new decision version rather than silently weakening
 the checker.
+
+Phase B must preserve that function cap by splitting `_create_login(...)`, not
+by raising the cap. Small private helpers in the same connection and
+transaction separately derive the exact expected role after `H3`, `A3`, and
+the three reserves, and execute the existing role SQL, settings, and grants.
+The outer `_create_login(...)` handles commit outcome construction, while
+`_create_or_resolve_login(...)` retains ambiguity resolution. Both outer
+functions and every new helper remain at or below 80 lines; the split does not
+introduce another transaction, authority, or recomputation path.
 
 The focused test module replaces the arbitrary public-construction assertion
 with a real-lifecycle result assertion and adds hostile raw-regression and
@@ -622,8 +679,8 @@ Sources of truth remain:
 4. the source-fixed `U`, `T`, and `Q` constants, with independent exact
    clock-pair, server-configuration, and timer evidence as production-
    eligibility prerequisites;
-5. PostgreSQL 17 source semantics for password-expiry equality and complete
-   password authentication;
+5. PostgreSQL 17.10 `REL_17_10` source semantics for password-expiry equality
+   and complete password authentication;
 6. acknowledged consumption commit for first use; and
 7. complete role absence plus structural verification for closure.
 
@@ -700,9 +757,10 @@ remain binding. Evidence that arbitrary in-process code execution must be in
 scope would invalidate module privacy and require a cryptographic or
 process-isolated admission design. Evidence that PostgreSQL authenticates
 against a clock other than the observed selected database domain would require
-a new deadline design. A PostgreSQL source change to expiry equality, timeout
-coverage, or the point represented by `AuthenticationOk` requires a new
-decision. Evidence that the exact authority host and PostgreSQL route cannot
+a new deadline design. A change from the pinned PostgreSQL `REL_17_10` source
+semantics for expiry equality, authentication-timer coverage, or the point
+represented by `AuthenticationOk` requires a new decision. Evidence that the
+exact authority host and PostgreSQL route cannot
 keep differential growth at or below one second over every 300-second interval,
 or cannot bound complete-authentication authority advance at or below 61
 seconds with `authentication_timeout <= 60 seconds`, makes production
@@ -731,25 +789,35 @@ Required Phase B verification:
 - architecture negative evidence for public result restoration, external
   private-symbol reference, duplicate construction, construction before
   closure, cached/regressed H3, missing or changed `U`, `T`, or `Q`, altered
-  combined formula, `A3 -> H3` order, recovery recomputation, or private-symbol
-  AST false positives from the checker's own string constant, plus any
-  non-test production import, reference, or call to
-  `SecurityAuditBreakGlassRunner`;
+  combined formula, `A3 -> H3` order, recovery recomputation, or false
+  positives from string constants, plus any non-test production import,
+  reference, or call to `SecurityAuditBreakGlassRunner`; both symbol rules
+  inspect only AST `Name`, `Attribute`, and `ImportFrom`, and tests are
+  classified by a `tests` path component or `test_*.py` basename independently
+  of `TEST_GLOBS`;
 - deterministic hostile delay evidence that advances time between `H3` and
   `A3` and proves the lagging-database cutoff moves earlier by `d` and the
   interval from role creation shrinks by `2d`;
 - deterministic forward-step and relative-rate evidence at, below, and above
   `U`; authority-time advance at, below, and above `T`; combined-reserve
-  exhaustion refusal; and exact arithmetic for `Q`;
-- live PostgreSQL 17 evidence that the former no-`Q` equality deadline refuses,
+  exhaustion at the exact `62.000001`-second floor; maximum-window arithmetic
+  leaving no more than `237.999999` seconds after `A3`; and exact arithmetic
+  for `Q`;
+- live PostgreSQL 17.10 evidence against the `REL_17_10` functions named in
+  section 6.2 that the former no-`Q` equality deadline refuses,
   corrected equality can retrieve the verifier, delayed SCRAM admitted near
   the exact configured authentication bound completes before authority expiry,
   a delay beyond the bound times out, and an in-flight client crash creates no
-  authenticated session or page handoff;
+  authenticated session or page handoff; the evidence must also distinguish
+  the server authentication timer's internal `STATEMENT_TIMEOUT` slot from the
+  independent post-authentication `statement_timeout=5000` option and show why
+  the five-second client `connect_timeout` is not an authoritative cutoff;
 - ambiguous LOGIN-commit evidence using the one returned derived role, and a
   held-access-clock-lock case proving rollback with no lock-order inversion;
-- exact lifecycle module budget no greater than 1,325 physical lines, with the
-  repository 80-line function cap and every other budget unchanged;
+- exact lifecycle module budget no greater than 1,325 physical lines, with
+  `_create_login(...)`, `_create_or_resolve_login(...)`, and their private
+  helpers split under the unchanged repository 80-line function cap and every
+  other budget unchanged;
 - Ruff over every changed Python path and `git diff --check`;
 - mechanically regenerated canonical test inventory when collection changes;
 - `python3 conformance/ofarm_pkg_contract_check.py` immediately before every
@@ -757,7 +825,8 @@ Required Phase B verification:
 - exact base-to-head five-path equality;
 - an explicit report that differential-clock and complete-authentication
   deployment evidence is not supplied by this PR and production composition
-  remains unauthorized;
+  remains unauthorized and non-deployable pending the separate production-
+  evidence follow-up;
 - two clean full Kernel baseline runs against the same isolated PostgreSQL
   clusters if the focused live suite passes; and
 - hosted review, conformance, native amd64, native arm64, and canonical native
@@ -776,19 +845,28 @@ Current review disposition:
   regression; and the decision-v2 `A3 -> H3` observation order that could
   double-count inter-observation delay; the decision-v3 absence of a bound on
   post-`A3` authority-minus-database divergence; and the decision-v4 false
-  equality and pre-SCRAM-expiry-check assumptions.
+  equality and pre-SCRAM-expiry-check assumptions; and the initial decision-v5
+  source-provenance Blocker, now pinned to the supported PostgreSQL
+  `REL_17_10` tag and exact authentication functions.
 - Whole-card review clarifications incorporated: commit-ambiguity carrier
   return semantics; the exact live-`clock_timestamp()` premise; database-ahead
   derivation provenance; lagging-database `2d` delay cost and consumed-failure
   posture; explicit module-budget change; unambiguous regression notation;
   held access-clock lock evidence; and AST node-kind scope for the private-
-  symbol checker.
+  symbol checker. The decision-v5 bounded clarifications also specify the
+  runner-rule AST and test-module scope, authentication timer-slot
+  independence, the exact availability floor and its RFC-local operator
+  guidance, client `connect_timeout` limits, the interval-form divergence
+  premise, and the required under-cap `_create_login(...)` helper split.
 - Remaining Blockers: Phase A review pending.
 - Follow-ups: unchanged decision-v1 output custody, broader crash-operation
   evidence beyond the required in-flight authentication case, final hostile
   cross-slice evidence, production prerequisite evidence, and issue #192
   closure audit. The future output-custody composition must resolve how it
-  annotates the private result without widening this PR.
+  annotates the private result without widening this PR. Section 6.2 is the
+  authoritative home for prompt-use guidance; no additional path is required.
+  Phase B remains non-deployable until the separate production-evidence
+  follow-up is complete.
 - Preferences: none.
 
 ### Required exact approval form
