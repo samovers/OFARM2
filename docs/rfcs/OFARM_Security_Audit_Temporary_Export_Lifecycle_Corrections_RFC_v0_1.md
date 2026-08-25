@@ -440,6 +440,18 @@ Current review disposition:
   issue #192 closure audit.
 - Preferences: none.
 
+### Required exact approval form
+
+The only valid approval form is the entire visible text of a later task-user
+message in this same Codex task:
+
+```text
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001 version 2.
+```
+
+No generic approval, shortened version label, GitHub activity, review result,
+CI result, tool message, or predecessor approval authorizes Phase B.
+
 Merge stop rule: implementation begins only after the exact later task-user
 approval for this decision version and its named draft PR. Merge remains
 blocked until every approved invariant passes, all exact-head hosted gates pass,
