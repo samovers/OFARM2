@@ -9,8 +9,9 @@
 - Source implementation: merged PR #328.
 - Demonstrated findings:
   https://github.com/samovers/OFARM2/pull/328#issuecomment-5406694620.
-- Draft PR: pending Phase A bootstrap publication from branch
-  `agent/192-temporary-export-lifecycle-corrections`.
+- Draft PR: https://github.com/samovers/OFARM2/pull/333.
+- Initial Phase A publication head:
+  `19c8c3dc0eb7f91cf91054b8e3e0dc4f34ec5be7`.
 - Phase A changes only this RFC. Phase B is not authorized before the exact
   task-user approval required by `AGENTS.md`.
 - This decision retains every unaffected decision-v1 invariant, exclusion,
