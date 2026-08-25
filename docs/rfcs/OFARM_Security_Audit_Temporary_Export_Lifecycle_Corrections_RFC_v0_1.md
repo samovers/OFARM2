@@ -94,7 +94,6 @@ This decision does not:
 - change approval schemas, signatures, authority receipts, consumption
   durability, access-intent semantics, page bounds, or closure ordering;
 - introduce a cryptographic admission token, serialized result, result
-- introduce a cryptographic admission token, serialized result, result
   validator, generic credential manager, clock synchronizer, evidence
   collector, runtime configuration value, or background state;
 - implement protected output custody or allow an output layer to accept a
