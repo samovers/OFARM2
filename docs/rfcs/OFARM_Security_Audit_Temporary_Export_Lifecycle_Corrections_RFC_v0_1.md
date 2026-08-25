@@ -1,10 +1,10 @@
-# OFARM Security-Audit Temporary Export Lifecycle Corrections — Decision v2
+# OFARM Security-Audit Temporary Export Lifecycle Corrections — Decision v3
 
 ## Status
 
 - Parent: issue #192.
 - Decision: `ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001`,
-  version 2.
+  version 3.
 - Reviewed base: `28cf73b859fc50bc810f53b0bdbf26848b7841aa`.
 - Source implementation: merged PR #328.
 - Demonstrated findings:
@@ -12,8 +12,17 @@
 - Draft PR: https://github.com/samovers/OFARM2/pull/333.
 - Initial Phase A publication head:
   `19c8c3dc0eb7f91cf91054b8e3e0dc4f34ec5be7`.
+- Superseded decision-v2 review head:
+  `23f441acd31262f41182c274f1b6b0fee94c7a96`.
+- Decision-v2 ordering Blocker:
+  https://github.com/samovers/OFARM2/pull/333#pullrequestreview-5016552073.
 - Phase A changes only this RFC. Phase B is not authorized before the exact
   task-user approval required by `AGENTS.md`.
+- This version supersedes decision v2. Version 2 sampled authority time `A3`
+  before database high-water `H3`; delay between those observations could be
+  counted again in the database-domain deadline and extend authentication past
+  authority expiry. Version 3 reverses only that observation order and binds
+  hostile delay evidence to the corrected invariant.
 - This decision retains every unaffected decision-v1 invariant, exclusion,
   and trust premise. It replaces only the result-provenance, authority-time
   ordering, and database-clock authentication-deadline mechanics named below.
@@ -35,9 +44,11 @@ high-severity enforcement gap:
 
 This decision establishes a narrow correction in the same primary trust
 boundary. It makes closure provenance repository-private, carries raw
-authority currentness through the state machine, translates remaining
-authority time into the database clock domain inside the role-creation
-transaction, and proves those properties with hostile regression evidence.
+authority currentness through the state machine, observes the database
+deadline origin before the final authority observation, translates the then
+remaining authority time into the database clock domain inside the
+role-creation transaction, and proves those properties with hostile
+regression and observation-delay evidence.
 
 The goal is not to add a new lifecycle or authority. It is to make the merged
 implementation satisfy `TEL-002`, `TEL-005`, `TEL-008`, and `TEL-013` as they
@@ -136,8 +147,8 @@ module privacy is a cryptographic sandbox.
 | Verified approval and first raw currentness | Decision-v1 verifier result bound to the exact first fresh authority observation | parsed carriers, caller time, database time alone |
 | Later raw authority currentness | Each direct fresh observation, accepted only when it is at least the immediately preceding raw authority observation | maximum with database time, caller assertion, an earlier observation reused after delay |
 | Consumption | Existing acknowledged migration-4 consume commit using the second accepted raw authority observation | verifier success, returned SQL row before commit, retry inference |
-| Remaining new-authentication authority | Signed request expiry minus the exact maximum of the third fresh authority observation and the role-creation transaction's immediate database high-water | signed absolute expiry copied directly to PostgreSQL, either clock alone |
-| PostgreSQL role deadline | The same transaction's database high-water plus the remaining new-authentication authority | authority-domain absolute timestamp, process wall-clock conversion, caller deadline |
+| Remaining new-authentication authority | Signed request expiry minus the exact maximum of the third fresh authority observation and the role-creation transaction's database high-water observed immediately before it | signed absolute expiry copied directly to PostgreSQL, either clock alone, a database high-water observed after the authority observation |
+| PostgreSQL role deadline | The same transaction's earlier database high-water plus the remaining new-authentication authority derived after the later authority observation | authority-domain absolute timestamp, process wall-clock conversion, caller deadline, a later database observation that double-counts observation delay |
 | Closure provenance | The sole module-private carrier construction after `_close_login(...)` returns successfully | a public constructor, imported private class, caller-created lookalike, serialized token |
 | Positive output entry | A future trusted composition invoking this runner or a separately approved source-pinned private-carrier composition | accepting a caller-supplied nominal result |
 
@@ -169,8 +180,8 @@ PREFLIGHT(database H1)
   -> CONSUME(approval, A2)
   -> CONSUMPTION_ACKNOWLEDGED
   -> inside role-creation transaction:
-       ADVANCE(A3), require A3 >= A2
        observe immediate database H3
+       ADVANCE(A3), require A3 >= A2
        derive remaining and database deadline
        create exact role
   -> LOGIN_COMMITTED
@@ -188,13 +199,32 @@ After acknowledged consumption, the role-creation function opens the trusted
 admin transaction, verifies admin identity and store identity, and requires
 the fixed role to be absent. Immediately before role SQL it:
 
-1. takes fresh authority observation `A3` and requires `A3 >= A2`;
-2. takes the immediate database high-water `H3` on that same connection;
+1. takes database high-water `H3` on that same connection;
+2. then takes fresh authority observation `A3` and requires `A3 >= A2`;
 3. computes `effective_now = max(A3, H3)`;
 4. computes `remaining = signed_valid_until - effective_now`;
 5. refuses with a consumed failure if `remaining <= 0` or the derived value is
    outside supported integer/datetime bounds; and
 6. computes `database_role_valid_until = H3 + remaining`.
+
+The `H3 -> A3 -> derive -> role SQL` order is authoritative. No database-time
+observation may be substituted after `A3`. Time spent between `H3` and `A3`,
+or between derivation and role creation, consumes the already bounded database
+interval rather than being added to it. A hostile test deliberately delays
+between `H3` and `A3`, advances the simulated clocks through that delay, and
+proves the database deadline becomes earlier relative to role creation than
+the zero-delay case. Reversing the observations to `A3 -> H3` is a contract
+failure even when both raw observations are individually non-regressing.
+
+The rejected order has a concrete one-second-delay counterexample. If `A3 =
+60` is sampled first, the database is at `0`, signed expiry is `63`, and `H3 =
+1` is sampled one second later, the reversed formula produces database
+deadline `4`; authority expires at real time `3`, but database authentication
+can remain open until real time `4`. With the required order, `H3 = 0` is
+sampled first and the authority clock advances to `A3 = 61` during the same
+delay, producing database deadline `2`. At role creation the database is
+already at `1`, so the delay shortened the new-authentication interval instead
+of extending it.
 
 The exact derived database timestamp, not the signed authority timestamp, is
 used in `CREATE ROLE ... VALID UNTIL`. All role settings and the sole
@@ -203,7 +233,9 @@ membership remain unchanged.
 If the database is behind authority time, PostgreSQL receives only the true
 remaining interval. If the database is ahead, `effective_now` equals the
 database high-water and the deadline cannot become later than the signed
-absolute expiry. Either direction fails closed.
+absolute expiry. Because the deadline origin is observed before the authority
+currentness used to calculate the remainder, observation delay can only
+shorten the database acceptance interval. Either clock direction fails closed.
 
 The expected derived role shape is retained across LOGIN commit ambiguity so
 the existing exact-state resolution, closure, and quarantine behavior remains
@@ -246,9 +278,14 @@ import the private type.
 - `TELC-003` — The raw authority observation inside role creation is greater
   than or equal to the consumption observation. A lower value after
   acknowledged consumption yields a fixed consumed failure and no role effect.
-- `TELC-004` — `VALID UNTIL` equals the role-creation transaction's database
-  high-water plus `signed_expiry - max(fresh_authority, database_high_water)`.
-  Non-positive or unrepresentable remaining authority refuses before role SQL.
+- `TELC-004` — Inside the role-creation transaction, database high-water `H3`
+  is observed before fresh authority observation `A3`; then `A3 >= A2` is
+  required before derivation or role SQL. `VALID UNTIL` equals
+  `H3 + (signed_expiry - max(A3, H3))`. Non-positive or unrepresentable
+  remaining authority refuses before role SQL. A deliberate positive delay
+  between `H3` and `A3` can only shorten the database acceptance interval
+  relative to role creation; it can never extend that interval or move the
+  deadline past authority expiry.
 - `TELC-005` — With a database clock behind authority time, a new password
   authentication succeeds only during the translated remaining interval and
   fails afterward even while the signed absolute timestamp remains future in
@@ -273,6 +310,7 @@ invariant remains binding.
 | TELC-002 | Call the supported lifecycle with `A1 = T-1`, then observe `A2 = T-2` while database high-water is lower. | Fixed refusal before consume SQL; no consumption row and no LOGIN. |
 | TELC-003 | Call with non-regressing `A1`, `A2`, acknowledge consumption, then observe `A3 < A2` before role creation. | Fixed consumed failure; one consumed row may exist, no LOGIN or export call. |
 | TELC-004 | Call near signed expiry with `A3 >= expiry`, or with an unrepresentable derived database deadline. | Fixed consumed failure before `CREATE ROLE`; no LOGIN. |
+| TELC-004 | On the supported role-creation path, observe `H3`, deliberately delay while advancing both simulated clocks, and only then observe non-regressing `A3`; compare with the same offsets and no delay. | Source and runtime evidence show `H3 -> A3 -> derive -> role SQL`; the post-delay database interval is shorter by at least the elapsed delay and never extends past authority expiry. An `A3 -> H3` implementation fails. |
 | TELC-004, TELC-005 | Use a certified authority observation 60 seconds ahead of database high-water and a request with three seconds remaining. | Role `VALID UNTIL` is approximately database high-water plus three seconds, not the signed absolute timestamp approximately 63 database seconds ahead. Immediate new authentication may succeed; a new authentication after the remaining interval fails while the role still exists. |
 | TELC-006 | Raise dependency exceptions containing carriers, routes, password, page, and derived timestamps at each corrected boundary. | Existing fixed non-sensitive public outcomes only. |
 | TELC-007 | Require output custody, SQL migration, provider evidence, or another role capability to close a finding. | Stop and create a new decision or Follow-up; do not expand this PR. |
@@ -299,13 +337,17 @@ closure, structural verification, and fixed public exceptions remain direct.
 
 The architecture checker extends its existing lifecycle rule instead of
 creating a new framework. It checks class inventory, export surface, sole
-construction ordering, and repository-wide private-symbol references using the
-already authenticated Python source snapshot.
+construction ordering, the exact `H3 -> A3 -> derive -> role SQL` source
+ordering, and repository-wide private-symbol references using the already
+authenticated Python source snapshot.
 
 The focused test module replaces the arbitrary public-construction assertion
 with a real-lifecycle result assertion and adds hostile raw-regression and
-lagging-database authentication cases. The canonical inventory changes only by
-the mechanically collected test-count delta.
+lagging-database authentication cases. It also injects elapsed time after the
+`H3` read and before `A3`, proving the derived deadline and the interval
+remaining at role creation become no later than the zero-delay case. The
+canonical inventory changes only by the mechanically collected test-count
+delta.
 
 This is the minimum coherent correction because:
 
@@ -325,14 +367,16 @@ Sources of truth remain:
 
 1. the signed request expiry for total remaining authentication authority;
 2. direct raw authority observations for authority-domain progression;
-3. the database high-water for the PostgreSQL deadline origin;
+3. the database high-water observed before final authority currentness for the
+   PostgreSQL deadline origin;
 4. acknowledged consumption commit for first use; and
 5. complete role absence plus structural verification for closure.
 
-There is one deadline translation and one positive result construction. The
-current-approval carrier removes correlated `approval` and `authority_now`
-arguments from the corrected transitions. The login-creation outcome retains
-only state already required for ambiguous-commit resolution.
+There is one deadline translation, one authoritative observation order, and
+one positive result construction. The current-approval carrier removes
+correlated `approval` and `authority_now` arguments from the corrected
+transitions. The login-creation outcome retains only state already required
+for ambiguous-commit resolution.
 
 Deleted compatibility surface:
 
@@ -366,7 +410,7 @@ The draft and any authorized Phase B implementation are limited to exactly:
 Phase A changes only path 1. The technical Phase B allowlist may equal or
 narrow this envelope but may not add another path.
 
-There is no cross-boundary exception in version 2. Migration 4 and temporary
+There is no cross-boundary exception in version 3. Migration 4 and temporary
 credential authority were already merged by decision v1; this PR changes only
 the lifecycle's enforcement of the approved contract and its necessary
 mechanical conformance evidence.
@@ -400,7 +444,7 @@ a new deadline design. Neither condition is anticipated in this correction.
 | TELC-001 | private result class; `_export_and_close`; lifecycle architecture rule | public/re-exported/external private-symbol AST; real result path | no public symbol, one constructor after `_close_login`, no external references | focused source test plus rewrite architecture check |
 | TELC-002 | private current-approval carrier and advance function before `_consume` | `A2 < A1` | fixed refusal, no consume row, no role | focused deterministic live lifecycle test |
 | TELC-003 | currentness advance inside role-creation transaction | `A3 < A2` after consume commit | fixed consumed failure, one consume row, no role/export | focused deterministic live lifecycle test |
-| TELC-004 | in-transaction deadline translation and expected-role creation outcome | expired, leading, lagging, and unrepresentable calculations | exact derived database-domain expiry; no direct signed-expiry role SQL | pure bound tests plus live catalog observation |
+| TELC-004 | ordered in-transaction `H3` observation, `A3` advance, deadline translation, and expected-role creation outcome | reversed observation order; injected inter-observation delay; expired, leading, lagging, and unrepresentable calculations | exact `H3 -> A3 -> derive -> role SQL` order; delay shortens rather than extends the interval; exact derived database-domain expiry; no direct signed-expiry role SQL | architecture source-order check, deterministic delay test, pure bound tests, and live catalog observation |
 | TELC-005 | translated PostgreSQL `VALID UNTIL` | authority 60 seconds ahead with three seconds remaining | immediate authentication allowed and later new authentication refused before signed absolute database timestamp | focused live PostgreSQL authentication probe |
 | TELC-006 | existing public exception mapping, export, closure, and quarantine paths | dependency canaries across corrected states | fixed non-rendering errors; existing lifecycle regressions pass | focused suite plus full Kernel baselines |
 | TELC-007 | Git diff path check and canonical inventory | any sixth path or unregenerated count | exact five-path diff and collected inventory equality | package contract plus exact path comparison |
@@ -411,8 +455,11 @@ Required Phase B verification:
 - existing security-audit approval, export, migration, lifecycle, structural,
   readiness, and observer-vocabulary regressions;
 - architecture negative evidence for public result restoration, external
-  private-symbol reference, duplicate construction, or construction before
-  closure;
+  private-symbol reference, duplicate construction, construction before
+  closure, or `A3 -> H3` role-deadline observation order;
+- deterministic hostile delay evidence that advances time between `H3` and
+  `A3` and proves the resulting authentication interval is shorter, never
+  longer, than the corresponding zero-delay interval;
 - Ruff over every changed Python path and `git diff --check`;
 - mechanically regenerated canonical test inventory when collection changes;
 - `python3 conformance/ofarm_pkg_contract_check.py` immediately before every
@@ -433,7 +480,8 @@ Current review disposition:
 
 - Blockers addressed by this proposed contract: public forgeable closed
   result; cross-clock authentication extension; unobserved raw authority-time
-  regression.
+  regression; and the decision-v2 `A3 -> H3` observation order that could
+  double-count inter-observation delay.
 - Remaining Blockers: Phase A review pending.
 - Follow-ups: unchanged decision-v1 output custody, crash-operation evidence,
   final hostile cross-slice evidence, production prerequisite evidence, and
@@ -446,7 +494,7 @@ The only valid approval form is the entire visible text of a later task-user
 message in this same Codex task:
 
 ```text
-I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001 version 2.
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001 version 3.
 ```
 
 No generic approval, shortened version label, GitHub activity, review result,
