@@ -76,81 +76,40 @@ def _key_id(public_key):
 def _material(store_id, now_us, *, operation_id=OPERATION_ID):
     observer = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
     approvers = tuple(
-        (
-            Ed25519PrivateKey.from_private_bytes(bytes(range(start, start + 32))),
-            f"APPROVER_{name}",
-            f"DOMAIN_{name}",
-        )
+        (Ed25519PrivateKey.from_private_bytes(bytes(range(start, start + 32))),
+         f"APPROVER_{name}", f"DOMAIN_{name}")
         for start, name in ((1, "A"), (2, "B"))
     )
     entries = [
-        {
-            "approverId": approver,
-            "independenceDomain": domain,
-            "keyId": _key_id(_public_key(key)),
-            "publicKey": _b64(_public_key(key)),
-        }
+        {"approverId": approver, "independenceDomain": domain,
+         "keyId": _key_id(_public_key(key)), "publicKey": _b64(_public_key(key))}
         for key, approver, domain in approvers
     ]
-    payload = _canonical(
-        {
-            "approvers": entries,
-            "audience": AUDIENCE,
-            "expiresAtUnixMicroseconds": now_us + 240_000_000,
-            "observedAtUnixMicroseconds": now_us - 1_000_000,
-            "schemaVersion": AUTHORITY_SCHEMA,
-        }
-    )
-    authority = _canonical(
-        {
-            "payload": _b64(payload),
-            "signature": _b64(observer.sign(AUTHORITY_DOMAIN + payload)),
-        }
-    )
-    request = _canonical(
-        {
-            "audience": AUDIENCE,
-            "authorityReceiptDigest": _digest(authority),
-            "cursor": None,
-            "expiresAtUnixMicroseconds": now_us + 120_000_000,
-            "functionIdentity": EXPORT_FUNCTION_IDENTITY,
-            "maxBytes": EXPORT_MAX_BYTES,
-            "maxPages": 1,
-            "maxRows": EXPORT_MAX_ROWS,
-            "notBeforeUnixMicroseconds": now_us - 500_000,
-            "operationId": str(operation_id),
-            "purpose": EXPORT_ACCESS_PURPOSE_IDENTITY,
-            "schemaVersion": REQUEST_SCHEMA,
-            "storeMigrationExecutionId": str(store_id),
-        }
-    )
+    payload = _canonical({"approvers": entries, "audience": AUDIENCE,
+        "expiresAtUnixMicroseconds": now_us + 240_000_000,
+        "observedAtUnixMicroseconds": now_us - 1_000_000,
+        "schemaVersion": AUTHORITY_SCHEMA})
+    authority = _canonical({"payload": _b64(payload),
+        "signature": _b64(observer.sign(AUTHORITY_DOMAIN + payload))})
+    request = _canonical({"audience": AUDIENCE,
+        "authorityReceiptDigest": _digest(authority), "cursor": None,
+        "expiresAtUnixMicroseconds": now_us + 120_000_000,
+        "functionIdentity": EXPORT_FUNCTION_IDENTITY, "maxBytes": EXPORT_MAX_BYTES,
+        "maxPages": 1, "maxRows": EXPORT_MAX_ROWS,
+        "notBeforeUnixMicroseconds": now_us - 500_000,
+        "operationId": str(operation_id), "purpose": EXPORT_ACCESS_PURPOSE_IDENTITY,
+        "schemaVersion": REQUEST_SCHEMA, "storeMigrationExecutionId": str(store_id)})
     approvals = []
     for key, approver, domain in approvers:
-        statement = _canonical(
-            {
-                "approverId": approver,
-                "audience": AUDIENCE,
-                "authorityReceiptDigest": _digest(authority),
-                "independenceDomain": domain,
-                "keyId": _key_id(_public_key(key)),
-                "operationId": str(operation_id),
-                "requestDigest": _digest(request),
-                "schemaVersion": STATEMENT_SCHEMA,
-            }
-        )
-        approvals.append(
-            {
-                "signature": _b64(key.sign(APPROVAL_DOMAIN + statement)),
-                "statement": _b64(statement),
-            }
-        )
-    bundle = _canonical(
-        {
-            "approvals": approvals,
-            "request": _b64(request),
-            "schemaVersion": BUNDLE_SCHEMA,
-        }
-    )
+        statement = _canonical({"approverId": approver, "audience": AUDIENCE,
+            "authorityReceiptDigest": _digest(authority),
+            "independenceDomain": domain, "keyId": _key_id(_public_key(key)),
+            "operationId": str(operation_id), "requestDigest": _digest(request),
+            "schemaVersion": STATEMENT_SCHEMA})
+        approvals.append({"signature": _b64(key.sign(APPROVAL_DOMAIN + statement)),
+                          "statement": _b64(statement)})
+    bundle = _canonical({"approvals": approvals, "request": _b64(request),
+                         "schemaVersion": BUNDLE_SCHEMA})
     return _public_key(observer), authority, bundle
 
 
@@ -245,6 +204,17 @@ class _FailingExport:
         raise RuntimeError(self.canary)
 
 
+class _CrashingScramExport:
+    def __init__(self):
+        self.calls = 0
+
+    def run(self, _control, export, _cursor):
+        self.calls += 1
+        session = _start_scram(export)
+        session[0].close()
+        raise RuntimeError("client-crashed-before-authentication")
+
+
 class _Proxy:
     def __init__(self, connection):
         self.connection = connection
@@ -327,11 +297,10 @@ class _BeforeNoLogin(_Proxy):
 
 class _BeforeNoLoginFactory:
     def __init__(self, callback):
-        self.callback = callback
-        self.triggered = False
+        self.callback, self.triggered, self.connect = callback, False, psycopg.connect
 
     def __call__(self, conninfo, **kwargs):
-        return _BeforeNoLogin(psycopg.connect(conninfo, **kwargs), self)
+        return _BeforeNoLogin(self.connect(conninfo, **kwargs), self)
 
 
 class _ClockCursor(_Proxy):
@@ -602,6 +571,16 @@ def test_live_failure_and_commit_ambiguity_outcomes(migrated_audit_service):
     assert _count(state, operation) == 1 and exporter.calls == 0 and not _role_exists(state)
 
 
+def test_live_inflight_authentication_crash_yields_no_page(migrated_audit_service):
+    state = migrated_audit_service
+    operation, _, observer, authority, bundle, secret = _case(state)
+    exporter = _CrashingScramExport()
+    dependencies = _dependencies(observer, exporter=exporter)
+    error = _fixed_error(SecurityAuditBreakGlassFailed, lambda: break_glass._run_security_audit_break_glass_for_testing(secret, authority, bundle, dependencies))
+    assert exporter.calls == 1 and "client-crashed" not in repr(error)
+    assert _count(state, operation) == 1 and not _role_exists(state)
+
+
 def test_live_login_commit_ambiguity_retains_exact_role(migrated_audit_service):
     state = migrated_audit_service
     _, now, observer, authority, bundle, secret = _case(state)
@@ -781,8 +760,12 @@ def test_live_pgdg_scram_timer_and_timestamp_quantum(migrated_audit_service):
             crashed = _start_scram(route)
             sessions.append(crashed)
             crashed[0].close()
-            time.sleep(0.1)
-            assert admin.execute(break_glass._SESSION_COUNT_SQL).fetchone() == (0,)
+            for _attempt in range(100):
+                sessions_left = admin.execute(break_glass._SESSION_COUNT_SQL).fetchone()
+                if sessions_left == (0,):
+                    break
+                time.sleep(0.05)
+            assert sessions_left == (0,)
             former = admin.execute("SELECT floor(extract(epoch FROM clock_timestamp()) * 1000000)::bigint + 1000000").fetchone()[0]
             expected = break_glass._ExpectedRole(break_glass._expiry(former - 1), verifier)
             admin.execute(sql.SQL("ALTER ROLE {} VALID UNTIL {}").format(sql.Identifier(break_glass.TEMPORARY_EXPORT_LOGIN), sql.Literal(expected.valid_until.isoformat(timespec="microseconds"))))

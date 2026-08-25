@@ -11871,6 +11871,11 @@
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_inflight_authentication_crash_yields_no_page",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_login_commit_ambiguity_retains_exact_role",
       "sourceModule": "kernel.tests.test_security_audit_break_glass",
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
@@ -17446,8 +17451,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "0772167b0008a7a89273e73e6e936fd4795662584fb47c17b8c685f98efbfd6f",
-  "entryCount": 3489,
+  "entriesSha256": "6342321c4e5e755d30980044f383a8f27cc082c8c7c5c75023ce5cbb608e0114",
+  "entryCount": 3490,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

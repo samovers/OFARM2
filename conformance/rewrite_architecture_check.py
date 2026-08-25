@@ -2850,6 +2850,14 @@ def _private_result_internal_reference_violations(
                 annotations.update(id(member) for member in ast.walk(value))
     references = []
     for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == private:
+            references.append(node.lineno)
+            continue
+        if isinstance(node, ast.ImportFrom) and any(
+            alias.name == private for alias in node.names
+        ):
+            references.append(node.lineno)
+            continue
         if not isinstance(node, ast.Name) or node.id != private:
             continue
         parent = parents.get(id(node))
