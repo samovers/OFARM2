@@ -1,10 +1,10 @@
-# OFARM Security-Audit Temporary Export Lifecycle Corrections — Decision v8
+# OFARM Security-Audit Temporary Export Lifecycle Corrections — Decision v9
 
 ## Status
 
 - Parent: issue #192.
 - Decision: `ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001`,
-  version 8.
+  version 9.
 - Reviewed base: `28cf73b859fc50bc810f53b0bdbf26848b7841aa`.
 - Source implementation: merged PR #328.
 - Demonstrated findings:
@@ -45,8 +45,14 @@
   `05633f1db8b56432f4ed9eaa464531489313b288`.
 - Decision-v7 regular-package-initializer Blocker:
   https://github.com/samovers/OFARM2/pull/333#pullrequestreview-5022772708.
+- Superseded decision-v8 head:
+  `727b28fc789632be6651439cd20de77af2e1874c`.
+- Decision-v8 incomplete-production-root Blocker:
+  https://github.com/samovers/OFARM2/pull/333#pullrequestreview-5023619512.
+- Decision-v8 source-integrity scope objection:
+  https://github.com/samovers/OFARM2/pull/333#pullrequestreview-5023671963.
 - Phase A changes only this RFC. Phase B is not authorized before the exact
-  task-user approval required by `AGENTS.md`.
+  task-user approval required below.
 - Decision v5 superseded decision v4. Version 4 correctly bounded later
   authority-minus-database divergence, but it treated equality at PostgreSQL
   `VALID UNTIL` as expired and treated password-verifier retrieval as the end
@@ -66,14 +72,12 @@
   pending exact-head review.
 - This version supersedes decision v5. Version 5 bounded differential growth
   over 300 seconds of real time but applied that premise through a role's
-  potentially longer real lifetime, and its proposed runner-symbol rule left
-  private execution seams and production-reachable nominal test modules
-  unguarded. Version 6 requires the same fixed `U` bound over the complete
-  credential-relevant interval without a real-duration cap and replaces the
-  symbol-only rule with authenticated production-root reachability plus one
-  exact focused-test exception. These are material external-premise and
-  conformance-invariant changes. Version 5 was never approved, and its task-user
-  card is withdrawn.
+  potentially longer real lifetime. Version 6 requires the same fixed `U`
+  bound over the complete credential-relevant interval without a real-duration
+  cap. That material external-premise correction remains binding; version 5
+  was never approved, and its task-user card is withdrawn. Version 6 also began
+  a production-source composition rule whose later expansion is withdrawn by
+  version 9 as a separate trust boundary.
 - This version supersedes decision v6. Version 6 closed the complete-interval
   proof domain and ordinary authenticated import reachability, but a fixed-root
   production module could still execute the lifecycle through a source-visible
@@ -100,13 +104,28 @@
   execution policy applies to all of them. This is a material production-set,
   graph-semantics, inventory, and conformance-invariant change. Version 7 was
   never approved, and its task-user card is withdrawn.
+- This version supersedes decision v8. Exact-head review demonstrated that the
+  37-member application import-execution closure omitted documented production
+  release and operator entrypoints, including
+  `deployment.postgresql.run_security_audit_migrations`. A complete correction
+  would require governed classification of production, operator, console,
+  test, conformance, and non-production execution roots plus capability
+  profiles for their closures. The accompanying scope review correctly
+  identified that work as repository-wide source-integrity governance, not the
+  temporary export lifecycle boundary. Version 9 therefore withdraws the
+  universal repository-composition and source-admissibility guarantee instead
+  of appending another cross-boundary fix. It preserves the complete-interval
+  clock premise and every other lifecycle correction established after version
+  5. The reachability-framework residue is tracked by issue #334; complete
+  execution-root classification and any closed source-capability policy require
+  their own reviewed decision and PR. Version 8 was never approved, and its
+  task-user card is withdrawn.
 - Version 3 had already superseded version 2, whose `A3 -> H3` order could
   double-count inter-observation delay. Every predecessor card remains
   withdrawn.
 - This decision retains every unaffected decision-v1 invariant, exclusion,
   and trust premise. It replaces only the result-provenance, authority-time
-  ordering, database-clock authentication-deadline, and pre-composition source-
-  execution mechanics named below.
+  ordering, and database-clock authentication-deadline mechanics named below.
 
 ## 1. Problem and goal
 
@@ -130,28 +149,41 @@ Earlier correction drafts then exposed two further deadline defects:
 5. PostgreSQL retrieves and checks the verifier before SCRAM, then performs no
    second expiry check when the exchange succeeds.
 
-Exact-head review of decision v5 then demonstrated two further contract gaps:
+Exact-head review of decision v5 then demonstrated one further lifecycle gap:
 
 6. a bound quantified over 300 seconds of real time was applied through a
    credential interval whose real duration was not bounded by the request's
-   300-second authority-domain lifetime; and
-7. a runner-name architecture rule did not cover the private test seam,
+   300-second authority-domain lifetime.
+
+The same review also challenged a voluntarily added repository-composition
+rule:
+
+7. its runner-name scan did not cover the private test seam,
    dependency carrier, aliases, re-exports, reflection through an ordinary
    module import, or nominal test modules reachable from production roots.
 
-Exact-head review of decision v6 demonstrated one remaining composition gap:
+Later reviews correctly demonstrated that the expanding source-governance rule
+remained incomplete:
 
 8. authenticated static import reachability did not cover checked-in dynamic
    module loading, code execution, module-cache resolution, or interpreter and
    process launch, so split strings passed to `runpy.run_module(...)` could
    execute the lifecycle without an import-graph edge.
-
-Exact-head review of decision v7 demonstrated one further subject-set gap:
-
 9. explicit-import reachability did not require every retained regular-package
    initializer that Python executes implicitly before a root or reached
    submodule, leaving `deployment/__init__.py` outside the 36-module production
-   policy even though normal loading of `deployment.postgresql` executes it.
+   policy even though normal loading of `deployment.postgresql` executes it;
+   and
+10. the resulting 37-member application closure omitted supported production
+    release and operator entrypoints, so a documented `python -m` command could
+    execute source outside the closed policy.
+
+Items 7 through 10 are sound observations about repository source governance,
+but they do not belong to this lifecycle-correction trust boundary. Closing
+them coherently requires a complete execution-root inventory and policy across
+application, release, operator, console, test, conformance, build, and tooling
+source. Version 9 removes the over-broad guarantee and records that work as a
+separate source-integrity decision rather than redefining this PR's boundary.
 
 This decision establishes a narrow correction in the same primary trust
 boundary. It makes closure provenance repository-private, carries raw
@@ -161,12 +193,10 @@ remaining authority time into the database clock domain, and subtracts three
 source-fixed values: future differential-clock growth, complete-authentication
 authority advance, and one PostgreSQL timestamp quantum. It proves those
 properties with hostile regression, observation-delay, forward-step,
-relative-rate, slow-clock, exact-equality, delayed-SCRAM, and hostile production
-import-execution evidence. It also closes checked-in production-source execution
-to a source-fixed capability policy and proves the exact dynamic-loading
-counterexample cannot bypass that gate. The policy's subject is the fixed-point
-production import-execution closure, so implicit regular-package initializers
-cannot execute before an otherwise protected root or reached module.
+relative-rate, slow-clock, exact-equality, and delayed-SCRAM evidence. It grants
+no deployment or production-composition authority. It does not claim that an
+application import graph, AST policy, or incomplete execution-root inventory
+can prove the lifecycle unreachable from every supported repository command.
 
 The goal is not to add a new lifecycle or authority. It is to make the merged
 implementation satisfy `TEL-002`, `TEL-005`, `TEL-008`, and `TEL-013` as they
@@ -178,9 +208,9 @@ The correction demonstrates that one direct lifecycle can safely bridge the
 authority clock, PostgreSQL wall clock, and PostgreSQL authentication timer
 without treating their timestamp values or rates as interchangeable. It also
 proves that a nominal positive carrier is not an admission authority:
-repository composition must obtain it only from the closed runner path.
+any later approved composition must obtain it from the closed runner path.
 
-The work removes nine concrete risks:
+The work removes six concrete lifecycle risks:
 
 - arbitrary repository code presenting caller-created bytes as a
   closure-proven result;
@@ -192,16 +222,7 @@ The work removes nine concrete risks:
 - equality at `VALID UNTIL` or an in-flight SCRAM exchange completing at or
   after signed authority expiry;
 - two slowly progressing clocks accumulating unsafe divergence after the first
-  300 real seconds while the role remains;
-- any checked-in production-root path reaching the public runner, private test
-  seam, dependency carrier, or another lifecycle execution entry before the
-  required deployment evidence exists;
-- a production import-execution closure member dynamically loading, compiling,
-  evaluating, or launching an interpreter or process that reaches the lifecycle
-  while explicit import reachability falsely reports it absent; and
-- a regular-package initializer executing such a path before Python loads a
-  fixed production root or explicitly reached submodule, while the initializer
-  itself is omitted from the policy's subject set.
+  300 real seconds while the role remains.
 
 ## 3. Non-goals
 
@@ -216,12 +237,12 @@ This decision does not:
   collector, caller-selected runtime configuration value, or background
   state;
 - introduce a Python, operating-system, container, or process sandbox; attest
-  arbitrary post-snapshot runtime mutation; or prohibit dynamic tools in test,
-  conformance, and other modules outside the production import-execution
-  closure;
-- emulate arbitrary Python import hooks or execute source during conformance;
-  only retained regular-package initializers in the authenticated source
-  snapshot add implicit checked-in execution predecessors;
+  arbitrary post-snapshot runtime mutation; or govern checked-in dynamic module,
+  code, loader, cache, interpreter, or process capabilities;
+- define a complete application, release, operator, console, test, conformance,
+  build, or tooling execution-root inventory; change the repository import-
+  reachability framework tracked by issue #334; or claim every supported
+  repository command is covered by one source-execution policy;
 - implement protected output custody or allow an output layer to accept a
   caller-supplied nominal result;
 - change provider, IAM, observer-root, recovery, backup, replica, clone,
@@ -231,19 +252,17 @@ This decision does not:
 - reopen the abandoned PR #325-#327 target/epoch architecture.
 
 Protected output custody remains a separate later trust boundary. It must call
-the runner in its own trusted composition or receive the private carrier only
-through a separately reviewed source-pinned composition rule. This PR creates
-no output consumer and no allowlist entry for one.
+the runner in its own separately reviewed trusted composition and treat the
+returned private instance as opaque. This PR creates no output consumer,
+deployment entrypoint, production composition, or source allowlist.
 
-Until that separate composition is approved, no module in the fixed-point
-production import-execution closure may import, dynamically load, evaluate,
-compile, resolve through a module cache or loader, or launch an interpreter or
-process that can reach the lifecycle module. The closure includes every
-retained regular-package initializer Python executes before a fixed root or
-explicitly reached repository module. The sole external lifecycle-execution-
-reference exception is the exact focused test path
-`kernel/tests/test_security_audit_break_glass.py`, and that exception disappears
-if the test module itself enters the production import-execution closure.
+No absence claim over checked-in production execution is used as deployment
+authority. The application-root graph omits supported release and operator
+commands, and a complete governed root inventory is separate work. Until a
+later decision supplies the required external evidence and explicitly approves
+a composition, production operation remains unauthorized and non-deployable;
+this RFC does not claim it is mechanically unreachable from all repository
+source.
 
 The clock and complete-authentication evidence is also a deployment
 prerequisite, not a new runtime authority. This PR fixes every reserve in
@@ -294,12 +313,10 @@ composition remains ineligible and unavailable.
   greater than 60 seconds while authority time can advance by at most 61,000,000
   microseconds from password-verifier retrieval through `AuthenticationOk` or
   timeout;
-- the authenticated architecture source snapshot, fixed production roots,
-  import graph, regular-package initializer inventory, fixed-point production
-  import-execution closure, exact lifecycle surface check, and closed
-  production-source execution policy whose external-import, reflection, `os`,
-  alias, and call-provenance rules are fixed in the checker;
-  and
+- the authenticated architecture source snapshot only for the exact lifecycle
+  surface, private-result symbol, observation-order, formula, and path-envelope
+  checks defined by this decision; it is not trusted as a complete production
+  execution-root inventory; and
 - trusted future output composition, which is not implemented here.
 
 ### 4.3 Untrusted inputs and actors
@@ -324,19 +341,9 @@ composition remains ineligible and unavailable.
 - a raw authority-time observation that is lower than the previous raw
   observation;
 - a PostgreSQL server clock that is non-regressing but behind or ahead of the
-  certified authority-time domain;
-- a checked-in production module that directly or indirectly imports the
-  lifecycle module or any execution seam;
-- a checked-in production module that uses `runpy`, `importlib`, `__import__`,
-  a loader/spec API, `exec`, `eval`, `compile`, `sys.modules`, an interpreter
-  subprocess, `os.system`, `os.popen`, or an alias, re-export, reflected name,
-  split string, or equivalent code/module/process capability;
-- a retained regular-package initializer that Python executes before a fixed
-  production root or explicitly reached repository submodule;
-- a nominal `test_*.py` or `tests` module that is reachable from a production
-  root; and
-- ordinary checked-in aliasing, re-export, or module import followed by
-  `getattr` against a lifecycle execution entry.
+  certified authority-time domain; and
+- a caller attempting to substitute a public, imported, serialized, or
+  caller-constructed object for the runner's private post-closure result.
 
 ### 4.4 Excluded attacker capabilities
 
@@ -346,22 +353,13 @@ PostgreSQL dependencies, filesystem mutation, debugger access, process-memory
 compromise, database-superuser corruption, and trusted-operator compromise are
 out of scope.
 
-Arbitrary post-snapshot in-process mutation remains excluded, but every
-checked-in source expression in a production import-execution closure member
-is in scope.
-That includes every source expression in an implicitly executed regular-package
-initializer, plus reflection, loader and module-cache access, generated or
-split names, compilation and evaluation, and process launch. Such source must
-pass the closed production-source execution policy as well as the authenticated
-import-execution closure. Unknown capability provenance fails closed instead
-of relying on the absence of a statically recoverable lifecycle spelling.
-
-A module-private carrier plus repository-wide source enforcement is the
-smallest sufficient provenance boundary under the retained exclusions. The
-policy is a merge-time source-admissibility proof, not a claim that Python
-module privacy or AST analysis is a cryptographic runtime sandbox. Compromised
-dependencies, filesystem substitution after the authenticated snapshot,
-debugger access, and arbitrary memory mutation remain outside this decision.
+Because arbitrary in-process execution is excluded, a module-private carrier
+plus the exact repository-wide private-symbol import/reference check is the
+smallest sufficient result-provenance boundary. This decision does not pretend
+that Python module privacy or AST analysis is a cryptographic sandbox, and it
+does not use a partial production import graph as proof that all supported
+execution origins are safe. Broader source-admissibility and execution-root
+governance require a separate trust model and review.
 
 The source-fixed reserves are not an assertion that current deployment
 evidence already exists. They are the maximum admissible bounds for a future
@@ -388,8 +386,8 @@ cannot supply these distinct authority-host/database/timer premises.
 | Remaining complete-authentication authority | `raw_remaining = signed_expiry - max(A3, H3)` followed by `safe_remaining = raw_remaining - U - T - Q` | raw remaining without every reserve, signed absolute expiry copied directly to PostgreSQL, either clock alone |
 | PostgreSQL role deadline | `H3 + safe_remaining`, derived after `H3`, then `A3`, and retained unchanged for every exact-state comparison | authority-domain timestamp chosen directly, caller deadline, recomputation on commit ambiguity, a later database observation |
 | Closure provenance | The sole module-private carrier construction after `_close_login(...)` returns successfully | a public constructor, imported private class, caller-created lookalike, serialized token |
-| Positive output entry | A future trusted composition invoking this runner or a separately approved source-pinned private-carrier composition | accepting a caller-supplied nominal result |
-| Production lifecycle reachability | A separately approved composition after exact deployment evidence; until then, the authenticated fixed-point production import-execution closure proves the lifecycle module is absent from every explicit or implicit checked-in execution path and the closed production-source execution policy rejects every unapproved dynamic module/code/process capability in every closure member | a runner-name-only scan, explicit-import-only graph, omitted regular-package initializer, private test seam, `_public_run`, dependency carrier, nominal test filename, alias, re-export, module import plus `getattr`, `runpy` or loader execution, module-cache lookup, compilation/evaluation, or interpreter/process launch |
+| Positive output entry | A future separately approved trusted composition invoking this runner and treating its returned private instance as opaque | accepting a caller-supplied nominal result or importing a result constructor |
+| Production composition | A later decision after current independent clock, PostgreSQL artifact, route, hook, configuration, and authentication-timer evidence is accepted | this RFC, runner existence, merge, CI, an application-root reachability result, absence from a partial source graph, or an unclassified release/operator command |
 
 No new durable authority, database column, signature, token, registry, or
 alternate result constructor is introduced.
@@ -612,8 +610,9 @@ greater than 60 seconds. Per-window measurements, missing fields, expired
 evidence, server or packaging revision, hook or configuration change, topology
 change, ambiguous measurement error, or a larger result makes deployment
 ineligible. This PR adds no evidence loader or runtime bypass; its absence is
-enforced by the five-path boundary and production-reachability architecture
-rule.
+enforced only within this correction by the five-path boundary. Production
+composition remains unauthorized by decision governance, not proven
+unreachable from every repository execution origin by source analysis.
 
 The exact derived database timestamp, not the signed authority timestamp, is
 used in `CREATE ROLE ... VALID UNTIL`. All role settings and the sole
@@ -700,33 +699,23 @@ import the private type.
   `H3 + (signed_expiry - max(A3, H3) - U - T - Q)`. A
   `raw_remaining <= U + T + Q` or unrepresentable result refuses before role
   SQL. Every later exact-state comparison uses the identical derived value.
-- `TELC-005` — Production composition is ineligible unless current independent
+- `TELC-005` — Production use is ineligible unless current independent
   evidence for the exact authority host and PostgreSQL 17.10 route proves both
   that authority-minus-database divergence grows by at most `U` throughout the
   complete credential-relevant interval without a real-duration cap and that
   the exact server timeout and timer topology limit authority-clock advance
   from verifier retrieval through `AuthenticationOk` or timeout to at most
-  `T`. Until that evidence and a separate composition decision exist, the
-  authenticated architecture snapshot derives
-  `production_import_execution_closure` to a fixed point: seed the fixed
-  production roots, add every retained regular-package initializer ancestor
-  Python executes for each included module, follow every explicit authenticated
-  repository import from every included module, and repeat until no member is
-  added. The lifecycle module must be absent from that closure, and the closed
-  production-source execution policy rejects every unapproved dynamic module/
-  code/process capability in every closure member. At the reviewed base the
-  exact closure contains 37 modules. Only the exact focused test may reference
-  an execution entry, and it must remain outside the closure. The initializer
-  inventory and closure rules, exact reviewed-base external-import inventory,
-  harmless reflection sites, `os` capability surface, forbidden capability
-  classes, and alias/provenance rules are source-fixed security inputs; missing,
-  ambiguous, changed, or unresolved identity or capability provenance refuses.
-  Under those premises, every successful password authentication reaches
+  `T`. This decision defines neither a complete repository execution-root
+  inventory nor a production composition and grants no authority to deploy or
+  invoke one. Under the evidence premises and a later separately approved
+  composition, every successful password authentication reaches
   `AuthenticationOk` strictly before authority expiry, including a verifier
   retrieved at exact `VALID UNTIL` equality, forward authority steps, unequal
   clock rates, and a deliberately delayed SCRAM response. Missing, stale,
   ambiguous, build-, hook-, timer-, configuration-, or route-mismatched
-  evidence never selects a larger reserve or fallback.
+  evidence never selects a larger reserve or fallback. A green source check,
+  application-root reachability result, or absence from a partial import graph
+  never substitutes for that evidence or the later composition decision.
 - `TELC-006` — Existing consumption, role shape, export bounds, closure,
   quarantine, failure secrecy, and decision-v1 external prerequisites remain
   unchanged. LOGIN commit ambiguity retains the exact derived expected role
@@ -739,7 +728,7 @@ These correction invariants refine decision-v1 `TEL-002`, `TEL-005`,
 `TEL-008`, `TEL-010`, `TEL-012`, and `TEL-013`. Every unaffected decision-v1
 invariant remains binding.
 
-## 8. Production import-execution negative cases
+## 8. Lifecycle negative cases
 
 | Invariant | Supported entry and counterexample | Required outcome |
 | --- | --- | --- |
@@ -755,82 +744,10 @@ invariant remains binding.
 | TELC-005 | Crash or close the lifecycle client after verifier retrieval while SCRAM is in progress. | No page is exposed and no authenticated export session survives; the server observes EOF or its authentication timeout, while any exact stale LOGIN retains the existing readiness and closure-only posture. |
 | TELC-005 | After `A3`, step the authority clock forward, advance authority faster than the database, or grow divergence beyond `U`. | Within-`U` cases remain bounded by the subtracted reserve; beyond-`U`, missing-evidence, stale-evidence, and route-mismatch cases keep production composition ineligible and never widen the constant. |
 | TELC-005 | Over 19,000 real seconds use two nonregressing slow clocks that satisfy `U` in every 300-real-second window but grow total divergence by `62.2` seconds while the role remains. | Complete-interval evidence fails and production remains ineligible. A repeating-window implementation or model fails. |
-| TELC-005 | From a production root, directly import the private test seam, `_public_run`, `_execute`, or `_Dependencies`; import them through an alias or re-export; import a nominal `test_*.py` module that reaches the lifecycle; or import the lifecycle module and resolve a runner with `getattr`. | The authenticated production import-execution closure reaches the lifecycle module and the architecture gate fails, regardless of symbol spelling or test-like path. |
-| TELC-005 | In a production import-execution closure member, use the exact split-string `runpy.run_module(...)` counterexample below and recover the runner from a second split string. | The closed execution-policy gate fails on the unapproved `runpy` import and dynamic module execution even though no lifecycle import edge or whole runner string exists. |
-| TELC-005 | Use `runpy.run_path`; `importlib` or `__import__`; `SourceFileLoader`, `spec_from_file_location`, or a loader/spec equivalent; `exec`, `eval`, or `compile`; `sys.modules`; or builtins/global/module-loader reflection, through a direct name, alias, assignment, re-export, subscript, concatenated string, or indirect repository helper. | The production import-execution closure member fails closed. A newly reached repository helper and each retained initializer ancestor are recursively checked and cannot launder the capability. |
-| TELC-005 | Launch Python or another process through `subprocess`, `os.system`, `os.popen`, an `os.exec*`, `os.spawn*`, `os.posix_spawn*`, process-pool/multiprocessing/PTY API, or an alias or reflected equivalent. | The external-import inventory or source-fixed `os` capability surface rejects the path before lifecycle spelling is relevant. |
-| TELC-005 | Retain the exact reviewed-base external imports, the eight allowed harmless reflection calls, and the source-fixed file-descriptor/environment `os` operations; or add an unrelated string constant containing a lifecycle or runner fragment. | The policy passes the existing safe source and does not infer execution authority from an unrelated string. Any changed call shape or unresolved provenance fails. |
-| TELC-005 | Put the split-string `runpy.run_module(...)` recovery shown below in retained `deployment/__init__.py`, which has no explicit incoming repository import edge in the reviewed-base graph but is executed before `deployment.postgresql`. | The initializer is added to the fixed-point production import-execution closure, the exact closure grows from the former 36 explicit modules to 37 execution members, and the closed execution-policy gate fails. |
-| TELC-005 | Put the same recovery in retained `kernel/__init__.py`, then remove or rewrite the incidental `from . import security_audit_hmac_posture` edge that currently also makes `kernel` explicit. | The initializer remains in the closure because Python executes it before a reached `kernel.*` submodule; the gate fails independently of that incidental explicit edge. |
-| TELC-005 | In a synthetic copy of the authenticated tree, make a reached module live below two nested retained regular packages and place a forbidden execution path in either initializer; separately use a namespace parent with no retained `__init__.py`. | Every retained initializer ancestor enters the closure, its imports are followed, and the forbidden path fails. The namespace parent contributes no executable source and creates no artificial module member. |
-| TELC-005 | Make the focused test or any parent test initializer enter the production import-execution closure. | The exact-test exception disappears and the lifecycle import or execution reference fails; a test-like path never grants production authority. |
 | TELC-006 | Raise the LOGIN commit after role SQL. | The private creation outcome reports unacknowledged commit and carries the exact derived expected role into observation and closure; no recovery comparison uses signed expiry. |
 | TELC-006 | Hold the access-clock lock when the in-transaction `H3` observation runs. | Fixed consumed failure with rollback, no role, and no lock-order inversion with catalog observation. |
 | TELC-006 | Raise dependency exceptions containing carriers, routes, password, page, and derived timestamps at each corrected boundary. | Existing fixed non-sensitive public outcomes only. |
 | TELC-007 | Require output custody, SQL migration, provider evidence, or another role capability to close a finding. | Stop and create a new decision or Follow-up; do not expand this PR. |
-
-The exact dynamic-loading counterexample is injected into a copy of a
-production import-execution closure member for negative evidence:
-
-```python
-import runpy
-
-lifecycle = runpy.run_module(
-    "deployment.postgresql." + "security_audit_break_glass",
-    run_name="ofarm_break_glass_runtime",
-)
-runner_type = lifecycle["SecurityAudit" + "BreakGlassRunner"]
-runner = runner_type(observer_public_key)
-result = runner.run(
-    secret_carrier,
-    authority_receipt_bytes,
-    approval_bundle_bytes,
-)
-```
-
-The same negative rewrite also proves that split-string access to the private
-test seam and dependency carrier fails:
-
-```python
-run_for_testing = lifecycle[
-    "_run_security_audit_" + "break_glass_for_testing"
-]
-dependencies_type = lifecycle["_Dependencies"]
-```
-
-The actual reviewed-base implicit-execution counterexample is injected into
-retained `deployment/__init__.py`:
-
-```python
-import runpy
-
-_lifecycle = runpy.run_module(
-    "deployment.postgresql." + "security_audit_break_glass",
-    run_name="ofarm_break_glass_runtime",
-)
-_runner_type = _lifecycle[
-    "SecurityAudit" + "BreakGlassRunner"
-]
-```
-
-The decision-v7 review named `kernel/__init__.py` as its concrete hostile
-rewrite. The bypass class is correct, but that file is already in the current
-explicit production-reachability set through
-`kernel.application_runtime -> kernel.security_audit_runtime -> kernel`, so
-version 7 already applies its closed policy there. The currently omitted
-initializer is `deployment/__init__.py`: Python executes it before the reached
-`deployment.postgresql` package, but no explicit graph edge names it. Phase B
-must test both files. It must also remove the incidental explicit edge in its
-synthetic `kernel` case and test a nested regular-package path so initializer
-coverage follows Python's package semantics rather than today's accidental
-edges.
-
-Checked-in reflection is a supported production entry and is not excluded.
-The closed policy rejects every reflection call and meta-object access except
-the exact source-fixed harmless reviewed-base shapes. Runtime mutation after
-the authenticated source snapshot remains excluded. Repository source that
-directly imports, dynamically resolves, names, or constructs the private
-carrier also remains in scope and is rejected.
 
 ## 9. Proposed architecture and smallest change
 
@@ -851,124 +768,29 @@ acknowledgement is absent; recovery never recomputes it. Existing role SQL,
 settings, membership, export invocation, closure, structural verification,
 and fixed public exceptions remain direct.
 
-The architecture checker extends its authenticated source-snapshot and import-
-reachability framework. It checks class inventory, export surface, sole
+The architecture checker extends its authenticated source-snapshot structural
+checks. It checks class inventory, export surface, sole
 construction ordering, the exact `H3 -> A3 -> derive -> role SQL` source
 ordering and provenance, all three fixed reserves and the exact formula, and
 recovery use of the returned expected role.
 
-Before lifecycle or capability analysis, the checker derives one source-fixed
-`PRODUCTION_IMPORT_EXECUTION_CLOSURE_V1`:
+The checker does not derive or enforce a production import-execution closure,
+classify executable repository roots, pin unrelated external-import or `os`
+capability inventories, or prohibit general reflection, loaders, evaluation,
+or process launch. Those are source-integrity controls outside this decision.
+The existing authenticated snapshot may supply files and ASTs to the exact
+lifecycle checks above, but its application roots are not treated as a complete
+inventory of supported production, release, or operator execution origins.
 
-1. Seed the exact fixed production roots from the authenticated source
-   snapshot.
-2. For every included dotted module identity, add each ancestor whose retained
-   repository unit is a regular-package `__init__.py`, from outermost to
-   innermost. A namespace-package ancestor with no retained `__init__.py`
-   contributes no executable source and no artificial module member.
-3. Follow every explicit authenticated repository import edge from every
-   included module, including from an initializer added by step 2.
-4. Repeat steps 2 and 3 until neither adds a module. Missing roots, conflicting
-   file-to-module identities, an ambiguous regular/namespace-package identity,
-   an unresolved internal import, or a configured analysis-resource ceiling
-   fails closed rather than returning a partial set.
-
-At reviewed base `28cf73b859fc50bc810f53b0bdbf26848b7841aa`,
-the fixed point is exactly 37 modules: the former 36 explicit-reachability
-members plus `deployment`. `kernel` and `deployment.postgresql` are already
-explicit members, but their initializer membership must also be derivable
-from step 2 independently of those incidental edges. The lifecycle module
-`deployment.postgresql.security_audit_break_glass` must be absent from the
-closure. Any explicit import or implicit regular-package initialization that
-adds it fails before symbol analysis.
-
-The checker then applies one source-fixed
-`PRODUCTION_SOURCE_EXECUTION_POLICY_V1` to every module in the complete
-production import-execution closure. This is a positive capability policy,
-not a lifecycle-string denylist:
-
-1. A literal immutable mapping must equal the exact normalized external
-   `Import` and `ImportFrom` statement inventory, including imported names and
-   aliases, mechanically reconstructed from reviewed base
-   `28cf73b859fc50bc810f53b0bdbf26848b7841aa` for its exact 37-module
-   production import-execution closure, including the empty external-import
-   inventory of `deployment`. A new or changed external import fails. Imports
-   of an authenticated repository module extend the closure, every retained
-   regular-package initializer ancestor of that module is added, and every new
-   member is recursively subject to this same policy; a closure member with no
-   pinned production entry fails rather than becoming an implicit exception.
-2. Direct or indirect access to a module-, code-, bytecode-, loader-, cache-,
-   interpreter-, or process-execution capability is forbidden. At minimum the
-   checker rejects `runpy.run_module`, `runpy.run_path`, `importlib` and its
-   loader/spec APIs, `_imp`, frozen import machinery, `__import__`,
-   `SourceFileLoader`, `spec_from_file_location`, `exec_module`,
-   `module_from_spec`, `exec`, `eval`, `compile`, `sys.modules`, `zipimport`,
-   `modulefinder`, executable `pkgutil`/`pydoc` loading, `pickle`, `shelve`,
-   `marshal`, `ctypes`/FFI loading, `subprocess`, `multiprocessing` and process
-   pools, PTY launch, `breakpoint`, and every `os` process-launch family.
-3. Because `os` is an existing admitted import, its production capability is
-   a source-fixed positive surface. `deployment.postgresql.migration_sets` may
-   use only `O_RDONLY`, `O_DIRECTORY`, `O_NOFOLLOW`, `O_CLOEXEC`,
-   `O_NONBLOCK`, `stat_result`, `open`, `fstat`, `read`, `close`, and
-   `listdir`; `deployment.postgresql.native_release_identity` may use only
-   `O_RDONLY`, the optional `O_CLOEXEC`, `O_NOFOLLOW`, and `O_NONBLOCK` flags,
-   `open`, `fstat`, `read`, and `close`; and `kernel.runtime_config` may use
-   only `environ`. Each is admitted only in its exact reviewed-base normalized
-   call/access shapes.
-   Every other `os` member fails, including `system`, `popen`, `exec*`,
-   `spawn*`, `posix_spawn*`, `fork*`, and aliases or reflected access to them.
-4. Reflection is closed by default. The only admitted calls are the four
-   `hasattr(os, <literal safe flag>)` and two
-   `getattr(os, "O_CLOEXEC", 0)` calls in
-   `deployment.postgresql.migration_sets`; the one
-   `getattr(os, flag_name, 0)` loop in
-   `deployment.postgresql.native_release_identity`, where `flag_name` is
-   proven to come only from the literal safe three-name tuple; and the one
-   `getattr(config, field)` in `kernel.security_audit_runtime`, where `field`
-   is proven to come only from the fixed `_DATABASE_SESSION_USERS` keys.
-   Every other `getattr`, `hasattr`, `setattr`, `delattr`, `globals`, `locals`,
-   `vars`, `operator.attrgetter`/`methodcaller`, builtins mapping access, frame
-   or traceback access, and loader/module/global/code-bearing meta attribute
-   fails. This includes `__loader__`, `__spec__`, `__builtins__`, `__dict__`,
-   `__globals__`, `__code__`, `__subclasses__`, `__mro__`,
-   `__getattribute__`, `tb_frame`, `f_globals`, `gi_frame`, and `cr_frame`.
-5. Import bindings, assignment aliases, re-exports, attributes, and subscripts
-   are resolved through the authenticated repository graph to a fixed point.
-   Concatenation or formatting of a module, symbol, path, source, command, or
-   interpreter name does not declassify its use. A forbidden leaf, forbidden
-   root, changed safe-call shape, or unresolved provenance at a module/code/
-   process execution site fails closed. String constants with no flow into an
-   execution site and unrelated same-spelling local definitions remain inert.
-
-The Phase B checker fixes the closure and policy versions and all of those
-inventories in source. The focused negative evidence independently reconstructs
-the exact reviewed-base regular-package initializer inventory, 37-module fixed
-point, external-import inventory, and safe-call inventory, so an unaccompanied
-checker widening fails and any simultaneous checker/test change remains
-explicit in exact-head review. A later change to the production roots, retained
-`__init__.py` inventory or package ancestry, regular-versus-namespace-package
-identity, closure or graph semantics, external-import inventory, safe
-reflection or `os` surface, capability categories, alias/provenance semantics,
-or either policy version is a material security-decision trigger, not routine
-baseline regeneration.
-
-The only permitted external module with any import edge to the lifecycle module
-or lifecycle execution reference is the exact repository path
-`kernel/tests/test_security_audit_break_glass.py`. That exception is valid only
-while the focused test and each retained initializer on its package path are
-absent from the production import-execution closure; no basename or generic
-`tests` component grants an exemption. Every other module is rejected for any
-lifecycle-module import. Execution-surface checks
-additionally cover, at minimum, import-bound or lifecycle-module-attributed
-references to the public runner, `_run_security_audit_break_glass_for_testing`,
-`_public_run`, `_execute`, `_close_expired`, and the `_Dependencies` test
-carrier through `Import`, `ImportFrom`, `Name`, or `Attribute` nodes after alias
-and re-export resolution. An ordinary module import followed by `getattr` fails
-because the import edge itself is forbidden, so concatenated attribute strings
-cannot bypass the rule. String constants and unrelated local definitions with
-the same spelling do not count as lifecycle execution references. This PR
-therefore cannot create or expose a production composition before external
-clock and authentication evidence is separately approved.
+The Phase B checker fixes only the lifecycle-local structural and provenance
+rules named here. The repository-wide check for the private result symbol is
+targeted to `TELC-001`: no other Python AST may import or reference the exact
+private class name. It is not generalized into a runner, lifecycle-module,
+dynamic-execution, package-initializer, operator-root, or capability policy.
+The checker and focused test must not imply that passing this bounded rule
+proves production composition impossible. A future complete source-integrity
+policy must be designed and reviewed separately against its full execution-
+root and capability inventory.
 
 The lifecycle module is already 1,205 physical lines against its 1,250-line
 architecture budget. Phase B may raise only that exact module budget in
@@ -995,16 +817,9 @@ exactly-at-`U`, beyond-`U`, slow clocks whose per-300-second growth is admissibl
 but complete-interval growth exceeds `U`, combined-reserve exhaustion, the
 former unguarded equality deadline, exact corrected equality, delayed SCRAM
 success and timeout, in-flight client crash, regressed-live-clock, ambiguous-
-commit, held-access-clock-lock, and every production-composition bypass named
-above. It also injects the exact split-string `runpy.run_module` counterexample
-into an ordinary closure member and retained `deployment/__init__.py`, checks
-the named `kernel/__init__.py` rewrite independently of its incidental explicit
-edge, constructs nested regular-package and namespace-package cases, proves
-that initializer imports extend the fixed point, and proves the focused-test
-exception disappears if that path enters the closure. The same evidence covers
-the closed-policy loader, code, cache, reflection, alias, re-export, helper, and
-process-launch matrix while preserving positive evidence for every exact
-reviewed-base safe capability. An isolated live server may use a shorter known
+commit, held-access-clock-lock, public-result restoration, external private-
+symbol import/reference, duplicate construction, and construction before
+closure. An isolated live server may use a shorter known
 `authentication_timeout` to exercise the timeout path without changing the
 source-fixed `T`; the deterministic model proves the accepted 61-second bound.
 The canonical inventory changes only by the mechanically collected test-count
@@ -1025,13 +840,9 @@ This is the minimum coherent correction because:
 - omitting `Q` treats PostgreSQL's accepted equality as expired;
 - omitting `T` confuses verifier retrieval with completed password
   authentication;
-- scanning only the public runner's symbol leaves callable private execution
-  seams and nominal test modules inside the production closure outside the
-  composition gate;
-- static import reachability alone leaves dynamic loading, code execution,
-  module-cache lookup, and interpreter/process launch outside that gate;
-- explicit import reachability alone omits retained regular-package
-  initializers that Python executes before reached submodules; and
+- claiming universal production-source exclusion from application import roots
+  would require a separate complete execution-root and capability-governance
+  boundary; and
 - a new token, validator, service, database column, or migration would add
   authority not required by the retained threat model.
 
@@ -1048,15 +859,8 @@ Sources of truth remain:
    eligibility prerequisites;
 5. PostgreSQL 17.10 `REL_17_10` source semantics for password-expiry equality
    and complete password authentication;
-6. the authenticated fixed-point production import-execution closure derived
-   from fixed roots, explicit repository imports, and retained regular-package
-   initializer metadata for absence of checked-in production lifecycle
-   composition;
-7. the source-fixed closed production-source execution policy applied to every
-   closure member for absence of unapproved dynamic module/code/process
-   capability;
-8. acknowledged consumption commit for first use; and
-9. complete role absence plus structural verification for closure.
+6. acknowledged consumption commit for first use; and
+7. complete role absence plus structural verification for closure.
 
 There is one deadline translation, one combined reserve expression, one
 authoritative observation order, and one positive result construction. The
@@ -1071,12 +875,18 @@ Deleted compatibility surface:
 - an unreserved assumption that two nonregressing clocks keep equal future
   rates;
 - the false assumptions that `VALID UNTIL` equality refuses and that verifier
-  retrieval completes password authentication;
-- the assumption that absence from the static import graph proves absence of
-  source-visible dynamic execution; and
-- the assumption that an explicit repository import graph alone models the
-  regular-package initializers Python executes before reached submodules; and
+  retrieval completes password authentication; and
 - independent second observations with no raw ordering relation.
+
+Withdrawn prospective cross-boundary surface:
+
+- the claim that application import roots form a complete production execution-
+  root inventory;
+- the 37-member import-execution closure and its external-import inventory;
+- the closed reflection, `os`, loader, code, cache, interpreter, and process-
+  capability policy; and
+- the claim that those checks prove the lifecycle unreachable from every
+  supported release or operator command.
 
 No new abstraction has multiple implementations or selects a dependency at
 runtime. A clean rewrite is not justified; the direct state machine remains
@@ -1088,13 +898,8 @@ corrected here.
 ### 11.1 Primary trust boundary
 
 The primary trust boundary is the temporary dual-approved security-audit
-export lifecycle, specifically positive-result provenance, the bounded new-
-authentication interval between approval verification and credential closure,
-and the repository-composition gate that prevents any lifecycle execution entry
-from becoming explicitly imported, implicitly executed through a retained
-regular-package initializer, or dynamically reached through checked-in
-production source before separate deployment evidence and composition
-approval.
+export lifecycle, specifically positive-result provenance and the bounded new-
+authentication interval between approval verification and credential closure.
 
 ### 11.2 Exact maximum path envelope
 
@@ -1109,7 +914,7 @@ The draft and any authorized Phase B implementation are limited to exactly:
 Phase A changes only path 1. The technical Phase B allowlist may equal or
 narrow this envelope but may not add another path.
 
-There is no cross-boundary exception in version 8. Migration 4 and temporary
+There is no cross-boundary exception in version 9. Migration 4 and temporary
 credential authority were already merged by decision v1; this PR changes only
 the lifecycle's enforcement of the approved contract and its necessary
 mechanical conformance evidence.
@@ -1120,15 +925,19 @@ required.
 Reviewers must not require output custody, deployment composition, collection
 or storage of differential-clock or authentication-timer evidence, provider
 evidence, a cryptographic result token, a global clock service, a new database
-function, or unrelated lifecycle hardening from this PR. This decision defines
-the exact future evidence prerequisites but does not implement deployment
-eligibility. A demonstrated need for another path stops implementation for a
+function, a complete production execution-root inventory, package-initializer
+reachability repair, repository-wide source-capability policy, or unrelated
+lifecycle hardening from this PR. This decision defines the exact future
+evidence prerequisites but does not implement deployment eligibility. A
+demonstrated need for another path or trust boundary stops implementation for a
 separate decision.
 
 Follow-ups remain the decision-v1 protected output-custody, broader crash-
 operation evidence beyond the required in-flight authentication case,
 cross-slice evidence, production-prerequisite evidence, and issue-closure
-work.
+work. Issue #334 owns the package-initializer reachability-framework residue;
+complete production/operator execution-root classification and any closed
+source-capability policy require separate source-integrity work.
 
 ## 12. Provisional design record
 
@@ -1159,23 +968,18 @@ relevant interval, without a real-duration cap, or cannot bound complete-
 authentication authority advance at or below 61 seconds with
 `authentication_timeout <= 60 seconds`, makes production deployment ineligible
 and requires a new decision; it never widens `U` or `T`. Any explicit or
-implicit production import-execution closure path to the lifecycle module
-before a separate approved composition is also an invalid state and fails the
-architecture gate.
+implicit production composition of the lifecycle module before a separate
+approved composition is unauthorized and non-deployable. This decision does
+not claim that such composition is mechanically unreachable from every
+application, release, operator, console, test, conformance, build, or tooling
+entrypoint.
 
-Any change to the fixed production roots, retained `__init__.py` inventory,
-package ancestry, regular-versus-namespace-package identity, authenticated
-graph or fixed-point closure semantics, reviewed-base external-import
-inventory, admitted reflection sites, admitted `os` surface, forbidden
-module/code/process capability categories, alias or re-export resolution,
-unknown-provenance refusal, `PRODUCTION_IMPORT_EXECUTION_CLOSURE_V1` identity,
-or `PRODUCTION_SOURCE_EXECUTION_POLICY_V1` identity requires a new reviewed
-security decision. Adding or removing a retained initializer, or changing a
-namespace parent into a regular package, is material whenever it changes or
-could change the closure. A closure member that uses an unapproved dynamic
-execution path is an invalid state even when explicit imports still report the
-lifecycle absent. Neither an inventory regeneration nor adding one new loader
-spelling is sufficient authority to widen the policy.
+If implementation or review requires a complete execution-root inventory,
+package-initializer reachability model, or closed source-capability policy,
+work must stop at this boundary and move to the separate source-integrity
+decision tracked with issue #334. That need does not relax the lifecycle
+invariants here and cannot be satisfied by silently restoring the withdrawn
+decision-v8 policy.
 
 ## 13. Traceability and verification
 
@@ -1185,7 +989,7 @@ spelling is sufficient authority to widen the policy.
 | TELC-002 | private current-approval carrier and advance function before `_consume` | `A2 < A1` | fixed refusal, no consume row, no role | focused deterministic live lifecycle test |
 | TELC-003 | currentness advance inside role-creation transaction | `A3 < A2` after consume commit | fixed consumed failure, one consume row, no role/export | focused deterministic live lifecycle test |
 | TELC-004 | accepted-live-`H3` observation, `A3` advance, fixed-`U/T/Q` deadline helper, and expected-role creation outcome | regressed/cached H3; reversed order; injected delay; combined-reserve exhaustion; leading, lagging, equality, and unrepresentable calculations | exact `H3 -> A3 -> derive -> role SQL` provenance; exact three constants and formula; same derived value in ambiguity resolution | architecture provenance/order check, deterministic delay and pure bound tests, live catalog and equality observations |
-| TELC-005 | fixed `U/T/Q` reserves and translated PostgreSQL `VALID UNTIL`; complete-interval clock premise; fixed-point production import-execution closure; closed production-source execution policy; exact clock, pgdg server, configuration, and timer premises | authority forward step; faster or slowly progressing clocks; per-window-pass/complete-interval-fail growth; exact-equality verifier retrieval; delayed/timeout/crashed SCRAM; missing/stale/mismatched evidence; direct/private/aliased/reflected or nominal-test production entry; omitted or hostile regular-package initializer; dynamic loader, code, cache, interpreter, or process entry | every successful authentication reaches `AuthenticationOk` strictly before authority expiry; over-bound evidence is ineligible; authenticated closure and closed execution policy cannot compose production use | hostile full-interval clock/timer model, live raw-SCRAM probes, fixed-point import-execution closure, closed-capability, and execution-surface architecture checks, future independent deployment-evidence audit |
+| TELC-005 | fixed `U/T/Q` reserves and translated PostgreSQL `VALID UNTIL`; complete-interval clock premise; exact clock, pgdg server, configuration, and timer premises | authority forward step; faster or slowly progressing clocks; per-window-pass/complete-interval-fail growth; exact-equality verifier retrieval; delayed/timeout/crashed SCRAM; missing, stale, or mismatched evidence | every successful authentication reaches `AuthenticationOk` strictly before authority expiry; over-bound or absent evidence is ineligible; this invariant does not authorize production composition | hostile full-interval clock/timer model, live raw-SCRAM probes, and future independent deployment-evidence audit |
 | TELC-006 | private creation outcome; existing public exception mapping, export, closure, and quarantine paths | ambiguous commit, held access-clock lock, dependency canaries | derived role survives ambiguity; no lock inversion; fixed non-rendering errors; existing lifecycle regressions pass | focused suite plus full Kernel baselines |
 | TELC-007 | Git diff path check, lifecycle module budget, and canonical inventory | any sixth path, budget above 1,325, changed global function cap, or unregenerated count | exact five-path diff, bounded lifecycle growth, unchanged other budgets, collected inventory equality | package contract plus exact path and budget comparison |
 
@@ -1199,40 +1003,6 @@ Required Phase B verification:
   closure, cached/regressed H3, missing or changed `U`, `T`, or `Q`, altered
   combined formula, `A3 -> H3` order, recovery recomputation, or false positives
   from string constants and unrelated same-spelling local definitions;
-- authenticated fixed-point import-execution evidence that the exact reviewed-
-  base closure contains 37 modules, the lifecycle module is absent, and the
-  former 36 explicit members gain exactly retained `deployment/__init__.py`;
-  the exact focused test is the sole external execution-reference exception
-  only while it and every retained initializer on its package path remain
-  outside the closure. Negative rewrites must cover direct imports of
-  `SecurityAuditBreakGlassRunner`, `_run_security_audit_break_glass_for_testing`,
-  `_public_run`, `_execute`, `_close_expired`, and `_Dependencies`, plus an
-  otherwise unlisted lifecycle-module import, aliasing, re-export, module import
-  followed by `getattr`, a production root importing a nominal `test_*.py` or
-  `tests` module, and a production root importing the focused test itself.
-  Closure-specific hostile evidence must put the section-8 split-string
-  recovery in actual `deployment/__init__.py`; repeat it in
-  `kernel/__init__.py` after neutralizing the incidental explicit `kernel`
-  edge; include every initializer on a synthetic nested regular-package path;
-  add no executable member for a namespace parent without retained
-  `__init__.py`; follow imports from a newly added initializer back through the
-  fixed point; and revoke the focused-test exception whenever that path enters
-  the closure;
-- closed production-source execution-policy evidence over every production
-  import-execution closure member. Positive evidence must independently
-  reconstruct exact equality with the reviewed-base 37-member external-import
-  inventory, including `deployment`'s empty entry, the eight harmless
-  reflection calls, and the module-scoped `os` surface in section 9. Negative
-  rewrites must include the exact split-string `runpy.run_module(...)` blocks
-  in section 8; `runpy.run_path`; `importlib`,
-  `__import__`, `SourceFileLoader`, `spec_from_file_location`, and loader/spec
-  execution; `exec`, `eval`, and `compile`; `sys.modules` and builtins/global/
-  loader/meta-object recovery; `subprocess`, interpreter command execution,
-  `os.system`, `os.popen`, every `os.exec*`, `os.spawn*`, and
-  `os.posix_spawn*` family; aliases, assignment indirection, re-exports,
-  subscripts, split strings, and a newly production-reached repository helper.
-  Changed safe-call shapes and unresolved sensitive provenance must fail, while
-  unrelated strings and same-spelling local definitions must remain inert;
 - deterministic hostile delay evidence that advances time between `H3` and
   `A3` and proves the lagging-database cutoff moves earlier by `d` and the
   interval from role creation shrinks by `2d`;
@@ -1267,8 +1037,9 @@ Required Phase B verification:
 - exact base-to-head five-path equality;
 - an explicit report that differential-clock and complete-authentication
   deployment evidence is not supplied by this PR and production composition
-  remains unreachable, unauthorized, and non-deployable pending the separate
-  production-evidence and composition follow-ups;
+  remains unauthorized and non-deployable pending the separate production-
+  evidence and composition follow-ups; this RFC makes no universal
+  reachability claim;
 - two clean full Kernel baseline runs against the same isolated PostgreSQL
   clusters if the focused live suite passes; and
 - hosted review, conformance, native amd64, native arm64, and canonical native
@@ -1282,22 +1053,16 @@ path-envelope, or PR-binding change requires a new version.
 
 Current review disposition:
 
-- Blockers addressed by this proposed contract: public forgeable closed
-  result; cross-clock authentication extension; unobserved raw authority-time
-  regression; and the decision-v2 `A3 -> H3` observation order that could
-  double-count inter-observation delay; the decision-v3 absence of a bound on
-  post-`A3` authority-minus-database divergence; and the decision-v4 false
-  equality and pre-SCRAM-expiry-check assumptions; and the initial decision-v5
-  source-provenance Blocker, now pinned to the supported PostgreSQL
-  `REL_17_10` tag and exact authentication functions; and the corrected
-  decision-v5 300-real-second proof-domain gap and public-runner-only
-  composition rule, now replaced by the complete-interval premise and fixed-
-  root lifecycle-module reachability prohibition; and the decision-v6 dynamic-
-  loading bypass, now replaced by the reviewed-base-pinned closed production-
-  source execution policy and its exact split-string negative evidence; and the
-  decision-v7 implicit regular-package-initializer subject-set gap, now
-  replaced by the 37-member fixed-point production import-execution closure
-  and hostile initializer evidence.
+- Blockers addressed inside the retained lifecycle boundary: public forgeable
+  closed result; cross-clock authentication extension; unobserved raw
+  authority-time regression; the decision-v2 `A3 -> H3` observation order that
+  could double-count inter-observation delay; the decision-v3 absence of a
+  bound on post-`A3` authority-minus-database divergence; the decision-v4 false
+  equality and pre-SCRAM-expiry-check assumptions; the initial decision-v5
+  PostgreSQL source-provenance gap, now pinned to the supported `REL_17_10` tag
+  and exact authentication functions; and the decision-v5 300-real-second
+  proof-domain gap, now corrected by the complete credential-relevant interval
+  premise.
 - Whole-card review clarifications incorporated: commit-ambiguity carrier
   return semantics; the exact live-`clock_timestamp()` premise; database-ahead
   derivation provenance; lagging-database `2d` delay cost and consumed-failure
@@ -1310,19 +1075,26 @@ Current review disposition:
   premise, and the required under-cap `_create_login(...)` helper split.
   Decision-v6 clarifications distinguish upstream `REL_17_10` from the accepted
   pgdg artifact and make repository version-policy changes the mechanically
-  checkable source-semantic re-verification trigger. Decision-v7 additionally
-  treats checked-in reflection and dynamic execution as production composition,
-  pins the external-import and safe-capability baselines to the reviewed base,
-  resolves aliases and repository re-exports, and refuses unknown sensitive
-  provenance. Decision v8 accepts the review's broad initializer-execution
-  class while correcting its reviewed-base example: `kernel/__init__.py` was
-  already an explicit member through
-  `kernel.application_runtime -> kernel.security_audit_runtime -> kernel`, but
-  `deployment/__init__.py` was genuinely omitted before reached
-  `deployment.postgresql`. Phase B must test both, remove the incidental edge
-  from the synthetic `kernel` case, and test nested regular and namespace
-  packages so the rule is independent of current graph accidents.
-- Remaining Blockers: no known version-8 Blocker; independent exact-head Phase
+  checkable source-semantic re-verification trigger.
+- Review
+  [#5023619512](https://github.com/samovers/OFARM2/pull/333#pullrequestreview-5023619512)
+  is a valid Blocker against decision v8: its application-only root set omitted
+  documented release and operator entrypoints, including
+  `deployment.postgresql.run_security_audit_migrations`. Extending that rule
+  correctly would require a governed classification of all relevant execution
+  roots and a capability policy across them, so decision v8 is withdrawn rather
+  than patched across a second trust boundary.
+- Review
+  [#5023671963](https://github.com/samovers/OFARM2/pull/333#pullrequestreview-5023671963)
+  correctly identifies repository-wide source admissibility as a separate
+  trust boundary. Its suggestion to return to decision v5 is not safe because
+  review
+  [#5021156140](https://github.com/samovers/OFARM2/pull/333#pullrequestreview-5021156140)
+  found the complete-interval B-6 gap in that version. Decision v9 therefore
+  retains the complete-interval premise and all other lifecycle corrections,
+  while withdrawing—not claiming to satisfy—the broader B-7 through B-10
+  source-governance surface introduced in decisions v6 through v8.
+- Remaining Blockers: no known version-9 Blocker; independent exact-head Phase
   A review is pending and may demonstrate one.
 - Follow-ups: unchanged decision-v1 output custody, broader crash-operation
   evidence beyond the required in-flight authentication case, final hostile
@@ -1330,6 +1102,10 @@ Current review disposition:
   closure audit. The future output-custody composition must resolve how it
   annotates the private result without widening this PR. Section 6.2 is the
   authoritative home for prompt-use guidance; no additional path is required.
+  Issue #334 retains its reachability-residue work. A separate source-integrity
+  decision must define the complete execution-root classification, package-
+  initializer reachability model, and source-capability policy before any such
+  guarantee can authorize production composition.
   Phase B remains non-deployable until the separate production-evidence
   follow-up is complete.
 - Preferences: none.
@@ -1340,15 +1116,20 @@ The only valid approval form is the entire visible text of a later task-user
 message in this same Codex task:
 
 ```text
-I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001 version 8.
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001 version 9.
 ```
 
 No generic approval, shortened version label, GitHub activity, review result,
 CI result, tool message, or predecessor approval authorizes Phase B.
 
-Merge stop rule: implementation begins only after the exact later task-user
-approval for this decision version and its named draft PR. Merge remains
-blocked until every approved invariant passes, all exact-head hosted gates pass,
-an independent exact-head review demonstrates zero Blockers, and the complete
-diff equals the approved technical allowlist. New ideas and Preferences remain
-Follow-ups and do not widen this PR.
+Decision-draft sequencing is mandatory: run only required cheap local checks;
+push and freeze the exact head; obtain an independent exact-head content review
+with zero Blockers; only then run or monitor expensive hosted baselines; and
+present the approval form only after those hosted gates are green.
+
+Merge stop rule: Phase B implementation begins only after the exact later task-
+user approval for this decision version and its named draft PR. Merge remains
+blocked until every approved invariant passes, an independent exact-head review
+demonstrates zero Blockers, all subsequent exact-head hosted gates pass, and the
+complete diff equals the approved technical allowlist. New ideas and
+Preferences remain Follow-ups and do not widen this PR.
