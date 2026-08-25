@@ -4,18 +4,115 @@ name: conformance
 
 on:
   push:
-    branches: ["main", "m1/**"]
-  pull_request:
+    branches: ["main"]
+  pull_request_target:
+    types: [opened, reopened, synchronize, closed]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+concurrency:
+  group: >-
+    ${{ github.event_name == 'push'
+        && format('ofarm-main-{0}', github.sha)
+        || format('ofarm-pr-{0}', github.event.pull_request.number) }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
+
+env:
+  OFARM_BASELINE_ADMISSION_POLICY_SHA: >-
+    d0484e37374b1e6d5fa5a30462cdc2f2622f366d
 
 jobs:
+  baseline-admission:
+    name: live exact-head review admission
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      eligible: ${{ steps.admission.outputs.eligible }}
+      pull_request_number: ${{ steps.admission.outputs.pull_request_number }}
+      review_id: ${{ steps.admission.outputs.review_id }}
+      reviewed_head_sha: ${{ steps.admission.outputs.reviewed_head_sha }}
+      base_sha: ${{ steps.admission.outputs.base_sha }}
+      execution_merge_sha: ${{ steps.admission.outputs.execution_merge_sha }}
+      policy_sha: ${{ steps.admission.outputs.policy_sha }}
+      reason: ${{ steps.admission.outputs.reason }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ env.OFARM_BASELINE_ADMISSION_POLICY_SHA }}
+          path: .baseline-admission-policy
+          persist-credentials: false
+      - name: Authenticate the immutable admission policy
+        run: >-
+          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
+          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+      - name: Read live review and merge coordinates
+        id: admission
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python
+          .baseline-admission-policy/conformance/review_baseline_admission.py
+          --event-name "${GITHUB_EVENT_NAME}"
+          --event-path "${GITHUB_EVENT_PATH}"
+          --github-sha "${GITHUB_SHA}"
+          --repository "${GITHUB_REPOSITORY}"
+          --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+          --github-output "${GITHUB_OUTPUT}"
+
   conformance:
+    needs: baseline-admission
+    if: needs.baseline-admission.outputs.eligible == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
+          ref: ${{ env.OFARM_BASELINE_ADMISSION_POLICY_SHA }}
+          path: .baseline-admission-policy
+          persist-credentials: false
+      - name: Authenticate the immutable admission policy before conformance
+        run: >-
+          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
+          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+      - name: Recheck live admission before conformance
+        id: start-admission
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3
+          .baseline-admission-policy/conformance/review_baseline_admission.py
+          --event-name "${GITHUB_EVENT_NAME}"
+          --event-path "${GITHUB_EVENT_PATH}"
+          --github-sha "${GITHUB_SHA}"
+          --repository "${GITHUB_REPOSITORY}"
+          --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+          --github-output "${GITHUB_OUTPUT}"
+          --evidence-output
+          "${RUNNER_TEMP}/conformance-admission-start.json"
+      - name: Bind conformance to the admitted coordinates
+        env:
+          ADMITTED_HEAD: ${{ needs.baseline-admission.outputs.reviewed_head_sha }}
+          ADMITTED_BASE: ${{ needs.baseline-admission.outputs.base_sha }}
+          ADMITTED_MERGE: ${{ needs.baseline-admission.outputs.execution_merge_sha }}
+          START_HEAD: ${{ steps.start-admission.outputs.reviewed_head_sha }}
+          START_BASE: ${{ steps.start-admission.outputs.base_sha }}
+          START_MERGE: ${{ steps.start-admission.outputs.execution_merge_sha }}
+          START_POLICY: ${{ steps.start-admission.outputs.policy_sha }}
+        run: |
+          test "${START_HEAD}" = "${ADMITTED_HEAD}"
+          test "${START_BASE}" = "${ADMITTED_BASE}"
+          test "${START_MERGE}" = "${ADMITTED_MERGE}"
+          test "${START_POLICY}" = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+          rm -rf -- .baseline-admission-policy
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ needs.baseline-admission.outputs.execution_merge_sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Authenticate and install the exact Buildx client
@@ -329,8 +426,46 @@ jobs:
           LANG: C.UTF-8
           LC_ALL: C.UTF-8
         run: .review-venv/bin/python -m pytest kernel/tests/test_conformance.py -q -p no:cacheprovider
-      - name: Upload deterministic review baseline
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         if: always()
+        with:
+          ref: ${{ env.OFARM_BASELINE_ADMISSION_POLICY_SHA }}
+          path: .baseline-admission-policy
+          persist-credentials: false
+      - name: Re-authenticate the immutable conformance admission policy
+        if: always()
+        id: final-policy-proof
+        run: >-
+          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
+          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+      - name: Recheck live admission before conformance evidence publication
+        if: always() && steps.final-policy-proof.outcome == 'success'
+        id: final-admission
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3
+          .baseline-admission-policy/conformance/review_baseline_admission.py
+          --event-name "${GITHUB_EVENT_NAME}"
+          --event-path "${GITHUB_EVENT_PATH}"
+          --github-sha "${GITHUB_SHA}"
+          --repository "${GITHUB_REPOSITORY}"
+          --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+          --github-output "${GITHUB_OUTPUT}"
+          --evidence-output
+          .artifacts/review-baseline/review-baseline-admission.json
+      - name: Prove conformance admission stayed current
+        if: always()
+        id: final-admission-proof
+        run: |
+          test "${{ steps.final-admission.outputs.eligible }}" = true
+          cmp "${RUNNER_TEMP}/conformance-admission-start.json" \
+            .artifacts/review-baseline/review-baseline-admission.json
+          mkdir -p .artifacts/platform-evidence
+          cp .artifacts/review-baseline/review-baseline-admission.json \
+            .artifacts/platform-evidence/review-baseline-admission.json
+      - name: Upload deterministic review baseline
+        if: always() && steps.final-admission-proof.outcome == 'success'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: review-baseline
@@ -338,7 +473,7 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
       - name: Upload root platform MVP evidence
-        if: always()
+        if: always() && steps.final-admission-proof.outcome == 'success'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: platform-mvp-evidence
@@ -362,6 +497,8 @@ jobs:
           fi
 
   native-verifier:
+    needs: baseline-admission
+    if: needs.baseline-admission.outputs.eligible == 'true'
     name: native verifier (${{ matrix.architecture }})
     strategy:
       fail-fast: false
@@ -385,12 +522,55 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: read
+      pull-requests: read
     env:
       BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
       BUILDX_METADATA_PROVENANCE: disabled
       SOURCE_DATE_EPOCH: "0"
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ env.OFARM_BASELINE_ADMISSION_POLICY_SHA }}
+          path: .baseline-admission-policy
+          persist-credentials: false
+      - name: Authenticate the immutable admission policy before native verification
+        run: >-
+          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
+          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+      - name: Recheck live admission before native verification
+        id: start-admission
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3
+          .baseline-admission-policy/conformance/review_baseline_admission.py
+          --event-name "${GITHUB_EVENT_NAME}"
+          --event-path "${GITHUB_EVENT_PATH}"
+          --github-sha "${GITHUB_SHA}"
+          --repository "${GITHUB_REPOSITORY}"
+          --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+          --github-output "${GITHUB_OUTPUT}"
+          --evidence-output
+          "${RUNNER_TEMP}/native-${{ matrix.architecture }}-admission-start.json"
+      - name: Bind native verification to the admitted coordinates
+        env:
+          ADMITTED_HEAD: ${{ needs.baseline-admission.outputs.reviewed_head_sha }}
+          ADMITTED_BASE: ${{ needs.baseline-admission.outputs.base_sha }}
+          ADMITTED_MERGE: ${{ needs.baseline-admission.outputs.execution_merge_sha }}
+          START_HEAD: ${{ steps.start-admission.outputs.reviewed_head_sha }}
+          START_BASE: ${{ steps.start-admission.outputs.base_sha }}
+          START_MERGE: ${{ steps.start-admission.outputs.execution_merge_sha }}
+          START_POLICY: ${{ steps.start-admission.outputs.policy_sha }}
+        run: |
+          test "${START_HEAD}" = "${ADMITTED_HEAD}"
+          test "${START_BASE}" = "${ADMITTED_BASE}"
+          test "${START_MERGE}" = "${ADMITTED_MERGE}"
+          test "${START_POLICY}" = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+          rm -rf -- .baseline-admission-policy
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ needs.baseline-admission.outputs.execution_merge_sha }}
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12.13"
@@ -551,7 +731,7 @@ jobs:
           --second-artifacts
           ".artifacts/native/${{ matrix.architecture }}/second"
           --platform "linux/${{ matrix.architecture }}"
-          --source-commit "${{ github.sha }}"
+          --source-commit "${{ needs.baseline-admission.outputs.execution_merge_sha }}"
           --output
           ".artifacts/native/${{ matrix.architecture }}/reproducibility.json"
       - name: Load and verify the authenticated clean native child
@@ -630,7 +810,7 @@ jobs:
             --reproducibility \
               ".artifacts/native/${{ matrix.architecture }}/reproducibility.json" \
             --platform "linux/${{ matrix.architecture }}" \
-            --source-commit "${{ github.sha }}" \
+            --source-commit "${{ needs.baseline-admission.outputs.execution_merge_sha }}" \
             --containerfile deployment/postgresql/ofarm_ed25519/Containerfile \
             --builder-id \
               "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}" \
@@ -639,7 +819,44 @@ jobs:
           test "$(du --bytes --summarize \
             ".artifacts/native/${{ matrix.architecture }}" | cut --fields=1)" \
             -le 600000000
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        if: always()
+        with:
+          ref: ${{ env.OFARM_BASELINE_ADMISSION_POLICY_SHA }}
+          path: .baseline-admission-policy
+          persist-credentials: false
+      - name: Re-authenticate the immutable native admission policy
+        if: always()
+        id: final-policy-proof
+        run: >-
+          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
+          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+      - name: Recheck live admission before native evidence publication
+        if: always() && steps.final-policy-proof.outcome == 'success'
+        id: final-admission
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3
+          .baseline-admission-policy/conformance/review_baseline_admission.py
+          --event-name "${GITHUB_EVENT_NAME}"
+          --event-path "${GITHUB_EVENT_PATH}"
+          --github-sha "${GITHUB_SHA}"
+          --repository "${GITHUB_REPOSITORY}"
+          --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+          --github-output "${GITHUB_OUTPUT}"
+          --evidence-output
+          ".artifacts/native/${{ matrix.architecture }}/review-baseline-admission.json"
+      - name: Prove native admission stayed current
+        if: always()
+        id: final-admission-proof
+        run: |
+          test "${{ steps.final-admission.outputs.eligible }}" = true
+          cmp \
+            "${RUNNER_TEMP}/native-${{ matrix.architecture }}-admission-start.json" \
+            ".artifacts/native/${{ matrix.architecture }}/review-baseline-admission.json"
       - name: Upload bounded native verifier evidence
+        if: always() && steps.final-admission-proof.outcome == 'success'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: native-verifier-${{ matrix.architecture }}
@@ -660,13 +877,57 @@ jobs:
 
   native-verifier-index:
     name: native verifier canonical index
-    needs: native-verifier
+    needs: [baseline-admission, native-verifier]
+    if: needs.baseline-admission.outputs.eligible == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ env.OFARM_BASELINE_ADMISSION_POLICY_SHA }}
+          path: .baseline-admission-policy
+          persist-credentials: false
+      - name: Authenticate the immutable admission policy before native indexing
+        run: >-
+          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
+          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+      - name: Recheck live admission before native indexing
+        id: start-admission
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3
+          .baseline-admission-policy/conformance/review_baseline_admission.py
+          --event-name "${GITHUB_EVENT_NAME}"
+          --event-path "${GITHUB_EVENT_PATH}"
+          --github-sha "${GITHUB_SHA}"
+          --repository "${GITHUB_REPOSITORY}"
+          --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+          --github-output "${GITHUB_OUTPUT}"
+          --evidence-output
+          "${RUNNER_TEMP}/native-index-admission-start.json"
+      - name: Bind native indexing to the admitted coordinates
+        env:
+          ADMITTED_HEAD: ${{ needs.baseline-admission.outputs.reviewed_head_sha }}
+          ADMITTED_BASE: ${{ needs.baseline-admission.outputs.base_sha }}
+          ADMITTED_MERGE: ${{ needs.baseline-admission.outputs.execution_merge_sha }}
+          START_HEAD: ${{ steps.start-admission.outputs.reviewed_head_sha }}
+          START_BASE: ${{ steps.start-admission.outputs.base_sha }}
+          START_MERGE: ${{ steps.start-admission.outputs.execution_merge_sha }}
+          START_POLICY: ${{ steps.start-admission.outputs.policy_sha }}
+        run: |
+          test "${START_HEAD}" = "${ADMITTED_HEAD}"
+          test "${START_BASE}" = "${ADMITTED_BASE}"
+          test "${START_MERGE}" = "${ADMITTED_MERGE}"
+          test "${START_POLICY}" = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+          rm -rf -- .baseline-admission-policy
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ needs.baseline-admission.outputs.execution_merge_sha }}
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12.13"
@@ -691,7 +952,7 @@ jobs:
               --reproducibility \
                 ".artifacts/native-fan-in/${architecture}/reproducibility.json" \
               --platform "linux/${architecture}" \
-              --source-commit "${{ github.sha }}" \
+              --source-commit "${{ needs.baseline-admission.outputs.execution_merge_sha }}" \
               --containerfile deployment/postgresql/ofarm_ed25519/Containerfile \
               --builder-id \
                 "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}" \
@@ -705,7 +966,7 @@ jobs:
               .artifacts/native-fan-in/verified/amd64/oci-evidence.json \
             --arm64-evidence \
               .artifacts/native-fan-in/verified/arm64/oci-evidence.json \
-            --source-commit "${{ github.sha }}" \
+            --source-commit "${{ needs.baseline-admission.outputs.execution_merge_sha }}" \
             --index-output \
               .artifacts/native-index/ofarm-ed25519.index.json \
             --evidence-output \
@@ -731,7 +992,43 @@ jobs:
               .artifacts/native-index/native_release_identity.candidate.json \
             --candidate-receipt-output \
               .artifacts/native-index/native_evidence_receipt.candidate.json
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        if: always()
+        with:
+          ref: ${{ env.OFARM_BASELINE_ADMISSION_POLICY_SHA }}
+          path: .baseline-admission-policy
+          persist-credentials: false
+      - name: Re-authenticate the immutable native-index admission policy
+        if: always()
+        id: final-policy-proof
+        run: >-
+          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
+          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+      - name: Recheck live admission before native index publication
+        if: always() && steps.final-policy-proof.outcome == 'success'
+        id: final-admission
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3
+          .baseline-admission-policy/conformance/review_baseline_admission.py
+          --event-name "${GITHUB_EVENT_NAME}"
+          --event-path "${GITHUB_EVENT_PATH}"
+          --github-sha "${GITHUB_SHA}"
+          --repository "${GITHUB_REPOSITORY}"
+          --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+          --github-output "${GITHUB_OUTPUT}"
+          --evidence-output
+          .artifacts/native-index/review-baseline-admission.json
+      - name: Prove native index admission stayed current
+        if: always()
+        id: final-admission-proof
+        run: |
+          test "${{ steps.final-admission.outputs.eligible }}" = true
+          cmp "${RUNNER_TEMP}/native-index-admission-start.json" \
+            .artifacts/native-index/review-baseline-admission.json
       - name: Upload canonical two-platform OCI index evidence
+        if: always() && steps.final-admission-proof.outcome == 'success'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: native-verifier-index
