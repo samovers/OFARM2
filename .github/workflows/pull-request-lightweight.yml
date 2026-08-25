@@ -1,0 +1,53 @@
+# Cheap pull-request checks run before exact-head content review. This bootstrap
+# workflow does not alter the existing conformance or native-verifier triggers.
+name: pull-request-lightweight
+
+on:
+  pull_request:
+
+concurrency:
+  group: pull-request-lightweight-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: package and workflow policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12.13"
+          architecture: x64
+      - name: Create isolated locked environments
+        run: |
+          python -m venv .review-venv
+          .review-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-pip.lock
+          .review-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-baseline.lock
+          .review-venv/bin/python -m pip check
+          python -m venv .review-tools-venv
+          .review-tools-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-pip.lock
+          .review-tools-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-tools.lock
+          .review-tools-venv/bin/python -m pip check
+      - name: Test review-before-baseline admission
+        run: >-
+          .review-venv/bin/python -m unittest
+          conformance.test_review_baseline_admission
+      - name: Ruff baseline-admission policy
+        run: >-
+          .review-tools-venv/bin/python -m ruff check
+          conformance/review_baseline_admission.py
+          conformance/test_review_baseline_admission.py
+      - name: Check package contracts and architecture
+        run: .review-venv/bin/python conformance/ofarm_pkg_contract_check.py
+      - name: Reject pull-request whitespace errors
+        run: >-
+          git diff --check
+          origin/${{ github.event.repository.default_branch }}...HEAD
