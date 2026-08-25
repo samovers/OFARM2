@@ -1,6 +1,5 @@
-# Cheap pull-request checks run before exact-head content review. The expensive
-# conformance and native-verifier jobs are admitted separately by a zero-Blocker
-# review event in conformance.yml.
+# Cheap pull-request checks run before exact-head content review. This bootstrap
+# workflow does not alter the existing conformance or native-verifier triggers.
 name: pull-request-lightweight
 
 on:
@@ -27,10 +26,27 @@ jobs:
         with:
           python-version: "3.12.13"
           architecture: x64
+      - name: Create isolated locked environments
+        run: |
+          python -m venv .review-venv
+          .review-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-pip.lock
+          .review-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-baseline.lock
+          .review-venv/bin/python -m pip check
+          python -m venv .review-tools-venv
+          .review-tools-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-pip.lock
+          .review-tools-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-tools.lock
+          .review-tools-venv/bin/python -m pip check
       - name: Test review-before-baseline admission
-        run: python -m unittest conformance.test_review_baseline_admission
+        run: >-
+          .review-venv/bin/python -m unittest
+          conformance.test_review_baseline_admission
+      - name: Ruff baseline-admission policy
+        run: >-
+          .review-tools-venv/bin/python -m ruff check
+          conformance/review_baseline_admission.py
+          conformance/test_review_baseline_admission.py
       - name: Check package contracts and architecture
-        run: python conformance/ofarm_pkg_contract_check.py
+        run: .review-venv/bin/python conformance/ofarm_pkg_contract_check.py
       - name: Reject pull-request whitespace errors
         run: >-
           git diff --check

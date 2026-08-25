@@ -90,9 +90,12 @@ Use this fail-closed sequence:
    local checks, push the correction, and obtain the next exact-head review.
    Automatically started expensive jobs may finish unattended, but an agent
    must not spend time monitoring, diagnosing, or retrying them.
-3. A zero-Blocker exact-head GitHub review authorizes the expensive baseline
-   only when its body ends with this exact footer, using the full reviewed
-   commit SHA:
+3. A zero-Blocker exact-head review must identify the full reviewed commit SHA.
+   Do not treat the review as current after another commit, and do not infer
+   currentness from an automatically running or previously green workflow.
+4. When a technical admission workflow is active, it may admit an expensive
+   baseline only from a zero-Blocker review whose body ends with this exact
+   footer:
 
    ```text
    OFARM2_BASELINE_ADMISSION
@@ -100,18 +103,26 @@ Use this fail-closed sequence:
    blockers=0
    ```
 
-4. The full baseline workflow must verify that the review's recorded commit,
-   footer SHA, and current pull-request head are identical. A new commit makes
-   the previous review and all previous baseline results stale automatically.
-5. Present an approval card only after the exact same head has both the
+   It must verify live that the review's recorded commit, footer SHA, and
+   current pull-request head are identical and that the review remains in
+   force. A new commit or review edit/dismissal makes prior admission stale.
+5. Present an approval card only after the exact same reviewed head has both the
    zero-Blocker review and every required hosted baseline result. A main-branch
    post-merge run is not a pull-request admission and remains automatic.
 
 Never add the admission footer to a review with a remaining Blocker. Do not use
 labels, earlier-head reviews, green results from another SHA, or agent memory as
-substitutes for the exact-head review event. This sequencing rule controls
-workflow timing only; it does not weaken any required verification or merge
-gate.
+substitutes for exact-head review. Until a technical admission workflow is
+merged and active, this is an agent-enforced ordering rule: existing automatic
+jobs may run unattended, but they do not authorize monitoring, retries, an
+approval card, or merge. This sequencing rule controls workflow timing only;
+it does not weaken any required verification or merge gate.
+
+An admission review must be submitted with a user or GitHub App credential
+whose event can start the admission workflow; a review created with the
+repository `GITHUB_TOKEN` does not supply that trigger. Workflow admission also
+does not imply branch protection. Verify repository settings before describing
+hosted baselines as a GitHub-enforced merge requirement.
 
 ## Full design contract for high-risk trust-boundary work
 
