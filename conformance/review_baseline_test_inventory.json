@@ -11786,7 +11786,57 @@
       "sourcePath": "kernel/tests/test_security_audit_authority.py"
     },
     {
-      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_architecture_surface_rejects_public_injection_and_caller_time",
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_architecture_deadline_and_recovery_mutations_fail",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_architecture_result_surface_and_external_reference_rules",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_complete_interval_ordered_excursion_bound[values0-True]",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_complete_interval_ordered_excursion_bound[values1-True]",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_complete_interval_ordered_excursion_bound[values2-False]",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_complete_interval_ordered_excursion_bound[values3-True]",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_complete_interval_ordered_excursion_bound[values4-False]",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_deadline_floor_quantum_delay_and_unrepresentable_value",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_deadline_translation_is_exact[61000000-80000000-200000000-118999999]",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_deadline_translation_is_exact[80000000-61000000-200000000-137999999]",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_deadline_translation_is_exact[80000000-80000000-200000000-137999999]",
       "sourceModule": "kernel.tests.test_security_audit_break_glass",
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
@@ -11796,52 +11846,72 @@
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
     {
-      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_ambiguous_login_commit_is_inspected_closed_and_returns_no_page",
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_closure_does_not_close_concurrent_replacement",
       "sourceModule": "kernel.tests.test_security_audit_break_glass",
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
     {
-      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_ambiguous_login_commit_with_failed_resolution_quarantines",
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_closure_only_refuses_future_and_closes_expired",
       "sourceModule": "kernel.tests.test_security_audit_break_glass",
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
     {
-      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_closure_only_does_not_close_concurrent_replacement",
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_failed_login_resolution_quarantines",
       "sourceModule": "kernel.tests.test_security_audit_break_glass",
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
     {
-      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_closure_only_refuses_unexpired_and_closes_expired_exact_role",
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_failure_and_commit_ambiguity_outcomes",
       "sourceModule": "kernel.tests.test_security_audit_break_glass",
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
     {
-      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_consume_commit_ambiguity_is_terminal_and_creates_no_role",
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_held_access_clock_lock_rolls_back",
       "sourceModule": "kernel.tests.test_security_audit_break_glass",
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
     {
-      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_export_failure_closes_role_and_never_exposes_canary_page",
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_login_commit_ambiguity_retains_exact_role",
       "sourceModule": "kernel.tests.test_security_audit_break_glass",
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
     {
-      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_one_page_is_released_only_after_role_drop_and_replay_refuses",
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_one_page_closes_role_and_replay_refuses",
       "sourceModule": "kernel.tests.test_security_audit_break_glass",
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
     {
-      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_store_substitution_and_preexisting_role_refuse_before_consumption",
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_pgdg_scram_timer_and_timestamp_quantum",
       "sourceModule": "kernel.tests.test_security_audit_break_glass",
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
     {
-      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_public_surface_has_no_dependency_time_random_or_export_injection",
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_raw_authority_regressions[times0-SecurityAuditBreakGlassRefused-0]",
       "sourceModule": "kernel.tests.test_security_audit_break_glass",
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
     {
-      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_secret_and_closed_page_carriers_do_not_render_contents",
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_raw_authority_regressions[times1-SecurityAuditBreakGlassFailed-1]",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_role_uses_exact_translated_deadline_and_closes",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_live_store_substitution_and_preexisting_role_refuse",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_oscillation_slow_clocks_and_complete_authentication_bounds",
+      "sourceModule": "kernel.tests.test_security_audit_break_glass",
+      "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_break_glass.py::test_public_surface_and_secret_carrier_are_closed",
       "sourceModule": "kernel.tests.test_security_audit_break_glass",
       "sourcePath": "kernel/tests/test_security_audit_break_glass.py"
     },
@@ -17376,8 +17446,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "eb2abf85d39ec6f1f03f7fc808375a706726a116beb5693e65e8730044fdc7ce",
-  "entryCount": 3475,
+  "entriesSha256": "0772167b0008a7a89273e73e6e936fd4795662584fb47c17b8c685f98efbfd6f",
+  "entryCount": 3489,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

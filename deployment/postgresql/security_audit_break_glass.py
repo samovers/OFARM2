@@ -60,6 +60,9 @@ CONSUME_TEMPORARY_EXPORT_APPROVAL_SQL = (
 _MAX_CARRIER_BYTES = 16_384
 _MAX_DSN_BYTES = 8_192
 _MAX_UNIX_MICROSECONDS = 9_223_372_036_854_775_807
+_MAX_AUTHORITY_DATABASE_DIVERGENCE_GROWTH_US = 1_000_000
+_MAX_PASSWORD_AUTHORITY_ADVANCE_US = 61_000_000
+_POSTGRES_TIMESTAMP_QUANTUM_US = 1
 _PASSWORD_BYTES = 48
 _SCRAM_SALT_BYTES = 16
 _SCRAM_ITERATIONS = 4_096
@@ -211,7 +214,7 @@ class SecurityAuditBreakGlassSecrets:
 
 
 @dataclass(frozen=True, slots=True, repr=False)
-class ClosedSecurityAuditBreakGlassExport:
+class _ClosedSecurityAuditBreakGlassExport:
     """One buffered page released only after complete credential closure."""
 
     operation_id: UUID
@@ -235,6 +238,18 @@ class _Preflight:
 class _ExpectedRole:
     valid_until: datetime | None
     password_verifier: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _CurrentApprovalCarrier:
+    approval: _VerifiedSecurityAuditApproval
+    authority_now_us: int
+
+
+@dataclass(frozen=True, slots=True)
+class _LoginCreationOutcome:
+    expected_role: _ExpectedRole
+    commit_acknowledged: bool
 
 
 class _Cursor(Protocol):
@@ -532,12 +547,22 @@ def _authority_time_us(dependencies: _Dependencies) -> int:
     return value // 1_000
 
 
+def _advance_current_approval(
+    dependencies: _Dependencies,
+    current: _CurrentApprovalCarrier,
+) -> _CurrentApprovalCarrier:
+    authority_now_us = _authority_time_us(dependencies)
+    if authority_now_us < current.authority_now_us:
+        raise ValueError
+    return _CurrentApprovalCarrier(current.approval, authority_now_us)
+
+
 def _consume(
     dependencies: _Dependencies,
     route: str,
-    approval: _VerifiedSecurityAuditApproval,
-    authority_now_us: int,
+    current: _CurrentApprovalCarrier,
 ) -> None:
+    approval = current.approval
     connection = None
     try:
         connection = _open(dependencies.connection_factory, route)
@@ -549,7 +574,7 @@ def _consume(
                     approval.store_migration_execution_id,
                     approval.valid_from_us,
                     approval.valid_until_us,
-                    authority_now_us,
+                    current.authority_now_us,
                 ),
             ),
             1,
@@ -663,51 +688,89 @@ def _create_role_statement(
     )
 
 
+def _derived_expected_role(
+    database_now_us: int,
+    current: _CurrentApprovalCarrier,
+    password_verifier: str,
+) -> _ExpectedRole:
+    safe_remaining_us = (
+        current.approval.valid_until_us
+        - max(current.authority_now_us, database_now_us)
+        - _MAX_AUTHORITY_DATABASE_DIVERGENCE_GROWTH_US
+        - _MAX_PASSWORD_AUTHORITY_ADVANCE_US
+        - _POSTGRES_TIMESTAMP_QUANTUM_US
+    )
+    if safe_remaining_us <= 0:
+        raise ValueError
+    return _ExpectedRole(
+        _expiry(database_now_us + safe_remaining_us),
+        password_verifier,
+    )
+
+
+def _configure_login(
+    connection: _Connection,
+    expected_role: _ExpectedRole,
+) -> None:
+    connection.execute(
+        _create_role_statement(
+            cast(datetime, expected_role.valid_until),
+            cast(str, expected_role.password_verifier),
+        )
+    )
+    for name, value in _ROLE_SETTINGS:
+        connection.execute(
+            sql.SQL("ALTER ROLE {} IN DATABASE {} SET {} = {}").format(
+                sql.Identifier(TEMPORARY_EXPORT_LOGIN),
+                sql.Identifier(SECURITY_AUDIT_DATABASE),
+                sql.Identifier(name),
+                sql.Literal(value),
+            )
+        )
+    grant = sql.SQL("GRANT {} TO {} WITH ").format(
+        sql.Identifier(TEMPORARY_EXPORT_CAPABILITY),
+        sql.Identifier(TEMPORARY_EXPORT_LOGIN),
+    )
+    for option, enabled in (
+        ("ADMIN", False),
+        ("INHERIT", True),
+        ("SET", False),
+    ):
+        connection.execute(
+            grant
+            + sql.SQL("{} {}").format(
+                sql.SQL(option),
+                sql.SQL("TRUE" if enabled else "FALSE"),
+            )
+        )
+
+
 def _create_login(
     dependencies: _Dependencies,
     route: str,
     expected_store: UUID,
-    expected_role: _ExpectedRole,
-) -> None:
+    current: _CurrentApprovalCarrier,
+    password_verifier: str,
+) -> _LoginCreationOutcome:
     connection = None
+    expected_role = None
     try:
         connection = _open(dependencies.connection_factory, route)
         _require_admin(connection)
         if _store_id(connection) != expected_store:
             raise ValueError
-        if _role_state(connection, expected_role, allow_disabled=False) != "ABSENT":
+        if _role_state(
+            connection, _ExpectedRole(None, None), allow_disabled=False
+        ) != "ABSENT":
             raise ValueError
-        connection.execute(
-            _create_role_statement(
-                cast(datetime, expected_role.valid_until),
-                cast(str, expected_role.password_verifier),
-            )
+        database_now_us = _clock_high_water(connection)
+        current = _advance_current_approval(dependencies, current)
+        expected_role = _derived_expected_role(
+            database_now_us,
+            current,
+            password_verifier,
         )
-        for name, value in _ROLE_SETTINGS:
-            connection.execute(
-                sql.SQL("ALTER ROLE {} IN DATABASE {} SET {} = {}").format(
-                    sql.Identifier(TEMPORARY_EXPORT_LOGIN),
-                    sql.Identifier(SECURITY_AUDIT_DATABASE),
-                    sql.Identifier(name),
-                    sql.Literal(value),
-                )
-            )
-        grant = sql.SQL("GRANT {} TO {} WITH ").format(
-            sql.Identifier(TEMPORARY_EXPORT_CAPABILITY),
-            sql.Identifier(TEMPORARY_EXPORT_LOGIN),
-        )
-        for option, enabled in (
-            ("ADMIN", False),
-            ("INHERIT", True),
-            ("SET", False),
-        ):
-            connection.execute(
-                grant
-                + sql.SQL("{} {}").format(
-                    sql.SQL(option),
-                    sql.SQL("TRUE" if enabled else "FALSE"),
-                )
-            )
+        _configure_login(connection, expected_role)
     except Exception:
         _rollback_suppressed(connection)
         _close_suppressed(connection)
@@ -716,8 +779,9 @@ def _create_login(
         connection.commit()
     except Exception:
         _close_suppressed(connection)
-        raise _Quarantine()
+        return _LoginCreationOutcome(cast(_ExpectedRole, expected_role), False)
     _close_suppressed(connection)
+    return _LoginCreationOutcome(cast(_ExpectedRole, expected_role), True)
 
 
 def _export_route(admin_route: str, password: str) -> str:
@@ -862,11 +926,9 @@ def _verified_approval(
     preflight: _Preflight,
     authority_bytes: bytes,
     approval_bytes: bytes,
-) -> _VerifiedSecurityAuditApproval:
-    verifier_now_us = max(
-        _authority_time_us(dependencies),
-        preflight.database_high_water_us,
-    )
+) -> _CurrentApprovalCarrier:
+    authority_now_us = _authority_time_us(dependencies)
+    verifier_now_us = max(authority_now_us, preflight.database_high_water_us)
     try:
         approval = dependencies.approval_verifier.verify(
             authority_bytes,
@@ -881,56 +943,62 @@ def _verified_approval(
         != preflight.store_migration_execution_id
     ):
         raise _Refusal()
-    return approval
+    return _CurrentApprovalCarrier(approval, authority_now_us)
+
+
+def _resolve_unacknowledged_login(
+    dependencies: _Dependencies,
+    preflight: _Preflight,
+    outcome: _LoginCreationOutcome,
+) -> None:
+    expected_role = outcome.expected_role
+    try:
+        state = _role_observation(
+            dependencies,
+            preflight.routes.admin,
+            preflight.store_migration_execution_id,
+            expected_role,
+            allow_disabled=True,
+        )
+        if state == "EXPECTED":
+            _close_login(
+                dependencies,
+                preflight.routes.admin,
+                preflight.store_migration_execution_id,
+                expected_role,
+            )
+            raise _ConsumedFailure()
+        if state == "ABSENT":
+            _require_normal_structure(
+                dependencies,
+                preflight.routes.admin,
+                preflight.store_migration_execution_id,
+            )
+            raise _ConsumedFailure()
+    except (_ConsumedFailure, _Quarantine):
+        raise
+    except Exception:
+        raise _Quarantine()
+    raise _Quarantine()
 
 
 def _create_or_resolve_login(
     dependencies: _Dependencies,
     preflight: _Preflight,
-    approval: _VerifiedSecurityAuditApproval,
+    current: _CurrentApprovalCarrier,
 ) -> tuple[str, _ExpectedRole]:
     try:
         password, password_verifier = _password_material(dependencies)
-        valid_until = _expiry(approval.valid_until_us)
     except Exception:
         raise _ConsumedFailure()
-    expected_role = _ExpectedRole(valid_until, password_verifier)
     try:
-        _create_login(
+        outcome = _create_login(
             dependencies,
             preflight.routes.admin,
             preflight.store_migration_execution_id,
-            expected_role,
+            current,
+            password_verifier,
         )
-    except _Quarantine:
-        try:
-            state = _role_observation(
-                dependencies,
-                preflight.routes.admin,
-                preflight.store_migration_execution_id,
-                expected_role,
-                allow_disabled=True,
-            )
-            if state == "EXPECTED":
-                _close_login(
-                    dependencies,
-                    preflight.routes.admin,
-                    preflight.store_migration_execution_id,
-                    expected_role,
-                )
-                raise _ConsumedFailure()
-            if state == "ABSENT":
-                _require_normal_structure(
-                    dependencies,
-                    preflight.routes.admin,
-                    preflight.store_migration_execution_id,
-                )
-                raise _ConsumedFailure()
-        except (_ConsumedFailure, _Quarantine):
-            raise
-        except Exception:
-            raise _Quarantine()
-        raise
     except _ConsumedFailure:
         try:
             _require_normal_structure(
@@ -941,7 +1009,9 @@ def _create_or_resolve_login(
         except Exception:
             raise _Quarantine()
         raise
-    return password, expected_role
+    if outcome.commit_acknowledged is not True:
+        _resolve_unacknowledged_login(dependencies, preflight, outcome)
+    return password, outcome.expected_role
 
 
 def _export_and_close(
@@ -950,7 +1020,7 @@ def _export_and_close(
     approval: _VerifiedSecurityAuditApproval,
     password: str,
     expected_role: _ExpectedRole,
-) -> AcknowledgedSecurityAuditExport:
+) -> _ClosedSecurityAuditBreakGlassExport:
     exported = None
     export_failed = False
     interrupted: BaseException | None = None
@@ -976,7 +1046,10 @@ def _export_and_close(
         raise interrupted
     if export_failed or exported is None:
         raise _ConsumedFailure()
-    return exported
+    return _ClosedSecurityAuditBreakGlassExport(
+        operation_id=approval.operation_id,
+        page_bytes=exported.page_bytes,
+    )
 
 
 def _execute(
@@ -984,31 +1057,27 @@ def _execute(
     secret_carrier: object,
     authority_receipt_bytes: object,
     approval_bundle_bytes: object,
-) -> ClosedSecurityAuditBreakGlassExport:
+) -> _ClosedSecurityAuditBreakGlassExport:
     routes, authority_bytes, approval_bytes = _validated_invocation(
         secret_carrier,
         authority_receipt_bytes,
         approval_bundle_bytes,
     )
     preflight = _preflight(dependencies, routes)
-    approval = _verified_approval(
+    current = _verified_approval(
         dependencies, preflight, authority_bytes, approval_bytes
     )
-    _consume(
-        dependencies,
-        routes.control,
-        approval,
-        _authority_time_us(dependencies),
-    )
+    current = _advance_current_approval(dependencies, current)
+    _consume(dependencies, routes.control, current)
     password, expected_role = _create_or_resolve_login(
-        dependencies, preflight, approval
+        dependencies, preflight, current
     )
-    exported = _export_and_close(
-        dependencies, preflight, approval, password, expected_role
-    )
-    return ClosedSecurityAuditBreakGlassExport(
-        operation_id=approval.operation_id,
-        page_bytes=exported.page_bytes,
+    return _export_and_close(
+        dependencies,
+        preflight,
+        current.approval,
+        password,
+        expected_role,
     )
 
 
@@ -1076,7 +1145,7 @@ def _public_run(
     secret_carrier: object,
     authority_receipt_bytes: object,
     approval_bundle_bytes: object,
-) -> ClosedSecurityAuditBreakGlassExport:
+) -> _ClosedSecurityAuditBreakGlassExport:
     outcome = ""
     result = None
     try:
@@ -1126,7 +1195,7 @@ class SecurityAuditBreakGlassRunner:
         secret_carrier: SecurityAuditBreakGlassSecrets,
         authority_receipt_bytes: bytes,
         approval_bundle_bytes: bytes,
-    ) -> ClosedSecurityAuditBreakGlassExport:
+    ) -> _ClosedSecurityAuditBreakGlassExport:
         """Return one page only after acknowledged consumption and closure."""
 
         dependencies = _Dependencies(
@@ -1176,7 +1245,7 @@ def _run_security_audit_break_glass_for_testing(
     authority_receipt_bytes: object,
     approval_bundle_bytes: object,
     dependencies: _Dependencies,
-) -> ClosedSecurityAuditBreakGlassExport:
+) -> _ClosedSecurityAuditBreakGlassExport:
     """Private deterministic seam exercising the equal production machine."""
 
     return _public_run(
@@ -1191,7 +1260,6 @@ __all__ = (
     "BREAK_GLASS_CONNECTION_OPTIONS",
     "BREAK_GLASS_CONNECT_TIMEOUT_SECONDS",
     "CONSUME_TEMPORARY_EXPORT_APPROVAL_SQL",
-    "ClosedSecurityAuditBreakGlassExport",
     "SECURITY_AUDIT_DATABASE",
     "SecurityAuditBreakGlassError",
     "SecurityAuditBreakGlassFailed",
