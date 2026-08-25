@@ -1,10 +1,10 @@
-# OFARM Security-Audit Temporary Export Lifecycle Corrections — Decision v5
+# OFARM Security-Audit Temporary Export Lifecycle Corrections — Decision v6
 
 ## Status
 
 - Parent: issue #192.
 - Decision: `ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001`,
-  version 5.
+  version 6.
 - Reviewed base: `28cf73b859fc50bc810f53b0bdbf26848b7841aa`.
 - Source implementation: merged PR #328.
 - Demonstrated findings:
@@ -31,9 +31,15 @@
 - Decision-v5 PostgreSQL source-provenance Blocker and bounded review
   clarifications:
   https://github.com/samovers/OFARM2/pull/333#pullrequestreview-5019281156.
+- Superseded corrected decision-v5 head:
+  `2a5b37b1a2d0ebe991429e83bea4e44a7b3a5fc6`.
+- Decision-v5 corrected whole-card review:
+  https://github.com/samovers/OFARM2/pull/333#pullrequestreview-5020396231.
+- Decision-v5 proof-domain and production-composition Blockers:
+  https://github.com/samovers/OFARM2/pull/333#pullrequestreview-5021156140.
 - Phase A changes only this RFC. Phase B is not authorized before the exact
   task-user approval required by `AGENTS.md`.
-- This version supersedes decision v4. Version 4 correctly bounded later
+- Decision v5 superseded decision v4. Version 4 correctly bounded later
   authority-minus-database divergence, but it treated equality at PostgreSQL
   `VALID UNTIL` as expired and treated password-verifier retrieval as the end
   of SCRAM authentication. PostgreSQL 17 accepts equality and does not recheck
@@ -44,11 +50,22 @@
   approved and its task-user card is withdrawn.
 - The initial version-5 head correctly established that formula, but cited an
   unrelated PostgreSQL development commit rather than the supported server
-  release. This corrected version-5 text pins the same semantics to PostgreSQL
-  `REL_17_10`, matching repository version policy, and makes the already
-  required verification boundaries explicit. It changes no authority,
-  formula, invariant, or path envelope, so the decision remains version 5.
-  The earlier version-5 task-user card is withdrawn pending exact-head review.
+  release. The corrected decision-v5 head pinned the same semantics to
+  PostgreSQL `REL_17_10`, matching repository version policy, and made the
+  already required verification boundaries explicit. That correction changed
+  no authority, formula, invariant, or path envelope, so the head remained
+  decision version 5. The earlier version-5 task-user card was withdrawn
+  pending exact-head review.
+- This version supersedes decision v5. Version 5 bounded differential growth
+  over 300 seconds of real time but applied that premise through a role's
+  potentially longer real lifetime, and its proposed runner-symbol rule left
+  private execution seams and production-reachable nominal test modules
+  unguarded. Version 6 requires the same fixed `U` bound over the complete
+  credential-relevant interval without a real-duration cap and replaces the
+  symbol-only rule with authenticated production-root reachability plus one
+  exact focused-test exception. These are material external-premise and
+  conformance-invariant changes. Version 5 was never approved, and its task-user
+  card is withdrawn.
 - Version 3 had already superseded version 2, whose `A3 -> H3` order could
   double-count inter-observation delay. Every predecessor card remains
   withdrawn.
@@ -78,6 +95,15 @@ Earlier correction drafts then exposed two further deadline defects:
 5. PostgreSQL retrieves and checks the verifier before SCRAM, then performs no
    second expiry check when the exchange succeeds.
 
+Exact-head review of decision v5 then demonstrated two further contract gaps:
+
+6. a bound quantified over 300 seconds of real time was applied through a
+   credential interval whose real duration was not bounded by the request's
+   300-second authority-domain lifetime; and
+7. a runner-name architecture rule did not cover the private test seam,
+   dependency carrier, aliases, re-exports, reflection through an ordinary
+   module import, or nominal test modules reachable from production roots.
+
 This decision establishes a narrow correction in the same primary trust
 boundary. It makes closure provenance repository-private, carries raw
 authority currentness through the state machine, observes the database
@@ -86,7 +112,8 @@ remaining authority time into the database clock domain, and subtracts three
 source-fixed values: future differential-clock growth, complete-authentication
 authority advance, and one PostgreSQL timestamp quantum. It proves those
 properties with hostile regression, observation-delay, forward-step,
-relative-rate, exact-equality, and delayed-SCRAM evidence.
+relative-rate, slow-clock, exact-equality, delayed-SCRAM, and production-
+reachability evidence.
 
 The goal is not to add a new lifecycle or authority. It is to make the merged
 implementation satisfy `TEL-002`, `TEL-005`, `TEL-008`, and `TEL-013` as they
@@ -100,7 +127,7 @@ without treating their timestamp values or rates as interchangeable. It also
 proves that a nominal positive carrier is not an admission authority:
 repository composition must obtain it only from the closed runner path.
 
-The work removes five concrete risks:
+The work removes seven concrete risks:
 
 - arbitrary repository code presenting caller-created bytes as a
   closure-proven result;
@@ -109,9 +136,13 @@ The work removes five concrete risks:
   observations;
 - a later authority-clock step or faster authority-clock progression leaving
   PostgreSQL willing to retrieve the verifier after signed authority expiry;
-  and
 - equality at `VALID UNTIL` or an in-flight SCRAM exchange completing at or
-  after signed authority expiry.
+  after signed authority expiry;
+- two slowly progressing clocks accumulating unsafe divergence after the first
+  300 real seconds while the role remains; and
+- any checked-in production-root path reaching the public runner, private test
+  seam, dependency carrier, or another lifecycle execution entry before the
+  required deployment evidence exists.
 
 ## 3. Non-goals
 
@@ -137,6 +168,12 @@ Protected output custody remains a separate later trust boundary. It must call
 the runner in its own trusted composition or receive the private carrier only
 through a separately reviewed source-pinned composition rule. This PR creates
 no output consumer and no allowlist entry for one.
+
+Until that separate composition is approved, no module reachable from the
+repository's fixed production roots may import or otherwise reach the lifecycle
+module. The sole external execution exception is the exact focused test path
+`kernel/tests/test_security_audit_break_glass.py`, and that exception disappears
+if the test module itself becomes production-reachable.
 
 The clock and complete-authentication evidence is also a deployment
 prerequisite, not a new runtime authority. This PR fixes every reserve in
@@ -169,8 +206,8 @@ composition remains ineligible and unavailable.
   accepted only when `clock_regressed` is exactly false so its returned value
   is the observing connection's live PostgreSQL `clock_timestamp()` rather
   than a stored high-water;
-- the repository-supported PostgreSQL 17.10 release, upstream tag
-  `REL_17_10`, its strict
+- upstream PostgreSQL tag `REL_17_10` as the Phase A semantic reference for the
+  repository-supported PostgreSQL 17.10 pgdg artifact, its strict
   `VALID UNTIL < database_now` expiry comparison, and its server-side
   `authentication_timeout` covering verifier retrieval through the complete
   SCRAM exchange and `AuthenticationOk` result;
@@ -182,12 +219,14 @@ composition remains ineligible and unavailable.
 - before any production composition, current independently controlled evidence
   that, for the exact lifecycle authority host and selected PostgreSQL route,
   authority-minus-database divergence can grow by at most 1,000,000
-  microseconds over every interval no longer than the accepted 300-second
-  approval lifetime, and that the exact server's `authentication_timeout` is
-  no greater than 60 seconds while authority time can advance by at most
-  61,000,000 microseconds from password-verifier retrieval through
-  `AuthenticationOk` or timeout;
-- the architecture source snapshot and exact lifecycle surface check; and
+  microseconds over the complete credential-relevant interval, irrespective of
+  real duration, and that the exact server's `authentication_timeout` is no
+  greater than 60 seconds while authority time can advance by at most 61,000,000
+  microseconds from password-verifier retrieval through `AuthenticationOk` or
+  timeout;
+- the authenticated architecture source snapshot, fixed production roots,
+  import graph, production-reachability map, and exact lifecycle surface check;
+  and
 - trusted future output composition, which is not implemented here.
 
 ### 4.3 Untrusted inputs and actors
@@ -201,6 +240,8 @@ composition remains ineligible and unavailable.
   presented as evidence for this lifecycle's authority-host/database bound;
 - stale, ambiguous, topology-mismatched, or non-independent differential-clock
   evidence;
+- two nonregressing clocks that progress slowly together for more than 300 real
+  seconds while accumulating authority-minus-database divergence beyond `U`;
 - a client that retrieves the verifier immediately before the role deadline
   and then delays its SCRAM response;
 - stale, ambiguous, build-mismatched, hook-mismatched, or route-mismatched
@@ -208,9 +249,15 @@ composition remains ineligible and unavailable.
 - an authority-clock forward step or authority-over-database relative-rate
   change beyond the fixed reserve;
 - a raw authority-time observation that is lower than the previous raw
-  observation; and
+  observation;
 - a PostgreSQL server clock that is non-regressing but behind or ahead of the
-  certified authority-time domain.
+  certified authority-time domain;
+- a checked-in production module that directly or indirectly imports the
+  lifecycle module or any execution seam;
+- a nominal `test_*.py` or `tests` module that is reachable from a production
+  root; and
+- ordinary checked-in aliasing, re-export, or module import followed by
+  `getattr` against a lifecycle execution entry.
 
 ### 4.4 Excluded attacker capabilities
 
@@ -225,12 +272,20 @@ plus repository-wide static import/reference enforcement is the smallest
 sufficient provenance boundary. This decision does not pretend that Python
 module privacy is a cryptographic sandbox.
 
+Arbitrary runtime reflection remains excluded, but ordinary checked-in source
+that imports the lifecycle module and then uses `getattr`, aliasing, or a
+re-export is a production composition and is explicitly in scope. It is
+rejected through the authenticated import graph and production-reachability
+gate rather than by attempting to recognize every possible runtime spelling.
+
 The source-fixed reserves are not an assertion that current deployment
 evidence already exists. They are the maximum admissible bounds for a future
 deployment. Evidence that cannot prove the exact clock-pair ceiling, the
 60-second PostgreSQL authentication-timeout ceiling, and the 61-second
 authority-advance ceiling keeps production composition unavailable; it does
-not widen a constant or permit a fallback. The one-second KMS/database premise
+not widen a constant or permit a fallback. The clock-pair ceiling covers the
+entire time the exact role exists plus any still-unresolved password exchange;
+it does not reset every 300 real seconds. The one-second KMS/database premise
 elsewhere in the repository is a numeric security-audit precedent only and
 cannot supply these distinct authority-host/database/timer premises.
 
@@ -241,7 +296,7 @@ cannot supply these distinct authority-host/database/timer premises.
 | Verified approval and first raw currentness | Decision-v1 verifier result bound to the exact first fresh authority observation | parsed carriers, caller time, database time alone |
 | Later raw authority currentness | Each direct fresh observation, accepted only when it is at least the immediately preceding raw authority observation | maximum with database time, caller assertion, an earlier observation reused after delay |
 | Consumption | Existing acknowledged migration-4 consume commit using the second accepted raw authority observation | verifier success, returned SQL row before commit, retry inference |
-| Differential-clock growth reserve `U` | Source-fixed 1,000,000 microseconds, admissible for production only with current independent evidence for the exact authority host and PostgreSQL route over every interval up to 300 seconds | caller/configured value, missing or stale evidence, another host/route, KMS/database evidence, an NTP label alone |
+| Differential-clock growth reserve `U` | Source-fixed 1,000,000 microseconds, admissible for production only with current independent evidence for the exact authority host and PostgreSQL route over the complete credential-relevant interval without a real-duration cap | a repeating 300-real-second window, caller/configured value, missing or stale evidence, another host/route, KMS/database evidence, an NTP label alone |
 | Complete-authentication reserve `T` | Source-fixed 61,000,000 microseconds of maximum authority-clock advance from verifier retrieval through `AuthenticationOk` or timeout, admissible only when current independent evidence binds the exact PostgreSQL build, route, hooks, timer topology, and `authentication_timeout <= 60 seconds` | client or configured reserve, connect timeout, statement timeout, an unverified/default setting, another server or route |
 | PostgreSQL timestamp quantum `Q` | Source-fixed 1 microsecond matching PostgreSQL 17.10 `timestamptz` precision and compensating for its strict `VALID UNTIL < database_now` expiry comparison | zero, caller precision, host-language datetime assumption, changing the comparison premise without source evidence |
 | Live database deadline origin `H3` | Same-connection `_observe_nonregressing_access_clock()` result accepted only when `clock_regressed` is exactly false, proving the returned value is that connection's live `clock_timestamp()` | cached preflight `H1`, stored sequence high-water, direct sequence read, a regressed-clock result, later database observation |
@@ -249,6 +304,7 @@ cannot supply these distinct authority-host/database/timer premises.
 | PostgreSQL role deadline | `H3 + safe_remaining`, derived after `H3`, then `A3`, and retained unchanged for every exact-state comparison | authority-domain timestamp chosen directly, caller deadline, recomputation on commit ambiguity, a later database observation |
 | Closure provenance | The sole module-private carrier construction after `_close_login(...)` returns successfully | a public constructor, imported private class, caller-created lookalike, serialized token |
 | Positive output entry | A future trusted composition invoking this runner or a separately approved source-pinned private-carrier composition | accepting a caller-supplied nominal result |
+| Production lifecycle reachability | A separately approved composition after exact deployment evidence; until then, authenticated fixed-root reachability proves the lifecycle module is absent from every production path | a runner-name-only scan, private test seam, `_public_run`, dependency carrier, nominal test filename, alias, re-export, or module import plus `getattr` |
 
 No new durable authority, database column, signature, token, registry, or
 alternate result constructor is introduced.
@@ -337,13 +393,19 @@ database is already at `1`, leaving `0.999999` seconds rather than the
 zero-delay `2.999999` seconds. Delay still moves the absolute cutoff earlier
 by one second and shortens the interval from role creation by two seconds.
 
-The post-`A3` bound is exact. The external deployment premise is stated over
-real instants, not over the two sampled values. For every pair `r1 <= r2`
-whose interval is no longer than 300 seconds, independent evidence for the
-exact authority host and selected PostgreSQL route must prove:
+The post-`A3` proof is conditional on a complete-interval deployment premise,
+not a repeating short-window premise. Let the credential-relevant interval
+begin at the real instant `r2` where `A3` is sampled. It continues for as long
+as the exact role exists or any password exchange that retrieved its verifier
+remains unresolved. Successful closure ends it only after the role is absent
+and every such exchange has reached `AuthenticationOk`, refused, observed EOF,
+or timed out. A lifecycle stall or crash that leaves the role present leaves
+the interval open. For every later real instant `t` in that interval,
+irrespective of its real duration, independent evidence for the exact authority
+host and selected PostgreSQL route must prove:
 
 ```text
-(A(r2) - H(r2)) - (A(r1) - H(r1)) <= U
+(A(t) - H(t)) - (A(r2) - H(r2)) <= U
 U = 1_000_000 microseconds
 ```
 
@@ -351,9 +413,8 @@ Let the database observation occur at real instant `r1`, so `H3 = H(r1)`, and
 the later authority observation occur at `r2`, so `A3 = A(r2)`. Define the
 observed conservative divergence as `G3 = A3 - H3`. Because the accepted
 database clock is nonregressing, `H(r2) >= H3`, and therefore
-`G3 >= A(r2) - H(r2)`. Applying the interval premise from `r2` to every later
-relevant instant `t` through authority expiry, verifier retrieval, or the
-latest possible password-authentication result derives:
+`G3 >= A(r2) - H(r2)`. Applying the complete-interval premise derives for
+every relevant `t`:
 
 ```text
 (A(t) - H(t)) - G3 <= U
@@ -398,7 +459,18 @@ precision. At authority expiry, the same differential bound gives
 ceiling is the numeric ceiling used by another security-audit cross-clock
 decision, is one three-hundredth of the accepted maximum approval lifetime,
 and leaves no path to silently accept a larger operational skew. Evidence for
-that other clock pair does not transfer here.
+that other clock pair does not transfer here. The maximum approval lifetime
+does not cap real elapsed time, so the `U` premise never resets after 300 real
+seconds.
+
+A hostile slow-clock sequence makes that distinction executable. With seconds
+`A3 = H3 = 0`, `E = 300`, `U = 1`, `T = 61`, and `Q = 0.000001`, the deadline
+is `D = 237.999999`. Over 19,000 real seconds, clocks ending at `A = 300.1` and
+`H = 237.9` grow divergence by only about `0.9821` seconds in every 300-real-
+second window, yet total divergence grows by `62.2` seconds and PostgreSQL can
+retrieve the verifier after authority expiry. Decision v6 rejects that
+deployment because complete-interval growth exceeds `U`; a sequence of
+individually acceptable 300-second windows is not admissible evidence.
 
 `T` is also a maximum admissible authority-domain bound, not a claim that the
 documented PostgreSQL default is sufficient by itself. It admits only an exact
@@ -419,8 +491,9 @@ PostgreSQL accepts equality at `VALID UNTIL`; it is not a configurable safety
 margin.
 
 Repository policy in `deployment/postgresql/version_policy.py` fixes supported
-server version `17.10` and `server_version_num = 170010`. The design evidence
-is therefore pinned to the matching upstream PostgreSQL tag `REL_17_10`, commit
+server version `17.10`, `server_version_num = 170010`, and accepted artifact
+identity `17.10 (Debian 17.10-1.pgdg13+1)`. The Phase A semantic model is
+pinned to upstream tag `REL_17_10`, commit
 [`25c49f3a4a742ba283f5cc43cc7f1d361552e917`](https://github.com/postgres/postgres/commit/25c49f3a4a742ba283f5cc43cc7f1d361552e917).
 In [`src/backend/libpq/crypt.c::get_role_password`](https://github.com/postgres/postgres/blob/25c49f3a4a742ba283f5cc43cc7f1d361552e917/src/backend/libpq/crypt.c),
 PostgreSQL performs the strict expiry comparison. In
@@ -434,23 +507,28 @@ disables it only after that function returns. The lifecycle's startup option
 it is independent of, and cannot shorten or replace, the server authentication
 timer. PostgreSQL 17.10 documentation defines `timestamptz` resolution as one
 microsecond and `authentication_timeout` as the maximum time allowed to
-complete client authentication. These references establish the Phase A model;
-they do not replace future evidence binding the exact deployed build,
-configuration, route, and timer behavior.
+complete client authentication. Upstream `REL_17_10` establishes the Phase A
+semantic model; the artifact accepted by repository version policy is the pgdg
+Debian build of that release, not the upstream source tree itself. Phase B live
+evidence must run against that exact pgdg artifact and verify that its packaging
+patch series leaves the three named functions and timer behavior unchanged.
 
 Future deployment evidence must be independently controlled and verifiable.
-It binds the exact lifecycle authority host; PostgreSQL 17.10 build, system,
-HBA route, loaded authentication hooks, effective `authentication_timeout`,
-authentication-timer slot behavior, post-authentication query timeout, and
-timer source; clock and virtualization topology; measurement error;
-observation interval; issuance time; and evidence expiry. It must conclude
-both `U <= 1_000_000` microseconds over every interval up to 300 seconds and
-`A(c) - A(s) <= 61_000_000` microseconds for every password exchange admitted
-by a server timeout no greater than 60 seconds. Missing fields, expired
-evidence, server upgrade, hook or configuration change, topology change,
-ambiguous measurement error, or a larger result makes deployment ineligible.
-This PR adds no evidence loader or runtime bypass; its absence is enforced by
-the five-path boundary and the no-production-caller architecture rule.
+It binds the exact lifecycle authority host; exact accepted pgdg PostgreSQL
+artifact and packaging patch series; system, HBA route, loaded authentication
+hooks, effective `authentication_timeout`, authentication-timer slot behavior,
+post-authentication query timeout, and timer source; clock and virtualization
+topology; measurement error; observation scope; issuance time; and evidence
+expiry. It must conclude both that complete-interval differential growth never
+exceeds `U = 1_000_000` microseconds while the role or a retrieved exchange
+remains, without a real-duration cap, and that `A(c) - A(s) <= 61_000_000`
+microseconds for every password exchange admitted by a server timeout no
+greater than 60 seconds. Per-window measurements, missing fields, expired
+evidence, server or packaging revision, hook or configuration change, topology
+change, ambiguous measurement error, or a larger result makes deployment
+ineligible. This PR adds no evidence loader or runtime bypass; its absence is
+enforced by the five-path boundary and production-reachability architecture
+rule.
 
 The exact derived database timestamp, not the signed authority timestamp, is
 used in `CREATE ROLE ... VALID UNTIL`. All role settings and the sole
@@ -469,17 +547,17 @@ deployment eligibility instead of widening a source constant.
 This security bound does not guarantee availability. The exact reserve floor
 is `U + T + Q = 62_000_001` microseconds, or `62.000001` seconds. Because
 consumption is already acknowledged, `raw_remaining <= 62.000001` seconds is
-a consumed failure and creates no role. Even a maximum 300-second request can
-leave at most `237.999999` seconds usable after `A3`, and every preceding
-operation reduces that window. PostgreSQL's authentication timeout bounds only
-password authentication, not role creation, connection setup before its server
-timer, export execution, or output delivery. This paragraph is the
-authoritative operational guidance for this correction: request the full
-allowed 300-second lifetime and invoke the approved lifecycle promptly. Phase
-B must demonstrate the exhausted-reserve outcome. No additional operations or
-deployment-document path is added; production remains non-deployable until a
-separate follow-up supplies and approves the exact clock and authentication
-evidence.
+a consumed failure and creates no role. Even a maximum 300-second authority-
+domain request can leave at most `237.999999` seconds usable after `A3`, and
+every preceding operation reduces that window. PostgreSQL's authentication
+timeout bounds only password authentication, not role creation, connection setup
+before its server timer, export execution, or output delivery. This paragraph
+is the authoritative operational guidance for this correction: request the full
+allowed 300-second authority-domain lifetime and invoke the approved lifecycle
+promptly. Phase B must demonstrate the exhausted-reserve outcome. No additional
+operations or deployment-document path is added; production remains non-
+deployable until a separate follow-up supplies and approves the exact clock and
+authentication evidence.
 
 The expected derived role shape is retained across LOGIN commit ambiguity so
 the existing exact-state resolution, closure, and quarantine behavior remains
@@ -539,9 +617,15 @@ import the private type.
   SQL. Every later exact-state comparison uses the identical derived value.
 - `TELC-005` — Production composition is ineligible unless current independent
   evidence for the exact authority host and PostgreSQL 17.10 route proves both
-  that authority-minus-database divergence grows by at most `U` and that the
-  exact server timeout and timer topology limit authority-clock advance from
-  verifier retrieval through `AuthenticationOk` or timeout to at most `T`.
+  that authority-minus-database divergence grows by at most `U` throughout the
+  complete credential-relevant interval without a real-duration cap and that
+  the exact server timeout and timer topology limit authority-clock advance
+  from verifier retrieval through `AuthenticationOk` or timeout to at most
+  `T`. Until that evidence and a separate composition decision exist, the
+  authenticated architecture snapshot proves that the lifecycle module is
+  absent from every fixed production-root reachability path; only the exact
+  focused test may reference an execution entry, and it must not itself be
+  production-reachable.
   Under those premises, every successful password authentication reaches
   `AuthenticationOk` strictly before authority expiry, including a verifier
   retrieved at exact `VALID UNTIL` equality, forward authority steps, unequal
@@ -575,15 +659,20 @@ invariant remains binding.
 | TELC-005 | Retrieve the verifier at exact corrected equality `H(s) = D`, delay SCRAM near the exact server authentication timeout, and advance authority by the admissible bound. | Equality may retrieve the verifier, but every successful exchange reaches `AuthenticationOk` with `A(c) <= E - Q`; a response exceeding the server timeout fails and creates no authenticated session. |
 | TELC-005 | Crash or close the lifecycle client after verifier retrieval while SCRAM is in progress. | No page is exposed and no authenticated export session survives; the server observes EOF or its authentication timeout, while any exact stale LOGIN retains the existing readiness and closure-only posture. |
 | TELC-005 | After `A3`, step the authority clock forward, advance authority faster than the database, or grow divergence beyond `U`. | Within-`U` cases remain bounded by the subtracted reserve; beyond-`U`, missing-evidence, stale-evidence, and route-mismatch cases keep production composition ineligible and never widen the constant. |
+| TELC-005 | Over 19,000 real seconds use two nonregressing slow clocks that satisfy `U` in every 300-real-second window but grow total divergence by `62.2` seconds while the role remains. | Complete-interval evidence fails and production remains ineligible. A repeating-window implementation or model fails. |
+| TELC-005 | From a production root, directly import the private test seam, `_public_run`, `_execute`, or `_Dependencies`; import them through an alias or re-export; import a nominal `test_*.py` module that reaches the lifecycle; or import the lifecycle module and resolve a runner with `getattr`. | Authenticated production reachability reaches the lifecycle module and the architecture gate fails, regardless of symbol spelling or test-like path. |
 | TELC-006 | Raise the LOGIN commit after role SQL. | The private creation outcome reports unacknowledged commit and carries the exact derived expected role into observation and closure; no recovery comparison uses signed expiry. |
 | TELC-006 | Hold the access-clock lock when the in-transaction `H3` observation runs. | Fixed consumed failure with rollback, no role, and no lock-order inversion with catalog observation. |
 | TELC-006 | Raise dependency exceptions containing carriers, routes, password, page, and derived timestamps at each corrected boundary. | Existing fixed non-sensitive public outcomes only. |
 | TELC-007 | Require output custody, SQL migration, provider evidence, or another role capability to close a finding. | Stop and create a new decision or Follow-up; do not expand this PR. |
 
-Arbitrary in-process construction through reflection is not a supported
-production entry under the retained decision-v1 threat model. Repository source
-that directly imports, names, or constructs the private carrier is in scope and
-is mechanically rejected.
+Arbitrary runtime injection through reflection is not a supported production
+entry under the retained decision-v1 threat model. Checked-in source that uses
+an ordinary module import followed by `getattr`, aliasing, or re-export is a
+supported composition path: its import edge is in the authenticated graph and
+is mechanically rejected when production-reachable. Repository source that
+directly imports, names, or constructs the private carrier also remains in
+scope and is rejected.
 
 ## 9. Proposed architecture and smallest change
 
@@ -604,23 +693,32 @@ acknowledgement is absent; recovery never recomputes it. Existing role SQL,
 settings, membership, export invocation, closure, structural verification,
 and fixed public exceptions remain direct.
 
-The architecture checker extends its existing lifecycle rule instead of
-creating a new framework. It checks class inventory, export surface, sole
+The architecture checker extends its authenticated source-snapshot and import-
+reachability framework. It checks class inventory, export surface, sole
 construction ordering, the exact `H3 -> A3 -> derive -> role SQL` source
-ordering and provenance, all three fixed reserves and the exact formula,
-recovery use of the returned expected role, and repository-wide private-symbol
-references using the already authenticated Python source snapshot. Both the
-private-symbol rule and runner-composition rule are limited to Python AST
-`Name`, `Attribute`, and `ImportFrom` references; calls are covered through
-their `Name` or `Attribute` function expression. String constants, including
-the checker's own inventory strings, do not count as references. For these
-rules, a test module is identified only when its repository-relative path has
-a `tests` component or its basename matches `test_*.py`; classification does
-not depend on the checker's current `TEST_GLOBS`. The runner rule proves that
-no other checked-in non-test module imports, references, or calls
-`SecurityAuditBreakGlassRunner`; this PR cannot create the production
-composition whose external clock and authentication-timer evidence is still
-absent.
+ordering and provenance, all three fixed reserves and the exact formula, and
+recovery use of the returned expected role. The existing fixed production roots
+and authenticated import graph must prove that
+`deployment.postgresql.security_audit_break_glass` is absent from
+`production_reachability`. Any direct or indirect import edge that makes the
+lifecycle module production-reachable fails before symbol analysis.
+
+The only permitted external module with any import edge to the lifecycle module
+or lifecycle execution reference is the exact repository path
+`kernel/tests/test_security_audit_break_glass.py`. That exception is valid only
+while the focused test is itself absent from production reachability; no
+basename or generic `tests` component grants an exemption. Every other module
+is rejected for any lifecycle-module import. Execution-surface checks
+additionally cover, at minimum, import-bound or lifecycle-module-attributed
+references to the public runner, `_run_security_audit_break_glass_for_testing`,
+`_public_run`, `_execute`, `_close_expired`, and the `_Dependencies` test
+carrier through `Import`, `ImportFrom`, `Name`, or `Attribute` nodes after alias
+and re-export resolution. An ordinary module import followed by `getattr` fails
+because the import edge itself is forbidden, so concatenated attribute strings
+cannot bypass the rule. String constants and unrelated local definitions with
+the same spelling do not count as lifecycle execution references. This PR
+therefore cannot create or expose a production composition before external
+clock and authentication evidence is separately approved.
 
 The lifecycle module is already 1,205 physical lines against its 1,250-line
 architecture budget. Phase B may raise only that exact module budget in
@@ -643,10 +741,12 @@ The focused test module replaces the arbitrary public-construction assertion
 with a real-lifecycle result assertion and adds hostile raw-regression and
 lagging-database authentication cases. It injects elapsed time after the `H3`
 read and before `A3`; forward authority steps and unequal rates after `A3`;
-exactly-at-`U`, beyond-`U`, combined-reserve exhaustion, the former unguarded
-equality deadline, exact corrected equality, delayed SCRAM success and timeout,
-in-flight client crash, regressed-live-clock, ambiguous-commit, and held-
-access-clock-lock cases. An isolated live server may use a shorter known
+exactly-at-`U`, beyond-`U`, slow clocks whose per-300-second growth is admissible
+but complete-interval growth exceeds `U`, combined-reserve exhaustion, the
+former unguarded equality deadline, exact corrected equality, delayed SCRAM
+success and timeout, in-flight client crash, regressed-live-clock, ambiguous-
+commit, held-access-clock-lock, and every production-reachability bypass named
+above. An isolated live server may use a shorter known
 `authentication_timeout` to exercise the timeout path without changing the
 source-fixed `T`; the deterministic model proves the accepted 61-second bound.
 The canonical inventory changes only by the mechanically collected test-count
@@ -662,9 +762,14 @@ This is the minimum coherent correction because:
   check; the remaining interval must be translated into PostgreSQL's domain;
 - translating without subtracting `U` assumes future clock-offset equality
   that the accepted trust model does not provide;
+- bounding `U` only in repeating 300-real-second windows leaves a slowly
+  progressing persistent role outside the proof domain;
 - omitting `Q` treats PostgreSQL's accepted equality as expired;
 - omitting `T` confuses verifier retrieval with completed password
-  authentication; and
+  authentication;
+- scanning only the public runner's symbol leaves callable private execution
+  seams and production-reachable nominal tests outside the composition gate;
+  and
 - a new token, validator, service, database column, or migration would add
   authority not required by the retained threat model.
 
@@ -681,8 +786,10 @@ Sources of truth remain:
    eligibility prerequisites;
 5. PostgreSQL 17.10 `REL_17_10` source semantics for password-expiry equality
    and complete password authentication;
-6. acknowledged consumption commit for first use; and
-7. complete role absence plus structural verification for closure.
+6. the authenticated fixed-root import graph for absence of production
+   lifecycle composition;
+7. acknowledged consumption commit for first use; and
+8. complete role absence plus structural verification for closure.
 
 There is one deadline translation, one combined reserve expression, one
 authoritative observation order, and one positive result construction. The
@@ -710,9 +817,11 @@ corrected here.
 ### 11.1 Primary trust boundary
 
 The primary trust boundary is the temporary dual-approved security-audit
-export lifecycle, specifically positive-result provenance and the bounded
-new-authentication interval between approval verification and credential
-closure.
+export lifecycle, specifically positive-result provenance, the bounded new-
+authentication interval between approval verification and credential closure,
+and the repository-composition gate that prevents any lifecycle execution entry
+from becoming production-reachable before separate deployment evidence and
+composition approval.
 
 ### 11.2 Exact maximum path envelope
 
@@ -727,7 +836,7 @@ The draft and any authorized Phase B implementation are limited to exactly:
 Phase A changes only path 1. The technical Phase B allowlist may equal or
 narrow this envelope but may not add another path.
 
-There is no cross-boundary exception in version 5. Migration 4 and temporary
+There is no cross-boundary exception in version 6. Migration 4 and temporary
 credential authority were already merged by decision v1; this PR changes only
 the lifecycle's enforcement of the approved contract and its necessary
 mechanical conformance evidence.
@@ -757,17 +866,28 @@ remain binding. Evidence that arbitrary in-process code execution must be in
 scope would invalidate module privacy and require a cryptographic or
 process-isolated admission design. Evidence that PostgreSQL authenticates
 against a clock other than the observed selected database domain would require
-a new deadline design. A change from the pinned PostgreSQL `REL_17_10` source
-semantics for expiry equality, authentication-timer coverage, or the point
-represented by `AuthenticationOk` requires a new decision. Evidence that the
-exact authority host and PostgreSQL route cannot
-keep differential growth at or below one second over every 300-second interval,
-or cannot bound complete-authentication authority advance at or below 61
-seconds with `authentication_timeout <= 60 seconds`, makes production
-deployment ineligible and requires a new decision; it never widens `U` or `T`.
-Any host, route, server build, authentication hook, configuration,
-virtualization, timer, or time-sync topology change invalidates predecessor
-evidence until independently renewed.
+a new deadline design.
+
+Any change to `SUPPORTED_POSTGRESQL_VERSION`,
+`SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM`, or
+`SUPPORTED_POSTGRESQL_SERVER_VERSION` in
+`deployment/postgresql/version_policy.py` requires re-verification of
+`get_role_password`, `CheckPWChallengeAuth`, and `PerformAuthentication` against
+the new upstream release and accepted packaging patch series. A semantic change
+to expiry equality, authentication-timer coverage, or the point represented by
+`AuthenticationOk` requires a new decision. A packaging revision, server build,
+host, route, authentication hook, configuration, virtualization, timer, or
+time-sync topology change invalidates predecessor live evidence until
+independently renewed.
+
+Evidence that the exact authority host and PostgreSQL route cannot keep total
+differential growth at or below one second throughout the complete credential-
+relevant interval, without a real-duration cap, or cannot bound complete-
+authentication authority advance at or below 61 seconds with
+`authentication_timeout <= 60 seconds`, makes production deployment ineligible
+and requires a new decision; it never widens `U` or `T`. Any production-root
+reachability to the lifecycle module before a separate approved composition is
+also an invalid state and fails the architecture gate.
 
 ## 13. Traceability and verification
 
@@ -777,7 +897,7 @@ evidence until independently renewed.
 | TELC-002 | private current-approval carrier and advance function before `_consume` | `A2 < A1` | fixed refusal, no consume row, no role | focused deterministic live lifecycle test |
 | TELC-003 | currentness advance inside role-creation transaction | `A3 < A2` after consume commit | fixed consumed failure, one consume row, no role/export | focused deterministic live lifecycle test |
 | TELC-004 | accepted-live-`H3` observation, `A3` advance, fixed-`U/T/Q` deadline helper, and expected-role creation outcome | regressed/cached H3; reversed order; injected delay; combined-reserve exhaustion; leading, lagging, equality, and unrepresentable calculations | exact `H3 -> A3 -> derive -> role SQL` provenance; exact three constants and formula; same derived value in ambiguity resolution | architecture provenance/order check, deterministic delay and pure bound tests, live catalog and equality observations |
-| TELC-005 | fixed `U/T/Q` reserves and translated PostgreSQL `VALID UNTIL`; no production runner composition; exact clock, server, configuration, and timer deployment premises | authority forward step; faster authority rate; exactly-at/beyond-`U`; exact-equality verifier retrieval; delayed/timeout/crashed SCRAM; missing/stale/mismatched evidence; add a production caller | every successful authentication reaches `AuthenticationOk` strictly before authority expiry; over-bound exchange refuses; current repository cannot compose production use | hostile deterministic clock/timer model, live raw-SCRAM probes, architecture caller check, future independent deployment-evidence audit |
+| TELC-005 | fixed `U/T/Q` reserves and translated PostgreSQL `VALID UNTIL`; complete-interval clock premise; no fixed-root production reachability; exact clock, pgdg server, configuration, and timer premises | authority forward step; faster or slowly progressing clocks; per-window-pass/complete-interval-fail growth; exact-equality verifier retrieval; delayed/timeout/crashed SCRAM; missing/stale/mismatched evidence; direct/private/aliased/reflected or nominal-test production entry | every successful authentication reaches `AuthenticationOk` strictly before authority expiry; over-bound evidence is ineligible; authenticated import graph cannot compose production use | hostile full-interval clock/timer model, live raw-SCRAM probes, production-reachability and execution-surface architecture checks, future independent deployment-evidence audit |
 | TELC-006 | private creation outcome; existing public exception mapping, export, closure, and quarantine paths | ambiguous commit, held access-clock lock, dependency canaries | derived role survives ambiguity; no lock inversion; fixed non-rendering errors; existing lifecycle regressions pass | focused suite plus full Kernel baselines |
 | TELC-007 | Git diff path check, lifecycle module budget, and canonical inventory | any sixth path, budget above 1,325, changed global function cap, or unregenerated count | exact five-path diff, bounded lifecycle growth, unchanged other budgets, collected inventory equality | package contract plus exact path and budget comparison |
 
@@ -789,22 +909,31 @@ Required Phase B verification:
 - architecture negative evidence for public result restoration, external
   private-symbol reference, duplicate construction, construction before
   closure, cached/regressed H3, missing or changed `U`, `T`, or `Q`, altered
-  combined formula, `A3 -> H3` order, recovery recomputation, or false
-  positives from string constants, plus any non-test production import,
-  reference, or call to `SecurityAuditBreakGlassRunner`; both symbol rules
-  inspect only AST `Name`, `Attribute`, and `ImportFrom`, and tests are
-  classified by a `tests` path component or `test_*.py` basename independently
-  of `TEST_GLOBS`;
+  combined formula, `A3 -> H3` order, recovery recomputation, or false positives
+  from string constants and unrelated same-spelling local definitions;
+- authenticated import-graph evidence that the lifecycle module is absent from
+  fixed production-root reachability, with the exact focused test as the sole
+  external execution-reference exception only while it is not production-
+  reachable; negative rewrites must cover direct imports of
+  `SecurityAuditBreakGlassRunner`, `_run_security_audit_break_glass_for_testing`,
+  `_public_run`, `_execute`, `_close_expired`, and `_Dependencies`, plus an
+  otherwise unlisted lifecycle-module import, aliasing, re-export, module import
+  followed by `getattr`, a production root importing a nominal `test_*.py` or
+  `tests` module, and a production root importing the focused test itself;
 - deterministic hostile delay evidence that advances time between `H3` and
   `A3` and proves the lagging-database cutoff moves earlier by `d` and the
   interval from role creation shrinks by `2d`;
 - deterministic forward-step and relative-rate evidence at, below, and above
-  `U`; authority-time advance at, below, and above `T`; combined-reserve
-  exhaustion at the exact `62.000001`-second floor; maximum-window arithmetic
-  leaving no more than `237.999999` seconds after `A3`; and exact arithmetic
-  for `Q`;
-- live PostgreSQL 17.10 evidence against the `REL_17_10` functions named in
-  section 6.2 that the former no-`Q` equality deadline refuses,
+  `U` across the complete credential-relevant interval without a duration cap;
+  the 19,000-real-second slow-clock counterexample must pass every 300-second
+  window but fail complete-interval eligibility; authority-time advance at,
+  below, and above `T`; combined-reserve exhaustion at the exact `62.000001`-
+  second floor; maximum-window arithmetic leaving no more than `237.999999`
+  seconds after `A3`; and exact arithmetic for `Q`;
+- live evidence against the exact accepted PostgreSQL
+  `17.10 (Debian 17.10-1.pgdg13+1)` artifact, including a verified packaging-
+  patch comparison to the `REL_17_10` functions named in section 6.2, that the
+  former no-`Q` equality deadline refuses,
   corrected equality can retrieve the verifier, delayed SCRAM admitted near
   the exact configured authentication bound completes before authority expiry,
   a delay beyond the bound times out, and an in-flight client crash creates no
@@ -825,8 +954,8 @@ Required Phase B verification:
 - exact base-to-head five-path equality;
 - an explicit report that differential-clock and complete-authentication
   deployment evidence is not supplied by this PR and production composition
-  remains unauthorized and non-deployable pending the separate production-
-  evidence follow-up;
+  remains unreachable, unauthorized, and non-deployable pending the separate
+  production-evidence and composition follow-ups;
 - two clean full Kernel baseline runs against the same isolated PostgreSQL
   clusters if the focused live suite passes; and
 - hosted review, conformance, native amd64, native arm64, and canonical native
@@ -847,7 +976,10 @@ Current review disposition:
   post-`A3` authority-minus-database divergence; and the decision-v4 false
   equality and pre-SCRAM-expiry-check assumptions; and the initial decision-v5
   source-provenance Blocker, now pinned to the supported PostgreSQL
-  `REL_17_10` tag and exact authentication functions.
+  `REL_17_10` tag and exact authentication functions; and the corrected
+  decision-v5 300-real-second proof-domain gap and public-runner-only
+  composition rule, now replaced by the complete-interval premise and fixed-
+  root lifecycle-module reachability prohibition.
 - Whole-card review clarifications incorporated: commit-ambiguity carrier
   return semantics; the exact live-`clock_timestamp()` premise; database-ahead
   derivation provenance; lagging-database `2d` delay cost and consumed-failure
@@ -858,6 +990,9 @@ Current review disposition:
   independence, the exact availability floor and its RFC-local operator
   guidance, client `connect_timeout` limits, the interval-form divergence
   premise, and the required under-cap `_create_login(...)` helper split.
+  Decision-v6 clarifications distinguish upstream `REL_17_10` from the accepted
+  pgdg artifact and make repository version-policy changes the mechanically
+  checkable source-semantic re-verification trigger.
 - Remaining Blockers: Phase A review pending.
 - Follow-ups: unchanged decision-v1 output custody, broader crash-operation
   evidence beyond the required in-flight authentication case, final hostile
@@ -875,7 +1010,7 @@ The only valid approval form is the entire visible text of a later task-user
 message in this same Codex task:
 
 ```text
-I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001 version 5.
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-TEMPORARY-EXPORT-LIFECYCLE-001 version 6.
 ```
 
 No generic approval, shortened version label, GitHub activity, review result,
