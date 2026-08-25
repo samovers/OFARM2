@@ -76,6 +76,43 @@ Only demonstrated Blockers delay a merge. Once the acceptance criteria pass
 and no Blocker remains, merge the pull request. New ideas, Preferences, and
 non-blocking hardening become Follow-ups and do not reopen review.
 
+## Review-before-baseline sequencing (binding for agents)
+
+Treat the full hosted conformance and native-verifier workflows as expensive
+baselines. Do not start, monitor, diagnose, or rerun them for a pull-request
+head until an exact-head content review reports zero Blockers.
+
+Use this fail-closed sequence:
+
+1. Every new pull-request head starts in `REVIEW_PENDING`, including a head
+   produced only by documentation or review-fix commits.
+2. While review is pending or reports a Blocker, run only mandatory and cheap
+   local checks, push the correction, and obtain the next exact-head review.
+   Automatically started expensive jobs may finish unattended, but an agent
+   must not spend time monitoring, diagnosing, or retrying them.
+3. A zero-Blocker exact-head GitHub review authorizes the expensive baseline
+   only when its body ends with this exact footer, using the full reviewed
+   commit SHA:
+
+   ```text
+   OFARM2_BASELINE_ADMISSION
+   head=<FULL_COMMIT_SHA>
+   blockers=0
+   ```
+
+4. The full baseline workflow must verify that the review's recorded commit,
+   footer SHA, and current pull-request head are identical. A new commit makes
+   the previous review and all previous baseline results stale automatically.
+5. Present an approval card only after the exact same head has both the
+   zero-Blocker review and every required hosted baseline result. A main-branch
+   post-merge run is not a pull-request admission and remains automatic.
+
+Never add the admission footer to a review with a remaining Blocker. Do not use
+labels, earlier-head reviews, green results from another SHA, or agent memory as
+substitutes for the exact-head review event. This sequencing rule controls
+workflow timing only; it does not weaken any required verification or merge
+gate.
+
 ## Full design contract for high-risk trust-boundary work
 
 The full Phase A design contract in `TASK_PROMPT.md` is required when a task

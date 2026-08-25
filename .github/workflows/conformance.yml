@@ -4,11 +4,44 @@ name: conformance
 
 on:
   push:
-    branches: ["main", "m1/**"]
-  pull_request:
+    branches: ["main"]
+  pull_request_review:
+    types: [submitted]
 
 jobs:
+  baseline-admission:
+    name: exact-head review admission
+    if: >-
+      github.event_name == 'push' ||
+      contains(github.event.review.body, 'OFARM2_BASELINE_ADMISSION')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      eligible: ${{ steps.admission.outputs.eligible }}
+      target_sha: ${{ steps.admission.outputs.target_sha }}
+      reason: ${{ steps.admission.outputs.reason }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .baseline-admission-policy
+          persist-credentials: false
+      - name: Admit only main or an exact-head zero-Blocker review
+        id: admission
+        run: >-
+          python
+          .baseline-admission-policy/conformance/review_baseline_admission.py
+          --event-name "${GITHUB_EVENT_NAME}"
+          --event-path "${GITHUB_EVENT_PATH}"
+          --github-sha "${GITHUB_SHA}"
+          --github-output "${GITHUB_OUTPUT}"
+
   conformance:
+    needs: baseline-admission
+    if: needs.baseline-admission.outputs.eligible == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -16,6 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
+          ref: ${{ needs.baseline-admission.outputs.target_sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Authenticate and install the exact Buildx client
@@ -362,6 +396,8 @@ jobs:
           fi
 
   native-verifier:
+    needs: baseline-admission
+    if: needs.baseline-admission.outputs.eligible == 'true'
     name: native verifier (${{ matrix.architecture }})
     strategy:
       fail-fast: false
@@ -391,6 +427,9 @@ jobs:
       SOURCE_DATE_EPOCH: "0"
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ needs.baseline-admission.outputs.target_sha }}
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12.13"
@@ -551,7 +590,7 @@ jobs:
           --second-artifacts
           ".artifacts/native/${{ matrix.architecture }}/second"
           --platform "linux/${{ matrix.architecture }}"
-          --source-commit "${{ github.sha }}"
+          --source-commit "${{ needs.baseline-admission.outputs.target_sha }}"
           --output
           ".artifacts/native/${{ matrix.architecture }}/reproducibility.json"
       - name: Load and verify the authenticated clean native child
@@ -630,7 +669,7 @@ jobs:
             --reproducibility \
               ".artifacts/native/${{ matrix.architecture }}/reproducibility.json" \
             --platform "linux/${{ matrix.architecture }}" \
-            --source-commit "${{ github.sha }}" \
+            --source-commit "${{ needs.baseline-admission.outputs.target_sha }}" \
             --containerfile deployment/postgresql/ofarm_ed25519/Containerfile \
             --builder-id \
               "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}" \
@@ -660,13 +699,17 @@ jobs:
 
   native-verifier-index:
     name: native verifier canonical index
-    needs: native-verifier
+    needs: [baseline-admission, native-verifier]
+    if: needs.baseline-admission.outputs.eligible == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ needs.baseline-admission.outputs.target_sha }}
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12.13"
@@ -691,7 +734,7 @@ jobs:
               --reproducibility \
                 ".artifacts/native-fan-in/${architecture}/reproducibility.json" \
               --platform "linux/${architecture}" \
-              --source-commit "${{ github.sha }}" \
+              --source-commit "${{ needs.baseline-admission.outputs.target_sha }}" \
               --containerfile deployment/postgresql/ofarm_ed25519/Containerfile \
               --builder-id \
                 "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}" \
@@ -705,7 +748,7 @@ jobs:
               .artifacts/native-fan-in/verified/amd64/oci-evidence.json \
             --arm64-evidence \
               .artifacts/native-fan-in/verified/arm64/oci-evidence.json \
-            --source-commit "${{ github.sha }}" \
+            --source-commit "${{ needs.baseline-admission.outputs.target_sha }}" \
             --index-output \
               .artifacts/native-index/ofarm-ed25519.index.json \
             --evidence-output \
