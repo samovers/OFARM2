@@ -3915,6 +3915,9 @@ def test_evidence_publication_policy_is_transitively_authenticated():
     publication_path = (
         PACKAGE_ROOT / ".github/workflows/evidence-publication.yml"
     )
+    publication_policy_path = (
+        PACKAGE_ROOT / "conformance/evidence_publication_policy.py"
+    )
     admission_path = PACKAGE_ROOT / "conformance/review_baseline_admission.py"
     gate_path = PACKAGE_ROOT / ".github/workflows/review-baseline-gate.yml"
     conformance_workflow = conformance_path.read_text()
@@ -3934,6 +3937,10 @@ def test_evidence_publication_policy_is_transitively_authenticated():
         conformance_workflow,
         "OFARM_EVIDENCE_PUBLICATION_WORKFLOW_SHA256",
     ) == _digest(publication_path.read_bytes())
+    assert pinned_digest(
+        publication_workflow,
+        "OFARM_EVIDENCE_PUBLICATION_POLICY_SHA256",
+    ) == _digest(publication_policy_path.read_bytes())
     assert pinned_digest(
         publication_workflow,
         "OFARM_REVIEW_BASELINE_ADMISSION_SHA256",
@@ -3966,6 +3973,10 @@ def test_evidence_publication_policy_is_transitively_authenticated():
     assert "sha256sum --check --strict" in handoff_job
 
     for variable, relative_path in (
+        (
+            "OFARM_EVIDENCE_PUBLICATION_POLICY_SHA256",
+            "conformance/evidence_publication_policy.py",
+        ),
         (
             "OFARM_REVIEW_BASELINE_ADMISSION_SHA256",
             "conformance/review_baseline_admission.py",

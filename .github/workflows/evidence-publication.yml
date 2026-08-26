@@ -18,7 +18,19 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  GIT_CONFIG_COUNT: "2"
+  GIT_CONFIG_GLOBAL: /dev/null
+  GIT_CONFIG_KEY_0: core.hooksPath
+  GIT_CONFIG_KEY_1: core.fsmonitor
+  GIT_CONFIG_NOSYSTEM: "1"
+  GIT_CONFIG_SYSTEM: /dev/null
+  GIT_CONFIG_VALUE_0: /dev/null
+  GIT_CONFIG_VALUE_1: "false"
+  GIT_OPTIONAL_LOCKS: "0"
+  GIT_PAGER: cat
   OFARM_PUBLICATION_POLICY_SHA: ${{ github.workflow_sha }}
+  OFARM_EVIDENCE_PUBLICATION_POLICY_SHA256: >-
+    sha256:023b4704248811b375fb899ddd25a0222ac21a9d23a9f013820b8f7e10417cb2
   OFARM_REVIEW_BASELINE_ADMISSION_SHA256: >-
     sha256:f7ede964bd1a7d9a77ab19064e329c4805ff785c8d5e31933914f4a201211fff
   OFARM_REVIEW_BASELINE_GATE_WORKFLOW_SHA256: >-
@@ -50,11 +62,14 @@ jobs:
           ref: ${{ env.OFARM_PUBLICATION_POLICY_SHA }}
           path: .publication-policy
           persist-credentials: false
+          set-safe-directory: false
       - name: Authenticate the immutable publication policy
         run: |
           test "$(git -C .publication-policy rev-parse HEAD)" = \
             "${OFARM_PUBLICATION_POLICY_SHA}"
-          printf '%s  %s\n%s  %s\n' \
+          printf '%s  %s\n%s  %s\n%s  %s\n' \
+            "${OFARM_EVIDENCE_PUBLICATION_POLICY_SHA256#sha256:}" \
+            ".publication-policy/conformance/evidence_publication_policy.py" \
             "${OFARM_REVIEW_BASELINE_ADMISSION_SHA256#sha256:}" \
             ".publication-policy/conformance/review_baseline_admission.py" \
             "${OFARM_REVIEW_BASELINE_GATE_WORKFLOW_SHA256#sha256:}" \
@@ -144,16 +159,21 @@ jobs:
       issues: read
       pull-requests: read
     steps:
+      - name: Refuse attempt-ambiguous publisher reruns
+        run: test "$GITHUB_RUN_ATTEMPT" = 1
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           ref: ${{ env.OFARM_PUBLICATION_POLICY_SHA }}
           path: .publication-policy
           persist-credentials: false
+          set-safe-directory: false
       - name: Authenticate the immutable publication policy
         run: |
           test "$(git -C .publication-policy rev-parse HEAD)" = \
             "${OFARM_PUBLICATION_POLICY_SHA}"
-          printf '%s  %s\n%s  %s\n' \
+          printf '%s  %s\n%s  %s\n%s  %s\n' \
+            "${OFARM_EVIDENCE_PUBLICATION_POLICY_SHA256#sha256:}" \
+            ".publication-policy/conformance/evidence_publication_policy.py" \
             "${OFARM_REVIEW_BASELINE_ADMISSION_SHA256#sha256:}" \
             ".publication-policy/conformance/review_baseline_admission.py" \
             "${OFARM_REVIEW_BASELINE_GATE_WORKFLOW_SHA256#sha256:}" \
@@ -225,30 +245,54 @@ jobs:
           test "${OBSERVED_SOURCE_RUN}" = "${EXPECTED_SOURCE_RUN}"
           test "${OBSERVED_SOURCE_POLICY}" = "${EXPECTED_SOURCE_POLICY}"
           test "${OBSERVED_SOURCE_POLICY}" = "${OFARM_PUBLICATION_POLICY_SHA}"
-      - name: Download provisional conformance evidence by artifact ID
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          artifact-ids: ${{ steps.publisher-start.outputs.conformance_artifact_id }}
-          path: ${{ runner.temp }}/ofarm-publication-input/conformance
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.publisher-start.outputs.source_run_id }}
-      - name: Download provisional amd64 evidence by artifact ID
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          artifact-ids: ${{ steps.publisher-start.outputs.native_amd64_artifact_id }}
-          path: ${{ runner.temp }}/ofarm-publication-input/native/amd64
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.publisher-start.outputs.source_run_id }}
-      - name: Download provisional arm64 evidence by artifact ID
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          artifact-ids: ${{ steps.publisher-start.outputs.native_arm64_artifact_id }}
-          path: ${{ runner.temp }}/ofarm-publication-input/native/arm64
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.publisher-start.outputs.source_run_id }}
+      - name: Securely download and extract provisional conformance evidence
+        env:
+          ARTIFACT_DIGEST: ${{ steps.publisher-start.outputs.conformance_artifact_digest }}
+          ARTIFACT_ID: ${{ steps.publisher-start.outputs.conformance_artifact_id }}
+          OFARM_ARTIFACT_TOKEN: ${{ github.token }}
+        run: >-
+          /usr/bin/python3
+          .publication-policy/conformance/evidence_publication_policy.py
+          download
+          --api-url "${GITHUB_API_URL}"
+          --repository "${GITHUB_REPOSITORY}"
+          --artifact-name conformance-provisional
+          --artifact-id "${ARTIFACT_ID}"
+          --artifact-digest "${ARTIFACT_DIGEST}"
+          --output-directory
+          "${RUNNER_TEMP}/ofarm-publication-input/conformance"
+      - name: Securely download and extract provisional amd64 evidence
+        env:
+          ARTIFACT_DIGEST: ${{ steps.publisher-start.outputs.native_amd64_artifact_digest }}
+          ARTIFACT_ID: ${{ steps.publisher-start.outputs.native_amd64_artifact_id }}
+          OFARM_ARTIFACT_TOKEN: ${{ github.token }}
+        run: >-
+          /usr/bin/python3
+          .publication-policy/conformance/evidence_publication_policy.py
+          download
+          --api-url "${GITHUB_API_URL}"
+          --repository "${GITHUB_REPOSITORY}"
+          --artifact-name native-verifier-amd64-provisional
+          --artifact-id "${ARTIFACT_ID}"
+          --artifact-digest "${ARTIFACT_DIGEST}"
+          --output-directory
+          "${RUNNER_TEMP}/ofarm-publication-input/native/amd64"
+      - name: Securely download and extract provisional arm64 evidence
+        env:
+          ARTIFACT_DIGEST: ${{ steps.publisher-start.outputs.native_arm64_artifact_digest }}
+          ARTIFACT_ID: ${{ steps.publisher-start.outputs.native_arm64_artifact_id }}
+          OFARM_ARTIFACT_TOKEN: ${{ github.token }}
+        run: >-
+          /usr/bin/python3
+          .publication-policy/conformance/evidence_publication_policy.py
+          download
+          --api-url "${GITHUB_API_URL}"
+          --repository "${GITHUB_REPOSITORY}"
+          --artifact-name native-verifier-arm64-provisional
+          --artifact-id "${ARTIFACT_ID}"
+          --artifact-digest "${ARTIFACT_DIGEST}"
+          --output-directory
+          "${RUNNER_TEMP}/ofarm-publication-input/native/arm64"
       - name: Re-authenticate policy after all provisional downloads
         run: |
           test "$(git -C .publication-policy rev-parse HEAD)" = \
@@ -260,6 +304,10 @@ jobs:
         env:
           CONFORMANCE_INPUT: ${{ runner.temp }}/ofarm-publication-input/conformance
         run: |
+          /usr/bin/python3 \
+            .publication-policy/conformance/evidence_publication_policy.py \
+            validate-conformance \
+            --root "$CONFORMANCE_INPUT"
           /usr/bin/python3 - <<'PY'
           import json
           import os
@@ -348,6 +396,13 @@ jobs:
           NATIVE_INPUT: ${{ runner.temp }}/ofarm-publication-input/native
           SOURCE_COMMIT: ${{ steps.publisher-start.outputs.execution_merge_sha }}
         run: |
+          for architecture in amd64 arm64
+          do
+            /usr/bin/python3 \
+              .publication-policy/conformance/evidence_publication_policy.py \
+              validate-native \
+              --root "$NATIVE_INPUT/$architecture"
+          done
           /usr/bin/python3 - <<'PY'
           import json
           import os
@@ -517,6 +572,24 @@ jobs:
             /usr/bin/cp \
               "$CONTEXT_PATH" \
               "$RUNNER_TEMP/ofarm-publication-input/native/$architecture/evidence-publication-context.json"
+          done
+      - name: Require exact authoritative file inventories
+        env:
+          CONFORMANCE_INPUT: ${{ runner.temp }}/ofarm-publication-input/conformance
+          NATIVE_INPUT: ${{ runner.temp }}/ofarm-publication-input/native
+        run: |
+          /usr/bin/python3 \
+            .publication-policy/conformance/evidence_publication_policy.py \
+            validate-conformance \
+            --root "$CONFORMANCE_INPUT" \
+            --authoritative
+          for architecture in amd64 arm64
+          do
+            /usr/bin/python3 \
+              .publication-policy/conformance/evidence_publication_policy.py \
+              validate-native \
+              --root "$NATIVE_INPUT/$architecture" \
+              --authoritative
           done
       - name: Upload authoritative deterministic review baseline
         id: upload-review-baseline

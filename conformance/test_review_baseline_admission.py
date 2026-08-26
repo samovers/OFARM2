@@ -4,12 +4,26 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import re
+import stat
 import tempfile
 import unittest
+import warnings
+import zipfile
 from pathlib import Path
 
+from conformance.evidence_publication_policy import (
+    NATIVE_EVIDENCE_FILES,
+    REVIEW_BASELINE_FILES,
+    TRUSTED_METADATA_FILES,
+    PublicationPolicyError,
+    _HttpsOnlyRedirectHandler,
+    download_and_extract_artifact,
+    validate_conformance_inventory,
+    validate_native_inventory,
+)
 from conformance.review_baseline_admission import (
     ADMISSION_MARKER,
     EVIDENCE_SCHEMA,
@@ -57,6 +71,43 @@ CONFORMANCE_WORKFLOW_REF = (
 PUBLICATION_WORKFLOW_REF = (
     f"{REPOSITORY}/{PUBLICATION_WORKFLOW_PATH}@refs/heads/main"
 )
+
+
+class FakeArtifactResponse(io.BytesIO):
+    status = 200
+
+    def geturl(self) -> str:
+        return "https://artifact-results.example.test/immutable.zip"
+
+
+def artifact_zip(
+    entries: dict[str, bytes],
+    *,
+    duplicate: str | None = None,
+    symlink: str | None = None,
+) -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, value in entries.items():
+            archive.writestr(name, value)
+        if duplicate is not None:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                archive.writestr(duplicate, "first")
+                archive.writestr(duplicate, "second")
+        if symlink is not None:
+            entry = zipfile.ZipInfo(symlink)
+            entry.create_system = 3
+            entry.external_attr = (stat.S_IFLNK | 0o777) << 16
+            archive.writestr(entry, "target")
+    return output.getvalue()
+
+
+def write_inventory(root: Path, names: set[str] | frozenset[str]) -> None:
+    for name in names:
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"evidence")
 
 
 def workflow_job_section(workflow: str, job_name: str) -> str:
@@ -894,6 +945,150 @@ class PublicationAdmissionTests(unittest.TestCase):
             )
 
 
+class EvidencePublicationPolicyTests(unittest.TestCase):
+    def test_secure_download_verifies_digest_and_extracts_inside_fresh_root(
+        self,
+    ) -> None:
+        payload = artifact_zip({"nested/evidence.json": b'{"ok":true}\n'})
+        digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+        captured: list[object] = []
+
+        def response_factory(request):
+            captured.append(request)
+            return FakeArtifactResponse(payload)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "fresh-artifact"
+            download_and_extract_artifact(
+                api_url="https://api.github.com",
+                repository=REPOSITORY,
+                artifact_name="conformance-provisional",
+                artifact_id=123,
+                expected_digest=digest,
+                output_directory=root,
+                token="test-token",
+                response_factory=response_factory,
+            )
+            self.assertEqual(
+                (root / "nested/evidence.json").read_bytes(),
+                b'{"ok":true}\n',
+            )
+            self.assertFalse((root / ".ofarm-artifact.zip").exists())
+            self.assertEqual(len(captured), 1)
+            request = captured[0]
+            self.assertEqual(
+                request.full_url,
+                "https://api.github.com/repos/samovers/OFARM2/"
+                "actions/artifacts/123/zip",
+            )
+            self.assertEqual(
+                request.get_header("Authorization"),
+                "Bearer test-token",
+            )
+            redirected = _HttpsOnlyRedirectHandler().redirect_request(
+                request,
+                None,
+                302,
+                "Found",
+                {},
+                "https://artifact-results.example.test/signed.zip",
+            )
+            self.assertIsNotNone(redirected)
+            self.assertIsNone(redirected.get_header("Authorization"))
+            with self.assertRaisesRegex(PublicationPolicyError, "not HTTPS"):
+                _HttpsOnlyRedirectHandler().redirect_request(
+                    request,
+                    None,
+                    302,
+                    "Found",
+                    {},
+                    "http://artifact-results.example.test/unsafe.zip",
+                )
+
+    def test_secure_download_refuses_digest_mismatch_and_unsafe_entries(self) -> None:
+        clean = artifact_zip({"evidence.json": b"evidence"})
+        cases = {
+            "digest": (clean, "sha256:" + "0" * 64),
+            "traversal": (
+                artifact_zip({"../escaped.json": b"hostile"}),
+                None,
+            ),
+            "absolute": (
+                artifact_zip({"/absolute.json": b"hostile"}),
+                None,
+            ),
+            "duplicate": (
+                artifact_zip({}, duplicate="evidence.json"),
+                None,
+            ),
+            "symlink": (
+                artifact_zip({}, symlink="evidence-link"),
+                None,
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            for name, (payload, expected) in cases.items():
+                with self.subTest(name=name):
+                    digest = expected or (
+                        "sha256:" + hashlib.sha256(payload).hexdigest()
+                    )
+                    with self.assertRaises(PublicationPolicyError):
+                        download_and_extract_artifact(
+                            api_url="https://api.github.com",
+                            repository=REPOSITORY,
+                            artifact_name="conformance-provisional",
+                            artifact_id=123,
+                            expected_digest=digest,
+                            output_directory=temporary / name,
+                            token="test-token",
+                            response_factory=lambda _request, body=payload: (
+                                FakeArtifactResponse(body)
+                            ),
+                        )
+                    self.assertFalse((temporary / "escaped.json").exists())
+
+    def test_conformance_inventory_is_exact_before_and_after_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_inventory(
+                root / "review-baseline",
+                REVIEW_BASELINE_FILES,
+            )
+            platform_name = "platform_mvp_results_2026-08-26T170000Z.json"
+            write_inventory(root / "platform-evidence", {platform_name})
+            self.assertEqual(
+                validate_conformance_inventory(root, authoritative=False),
+                platform_name,
+            )
+
+            extra = root / "review-baseline/run-3/attacker.json"
+            extra.parent.mkdir()
+            extra.write_bytes(b"hostile")
+            with self.assertRaisesRegex(PublicationPolicyError, "not exact"):
+                validate_conformance_inventory(root, authoritative=False)
+            extra.unlink()
+            for subtree in ("review-baseline", "platform-evidence"):
+                write_inventory(root / subtree, TRUSTED_METADATA_FILES)
+            self.assertEqual(
+                validate_conformance_inventory(root, authoritative=True),
+                platform_name,
+            )
+
+    def test_native_inventory_is_exact_before_and_after_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_inventory(root, NATIVE_EVIDENCE_FILES)
+            validate_native_inventory(root, authoritative=False)
+            extra = root / "native_evidence_receipt.json"
+            extra.write_bytes(b"hostile")
+            with self.assertRaisesRegex(PublicationPolicyError, "not exact"):
+                validate_native_inventory(root, authoritative=False)
+            extra.unlink()
+            write_inventory(root, TRUSTED_METADATA_FILES)
+            validate_native_inventory(root, authoritative=True)
+
+
 class WorkflowPolicyTests(unittest.TestCase):
     def test_default_branch_gate_never_checks_out_pull_request_code(self) -> None:
         workflow = Path(".github/workflows/review-baseline-gate.yml").read_text(
@@ -988,8 +1183,19 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("workflow_dispatch", trigger)
         self.assertNotIn("pull_request", trigger)
         self.assertNotIn("push:", trigger)
-        self.assertIn("Refuse attempt-ambiguous publisher reruns", workflow)
-        self.assertIn('test "$GITHUB_RUN_ATTEMPT" = 1', workflow)
+        self.assertEqual(
+            workflow.count("Refuse attempt-ambiguous publisher reruns"),
+            2,
+        )
+        self.assertEqual(workflow.count('test "$GITHUB_RUN_ATTEMPT" = 1'), 2)
+        for variable, value in (
+            ("GIT_CONFIG_GLOBAL", "/dev/null"),
+            ("GIT_CONFIG_SYSTEM", "/dev/null"),
+            ("GIT_CONFIG_NOSYSTEM", '"1"'),
+            ("GIT_CONFIG_KEY_0", "core.hooksPath"),
+            ("GIT_CONFIG_KEY_1", "core.fsmonitor"),
+        ):
+            self.assertIn(f"  {variable}: {value}\n", workflow)
 
         source_admission = workflow_job_section(workflow, "source-admission")
         publisher = workflow_job_section(workflow, "publish")
@@ -1007,17 +1213,34 @@ class WorkflowPolicyTests(unittest.TestCase):
                 "ref: ${{ steps.publisher-start.outputs.execution_merge_sha }}",
                 section,
             )
+            self.assertIn("set-safe-directory: false", section)
             self.assertIn("git -C .publication-policy diff --exit-code", section)
             self.assertIn("--porcelain=v1 --untracked-files=all", section)
 
         downloads = workflow.split("uses: actions/download-artifact@")[1:]
-        self.assertEqual(len(downloads), 7)
+        self.assertEqual(len(downloads), 4)
         for download in downloads:
             step = download.split("\n      - ", 1)[0]
             self.assertIn("artifact-ids:", step)
             self.assertIn("github-token:", step)
             self.assertIn("repository:", step)
             self.assertIn("run-id:", step)
+            self.assertNotIn("ofarm-publication-input", step)
+
+        self.assertEqual(
+            publisher.count(
+                ".publication-policy/conformance/"
+                "evidence_publication_policy.py\n          download"
+            ),
+            3,
+        )
+        for artifact_name in PROVISIONAL_ARTIFACT_NAMES:
+            self.assertIn(f"--artifact-name {artifact_name}", publisher)
+        self.assertIn("--artifact-digest", publisher)
+        self.assertIn("validate-conformance", publisher)
+        self.assertIn("validate-native", publisher)
+        self.assertIn("Require exact authoritative file inventories", publisher)
+        self.assertIn("--authoritative", publisher)
 
         self.assertEqual(publisher.count("collect-oci"), 2)
         self.assertIn("compose-index", publisher)

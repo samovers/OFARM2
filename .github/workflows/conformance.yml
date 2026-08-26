@@ -61,7 +61,7 @@ env:
   OFARM_BASELINE_ADMISSION_POLICY_SHA: ${{ github.workflow_sha }}
   OFARM_BASELINE_ADMISSION_INPUTS: ${{ toJSON(inputs) }}
   OFARM_EVIDENCE_PUBLICATION_WORKFLOW_SHA256: >-
-    sha256:cc8846f0673a1d787ba4410a469f995a1aa1950874b9a570bbab3b6efcd8b7b9
+    sha256:95b1ef1f4e5d1c41731ba1b17b0851f0aa2c3d1c77a1c8749ab056087fba09c2
 
 jobs:
   baseline-admission:
