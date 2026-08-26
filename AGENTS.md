@@ -90,12 +90,13 @@ Use this fail-closed sequence:
    local checks, push the correction, and obtain the next exact-head review.
    Automatically started expensive jobs may finish unattended, but an agent
    must not spend time monitoring, diagnosing, or retrying them.
-3. A zero-Blocker exact-head review must identify the full reviewed commit SHA.
-   Do not treat the review as current after another commit, and do not infer
-   currentness from an automatically running or previously green workflow.
-4. When a technical admission workflow is active, it may admit an expensive
-   baseline only from a zero-Blocker review whose body ends with this exact
-   footer:
+3. A zero-Blocker exact-head content review must identify the full reviewed
+   commit SHA. Do not treat the review as current after another commit, and do
+   not infer currentness from an automatically running or previously green
+   workflow.
+4. After that review is complete, a repository owner, member, or collaborator
+   may create one admission issue comment on the pull request. The comment must
+   end with this exact footer:
 
    ```text
    OFARM2_BASELINE_ADMISSION
@@ -103,26 +104,46 @@ Use this fail-closed sequence:
    blockers=0
    ```
 
-   It must verify live that the review's recorded commit, footer SHA, and
-   current pull-request head are identical and that the review remains in
-   force. A new commit or review edit/dismissal makes prior admission stale.
-5. Present an approval card only after the exact same reviewed head has both the
-   zero-Blocker review and every required hosted baseline result. A main-branch
-   post-merge run is not a pull-request admission and remains automatic.
+   The admission comment is a separate technical trigger, not the content
+   review itself. Never edit it. The default-branch gate must verify live that
+   the comment is created and unedited, its exact UTF-8 body digest is bound,
+   its author still has repository standing, the pull request is open, the
+   footer SHA equals the current head, and the execution merge commit binds the
+   live base and head. Only then may it call the same-commit expensive executor.
+5. A new commit, close/reopen transition, or deletion/edit of an admission
+   comment revokes admitted work. A standing reviewer may also create this
+   explicit exact-head revocation comment:
 
-Never add the admission footer to a review with a remaining Blocker. Do not use
-labels, earlier-head reviews, green results from another SHA, or agent memory as
-substitutes for exact-head review. Until a technical admission workflow is
-merged and active, this is an agent-enforced ordering rule: existing automatic
-jobs may run unattended, but they do not authorize monitoring, retries, an
-approval card, or merge. This sequencing rule controls workflow timing only;
-it does not weaken any required verification or merge gate.
+   ```text
+   OFARM2_BASELINE_REVOCATION
+   head=<FULL_COMMIT_SHA>
+   ```
 
-An admission review must be submitted with a user or GitHub App credential
-whose event can start the admission workflow; a review created with the
-repository `GITHUB_TOKEN` does not supply that trigger. Workflow admission also
-does not imply branch protection. Verify repository settings before describing
-hosted baselines as a GitHub-enforced merge requirement.
+   Public or ordinary comments never share the executor's cancellation group.
+   The dispatcher must run only trusted default-branch policy and must never
+   check out pull-request code.
+6. Present an approval card only after the exact same reviewed head has both the
+   zero-Blocker review and every required hosted baseline result. Normal success
+   artifact names may be published only after the substantive job and final
+   live admission proof both succeed. A main-branch post-merge run is not a
+   pull-request admission and remains automatic.
+
+Never create the admission comment while the content review has a remaining
+Blocker. Do not use labels, earlier-head reviews, green results from another
+SHA, or agent memory as substitutes for exact-head review. Until a technical
+admission workflow is merged and active, this is an agent-enforced ordering
+rule: existing automatic jobs may run unattended, but they do not authorize
+monitoring, retries, an approval card, or merge. This sequencing rule controls
+workflow timing only; it does not weaken any required verification or merge
+gate.
+
+An admission comment must be created with a user or GitHub App credential whose
+event can start the default-branch gate; a comment created with the repository
+`GITHUB_TOKEN` does not supply that trigger. A manual workflow run, a
+formal-review event, and a pull-request-controlled workflow are not substitutes
+for the live admission proof. Workflow admission also does not imply branch
+protection. Verify repository settings before describing hosted baselines as a
+GitHub-enforced merge requirement.
 
 ## Full design contract for high-risk trust-boundary work
 

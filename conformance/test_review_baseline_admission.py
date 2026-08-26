@@ -1,231 +1,503 @@
 #!/usr/bin/env python3
-"""Zero-dependency tests for the live expensive-baseline admission gate."""
+"""Zero-dependency tests for trusted expensive-baseline admission."""
 
 from __future__ import annotations
 
+import hashlib
+import re
 import unittest
+from pathlib import Path
 
 from conformance.review_baseline_admission import (
+    ADMISSION_MARKER,
     EVIDENCE_SCHEMA,
+    REVOCATION_MARKER,
+    GRAPHQL_COMMENT_PREFIX,
     AdmissionError,
-    MARKER,
     decide,
+    gate_decision,
 )
 
 
-SHA = "a" * 40
+HEAD_SHA = "a" * 40
 NEXT_SHA = "b" * 40
 BASE_SHA = "c" * 40
 MERGE_SHA = "d" * 40
 POLICY_SHA = "e" * 40
 REPOSITORY = "samovers/OFARM2"
 PR_NUMBER = 336
-REVIEW_ID = 12345
+COMMENT_ID = 12345
+COMMENT_NODE_ID = "IC_kwDOExample"
+CREATED_AT = "2026-08-26T08:00:00Z"
+GATE_WORKFLOW_REF = (
+    f"{REPOSITORY}/.github/workflows/review-baseline-gate.yml@refs/heads/main"
+)
+CONFORMANCE_WORKFLOW_REF = (
+    f"{REPOSITORY}/.github/workflows/conformance.yml@refs/heads/main"
+)
 
 
-def event(*, review_sha: str = SHA) -> dict[str, object]:
-    return {
+def admission_body(head_sha: str = HEAD_SHA) -> str:
+    return (
+        "Exact-head review complete.\n\n"
+        f"{ADMISSION_MARKER}\n"
+        f"head={head_sha}\n"
+        "blockers=0\n"
+    )
+
+
+def revocation_body(head_sha: str = HEAD_SHA) -> str:
+    return f"Admission withdrawn.\n\n{REVOCATION_MARKER}\nhead={head_sha}\n"
+
+
+def issue_comment_event(
+    *,
+    action: str = "created",
+    body: str | None = None,
+    association: str = "OWNER",
+    prior_body: str | None = None,
+    pull_request: bool = True,
+) -> dict[str, object]:
+    event: dict[str, object] = {
+        "action": action,
         "repository": {"full_name": REPOSITORY},
-        "review": {"id": REVIEW_ID, "commit_id": review_sha},
+        "issue": {
+            "number": PR_NUMBER,
+            **({"pull_request": {"url": "unused"}} if pull_request else {}),
+        },
+        "comment": {
+            "id": COMMENT_ID,
+            "body": admission_body() if body is None else body,
+            "author_association": association,
+        },
+    }
+    if prior_body is not None:
+        event["changes"] = {"body": {"from": prior_body}}
+    return event
+
+
+def pull_request_target_event(action: str = "synchronize") -> dict[str, object]:
+    return {
+        "action": action,
+        "repository": {"full_name": REPOSITORY},
         "pull_request": {"number": PR_NUMBER},
     }
 
 
-def footer(sha: str = SHA) -> str:
-    return f"Review complete.\n\n{MARKER}\nhead={sha}\nblockers=0\n"
-
-
 def live_reader(
     *,
-    body: str,
-    review_sha: str = SHA,
-    head_sha: str = SHA,
+    body: str | None = None,
+    head_sha: str = HEAD_SHA,
     base_sha: str = BASE_SHA,
-    merge_sha: str = MERGE_SHA,
+    merge_sha: object = MERGE_SHA,
     merge_parents: list[str] | None = None,
-    state: str = "COMMENTED",
     association: str = "OWNER",
+    created_at: str = CREATED_AT,
+    updated_at: str = CREATED_AT,
+    last_edited_at: str | None = None,
+    minimized: bool = False,
 ):
+    comment_body = admission_body() if body is None else body
     parent_shas = merge_parents or [base_sha, head_sha]
     responses = {
         f"/repos/{REPOSITORY}/pulls/{PR_NUMBER}": {
             "number": PR_NUMBER,
+            "state": "open",
             "head": {"sha": head_sha},
             "base": {"sha": base_sha},
             "merge_commit_sha": merge_sha,
         },
-        f"/repos/{REPOSITORY}/pulls/{PR_NUMBER}/reviews/{REVIEW_ID}": {
-            "id": REVIEW_ID,
-            "body": body,
-            "commit_id": review_sha,
-            "state": state,
+        f"/repos/{REPOSITORY}/issues/comments/{COMMENT_ID}": {
+            "id": COMMENT_ID,
+            "node_id": COMMENT_NODE_ID,
+            "issue_url": (
+                f"https://api.github.com/repos/{REPOSITORY}/issues/{PR_NUMBER}"
+            ),
+            "body": comment_body,
             "author_association": association,
+            "created_at": created_at,
+            "updated_at": updated_at,
         },
-        f"/repos/{REPOSITORY}/git/commits/{merge_sha}": {
-            "sha": merge_sha,
+        f"{GRAPHQL_COMMENT_PREFIX}{COMMENT_NODE_ID}": {
+            "databaseId": COMMENT_ID,
+            "body": comment_body,
+            "authorAssociation": association,
+            "createdAt": created_at,
+            "updatedAt": updated_at,
+            "lastEditedAt": last_edited_at,
+            "isMinimized": minimized,
+            "issue": {
+                "number": PR_NUMBER,
+                "repository": {"nameWithOwner": REPOSITORY},
+            },
+        },
+        f"/repos/{REPOSITORY}/git/commits/{MERGE_SHA}": {
+            "sha": MERGE_SHA,
             "parents": [{"sha": value} for value in parent_shas],
         },
     }
     return responses.__getitem__
 
 
-def decide_review(event_payload, reader):
-    return decide(
-        "pull_request_review",
-        event_payload,
-        NEXT_SHA,
+def admitted_gate(**reader_options: object):
+    return gate_decision(
+        "issue_comment",
+        issue_comment_event(),
         REPOSITORY,
         POLICY_SHA,
-        reader,
+        live_reader(**reader_options),
     )
 
 
-class AdmissionTests(unittest.TestCase):
-    def test_main_push_is_eligible_and_carries_policy(self) -> None:
+def decide_call(
+    inputs: dict[str, str],
+    reader=None,
+    workflow_sha=POLICY_SHA,
+    workflow_ref=GATE_WORKFLOW_REF,
+    event_payload=None,
+):
+    return decide(
+        "issue_comment",
+        issue_comment_event() if event_payload is None else event_payload,
+        POLICY_SHA,
+        workflow_sha,
+        workflow_ref,
+        REPOSITORY,
+        POLICY_SHA,
+        inputs,
+        live_reader() if reader is None else reader,
+    )
+
+
+class GateDecisionTests(unittest.TestCase):
+    def test_created_standing_admission_dispatches_exact_coordinates(self) -> None:
+        decision = admitted_gate()
+        self.assertTrue(decision.dispatch)
+        self.assertEqual(decision.mode, "admit")
+        self.assertEqual(decision.pull_request_number, PR_NUMBER)
+        self.assertEqual(decision.admission_comment_id, COMMENT_ID)
+        self.assertEqual(decision.inputs["reviewed_head_sha"], HEAD_SHA)
+        self.assertEqual(decision.inputs["base_sha"], BASE_SHA)
+        self.assertEqual(decision.inputs["execution_merge_sha"], MERGE_SHA)
+        self.assertEqual(decision.inputs["policy_sha"], POLICY_SHA)
+
+    def test_public_commenter_cannot_enter_shared_dispatch(self) -> None:
+        decision = gate_decision(
+            "issue_comment",
+            issue_comment_event(association="CONTRIBUTOR"),
+            REPOSITORY,
+            POLICY_SHA,
+            lambda _: self.fail("public comments must not cause live reads"),
+        )
+        self.assertFalse(decision.dispatch)
+        self.assertEqual(decision.mode, "ignore")
+
+    def test_ordinary_standing_comment_is_ignored(self) -> None:
+        decision = gate_decision(
+            "issue_comment",
+            issue_comment_event(body="Looks good, but this is not admission."),
+            REPOSITORY,
+            POLICY_SHA,
+        )
+        self.assertFalse(decision.dispatch)
+
+    def test_created_explicit_revocation_dispatches_revocation(self) -> None:
+        decision = gate_decision(
+            "issue_comment",
+            issue_comment_event(body=revocation_body()),
+            REPOSITORY,
+            POLICY_SHA,
+            live_reader(),
+        )
+        self.assertTrue(decision.dispatch)
+        self.assertEqual(decision.mode, "revoke")
+        self.assertEqual(
+            decision.inputs["revocation_reason"],
+            "explicit-standing-reviewer-revocation",
+        )
+
+    def test_edit_of_admission_is_revocation_only(self) -> None:
+        decision = gate_decision(
+            "issue_comment",
+            issue_comment_event(
+                action="edited",
+                body="Admission text changed.",
+                prior_body=admission_body(),
+            ),
+            REPOSITORY,
+            POLICY_SHA,
+            live_reader(),
+        )
+        self.assertTrue(decision.dispatch)
+        self.assertEqual(decision.mode, "revoke")
+        self.assertEqual(
+            decision.inputs["revocation_reason"], "admission-comment-edited"
+        )
+
+    def test_deletion_of_admission_is_revocation_only(self) -> None:
+        decision = gate_decision(
+            "issue_comment",
+            issue_comment_event(action="deleted", body=admission_body()),
+            REPOSITORY,
+            POLICY_SHA,
+            live_reader(),
+        )
+        self.assertTrue(decision.dispatch)
+        self.assertEqual(decision.mode, "revoke")
+
+    def test_ordinary_edit_is_ignored(self) -> None:
+        decision = gate_decision(
+            "issue_comment",
+            issue_comment_event(
+                action="edited",
+                body="New ordinary text.",
+                prior_body="Old ordinary text.",
+            ),
+            REPOSITORY,
+            POLICY_SHA,
+            live_reader(),
+        )
+        self.assertFalse(decision.dispatch)
+
+    def test_old_head_admission_edit_cannot_cancel_newer_work(self) -> None:
+        decision = gate_decision(
+            "issue_comment",
+            issue_comment_event(
+                action="edited",
+                body="Admission text changed.",
+                prior_body=admission_body(),
+            ),
+            REPOSITORY,
+            POLICY_SHA,
+            live_reader(head_sha=NEXT_SHA),
+        )
+        self.assertFalse(decision.dispatch)
+        self.assertIn("older head", decision.reason)
+
+    def test_pull_request_state_transition_uses_revocation_concurrency(self) -> None:
+        decision = gate_decision(
+            "pull_request_target",
+            pull_request_target_event(),
+            REPOSITORY,
+            POLICY_SHA,
+        )
+        self.assertFalse(decision.dispatch)
+        self.assertEqual(decision.mode, "state-revocation")
+        self.assertEqual(decision.pull_request_number, PR_NUMBER)
+
+    def test_non_pull_request_issue_comment_is_ignored(self) -> None:
+        decision = gate_decision(
+            "issue_comment",
+            issue_comment_event(pull_request=False),
+            REPOSITORY,
+            POLICY_SHA,
+        )
+        self.assertFalse(decision.dispatch)
+
+
+class ExecutorAdmissionTests(unittest.TestCase):
+    def test_main_push_is_bound_to_workflow_and_policy_sha(self) -> None:
+        event = {
+            "ref": "refs/heads/main",
+            "after": HEAD_SHA,
+            "repository": {"full_name": REPOSITORY},
+        }
         admission = decide(
             "push",
-            {"ref": "refs/heads/main", "after": SHA},
-            SHA,
+            event,
+            HEAD_SHA,
+            HEAD_SHA,
+            CONFORMANCE_WORKFLOW_REF,
             REPOSITORY,
-            POLICY_SHA,
+            HEAD_SHA,
         )
         self.assertTrue(admission.eligible)
-        self.assertEqual(admission.reviewed_head_sha, SHA)
-        self.assertEqual(admission.execution_merge_sha, SHA)
-        self.assertEqual(admission.policy_sha, POLICY_SHA)
+        self.assertEqual(admission.event_class, "MAIN_PUSH")
+        self.assertEqual(admission.execution_merge_sha, HEAD_SHA)
 
-    def test_non_main_push_refuses(self) -> None:
-        with self.assertRaisesRegex(AdmissionError, "limited to main"):
-            decide(
-                "push",
-                {"ref": "refs/heads/topic", "after": SHA},
-                SHA,
-                REPOSITORY,
-                POLICY_SHA,
-            )
-
-    def test_pull_request_target_synchronize_revokes_without_admission(self) -> None:
-        admission = decide(
-            "pull_request_target",
-            {
-                "action": "synchronize",
-                "repository": {"full_name": REPOSITORY},
-                "pull_request": {"number": PR_NUMBER},
-            },
-            NEXT_SHA,
-            REPOSITORY,
-            POLICY_SHA,
-        )
-        self.assertFalse(admission.eligible)
-        self.assertEqual(admission.event_class, "PULL_REQUEST_REVOCATION")
+    def test_dispatch_revalidates_live_admission(self) -> None:
+        admission = decide_call(admitted_gate().inputs)
+        self.assertTrue(admission.eligible)
         self.assertEqual(admission.pull_request_number, PR_NUMBER)
-
-    def test_unconfigured_pull_request_action_refuses(self) -> None:
-        with self.assertRaisesRegex(AdmissionError, "revocation action"):
-            decide(
-                "pull_request_target",
-                {
-                    "action": "labeled",
-                    "repository": {"full_name": REPOSITORY},
-                    "pull_request": {"number": PR_NUMBER},
-                },
-                NEXT_SHA,
-                REPOSITORY,
-                POLICY_SHA,
-            )
-
-    def test_activation_pull_request_event_is_also_ineligible(self) -> None:
-        admission = decide(
-            "pull_request",
-            {
-                "action": "opened",
-                "repository": {"full_name": REPOSITORY},
-                "pull_request": {"number": PR_NUMBER},
-            },
-            NEXT_SHA,
-            REPOSITORY,
-            POLICY_SHA,
-        )
-        self.assertFalse(admission.eligible)
-
-    def test_ordinary_live_review_does_not_admit(self) -> None:
-        admission = decide_review(event(), live_reader(body="Blockers: 1"))
-        self.assertFalse(admission.eligible)
-        self.assertEqual(admission.reviewed_head_sha, "")
-
-    def test_live_review_binds_head_base_and_execution_merge(self) -> None:
-        admission = decide_review(event(), live_reader(body=footer()))
-        self.assertTrue(admission.eligible)
-        self.assertEqual(admission.reviewed_head_sha, SHA)
-        self.assertEqual(admission.base_sha, BASE_SHA)
+        self.assertEqual(admission.admission_comment_id, COMMENT_ID)
+        self.assertEqual(admission.reviewed_head_sha, HEAD_SHA)
         self.assertEqual(admission.execution_merge_sha, MERGE_SHA)
-        self.assertEqual(admission.pull_request_number, PR_NUMBER)
-        self.assertEqual(admission.review_id, REVIEW_ID)
 
-    def test_evidence_records_both_coordinates_and_policy(self) -> None:
-        evidence = decide_review(event(), live_reader(body=footer())).evidence()
+    def test_evidence_binds_body_digest_state_and_update_time(self) -> None:
+        evidence = decide_call(admitted_gate().inputs).evidence()
+        expected_digest = "sha256:" + hashlib.sha256(
+            admission_body().encode("utf-8")
+        ).hexdigest()
         self.assertEqual(evidence["schemaVersion"], EVIDENCE_SCHEMA)
-        self.assertEqual(evidence["reviewed_head_sha"], SHA)
-        self.assertEqual(evidence["base_sha"], BASE_SHA)
-        self.assertEqual(evidence["execution_merge_sha"], MERGE_SHA)
-        self.assertEqual(evidence["policy_sha"], POLICY_SHA)
+        self.assertEqual(evidence["review_body_sha256"], expected_digest)
+        self.assertEqual(evidence["review_state"], "ACTIVE_UNEDITED")
+        self.assertEqual(evidence["review_updated_at"], CREATED_AT)
+        self.assertEqual(evidence["reviewer_association"], "OWNER")
 
-    def test_new_live_head_invalidates_old_review_event(self) -> None:
-        with self.assertRaisesRegex(AdmissionError, "live pull-request head"):
-            decide_review(event(), live_reader(body=footer(), head_sha=NEXT_SHA))
+    def test_edited_live_comment_cannot_admit(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "edited comment cannot admit"):
+            admitted_gate(last_edited_at="2026-08-26T08:00:00Z")
 
-    def test_live_review_edit_removing_footer_revokes_admission(self) -> None:
-        admission = decide_review(
-            event(), live_reader(body="Review edited; admission withdrawn.")
-        )
-        self.assertFalse(admission.eligible)
+    def test_closed_pull_request_cannot_admit(self) -> None:
+        responses = live_reader()
 
-    def test_dismissed_live_review_refuses(self) -> None:
-        with self.assertRaisesRegex(AdmissionError, "COMMENTED or APPROVED"):
-            decide_review(event(), live_reader(body=footer(), state="DISMISSED"))
+        def reader(path: str):
+            value = responses(path)
+            if path == f"/repos/{REPOSITORY}/pulls/{PR_NUMBER}":
+                return {**value, "state": "closed"}
+            return value
 
-    def test_footer_must_be_final_and_exact(self) -> None:
-        with self.assertRaisesRegex(AdmissionError, "malformed or not final"):
-            decide_review(
-                event(), live_reader(body=footer() + "Later qualification\n")
-            )
-
-    def test_footer_sha_must_match_review_commit(self) -> None:
-        with self.assertRaisesRegex(AdmissionError, "malformed or not final"):
-            decide_review(event(), live_reader(body=footer(NEXT_SHA)))
-
-    def test_event_and_live_review_commit_must_match(self) -> None:
-        with self.assertRaisesRegex(AdmissionError, "event and live review commits"):
-            decide_review(event(review_sha=NEXT_SHA), live_reader(body=footer()))
-
-    def test_reviewer_requires_repository_standing(self) -> None:
-        with self.assertRaisesRegex(AdmissionError, "repository standing"):
-            decide_review(
-                event(), live_reader(body=footer(), association="CONTRIBUTOR")
-            )
-
-    def test_execution_merge_must_bind_base_and_head(self) -> None:
-        with self.assertRaisesRegex(AdmissionError, "parents do not bind"):
-            decide_review(
-                event(),
-                live_reader(body=footer(), merge_parents=[BASE_SHA, NEXT_SHA]),
-            )
-
-    def test_execution_merge_must_have_exactly_two_parents(self) -> None:
-        with self.assertRaisesRegex(AdmissionError, "parents do not bind"):
-            decide_review(
-                event(), live_reader(body=footer(), merge_parents=[BASE_SHA])
-            )
-
-    def test_live_reader_is_mandatory(self) -> None:
-        with self.assertRaisesRegex(AdmissionError, "live GitHub reader"):
-            decide(
-                "pull_request_review",
-                event(),
-                NEXT_SHA,
+        with self.assertRaisesRegex(AdmissionError, "not open"):
+            gate_decision(
+                "issue_comment",
+                issue_comment_event(),
                 REPOSITORY,
                 POLICY_SHA,
+                reader,
             )
+
+    def test_minimized_live_comment_cannot_admit(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "minimized comment"):
+            admitted_gate(minimized=True)
+
+    def test_admission_footer_is_byte_exact(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "gate footer is malformed"):
+            gate_decision(
+                "issue_comment",
+                issue_comment_event(body=admission_body().rstrip() + " "),
+                REPOSITORY,
+                POLICY_SHA,
+                live_reader(body=admission_body().rstrip() + " "),
+            )
+
+    def test_new_live_head_invalidates_dispatch(self) -> None:
+        inputs = admitted_gate().inputs
+        reader = live_reader(head_sha=NEXT_SHA, body=admission_body())
+        with self.assertRaisesRegex(AdmissionError, "does not equal the live"):
+            decide_call(inputs, reader)
+
+    def test_coordinate_mismatch_invalidates_dispatch(self) -> None:
+        inputs = dict(admitted_gate().inputs)
+        inputs["execution_merge_sha"] = NEXT_SHA
+        with self.assertRaisesRegex(AdmissionError, "differs from the live gate"):
+            decide_call(inputs)
+
+    def test_metadata_mismatch_invalidates_dispatch(self) -> None:
+        inputs = dict(admitted_gate().inputs)
+        inputs["review_metadata"] = (
+            '{"association":"OWNER","state":"ACTIVE_UNEDITED",'
+            '"updated_at":"2026-08-26T08:00:01Z"}'
+        )
+        with self.assertRaisesRegex(AdmissionError, "differs from the live gate"):
+            decide_call(inputs)
+
+    def test_workflow_sha_must_equal_trusted_policy_sha(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "workflow does not equal"):
+            decide_call(admitted_gate().inputs, workflow_sha=NEXT_SHA)
+
+    def test_caller_must_be_the_main_branch_gate(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "trusted main-branch gate"):
+            decide_call(admitted_gate().inputs, workflow_ref="untrusted/workflow")
+
+    def test_null_execution_merge_refuses_admission(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "full lowercase commit SHA"):
+            admitted_gate(merge_sha=None)
+
+    def test_execution_merge_parents_bind_live_base_and_head(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "parents do not bind"):
+            admitted_gate(merge_parents=[BASE_SHA, NEXT_SHA])
+
+    def test_revocation_dispatch_is_cleanly_ineligible(self) -> None:
+        revocation = gate_decision(
+            "issue_comment",
+            issue_comment_event(body=revocation_body()),
+            REPOSITORY,
+            POLICY_SHA,
+            live_reader(),
+        )
+        admission = decide_call(
+            revocation.inputs,
+            reader=live_reader(),
+            event_payload=issue_comment_event(body=revocation_body()),
+        )
+        self.assertFalse(admission.eligible)
+        self.assertEqual(admission.event_class, "TRUSTED_REVOCATION")
+        self.assertEqual(admission.review_state, "REVOKED")
+
+    def test_admission_edit_call_is_cleanly_ineligible(self) -> None:
+        event = issue_comment_event(
+            action="edited",
+            body="Admission text changed.",
+            prior_body=admission_body(),
+        )
+        revocation = gate_decision(
+            "issue_comment",
+            event,
+            REPOSITORY,
+            POLICY_SHA,
+            live_reader(),
+        )
+        admission = decide_call(
+            revocation.inputs,
+            reader=live_reader(),
+            event_payload=event,
+        )
+        self.assertFalse(admission.eligible)
+        self.assertEqual(admission.reason, "admission-comment-edited")
+
+
+class WorkflowPolicyTests(unittest.TestCase):
+    def test_default_branch_gate_never_checks_out_pull_request_code(self) -> None:
+        workflow = Path(".github/workflows/review-baseline-gate.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("  issue_comment:\n", workflow)
+        self.assertIn("  pull_request_target:\n", workflow)
+        self.assertIn("ref: ${{ github.workflow_sha }}", workflow)
+        self.assertIn("uses: ./.github/workflows/conformance.yml", workflow)
+        self.assertIn("ofarm-gate-comment-", workflow)
+        self.assertIn("ofarm-pr-{0}", workflow)
+        self.assertNotIn("actions: write", workflow)
+        self.assertNotIn("/dispatches", workflow)
+        self.assertNotIn("github.event.pull_request.head", workflow)
+        self.assertNotIn("github.head_ref", workflow)
+
+    def test_executor_has_only_trusted_dispatch_and_main_triggers(self) -> None:
+        workflow = Path(".github/workflows/conformance.yml").read_text(
+            encoding="utf-8"
+        )
+        trigger = workflow.split("permissions: {}", 1)[0]
+        self.assertIn("  push:\n", trigger)
+        self.assertIn("  workflow_call:\n", trigger)
+        self.assertNotIn("pull_request_target", trigger)
+        self.assertNotIn("pull_request_review", trigger)
+        self.assertNotIn("workflow_dispatch", trigger)
+        inputs = trigger.split("    inputs:\n", 1)[1]
+        names = re.findall(r"^      ([a-z0-9_]+):$", inputs, re.MULTILINE)
+        self.assertEqual(len(names), 10)
+        self.assertIn("review_metadata", names)
+        self.assertIn(
+            "OFARM_BASELINE_ADMISSION_POLICY_SHA: ${{ github.workflow_sha }}",
+            workflow,
+        )
+
+    def test_normal_artifacts_require_complete_success_proof(self) -> None:
+        workflow = Path(".github/workflows/conformance.yml").read_text(
+            encoding="utf-8"
+        )
+        for step_name in (
+            "Upload deterministic review baseline",
+            "Upload root platform MVP evidence",
+            "Upload bounded native verifier evidence",
+            "Upload canonical two-platform OCI index evidence",
+        ):
+            section = workflow.split(f"- name: {step_name}", 1)[1].split(
+                "uses:", 1
+            )[0]
+            self.assertIn("steps.success-artifact-proof.outcome == 'success'", section)
+        self.assertIn("review-baseline-admission-failure", workflow)
+        self.assertIn("native-verifier-${{ matrix.architecture }}-admission-failure", workflow)
+        self.assertIn("native-verifier-index-admission-failure", workflow)
 
 
 if __name__ == "__main__":
