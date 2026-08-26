@@ -4341,6 +4341,11 @@
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_evidence_publication_policy_is_transitively_authenticated",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_finalizer_refuses_an_unapproved_historical_candidate_before_github",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
@@ -17451,8 +17456,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "6342321c4e5e755d30980044f383a8f27cc082c8c7c5c75023ce5cbb608e0114",
-  "entryCount": 3490,
+  "entriesSha256": "1770b168c1c435f8517bcaaa3257f7a6404ea755213ecfeacac9cb8b9820a96a",
+  "entryCount": 3491,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

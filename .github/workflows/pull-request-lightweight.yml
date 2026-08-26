@@ -40,9 +40,10 @@ jobs:
         run: >-
           .review-venv/bin/python -m unittest
           conformance.test_review_baseline_admission
-      - name: Ruff baseline-admission policy
+      - name: Ruff admission and evidence-publication policy
         run: >-
           .review-tools-venv/bin/python -m ruff check
+          conformance/evidence_publication_policy.py
           conformance/review_baseline_admission.py
           conformance/test_review_baseline_admission.py
       - name: Check package contracts and architecture

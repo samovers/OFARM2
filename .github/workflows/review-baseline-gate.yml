@@ -87,6 +87,7 @@ jobs:
       group: ofarm-pr-${{ needs.gate.outputs.pull_request_number }}
       cancel-in-progress: true
     permissions:
+      actions: read
       contents: read
       issues: read
       pull-requests: read
