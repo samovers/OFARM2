@@ -5,7 +5,11 @@ Status: **Phase A correction pending exact-head review; Phase B not authorized**
 - Decision: `ISSUE192-SECURITY-AUDIT-PROCESS-CRASH-RECONCILIATION-001`
 - Version: `2`
 - Issue: [#192](https://github.com/samovers/OFARM2/issues/192)
-- Base: `775e6fde6256f9c87a6e13dd5610d753115b7eaf`
+- Phase A comparison base: `775e6fde6256f9c87a6e13dd5610d753115b7eaf`
+  (deliberately pinned to the draft pull request's creation base for the
+  path-and-authority comparison)
+- Current default branch for the next review/admission binding:
+  `539170f3c4cb0df43c06c23bcdf689073e4e5dc3`
 - Draft pull request: [#338](https://github.com/samovers/OFARM2/pull/338)
 - Primary trust boundary: one operator-triggered, independently witnessed,
   unknown-count process-crash interval recorded in the surviving security-audit
@@ -353,6 +357,11 @@ string as a second authority. A missing, extra, malformed, or unequal
 admission-row field refuses before the database clock or append. Hostile
 conninfo values and hostile role/database defaults cannot override the
 code-owned options; the observed admission row must still match every value.
+The verified setting set is exactly the settings that can terminate the
+session, weaken commit durability, or alter timestamp/interval interpretation.
+Provisioned resource hints remain outside this operation's admission contract;
+`search_path` cannot redirect the schema-qualified SQL, and the target relation
+has no row-level-security policy for `row_security` to select.
 
 The operation then obtains one fresh database clock. If the value is malformed,
 non-finite, naive, or not strictly later than the supplied interval start, it
@@ -376,9 +385,11 @@ observed_at = RETENTION_SECONDS` relationship before commit.
 numeric duration as a second authority.
 
 Any known failure before the commit-invocation boundary rolls back best-effort
-and returns only the fixed refused outcome. An authenticated
-`IdleInTransactionSessionTimeout` diagnostic proving server rollback before
-`COMMIT` processing also refuses even if first received by the commit call.
+and returns only the fixed refused outcome. On the protected local route, a
+structured PostgreSQL diagnostic with typed class
+`IdleInTransactionSessionTimeout` and exact SQLSTATE `25P03` proves server
+rollback before `COMMIT` processing and also refuses even if first received by
+the commit call. Error-message text is never evidence and remains suppressed.
 Once the commit-invocation boundary is entered, every other exception produces
 only the fixed outcome-unknown result; it is never automatically retried. A
 returned commit acknowledgement transitions irreversibly to `COMMITTED`.
@@ -462,7 +473,7 @@ interruptions; no dependency text, traceback, source path, or caller-supplied
 | --- | --- |
 | Before a connection is returned | `INTERRUPTED`; no success and no connection cleanup |
 | Connected but before `commit()` is called | `INTERRUPTED`; best-effort rollback and close; no success inference |
-| Authenticated PostgreSQL termination proving `IdleInTransactionSessionTimeout` rolled back the transaction before `COMMIT` processing | `REFUSED`; best-effort close; no commit-success inference |
+| Protected-route PostgreSQL termination with typed `IdleInTransactionSessionTimeout` and SQLSTATE `25P03`, proving rollback before `COMMIT` processing | `REFUSED`; best-effort close; no commit-success inference |
 | Commit invocation boundary entered through return without acknowledgement | `OUTCOME_UNKNOWN`; commit may or may not have been sent or committed; best-effort close, no rollback claim, and no retry |
 | Commit acknowledged but the complete report has not been written and flushed | `REPORTING_FAILED`; no rollback claim and no retry |
 | Complete report written and flushed and `REPORTED` independently observed | successful report protocol is already complete; a later signal does not revoke it |
@@ -470,9 +481,11 @@ interruptions; no dependency text, traceback, source path, or caller-supplied
 The transition to `COMMIT_IN_FLIGHT` occurs immediately before invoking
 `commit()`. A generic direct `BaseException` raised by that call is therefore
 `OUTCOME_UNKNOWN`, even if no commit bytes were ultimately sent. The sole
-narrower classification is a structured, authenticated PostgreSQL
-`IdleInTransactionSessionTimeout` diagnostic that proves the server terminated
-and rolled back the transaction before processing `COMMIT`; that is `REFUSED`.
+narrower classification is a protected-route structured PostgreSQL diagnostic
+with typed class `IdleInTransactionSessionTimeout` and exact SQLSTATE `25P03`
+that proves the server terminated and rolled back the transaction before
+processing `COMMIT`; that is `REFUSED`. Diagnostic message text is not
+inspected.
 `TransactionTimeout` after the commit-invocation boundary remains
 `OUTCOME_UNKNOWN`. The transition to `REPORTED` occurs only after an exact full
 stdout write and successful flush.
@@ -663,11 +676,11 @@ are accepted over-disclosure, and this command neither reads nor coalesces them.
 | Invariant | Supported entry and counterexample | Required result |
 | --- | --- | --- |
 | `PCR-001` | Invoke the fixed command with a missing, duplicate, reordered, extra, noncanonical, offset, naive, infinite, or Unicode-lookalike timestamp; add count/end/database/SQL arguments. At the composition boundary, offer only a post-crash observation with no retained pre-attempt lower bound. | Invalid command shape exits before secret read or connection; composition with only the late observation has no supported entry and performs no mutation. |
-| `PCR-002` | Supply over-4096-byte, partial, duplicate-key, URI, multi-host, `hostaddr`, service, password-file, client-certificate, caller-CA/CRL, GSS, or caller-options process-crash conninfo; set hostile `PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`, `PGSERVICE`, `PGSERVICEFILE`, timeout and TLS environment values; use libpq below 16; mutate the separate shared control DSN; or point the closed route at a reader, producer, retention, readiness, migrator, owner-like test role, wrong database, standby, unsupported server, hostile role defaults, or read-only transaction. | Invalid route/environment/client refuses before connect; changing the shared DSN has no effect; the factory sees only the reconstructed process-crash conninfo and exact five-second connect timeout; exact same-transaction admission of users, database/version constants, writable primary, read-only/isolation, `2s`, `250ms`, `10s`, `15s`, `UTC`, `ISO, MDY`, and `on` refuses before append on any mismatch. |
+| `PCR-002` | Supply over-4096-byte, partial, duplicate-key, URI, multi-host, `hostaddr`, service, password-file, client-certificate, caller-CA/CRL, GSS, or caller-options process-crash conninfo; set hostile `PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`, `PGSERVICE`, `PGSERVICEFILE`, timeout and TLS environment values; use libpq below 16; mutate the separate shared control DSN; or point the closed route at a reader, producer, retention, readiness, migrator, owner-like test role, wrong database, standby, unsupported server, hostile role defaults, or read-only transaction. | Invalid route/environment/client refuses before connect; changing the shared DSN has no effect; the factory sees only the reconstructed process-crash conninfo and exact five-second connect timeout; a pre-17 server refuses during connection option negotiation because `transaction_timeout` is unsupported; a wrong 17.x version or any users, database, primary, read-only/isolation, `2s`, `250ms`, `10s`, `15s`, `UTC`, `ISO, MDY`, or `on` mismatch refuses in exact same-transaction admission; every case refuses before append. |
 | `PCR-003` | Supply a start equal to or later than the database clock, return malformed/naive/infinite clock data, or return an append observation earlier than the interval end. | Clock failures refuse before the function call; inconsistent append output rolls back before commit. |
 | `PCR-004` | Inspect the public request and SQL inventory, then use the existing accepted reader test fixture to inspect the live database result; attempt to select a known count, another kind, direct insert, producer, component, or function through the operation. | No such operation surface exists; the test-only reader observes exactly one `AUDIT_GAP` with count unknown and no protected fields. |
-| `PCR-005` | Return a valid append row then fail before commit; deliver authenticated `IdleInTransactionSessionTimeout` proof of pre-commit rollback; raise generically or with `TransactionTimeout` after the commit-invocation boundary; return from commit then fail ordinary close. | Precommit failure and proven idle-timeout rollback refuse; commit-boundary ambiguity is outcome unknown with zero retries; post-ack ordinary close failure preserves one committed success. |
-| `PCR-006` | Raise `KeyboardInterrupt`, `SystemExit`, and a custom direct `BaseException` from adapter parsing, environment inspection, side-effect-free runner construction, report retrieval, stdout write/flush, stderr write/flush, and the final module-entry invocation/status handoff; let the test-owned Unix-socket protocol relay forward the real command's append to PostgreSQL, observe its completed upstream response in an open transaction while withholding that response from the command, and then send SIGINT/SIGTERM; inject direct `BaseException` at commit and after acknowledgement. | Adapter, runner, and module entry produce exact phase-aware classifications without traceback or caller-selected status; a computed controlled return and already `REPORTED` success are preserved; stderr interruption is suppressed; closing the killed command's upstream PostgreSQL connection rolls back the append and the accepted reader observes no durable `AUDIT_GAP`; uncatchable termination has no success inference; generic commit interruption is outcome unknown; post-ack incomplete or complete-looking output is reporting failed; no path retries. |
+| `PCR-005` | Return a valid append row then fail before commit; deliver protected-route typed `IdleInTransactionSessionTimeout` with SQLSTATE `25P03` proving pre-commit rollback while varying untrusted message text; raise generically or with `TransactionTimeout` after the commit-invocation boundary; return from commit then fail ordinary close. | Precommit failure and proven idle-timeout rollback refuse without inspecting message text; commit-boundary ambiguity is outcome unknown with zero retries; post-ack ordinary close failure preserves one committed success. |
+| `PCR-006` | Raise `KeyboardInterrupt`, `SystemExit`, and a custom direct `BaseException` from adapter parsing, environment inspection, side-effect-free runner construction, report retrieval, stdout write/flush, stderr write/flush, and the final module-entry invocation/status handoff; let the test-owned Unix-socket protocol relay forward the real command's append to PostgreSQL, observe that request's own `CommandComplete` and immediately following `ReadyForQuery('T')` while withholding the response, and then send SIGINT/SIGTERM; prove an earlier `BEGIN` `ReadyForQuery('T')` does not release the barrier; inject direct `BaseException` at commit and after acknowledgement. | Adapter, runner, and module entry produce exact phase-aware classifications without traceback or caller-selected status; a computed controlled return and already `REPORTED` success are preserved; stderr interruption is suppressed; closing the killed command's upstream PostgreSQL connection rolls back the append and the accepted reader observes no durable `AUDIT_GAP`; uncatchable termination has no success inference; generic commit interruption is outcome unknown; post-ack incomplete or complete-looking output is reporting failed; no path retries. |
 | `PCR-007` | Put canaries in the conninfo password, PostgreSQL error, direct `BaseException`, interval parser input, output failure, and environment; exercise the 298-byte report golden, exact stderr bytes, short/non-integer/raising stdout and stderr writes, and stdout/stderr flush failures. | Only the exact canonical report or fixed diagnostic bytes appear; partial or complete-looking stdout without successful terminal status is never success; no canary, traceback, or source path crosses an authorized sink. |
 | `PCR-008` | Count input bytes, connections, statements, append attempts, commits, rollbacks, closes, stdout/stderr writes and flushes, and report bytes under success and every failure phase; stall an operating-system output sink separately. | Each repository-owned count and size stays within its fixed contract; client/server timeout values are exact; no automatic retry, poll, sleep, or growth appears. A stalled OS sink demonstrates the explicit absence of a hard wall-clock deadline rather than a false timeout claim. |
 | `PCR-009` | Make every dependency fail while presenting a token, tenant-shaped value, route value, and alternate sink fixture. | No authorization, tenant, route publication, readiness change, or fallback call occurs. |
@@ -678,18 +691,34 @@ Tests may provide controlled connections, output sinks, and barriers through
 public constructors. Live interruption evidence must enter through the actual
 command process and real PostgreSQL; it must not mutate private state and call
 that production evidence. The deterministic live precommit barrier is a
-test-owned Unix-socket protocol relay that forwards to real PostgreSQL. It
-forwards the append request, then observes and buffers the complete upstream
-append response through `ReadyForQuery` with transaction status `T`, without
-forwarding that response to the command or exposing or interpreting returned
-event data. That protocol boundary proves PostgreSQL executed the append while
-the transaction remains open and leaves the real command blocked in
-`APPEND_IN_FLIGHT`. The test then kills the command, closes the relay's upstream
-PostgreSQL connection, and uses the accepted reader fixture to prove that
-connection-loss rollback left no durable `AUDIT_GAP` event. No database
-lock is added, so the evidence does not race the 250-millisecond lock timeout
-or weaken any production setting. The relay is test evidence only and is not
-an authorized production route.
+test-owned Unix-socket protocol relay that forwards to real PostgreSQL. After
+forwarding the already identified append request, it observes that append
+statement's own `CommandComplete` protocol tag and the immediately following
+`ReadyForQuery` with transaction status `T`, and buffers that response without
+forwarding it to the command. The `CommandComplete` tag is protocol framing,
+not returned event data; the relay neither exposes nor interprets the event
+row. A `ReadyForQuery('T')` from `BEGIN`, an admission query, or any earlier
+statement does not satisfy the barrier. The paired append-specific markers
+prove PostgreSQL executed the append while the transaction remains open and
+leave the real command blocked in `APPEND_IN_FLIGHT`. The test then kills the
+command, closes the relay's upstream PostgreSQL connection, and uses the
+accepted reader fixture to prove that connection-loss rollback left no durable
+`AUDIT_GAP` event. No database lock is added, so the evidence does not race the
+250-millisecond lock timeout or weaken any production setting. The relay is
+test evidence only and is not an authorized production route.
+
+The Phase B test module owns the live Unix-socket fixture. In the accepted
+Linux conformance lane it starts a separate container from the already built
+`ofarm-postgresql-conformance:local` PostgreSQL 17.10 image, bind-mounts one
+test-owned temporary socket directory, provisions the server through existing
+repository APIs, constructs the operation-specific control and already
+accepted reader fixture values from only that server's test credentials, and
+owns deterministic teardown. Failure to create or reach this fixture fails the
+live lane; it does not skip. This is test implementation inside maximum-
+envelope path 4 and does not change `.github/workflows/conformance.yml`, the
+shared PostgreSQL test support, any production route, or any authority.
+Requiring another path or a TCP production/test route stops for decision
+version 3 under section 11.6.
 
 Post-commit row inspection uses the already accepted
 `OFARM_SECURITY_AUDIT_READER_PG_DSN` reader fixture after the command outcome is
@@ -903,10 +932,10 @@ patch to this command.
 | Invariant | Owning implementation | Negative test | Acceptance evidence | Smallest verification |
 | --- | --- | --- | --- | --- |
 | `PCR-001` | external composition prerequisite plus command parser and request | missing pre-attempt lower bound; malformed, duplicate, reordered, extra and lookalike inputs | unsupported late-only composition; no connection or secret read for invalid command shape | prerequisite review plus focused parser tests |
-| `PCR-002` | operation-specific command route sanitizer, minimum-libpq gate, runner connection factory, checked-in provisioning/version constants, and admission query | shared-DSN mutation, ambient `PG*`, oversize/indirect/file/multi-host/partial conninfo, old libpq, hostile options/defaults, wrong role/database/standby/version/settings | shared DSN has no effect; factory receives only closed reconstructed process-crash conninfo and exact client timeout; no append on any same-transaction admission mismatch | focused conninfo/environment/client/factory tests plus live role and complete server-setting matrix |
+| `PCR-002` | operation-specific command route sanitizer, minimum-libpq gate, runner connection factory, checked-in provisioning/version constants, and admission query | shared-DSN mutation, ambient `PG*`, oversize/indirect/file/multi-host/partial conninfo, old libpq, hostile options/defaults, wrong role/database/standby/version/settings | shared DSN has no effect; factory receives only closed reconstructed process-crash conninfo and exact client timeout; pre-17 refuses during connection option negotiation; wrong 17.x and every admitted identity/posture/setting mismatch refuse in the same transaction; no append | focused conninfo/environment/client/factory tests plus live pre-17 connection refusal and 17.10 role/complete server-setting matrix |
 | `PCR-003` | same-transaction clock and append-result path | equal/later start, malformed clock, observation before end | append absent or transaction rolled back | unit and live PostgreSQL clock/result cases |
 | `PCR-004` | fixed append SQL plus accepted test-only reader fixture | attempted count/kind/function widening or operation-owned readback | reader observes one unknown-count `AUDIT_GAP`, no protected fields, only after outcome fixed | SQL inventory and live reader query |
-| `PCR-005` | transaction phase state machine | ordinary/direct-`BaseException`, authenticated idle-timeout rollback, and transaction-timeout/generic failure at commit boundary | exact refused/unknown/committed classifications and zero automatic retries | deterministic connection tests plus live timeout termination |
+| `PCR-005` | transaction phase state machine | ordinary/direct-`BaseException`, protected-route typed idle-timeout/`25P03` rollback with hostile message text, and transaction-timeout/generic failure at commit boundary | exact refused/unknown/committed classifications without diagnostic-text authority and zero automatic retries | deterministic connection tests plus live timeout termination |
 | `PCR-006` | runner, adapter, final module-entry protocol, and command process | direct catchable interruptions at every adapter/runner/module-entry sink; actual SIGINT/SIGTERM after PostgreSQL completes the relayed append in an open transaction | fixed catchable classification without traceback or caller-selected status; controlled return and `REPORTED` success preservation; stderr interruption suppressed; connection-loss rollback leaves no durable `AUDIT_GAP`; no uncatchable success inference or automatic retry | adapter and module-entry seam matrix plus real subprocess/relay/PostgreSQL interruption, accepted-reader rollback observation, and deterministic runner phases |
 | `PCR-007` | sorted fixed report renderer, terminal truth mapping, and binary sinks | canaries, 298-byte golden report, exact diagnostics, short/non-integer/raising writes, flush failures, and over-ceiling fault | exact ASCII bytes, 512-byte fault ceiling, no canary/traceback/source path, incomplete or complete-looking failed output never success | byte-level report, terminal-status, and sink tests |
 | `PCR-008` | direct runner, bounded parsers, fixed timeout constants, and command | oversize inputs, every dependency phase, hostile timeout defaults, and stalled OS sink | exact input/connection/statement/append/output call and size ceilings; complete effective-timeout row; explicit no-wall-clock non-claim | deterministic call inventory, live timeout evidence, and stalled-sink non-claim test |
@@ -928,9 +957,12 @@ Required Phase B verification, if later authorized:
   input-size and minimum-libpq gates, ambient `PG*` rejection, no indirect
   libpq file authority, exact client timeout, and live complete effective-
   setting evidence;
-- deterministic Unix-socket protocol-relay interruption after PostgreSQL has
-  completed the append in an open transaction, followed by connection-loss
-  rollback evidence without weakening `lock_timeout`;
+- test-module-owned, socket-mounted PostgreSQL 17.10 container lifecycle in the
+  Linux conformance lane, without workflow or shared-test-helper changes;
+- deterministic Unix-socket protocol-relay interruption after the append's own
+  `CommandComplete` and following `ReadyForQuery('T')` prove PostgreSQL
+  completed it in an open transaction, followed by connection-loss rollback
+  evidence without weakening `lock_timeout`;
 - exact one-row unknown-count event, protected-field absence, and overlap
   observation through the existing test-only reader fixture;
 - byte-exact golden report, diagnostic, short-write, flush-failure, fixed canary,
@@ -951,6 +983,14 @@ Required Phase B verification, if later authorized:
 ### 14.1 Open decisions
 
 No repository design ambiguity may silently change Phase B.
+
+The Phase B live-evidence route is closed rather than external: the focused
+test module in maximum-envelope path 4 starts and tears down a separate
+socket-mounted PostgreSQL 17.10 container as specified in section 8. It uses
+the conformance image already built by the accepted Linux lane and requires no
+workflow, shared-test-helper, or production-route change. An inability to
+provide that fixture is a failing live test, not authority to substitute TCP
+or skip evidence.
 
 Before production composition, external owners must still define:
 
@@ -980,13 +1020,27 @@ system in this pull request.
   demonstrated adapter-boundary and terminal-truth residues. Review
   [5032563741](https://github.com/samovers/OFARM2/pull/338#pullrequestreview-5032563741)
   of that same head demonstrated omitted transaction-scoped timeouts and a
-  shared-environment grammar conflict. This revision addresses the combined
-  four Blockers without changing the Phase A path or primary trust boundary.
-  They remain review-pending until a new exact-head review reports zero
-  demonstrated Blockers.
+  shared-environment grammar conflict. Review
+  [5033119393](https://github.com/samovers/OFARM2/pull/338#pullrequestreview-5033119393)
+  of exact head `17d341587901317ec7699f8f041358b7bf8232da`
+  demonstrated a pre-forward relay barrier, an overclaimed refusal diagnostic,
+  and an unguarded final module-entry boundary. Review
+  [5033443677](https://github.com/samovers/OFARM2/pull/338#pullrequestreview-5033443677)
+  of exact head `370def701f7ac06f95b601cf4e0645dee40f4e5b`
+  confirmed the diagnostic and module-entry fixes, then demonstrated an
+  unspecified Unix-socket live fixture and a non-unique `ReadyForQuery('T')`
+  barrier. This revision closes the fixture inside test path 4 and binds the
+  relay to the append's own `CommandComplete` plus following transaction-open
+  marker. All corrections remain one RFC path and the same primary trust
+  boundary. They remain review-pending until a new exact-head review reports
+  zero demonstrated Blockers.
 - Follow-ups: bounded-cost wording, test-only reader observation, a non-locking
   protocol-relay interruption barrier, `RETENTION_SECONDS` authority, accepted
-  overlap, and minimum-libpq posture are incorporated. The earlier one-append-
+  overlap, and minimum-libpq posture are incorporated. The typed idle-timeout
+  classification now relies on the protected route, exact class and SQLSTATE,
+  never message text. Pre-17 connection-option refusal is distinct from 17.x
+  admission refusal. The comparison base is deliberately pinned and the live
+  default-branch policy base is recorded separately. The earlier one-append-
   attempt wording remains incorporated. Cross-invocation quarantine remains an
   external deployment prerequisite. Final cross-slice hostile evidence and
   closure audit remain in issue #192; the separately recorded items in section
@@ -994,11 +1048,13 @@ system in this pull request.
 - Preferences: `INPUT_VALIDATED` remains distinct from same-connection
   `DATABASE_ADMITTED`; alphabetical report rendering is adopted to reuse the
   store-loss precedent; the 512-byte ceiling is explicitly a fault guard over
-  the exact 298-byte admitted report.
-- Review independence: review 5032563741 explicitly identifies itself as a
-  self-review from the pull-request author account and does not satisfy an
-  independent-review gate. Its reproducible evidence is recorded here without
-  misrepresenting its independence.
+  the exact 298-byte admitted report; and the admission-setting subset is
+  justified by session-termination, durability and time-interpretation effects
+  rather than treating resource hints as operation authority.
+- Review independence: reviews 5032563741 and 5033443677 explicitly identify
+  themselves as self-reviews from the pull-request author account and do not
+  satisfy an independent-review gate. Their reproducible evidence is recorded
+  here without misrepresenting its independence.
 - Next review scope: these corrections and affected invariants only unless new
   evidence demonstrates that the original scope is unsafe.
 - Phase B: not authorized.
