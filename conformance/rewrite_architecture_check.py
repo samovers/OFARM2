@@ -2925,8 +2925,17 @@ def _private_result_construction_violations(tree: ast.Module) -> list[str]:
         for statement in function.body[-4:]
     )
     close_lines = _ordered_call_lines(function, ("_close_login",))
+    returns = [
+        node for node in ast.walk(function) if isinstance(node, ast.Return)
+    ]
+    has_yield = any(
+        isinstance(node, (ast.Yield, ast.YieldFrom)) for node in ast.walk(function)
+    )
     if (
         len(function.body) < 4
+        or len(returns) != 1
+        or returns[0] is not function.body[-1]
+        or has_yield
         or observed_tail != expected_tail
         or close_lines != (function.body[-4].lineno,)
     ):

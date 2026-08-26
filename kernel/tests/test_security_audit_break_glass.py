@@ -471,9 +471,15 @@ def test_architecture_result_surface_and_external_reference_rules():
     swallowed = source.replace(
         close, "    try:\n" + nested + "\n    except Exception:\n        pass", 1
     )
+    early_return = source.replace("        if type(exported) is not AcknowledgedSecurityAuditExport:\n            raise ValueError", "        if type(exported) is not AcknowledgedSecurityAuditExport:\n            raise ValueError\n        return exported", 1)
+    yielding = source.replace("    exported = None\n", "    yield exported\n    exported = None\n", 1)
+    yield_from = source.replace("    exported = None\n", "    yield from ()\n    exported = None\n", 1)
     violation = "private result is not constructed after closure and validation"
     assert violation in _violations(conditional)
     assert violation in _violations(swallowed)
+    assert violation in _violations(early_return)
+    assert violation in _violations(yielding)
+    assert violation in _violations(yield_from)
     life = ast.parse(source)
     external = ast.parse("from deployment.postgresql.security_audit_break_glass import _ClosedSecurityAuditBreakGlassExport\nimport deployment.postgresql.security_audit_break_glass as bg\nx = bg._ClosedSecurityAuditBreakGlassExport")
     assert architecture._private_result_reference_violations({"life": life, "other": external}, "life")
