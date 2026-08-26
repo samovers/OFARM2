@@ -455,6 +455,12 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("  pull_request_target:\n", workflow)
         self.assertIn("ref: ${{ github.workflow_sha }}", workflow)
         self.assertIn("uses: ./.github/workflows/conformance.yml", workflow)
+        execute = workflow.split("\n  execute:\n", 1)[1]
+        self.assertIn(
+            "group: ofarm-pr-${{ needs.gate.outputs.pull_request_number }}",
+            execute,
+        )
+        self.assertIn("cancel-in-progress: true", execute)
         self.assertIn("ofarm-gate-comment-", workflow)
         self.assertIn("ofarm-pr-{0}", workflow)
         self.assertNotIn("actions: write", workflow)

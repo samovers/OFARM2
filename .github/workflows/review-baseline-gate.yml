@@ -83,6 +83,9 @@ jobs:
   execute:
     needs: gate
     if: needs.gate.outputs.dispatch == 'true'
+    concurrency:
+      group: ofarm-pr-${{ needs.gate.outputs.pull_request_number }}
+      cancel-in-progress: true
     permissions:
       contents: read
       issues: read

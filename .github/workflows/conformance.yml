@@ -54,8 +54,8 @@ concurrency:
   group: >-
     ${{ github.event_name == 'push'
         && format('ofarm-main-{0}', github.sha)
-        || format('ofarm-pr-{0}', inputs.pull_request_number) }}
-  cancel-in-progress: ${{ github.event_name != 'push' }}
+        || format('ofarm-called-{0}', github.run_id) }}
+  cancel-in-progress: false
 
 env:
   OFARM_BASELINE_ADMISSION_POLICY_SHA: ${{ github.workflow_sha }}
