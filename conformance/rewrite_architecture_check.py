@@ -42,6 +42,7 @@ _PYTHON_SOURCE_SNAPSHOT_RFC_SHA256 = (
 MAX_FUNCTION_LINES = 80
 MAX_TEST_LINES = 800
 TEST_MODULE_BUDGETS = {
+    "kernel/tests/test_security_audit_process_crash.py": 1_250,
     "kernel/tests/test_security_audit_store_loss.py": 1_700,
 }
 SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH = (
@@ -92,11 +93,13 @@ MODULE_BUDGETS = {
     "deployment/postgresql/security_audit_approval.py": 640,
     "deployment/postgresql/security_audit_break_glass.py": 1_325,
     "deployment/postgresql/security_audit_authority.py": 388,
+    "deployment/postgresql/security_audit_process_crash.py": 650,
     "deployment/postgresql/security_audit_store_loss.py": 1_000,
     SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH: 1_747,
 }
 COMMAND_MODULE_BUDGETS = {
     "deployment/postgresql/run_security_audit_hmac_retirement.py": 160,
+    "deployment/postgresql/run_security_audit_process_crash.py": 260,
     "deployment/postgresql/run_security_audit_store_loss.py": 250,
 }
 GROUP_BUDGETS = {
@@ -204,6 +207,13 @@ GROUP_BUDGETS = {
             "deployment/postgresql/run_security_audit_store_loss.py",
         ),
     ),
+    "security audit process-crash reconciliation": (
+        910,
+        (
+            "deployment/postgresql/security_audit_process_crash.py",
+            "deployment/postgresql/run_security_audit_process_crash.py",
+        ),
+    ),
 }
 TEST_GLOBS = (
     "kernel/tests/*profile_runtime*.py",
@@ -223,6 +233,7 @@ TEST_GLOBS = (
     "kernel/tests/*security_audit_gap*.py",
     "kernel/tests/*security_audit_runtime*.py",
     "kernel/tests/*security_audit_hmac_retirement*.py",
+    "kernel/tests/*security_audit_process_crash*.py",
     "kernel/tests/*security_audit_store_loss*.py",
 )
 DIRECT_IMPORT_BOUNDS = {
@@ -268,6 +279,16 @@ DIRECT_IMPORT_BOUNDS = {
     ),
     "deployment/postgresql/run_security_audit_store_loss.py": frozenset(
         {"deployment.postgresql.security_audit_store_loss"}
+    ),
+    "deployment/postgresql/security_audit_process_crash.py": frozenset(
+        {
+            "deployment.postgresql.audit_contract",
+            "deployment.postgresql.provisioning_specs",
+            "deployment.postgresql.version_policy",
+        }
+    ),
+    "deployment/postgresql/run_security_audit_process_crash.py": frozenset(
+        {"deployment.postgresql.security_audit_process_crash"}
     ),
     "deployment/postgresql/security_audit_observer_root_admission.py": frozenset(),
 }
