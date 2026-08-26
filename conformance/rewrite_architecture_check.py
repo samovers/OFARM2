@@ -90,7 +90,7 @@ MODULE_BUDGETS = {
     "kernel/security_audit_runtime.py": 250,
     "deployment/postgresql/security_audit_hmac_retirement.py": 450,
     "deployment/postgresql/security_audit_approval.py": 640,
-    "deployment/postgresql/security_audit_break_glass.py": 1_250,
+    "deployment/postgresql/security_audit_break_glass.py": 1_325,
     "deployment/postgresql/security_audit_authority.py": 388,
     "deployment/postgresql/security_audit_store_loss.py": 1_000,
     SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH: 1_747,
@@ -2678,8 +2678,432 @@ def _check_security_audit_approval_surface(
     ]
 
 
+def _top_level_function(
+    tree: ast.Module,
+    name: str,
+) -> ast.FunctionDef | None:
+    functions = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == name
+    ]
+    return functions[0] if len(functions) == 1 else None
+
+
+def _top_level_class_fields(
+    tree: ast.Module,
+    name: str,
+) -> tuple[str, ...] | None:
+    classes = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == name
+    ]
+    if len(classes) != 1:
+        return None
+    return tuple(
+        node.target.id
+        for node in classes[0].body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+    )
+
+
+def _top_level_dataclass_options(
+    tree: ast.Module,
+    name: str,
+) -> dict[str, object] | None:
+    classes = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == name
+    ]
+    if len(classes) != 1:
+        return None
+    decorators = [
+        node
+        for node in classes[0].decorator_list
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "dataclass"
+    ]
+    if len(decorators) != 1:
+        return None
+    return {
+        keyword.arg: keyword.value.value
+        for keyword in decorators[0].keywords
+        if keyword.arg is not None
+        and isinstance(keyword.value, ast.Constant)
+    }
+
+
+def _statement_line(
+    function: ast.FunctionDef,
+    source: str,
+) -> int | None:
+    expected = _statement_shape(source)
+    matches = [
+        node.lineno
+        for node in ast.walk(function)
+        if isinstance(node, ast.stmt)
+        and ast.dump(node, include_attributes=False) == expected
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _statement_shape(source: str) -> str:
+    return ast.dump(ast.parse(source).body[0], include_attributes=False)
+
+
+def _call_name(node: ast.Call) -> str | None:
+    if isinstance(node.func, ast.Name):
+        return node.func.id
+    if isinstance(node.func, ast.Attribute):
+        return node.func.attr
+    return None
+
+
+def _ordered_call_lines(
+    function: ast.FunctionDef,
+    names: tuple[str, ...],
+) -> tuple[int, ...] | None:
+    observed = []
+    for name in names:
+        lines = [
+            node.lineno
+            for node in ast.walk(function)
+            if isinstance(node, ast.Call) and _call_name(node) == name
+        ]
+        if len(lines) != 1:
+            return None
+        observed.append(lines[0])
+    return tuple(observed)
+
+
+def _fixed_integer(tree: ast.Module, name: str) -> int | None:
+    values = [
+        node.value.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == name
+        and isinstance(node.value, ast.Constant)
+        and type(node.value.value) is int
+    ]
+    return values[0] if len(values) == 1 else None
+
+
+def _private_result_class_violations(tree: ast.Module) -> list[str]:
+    violations = []
+    public = "ClosedSecurityAuditBreakGlassExport"
+    private = "_ClosedSecurityAuditBreakGlassExport"
+    class_names = [
+        node.name for node in tree.body if isinstance(node, ast.ClassDef)
+    ]
+    if public in class_names:
+        violations.append("public closed-result class remains")
+    if _top_level_class_fields(tree, private) != ("operation_id", "page_bytes"):
+        violations.append("private closed-result class inventory differs")
+    if _top_level_dataclass_options(tree, private) != {
+        "frozen": True,
+        "slots": True,
+        "repr": False,
+    }:
+        violations.append("private closed-result posture differs")
+    exports = []
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        if isinstance(node.targets[0], ast.Name) and node.targets[0].id == "__all__":
+            try:
+                exports.append(ast.literal_eval(node.value))
+            except (TypeError, ValueError):
+                exports.append(None)
+    if (
+        len(exports) != 1
+        or type(exports[0]) is not tuple
+        or any(name in exports[0] for name in (public, private))
+    ):
+        violations.append("closed-result export surface differs")
+    return violations
+
+
+def _private_result_internal_reference_violations(
+    tree: ast.Module,
+) -> list[str]:
+    private = "_ClosedSecurityAuditBreakGlassExport"
+    parents = {
+        id(child): parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
+    annotations: set[int] = set()
+    for node in ast.walk(tree):
+        values: tuple[ast.expr | None, ...] = ()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            values = (
+                *(argument.annotation for argument in node.args.args),
+                *(argument.annotation for argument in node.args.kwonlyargs),
+                node.returns,
+            )
+        elif isinstance(node, ast.AnnAssign):
+            values = (node.annotation,)
+        for value in values:
+            if value is not None:
+                annotations.update(id(member) for member in ast.walk(value))
+    references = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == private:
+            references.append(node.lineno)
+            continue
+        if isinstance(node, ast.ImportFrom) and any(
+            alias.name == private for alias in node.names
+        ):
+            references.append(node.lineno)
+            continue
+        if not isinstance(node, ast.Name) or node.id != private:
+            continue
+        parent = parents.get(id(node))
+        if id(node) in annotations:
+            continue
+        if isinstance(parent, ast.Call) and parent.func is node:
+            continue
+        references.append(node.lineno)
+    return (
+        ["private closed-result direct reference inventory differs"]
+        if references
+        else []
+    )
+
+
+def _private_result_construction_violations(tree: ast.Module) -> list[str]:
+    private = "_ClosedSecurityAuditBreakGlassExport"
+    functions = [
+        node for node in tree.body if isinstance(node, ast.FunctionDef)
+    ]
+    constructions = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == private
+        ):
+            continue
+        owners = [
+            function.name
+            for function in functions
+            if any(member is node for member in ast.walk(function))
+        ]
+        constructions.append(
+            (owners[0] if len(owners) == 1 else None, node.lineno)
+        )
+    if len(constructions) != 1 or constructions[0][0] != "_export_and_close":
+        return ["private closed-result construction inventory differs"]
+    function = _top_level_function(tree, "_export_and_close")
+    if function is None:
+        return ["private closed-result construction owner is absent"]
+    terminal_sources = (
+        """_close_login(
+    dependencies,
+    preflight.routes.admin,
+    preflight.store_migration_execution_id,
+    expected_role,
+)""",
+        """if interrupted is not None:
+    raise interrupted""",
+        """if export_failed or exported is None:
+    raise _ConsumedFailure()""",
+        """return _ClosedSecurityAuditBreakGlassExport(
+    operation_id=approval.operation_id,
+    page_bytes=exported.page_bytes,
+)""",
+    )
+    expected_tail = tuple(_statement_shape(source) for source in terminal_sources)
+    observed_tail = tuple(
+        ast.dump(statement, include_attributes=False)
+        for statement in function.body[-4:]
+    )
+    close_lines = _ordered_call_lines(function, ("_close_login",))
+    if (
+        len(function.body) < 4
+        or observed_tail != expected_tail
+        or close_lines != (function.body[-4].lineno,)
+    ):
+        return ["private result is not constructed after closure and validation"]
+    return []
+
+
+def _private_result_reference_violations(
+    trees: collections.abc.Mapping[str, ast.Module],
+    lifecycle_module: str,
+) -> list[str]:
+    symbols = {
+        "ClosedSecurityAuditBreakGlassExport",
+        "_ClosedSecurityAuditBreakGlassExport",
+    }
+    violations = []
+    for module, tree in trees.items():
+        if module == lifecycle_module:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                names = {alias.name for alias in node.names}
+                found = sorted(names & symbols)
+                if found:
+                    violations.append(
+                        f"{module}:{node.lineno}: prohibited result import {found!r}"
+                    )
+            elif isinstance(node, ast.Attribute) and node.attr in symbols:
+                violations.append(
+                    f"{module}:{node.lineno}: prohibited result attribute {node.attr!r}"
+                )
+    return sorted(set(violations))
+
+
+def _break_glass_deadline_violations(tree: ast.Module) -> list[str]:
+    violations = []
+    constants = {
+        "_MAX_AUTHORITY_DATABASE_DIVERGENCE_GROWTH_US": 1_000_000,
+        "_MAX_PASSWORD_AUTHORITY_ADVANCE_US": 61_000_000,
+        "_POSTGRES_TIMESTAMP_QUANTUM_US": 1,
+    }
+    for name, value in constants.items():
+        if _fixed_integer(tree, name) != value:
+            violations.append(f"fixed deadline reserve {name} differs")
+    clock = _top_level_function(tree, "_clock_high_water")
+    clock_statements = (
+        "row = _exact_row(connection.execute(_CLOCK_SQL), 2)",
+        "if (type(row[0]) is not int "
+        "or not 0 <= row[0] <= _MAX_UNIX_MICROSECONDS "
+        "or row[1] is not False):\n    raise ValueError",
+        "return cast(int, row[0])",
+    )
+    if clock is None or any(
+        _statement_line(clock, statement) is None
+        for statement in clock_statements
+    ):
+        violations.append("live database clock acceptance differs")
+    derived = _top_level_function(tree, "_derived_expected_role")
+    if derived is None:
+        return violations + ["derived expected-role helper is absent"]
+    statements = (
+        "safe_remaining_us = (current.approval.valid_until_us "
+        "- max(current.authority_now_us, database_now_us) "
+        "- _MAX_AUTHORITY_DATABASE_DIVERGENCE_GROWTH_US "
+        "- _MAX_PASSWORD_AUTHORITY_ADVANCE_US "
+        "- _POSTGRES_TIMESTAMP_QUANTUM_US)",
+        "if safe_remaining_us <= 0:\n    raise ValueError",
+        "return _ExpectedRole(_expiry(database_now_us + safe_remaining_us), "
+        "password_verifier)",
+    )
+    if any(_statement_line(derived, statement) is None for statement in statements):
+        violations.append("database deadline formula or refusal differs")
+    create = _top_level_function(tree, "_create_login")
+    if create is None:
+        return violations + ["LOGIN creation helper is absent"]
+    ordered = _ordered_call_lines(
+        create,
+        (
+            "_clock_high_water",
+            "_advance_current_approval",
+            "_derived_expected_role",
+            "_configure_login",
+        ),
+    )
+    if ordered is None or tuple(sorted(ordered)) != ordered:
+        violations.append("LOGIN deadline order is not H3 then A3 then derive then SQL")
+    exact_create = (
+        "database_now_us = _clock_high_water(connection)",
+        "current = _advance_current_approval(dependencies, current)",
+        "expected_role = _derived_expected_role("
+        "database_now_us, current, password_verifier)",
+        "_configure_login(connection, expected_role)",
+    )
+    if any(_statement_line(create, statement) is None for statement in exact_create):
+        violations.append("LOGIN deadline provenance differs")
+    return violations
+
+
+def _break_glass_carrier_violations(tree: ast.Module) -> list[str]:
+    violations = []
+    if _top_level_class_fields(tree, "_CurrentApprovalCarrier") != (
+        "approval", "authority_now_us"
+    ):
+        violations.append("current-approval carrier differs")
+    if _top_level_class_fields(tree, "_LoginCreationOutcome") != (
+        "expected_role", "commit_acknowledged"
+    ):
+        violations.append("LOGIN creation outcome differs")
+    for name in ("_CurrentApprovalCarrier", "_LoginCreationOutcome"):
+        if _top_level_dataclass_options(tree, name) != {
+            "frozen": True,
+            "slots": True,
+        }:
+            violations.append(f"{name} immutable posture differs")
+    verified = _top_level_function(tree, "_verified_approval")
+    advance = _top_level_function(tree, "_advance_current_approval")
+    if verified is None or advance is None:
+        return violations + ["authority currentness helper inventory differs"]
+    required_verified = (
+        "authority_now_us = _authority_time_us(dependencies)",
+        "verifier_now_us = max(authority_now_us, preflight.database_high_water_us)",
+        "return _CurrentApprovalCarrier(approval, authority_now_us)",
+    )
+    required_advance = (
+        "authority_now_us = _authority_time_us(dependencies)",
+        "if authority_now_us < current.authority_now_us:\n    raise ValueError",
+        "return _CurrentApprovalCarrier(current.approval, authority_now_us)",
+    )
+    if any(_statement_line(verified, item) is None for item in required_verified):
+        violations.append("verified approval does not retain raw A1")
+    if any(_statement_line(advance, item) is None for item in required_advance):
+        violations.append("current approval does not reject raw regression")
+    execute = _top_level_function(tree, "_execute")
+    if execute is None:
+        return violations + ["lifecycle executor is absent"]
+    ordered = _ordered_call_lines(
+        execute,
+        (
+            "_verified_approval",
+            "_advance_current_approval",
+            "_consume",
+            "_create_or_resolve_login",
+            "_export_and_close",
+        ),
+    )
+    if ordered is None or tuple(sorted(ordered)) != ordered:
+        violations.append("lifecycle authority and closure order differs")
+    if _statement_line(execute, "_consume(dependencies, routes.control, current)") is None:
+        violations.append("consumption does not use accepted A2 carrier")
+    resolve = _top_level_function(tree, "_resolve_unacknowledged_login")
+    create_or_resolve = _top_level_function(tree, "_create_or_resolve_login")
+    if resolve is None or create_or_resolve is None:
+        return violations + ["LOGIN ambiguity helper inventory differs"]
+    if _statement_line(resolve, "expected_role = outcome.expected_role") is None:
+        violations.append("LOGIN ambiguity discards derived expected role")
+    if any(
+        isinstance(node, ast.Call) and _call_name(node) == "_derived_expected_role"
+        for node in ast.walk(resolve)
+    ):
+        violations.append("LOGIN ambiguity recomputes the derived role")
+    attributes = {
+        node.attr
+        for node in ast.walk(create_or_resolve)
+        if isinstance(node, ast.Attribute)
+    }
+    if not {"commit_acknowledged", "expected_role"} <= attributes:
+        violations.append("LOGIN creation outcome is not consumed exactly")
+    return violations
+
+
 def _security_audit_break_glass_violations(tree: ast.Module) -> list[str]:
     violations = []
+    violations.extend(_private_result_class_violations(tree))
+    violations.extend(_private_result_internal_reference_violations(tree))
+    violations.extend(_private_result_construction_violations(tree))
+    violations.extend(_break_glass_deadline_violations(tree))
+    violations.extend(_break_glass_carrier_violations(tree))
     classes = [
         node
         for node in tree.body
@@ -2783,10 +3207,12 @@ def _check_security_audit_break_glass_surface(
 ) -> list[str]:
     relative = "deployment/postgresql/security_audit_break_glass.py"
     module = snapshot.modules_by_relative_path[relative].module_name
-    return [
+    failures = [
         f"{relative}:{violation}"
         for violation in _security_audit_break_glass_violations(trees[module])
     ]
+    failures.extend(_private_result_reference_violations(trees, module))
+    return sorted(set(failures))
 
 
 def _authority_time_payload_is_exact(tree: ast.Module) -> bool:
