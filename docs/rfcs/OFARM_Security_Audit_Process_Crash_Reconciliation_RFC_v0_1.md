@@ -39,8 +39,9 @@ state is deliberately unrecoverable.
 This decision establishes one fixed, one-shot operator operation for the
 surviving-store case. The operation:
 
-1. accepts one canonical UTC interval-start value supplied by an independent
-   crash witness;
+1. accepts one canonical UTC interval-start value retained by an independent
+   process-window witness no later than the crashed process's first governed
+   audit attempt after the last independently closed continuity point;
 2. obtains only the already provisioned audit-control DSN from its fixed secret
    environment;
 3. uses one bounded transaction under the exact
@@ -56,8 +57,10 @@ surviving-store case. The operation:
    command outcomes without dependency detail.
 
 The operation does not detect a crash. It does not prove the external witness
-or choose the interval start. Deployment composition must provide an
-independently governed conservative witness. Without that prerequisite, the
+or choose the interval start. A crash-observation timestamp alone is unsafe
+because an uncommitted live-process gap may have begun earlier. Deployment
+composition must therefore retain an independently governed process-window
+lower bound before governed attempts begin. Without that prerequisite, the
 operation is unavailable and no process-crash completeness claim may be made.
 
 ## 2. Learning value
@@ -97,8 +100,8 @@ This decision does not change or add:
   failover, backup, replica, or multi-store selection;
 - overflow closure, HMAC custody or retirement, reader, retention, export,
   break-glass, temporary LOGIN, output custody, or source-capability governance;
-- proof that an external interval start is truthful, complete, independently
-  witnessed, or conservative;
+- proof that an external interval start was retained before governed attempts,
+  is truthful, complete, independently witnessed, or conservative;
 - production clock certification, route custody, secret distribution,
   deployment activation, production traffic, release, current/default
   promotion, production readiness, certification, current compliance, issue
@@ -126,8 +129,8 @@ parent issue.
 
 ### 4.2 Trusted components and inputs
 
-- an external operations authority supplies one independently witnessed
-  conservative lower bound for the uncertainty interval;
+- an external operations authority retains, before governed audit attempts,
+  one independently witnessed conservative lower bound for the process window;
 - deployment secret custody supplies the exact surviving-store audit-control
   DSN through one fixed environment name;
 - PostgreSQL authentication and `session_user` identify the existing
@@ -140,8 +143,11 @@ parent issue.
   transitions, report shape, and error translation.
 
 The external witness is a deployment prerequisite, not a repository-generated
-fact. Phase B may transport its canonical timestamp but may not add a receipt,
-signature, approver, public key, witness registry, or self-attestation scheme.
+fact. Its lower bound must be no later than the crashed process's first governed
+audit attempt after the last independently closed continuity point. A timestamp
+first observed after the crash is insufficient. Phase B may transport the
+canonical lower bound but may not add a receipt, signature, approver, public
+key, witness registry, or self-attestation scheme.
 
 ### 4.3 Untrusted actors and inputs
 
@@ -181,7 +187,7 @@ authority design rather than claiming that the fixed command covers it.
 | Decision | Sole authority | Forbidden substitute |
 | --- | --- | --- |
 | A crash interval must be recorded | Independently governed external operations witness | restart, runtime readiness, absence of traffic, a Python exception, command invocation itself |
-| Interval start | Canonical UTC lower bound supplied by that witness | process wall clock sampled after restart, database end time, event observation time, guessed count |
+| Interval start | Canonical UTC process-window lower bound retained by that witness no later than the first governed attempt after the last independently closed continuity point | crash-observation time alone, process wall clock sampled after restart, database end time, event observation time, guessed count |
 | Target route | One fixed secret environment containing the surviving-store audit-control DSN | command argument, tenant DSN, readiness DSN, admin DSN, DSN assembled from parts |
 | Database identity | Fixed expected audit database name observed on the effectful connection | DSN text alone, caller database name, search path, database OID alone |
 | Mutation authority | Exact `session_user = ofarm_security_audit_control_login` and existing `append_audit_gap` grant | `current_user` alone, `SET ROLE`, admin, owner, migrator, producer, reader, retention or export role |
@@ -270,7 +276,8 @@ FROM ofarm_security.append_audit_gap(%s, %s, 0, true)
 
 It is invoked once with the validated witness start and same-transaction
 database end. The operation validates one exact nonnil event UUID, aware
-`observed_at`, and exact 30-day `purge_after` relationship before commit.
+`observed_at` no earlier than the interval end, and exact 30-day `purge_after`
+relationship before commit.
 
 Any known failure before commit begins rolls back best-effort and returns only
 the fixed refused outcome. Once commit begins, any exception produces only the
@@ -297,9 +304,12 @@ not a retry of this operation.
 
 ## 7. Invariants and acceptance criteria
 
-### `PCR-001` — one independently witnessed input
+### `PCR-001` — one independently retained process-window input
 
-The production command accepts exactly one canonical UTC interval start. It
+The production command accepts exactly one canonical UTC interval start. Its
+external authority must have retained that lower bound no later than the
+crashed process's first governed attempt after the last independently closed
+continuity point. A post-crash observation alone is not sufficient. The command
 does not accept a count, interval end, producer, component, event kind,
 database, SQL, retry, operation mode, or arbitrary evidence field.
 
@@ -313,8 +323,9 @@ No role assumption or alternate credential is supported.
 ### `PCR-003` — database-owned conservative end
 
 The supplied witnessed start is used unchanged. The interval end is one fresh
-database clock from the effectful transaction and must be strictly later. No
-Python, request, restart, or caller-supplied time can narrow or select the end.
+database clock from the effectful transaction and must be strictly later. The
+returned observation must be no earlier than that end. No Python, request,
+restart, or caller-supplied time can narrow or select the end.
 
 ### `PCR-004` — exactly one unknown-count mutation
 
@@ -371,9 +382,9 @@ possible start, detected every lost event, or made production composition safe.
 
 | Invariant | Supported entry and counterexample | Required result |
 | --- | --- | --- |
-| `PCR-001` | Invoke the fixed command with a missing, duplicate, reordered, extra, noncanonical, offset, naive, infinite, or Unicode-lookalike timestamp; add count/end/database/SQL arguments. | Exit invalid before secret read or connection; no mutation. |
+| `PCR-001` | Invoke the fixed command with a missing, duplicate, reordered, extra, noncanonical, offset, naive, infinite, or Unicode-lookalike timestamp; add count/end/database/SQL arguments. At the composition boundary, offer only a post-crash observation with no retained pre-attempt lower bound. | Invalid command shape exits before secret read or connection; composition with only the late observation has no supported entry and performs no mutation. |
 | `PCR-002` | Point the fixed secret route at a reader, producer, retention, readiness, migrator, owner-like test role, wrong database, standby, unsupported server, read-only transaction, or conflicting DSN options. | Code-owned options win; exact admission refuses before append. |
-| `PCR-003` | Supply a start equal to or later than the database clock, or return malformed/naive/infinite clock data. | Refuse and roll back before the function call. |
+| `PCR-003` | Supply a start equal to or later than the database clock, return malformed/naive/infinite clock data, or return an append observation earlier than the interval end. | Clock failures refuse before the function call; inconsistent append output rolls back before commit. |
 | `PCR-004` | Inspect the public request, SQL inventory, and live database result; attempt to select a known count, another kind, direct insert, producer, component, or function. | No such surface exists; exactly one `AUDIT_GAP` has count unknown and no protected fields. |
 | `PCR-005` | Return a valid append row then raise before commit; raise from commit; return from commit then fail close. | Precommit failure rolls back and refuses; commit failure is outcome unknown with zero retries; post-ack close failure preserves one committed success. |
 | `PCR-006` | Start the real command against live PostgreSQL, block the append transaction with a privileged test fixture, terminate the process, and release the lock; separately make commit raise through the runner's public connection-factory dependency. | No positive report or retry occurs; the killed precommit transaction leaves no event; the commit exception is outcome unknown; restart makes no claim about either interrupted attempt. |
@@ -420,7 +431,7 @@ paths or imports outside this contract.
 ### 9.2 Data flow
 
 ```text
-independent external crash witness
+independently retained process-window lower bound
   -> canonical --interval-start
   -> fixed command parser
   -> fixed secret audit-control DSN
@@ -559,8 +570,9 @@ Stop for decision version 2 if implementation or review would:
 surviving-store, no-backup/no-replica/no-restore boundary.
 
 External production composition remains unavailable and unauthorized until an
-independently human-controlled operations system governs the crash witness,
-conservative start, surviving-store route, no-retry quarantine, and command
+independently human-controlled operations system retains the process-window
+lower bound before governed attempts, witnesses the crash, governs the
+surviving-store route, enforces no-retry quarantine, and consumes the command
 result. This RFC does not design or simulate that authority.
 
 Evidence that V1 must support automatic detection, multiple replicas, store
@@ -573,9 +585,9 @@ patch to this command.
 
 | Invariant | Owning implementation | Negative test | Acceptance evidence | Smallest verification |
 | --- | --- | --- | --- | --- |
-| `PCR-001` | command parser and request | malformed, duplicate, reordered, extra and lookalike inputs | no connection or secret read | focused parser tests |
+| `PCR-001` | external composition prerequisite plus command parser and request | missing pre-attempt lower bound; malformed, duplicate, reordered, extra and lookalike inputs | unsupported late-only composition; no connection or secret read for invalid command shape | prerequisite review plus focused parser tests |
 | `PCR-002` | runner connection factory and admission query | wrong role/database/standby/version/options | no append call | focused connection tests plus live role matrix |
-| `PCR-003` | same-transaction clock path | equal/later start and malformed clock | append absent | unit and live PostgreSQL clock cases |
+| `PCR-003` | same-transaction clock and append-result path | equal/later start, malformed clock, observation before end | append absent or transaction rolled back | unit and live PostgreSQL clock/result cases |
 | `PCR-004` | fixed append SQL | attempted count/kind/function widening | one unknown-count `AUDIT_GAP`, no protected fields | SQL inventory and live row query |
 | `PCR-005` | transaction phase state machine | precommit, commit, postcommit-close failures | exact refusal/unknown/success and zero retries | deterministic connection tests |
 | `PCR-006` | command process and no-retry contract | terminate a blocked real command; inject commit ambiguity through the public connection factory | no success output or automatic retry | real subprocess/PostgreSQL interruption plus deterministic commit-phase test |
@@ -612,8 +624,9 @@ No repository design ambiguity may silently change Phase B.
 
 Before production composition, external owners must still define:
 
-- who independently witnesses a crash and how the conservative lower bound is
-  recorded;
+- who retains the process-window lower bound before the first governed attempt,
+  what establishes the last independently closed continuity point, and who
+  independently witnesses a crash;
 - how the surviving audit-control route is selected and held;
 - how interrupted and outcome-unknown attempts are quarantined from retry; and
 - how the result gates later runtime publication.
