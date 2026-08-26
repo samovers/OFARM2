@@ -37,6 +37,15 @@ CONFORMANCE_WORKFLOW_REF = (
 )
 
 
+def workflow_job_section(workflow: str, job_name: str) -> str:
+    marker = f"\n  {job_name}:\n"
+    if marker not in workflow:
+        raise AssertionError(f"workflow job is missing: {job_name}")
+    section = workflow.split(marker, 1)[1]
+    next_job = re.search(r"\n  [a-zA-Z0-9_-]+:\n", section)
+    return section if next_job is None else section[: next_job.start()]
+
+
 def admission_body(head_sha: str = HEAD_SHA) -> str:
     return (
         "Exact-head review complete.\n\n"
@@ -487,22 +496,94 @@ class WorkflowPolicyTests(unittest.TestCase):
             workflow,
         )
 
-    def test_normal_artifacts_require_complete_success_proof(self) -> None:
+    def test_untrusted_jobs_upload_only_provisional_artifacts(self) -> None:
         workflow = Path(".github/workflows/conformance.yml").read_text(
             encoding="utf-8"
         )
-        for step_name in (
-            "Upload deterministic review baseline",
-            "Upload root platform MVP evidence",
-            "Upload bounded native verifier evidence",
-            "Upload canonical two-platform OCI index evidence",
-        ):
-            section = workflow.split(f"- name: {step_name}", 1)[1].split(
-                "uses:", 1
-            )[0]
-            self.assertIn("steps.success-artifact-proof.outcome == 'success'", section)
+        producers = {
+            "conformance": "name: conformance-provisional\n",
+            "native-verifier": (
+                "name: native-verifier-${{ matrix.architecture }}-provisional\n"
+            ),
+            "native-verifier-index": "name: native-verifier-index-provisional\n",
+        }
+        authoritative_names = (
+            "name: review-baseline\n",
+            "name: platform-mvp-evidence\n",
+            "name: native-verifier-${{ matrix.architecture }}\n",
+            "name: native-verifier-index\n",
+        )
+        for job_name, provisional_name in producers.items():
+            section = workflow_job_section(workflow, job_name)
+            self.assertIn(provisional_name, section)
+            self.assertNotIn("id: final-admission", section)
+            self.assertNotIn("id: success-artifact-proof", section)
+            for authoritative_name in authoritative_names:
+                self.assertNotIn(authoritative_name, section)
+
+    def test_authoritative_publishers_use_fresh_runners(self) -> None:
+        workflow = Path(".github/workflows/conformance.yml").read_text(
+            encoding="utf-8"
+        )
+        publishers = {
+            "conformance-publisher": "conformance",
+            "native-verifier-publisher": "native-verifier",
+            "native-verifier-index-publisher": "native-verifier-index",
+        }
+        for publisher, producer in publishers.items():
+            section = workflow_job_section(workflow, publisher)
+            self.assertIn(f"needs.{producer}.result == 'success'", section)
+            self.assertEqual(section.count("--operation admit"), 2)
+            self.assertIn(
+                "ref: ${{ env.OFARM_BASELINE_ADMISSION_POLICY_SHA }}", section
+            )
+            self.assertNotIn(
+                "ref: ${{ needs.baseline-admission.outputs.execution_merge_sha }}",
+                section,
+            )
+            self.assertNotIn("actions/setup-python", section)
+            self.assertNotIn("GITHUB_PATH", section)
+            self.assertNotIn("GITHUB_ENV", section)
+            self.assertIn("actions/download-artifact@", section)
+            self.assertIn("producer supplied an untrusted admission receipt", section)
+            self.assertIn("id: publisher-start-admission", section)
+            self.assertIn("id: final-admission", section)
+            self.assertIn("id: success-artifact-proof", section)
+            self.assertIn(
+                "steps.success-artifact-proof.outcome == 'success'", section
+            )
+
+        index_producer = workflow_job_section(workflow, "native-verifier-index")
+        self.assertIn(
+            "needs: [baseline-admission, native-verifier-publisher]",
+            index_producer,
+        )
+
+    def test_normal_artifact_names_are_owned_by_publishers(self) -> None:
+        workflow = Path(".github/workflows/conformance.yml").read_text(
+            encoding="utf-8"
+        )
+        owners = {
+            "review-baseline": "conformance-publisher",
+            "platform-mvp-evidence": "conformance-publisher",
+            "native-verifier-${{ matrix.architecture }}": (
+                "native-verifier-publisher"
+            ),
+            "native-verifier-index": "native-verifier-index-publisher",
+        }
+        for artifact_name, publisher in owners.items():
+            matches = re.findall(
+                rf"^\s+name: {re.escape(artifact_name)}$", workflow, re.MULTILINE
+            )
+            self.assertEqual(len(matches), 1)
+            section = workflow_job_section(workflow, publisher)
+            self.assertIn(f"name: {artifact_name}\n", section)
+
         self.assertIn("review-baseline-admission-failure", workflow)
-        self.assertIn("native-verifier-${{ matrix.architecture }}-admission-failure", workflow)
+        self.assertIn(
+            "native-verifier-${{ matrix.architecture }}-admission-failure",
+            workflow,
+        )
         self.assertIn("native-verifier-index-admission-failure", workflow)
 
 

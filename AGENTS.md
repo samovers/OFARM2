@@ -125,8 +125,14 @@ Use this fail-closed sequence:
 6. Present an approval card only after the exact same reviewed head has both the
    zero-Blocker review and every required hosted baseline result. Normal success
    artifact names may be published only after the substantive job and final
-   live admission proof both succeed. A main-branch post-merge run is not a
-   pull-request admission and remains automatic.
+   live admission proof both succeed. Jobs that execute pull-request code may
+   upload only explicitly provisional artifacts. Established authoritative
+   names may be uploaded only by fresh downstream publisher jobs whose runners
+   never check out or execute the admitted merge, require successful producer
+   job results, validate the provisional files with trusted policy code, bind
+   the original admission coordinates, and recheck live admission immediately
+   before upload. A main-branch post-merge run is not a pull-request admission
+   and remains automatic.
 
 Never create the admission comment while the content review has a remaining
 Blocker. Do not use labels, earlier-head reviews, green results from another
