@@ -438,8 +438,21 @@ The command adapter separately owns an end-to-end raw-`BaseException` guard:
   from report-byte retrieval, stdout write, or stdout flush becomes
   `REPORTING_FAILED`, exit `5`;
 - a raw catchable `BaseException` from stderr write or flush is suppressed; and
-- the module-level `raise SystemExit(main())` that converts the integer return
-  to process status remains outside this guard.
+- a final module-entry protocol encloses command invocation and the handoff of
+  its controlled integer return to ordinary `SystemExit`. It preserves a
+  controlled return already computed by `main()`, preserves success after
+  `REPORTED`, translates a catchable interruption before either fact is fixed
+  to exit `3`, suppresses its value and traceback, and prevents a
+  caller-selected `SystemExit` status from escaping.
+
+The module-entry protocol uses private controlled state to distinguish the
+adapter's completed return from a raw `SystemExit` raised while evaluating the
+entry path. Its final action is ordinary `SystemExit` termination; it is not a
+custom signal handler. A deterministic seam injects SIGINT and a custom direct
+`BaseException` while the module entry invokes `main()` and while it hands the
+computed status to termination. The test proves the computed controlled status
+is retained, an already completed `REPORTED` success is not revoked, and no
+traceback, source path, exception value, or caller-selected status escapes.
 
 The adapter catches the runner's fixed terminal classes and guards its own raw
 interruptions; no dependency text, traceback, source path, or caller-supplied
@@ -505,7 +518,7 @@ byte and is not a backslash followed by `n`.
 | Classification | Exit | Exact stderr |
 | --- | --- | --- |
 | `INVALID_INPUT` | `2` | `security-audit process-crash reconciliation command is invalid\n` |
-| `REFUSED` | `3` | `security-audit process-crash reconciliation was refused; no commit was sent\n` |
+| `REFUSED` | `3` | `security-audit process-crash reconciliation was refused; no commit succeeded\n` |
 | `INTERRUPTED` | `3` | `security-audit process-crash reconciliation was interrupted; no commit was sent; do not retry automatically\n` |
 | `OUTCOME_UNKNOWN` | `4` | `security-audit process-crash reconciliation outcome is unknown; do not retry automatically\n` |
 | `REPORTING_FAILED` | `5` | `security-audit process-crash reconciliation committed but reporting failed; do not retry automatically\n` |
@@ -654,7 +667,7 @@ are accepted over-disclosure, and this command neither reads nor coalesces them.
 | `PCR-003` | Supply a start equal to or later than the database clock, return malformed/naive/infinite clock data, or return an append observation earlier than the interval end. | Clock failures refuse before the function call; inconsistent append output rolls back before commit. |
 | `PCR-004` | Inspect the public request and SQL inventory, then use the existing accepted reader test fixture to inspect the live database result; attempt to select a known count, another kind, direct insert, producer, component, or function through the operation. | No such operation surface exists; the test-only reader observes exactly one `AUDIT_GAP` with count unknown and no protected fields. |
 | `PCR-005` | Return a valid append row then fail before commit; deliver authenticated `IdleInTransactionSessionTimeout` proof of pre-commit rollback; raise generically or with `TransactionTimeout` after the commit-invocation boundary; return from commit then fail ordinary close. | Precommit failure and proven idle-timeout rollback refuse; commit-boundary ambiguity is outcome unknown with zero retries; post-ack ordinary close failure preserves one committed success. |
-| `PCR-006` | Raise `KeyboardInterrupt`, `SystemExit`, and a custom direct `BaseException` from adapter parsing, environment inspection, side-effect-free runner construction, report retrieval, stdout write/flush, and stderr write/flush; pause the real command at `APPEND_IN_FLIGHT` through the test-owned Unix-socket protocol relay and send SIGINT/SIGTERM; inject direct `BaseException` at commit and after acknowledgement. | Adapter and runner produce exact phase-aware classifications without traceback; stderr interruption is suppressed; a proven killed precommit transaction leaves no event; uncatchable termination has no success inference; generic commit interruption is outcome unknown; post-ack incomplete or complete-looking output is reporting failed; no path retries. |
+| `PCR-006` | Raise `KeyboardInterrupt`, `SystemExit`, and a custom direct `BaseException` from adapter parsing, environment inspection, side-effect-free runner construction, report retrieval, stdout write/flush, stderr write/flush, and the final module-entry invocation/status handoff; let the test-owned Unix-socket protocol relay forward the real command's append to PostgreSQL, observe its completed upstream response in an open transaction while withholding that response from the command, and then send SIGINT/SIGTERM; inject direct `BaseException` at commit and after acknowledgement. | Adapter, runner, and module entry produce exact phase-aware classifications without traceback or caller-selected status; a computed controlled return and already `REPORTED` success are preserved; stderr interruption is suppressed; closing the killed command's upstream PostgreSQL connection rolls back the append and the accepted reader observes no durable `AUDIT_GAP`; uncatchable termination has no success inference; generic commit interruption is outcome unknown; post-ack incomplete or complete-looking output is reporting failed; no path retries. |
 | `PCR-007` | Put canaries in the conninfo password, PostgreSQL error, direct `BaseException`, interval parser input, output failure, and environment; exercise the 298-byte report golden, exact stderr bytes, short/non-integer/raising stdout and stderr writes, and stdout/stderr flush failures. | Only the exact canonical report or fixed diagnostic bytes appear; partial or complete-looking stdout without successful terminal status is never success; no canary, traceback, or source path crosses an authorized sink. |
 | `PCR-008` | Count input bytes, connections, statements, append attempts, commits, rollbacks, closes, stdout/stderr writes and flushes, and report bytes under success and every failure phase; stall an operating-system output sink separately. | Each repository-owned count and size stays within its fixed contract; client/server timeout values are exact; no automatic retry, poll, sleep, or growth appears. A stalled OS sink demonstrates the explicit absence of a hard wall-clock deadline rather than a false timeout claim. |
 | `PCR-009` | Make every dependency fail while presenting a token, tenant-shaped value, route value, and alternate sink fixture. | No authorization, tenant, route publication, readiness change, or fallback call occurs. |
@@ -665,12 +678,18 @@ Tests may provide controlled connections, output sinks, and barriers through
 public constructors. Live interruption evidence must enter through the actual
 command process and real PostgreSQL; it must not mutate private state and call
 that production evidence. The deterministic live precommit barrier is a
-test-owned Unix-socket protocol relay that forwards to real PostgreSQL but
-pauses the already authenticated connection immediately before forwarding the
-append request. This places the real command in `APPEND_IN_FLIGHT` without a
-database lock and therefore does not race the 250-millisecond lock timeout or
-weaken any production setting. The relay is test evidence only and is not an
-authorized production route.
+test-owned Unix-socket protocol relay that forwards to real PostgreSQL. It
+forwards the append request, then observes and buffers the complete upstream
+append response through `ReadyForQuery` with transaction status `T`, without
+forwarding that response to the command or exposing or interpreting returned
+event data. That protocol boundary proves PostgreSQL executed the append while
+the transaction remains open and leaves the real command blocked in
+`APPEND_IN_FLIGHT`. The test then kills the command, closes the relay's upstream
+PostgreSQL connection, and uses the accepted reader fixture to prove that
+connection-loss rollback left no durable `AUDIT_GAP` event. No database
+lock is added, so the evidence does not race the 250-millisecond lock timeout
+or weaken any production setting. The relay is test evidence only and is not
+an authorized production route.
 
 Post-commit row inspection uses the already accepted
 `OFARM_SECURITY_AUDIT_READER_PG_DSN` reader fixture after the command outcome is
@@ -708,17 +727,19 @@ One new `deployment/postgresql/run_security_audit_process_crash.py` module owns:
   rejection, and side-effect-free runner construction;
 - the adapter-owned raw-`BaseException` guards before connection and after
   acknowledged commit;
+- the final module-entry interruption protocol around command invocation and
+  controlled-status handoff to ordinary `SystemExit`;
 - the exact exit codes and stderr bytes in section 6.5;
 - one full report write and flush with short-write handling; and
 - construction of the fixed runner.
 
 One focused test module owns deterministic unit, live PostgreSQL, test-only
 reader observation and Unix-socket protocol relay, actual SIGINT/SIGTERM
-subprocess, adapter/runner direct-`BaseException`, conninfo/environment,
-byte-protocol, canary, bounded-call, and architecture evidence. Existing README
-files may document the command and its non-deployable external witness
-prerequisite. Mechanical conformance files may inventory the test and reject
-paths or imports outside this contract.
+subprocess, adapter/runner/module-entry direct-`BaseException`,
+conninfo/environment, byte-protocol, canary, bounded-call, and architecture
+evidence. Existing README files may document the command and its non-deployable
+external witness prerequisite. Mechanical conformance files may inventory the
+test and reject paths or imports outside this contract.
 
 ### 9.2 Data flow
 
@@ -886,7 +907,7 @@ patch to this command.
 | `PCR-003` | same-transaction clock and append-result path | equal/later start, malformed clock, observation before end | append absent or transaction rolled back | unit and live PostgreSQL clock/result cases |
 | `PCR-004` | fixed append SQL plus accepted test-only reader fixture | attempted count/kind/function widening or operation-owned readback | reader observes one unknown-count `AUDIT_GAP`, no protected fields, only after outcome fixed | SQL inventory and live reader query |
 | `PCR-005` | transaction phase state machine | ordinary/direct-`BaseException`, authenticated idle-timeout rollback, and transaction-timeout/generic failure at commit boundary | exact refused/unknown/committed classifications and zero automatic retries | deterministic connection tests plus live timeout termination |
-| `PCR-006` | runner and adapter phase translation plus command process | direct catchable interruptions at every adapter/runner sink; actual SIGINT/SIGTERM at the protocol-relay barrier | fixed catchable classification without traceback; stderr interruption suppressed; no uncatchable success inference or automatic retry | adapter seam matrix plus real subprocess/relay/PostgreSQL interruption and deterministic runner phases |
+| `PCR-006` | runner, adapter, final module-entry protocol, and command process | direct catchable interruptions at every adapter/runner/module-entry sink; actual SIGINT/SIGTERM after PostgreSQL completes the relayed append in an open transaction | fixed catchable classification without traceback or caller-selected status; controlled return and `REPORTED` success preservation; stderr interruption suppressed; connection-loss rollback leaves no durable `AUDIT_GAP`; no uncatchable success inference or automatic retry | adapter and module-entry seam matrix plus real subprocess/relay/PostgreSQL interruption, accepted-reader rollback observation, and deterministic runner phases |
 | `PCR-007` | sorted fixed report renderer, terminal truth mapping, and binary sinks | canaries, 298-byte golden report, exact diagnostics, short/non-integer/raising writes, flush failures, and over-ceiling fault | exact ASCII bytes, 512-byte fault ceiling, no canary/traceback/source path, incomplete or complete-looking failed output never success | byte-level report, terminal-status, and sink tests |
 | `PCR-008` | direct runner, bounded parsers, fixed timeout constants, and command | oversize inputs, every dependency phase, hostile timeout defaults, and stalled OS sink | exact input/connection/statement/append/output call and size ceilings; complete effective-timeout row; explicit no-wall-clock non-claim | deterministic call inventory, live timeout evidence, and stalled-sink non-claim test |
 | `PCR-009` | module imports and closed failures | token/tenant/route-shaped inputs with dependency failures | no authority or fallback calls | import and collaborator-call gates |
@@ -901,13 +922,15 @@ Required Phase B verification, if later authorized:
   deterministic public-constructor direct-`BaseException` evidence before,
   during, and after commit;
 - adapter-owned parsing/construction/stdout/stderr direct-`BaseException`
-  evidence and the complete terminal truth table;
+  evidence, final module-entry invocation/status-handoff interruption evidence,
+  and the complete terminal truth table;
 - operation-specific closed conninfo reconstruction, shared-DSN isolation,
   input-size and minimum-libpq gates, ambient `PG*` rejection, no indirect
   libpq file authority, exact client timeout, and live complete effective-
   setting evidence;
-- deterministic Unix-socket protocol-relay interruption without weakening
-  `lock_timeout`;
+- deterministic Unix-socket protocol-relay interruption after PostgreSQL has
+  completed the append in an open transaction, followed by connection-loss
+  rollback evidence without weakening `lock_timeout`;
 - exact one-row unknown-count event, protected-field absence, and overlap
   observation through the existing test-only reader fixture;
 - byte-exact golden report, diagnostic, short-write, flush-failure, fixed canary,
