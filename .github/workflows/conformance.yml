@@ -60,6 +60,8 @@ concurrency:
 env:
   OFARM_BASELINE_ADMISSION_POLICY_SHA: ${{ github.workflow_sha }}
   OFARM_BASELINE_ADMISSION_INPUTS: ${{ toJSON(inputs) }}
+  OFARM_EVIDENCE_PUBLICATION_WORKFLOW_SHA256: >-
+    sha256:f27337c35018d39f849879e4e8dace7c4724b7633b8f3921aeb1b33e379075a9
 
 jobs:
   baseline-admission:
@@ -524,17 +526,19 @@ jobs:
             "${ISSUE174_BUILDX}" rm "${ISSUE174_BUILDER}" || true
           fi
 
-  conformance-publisher:
-    name: publish verified conformance evidence
-    needs: [baseline-admission, conformance]
+  publication-handoff:
+    name: seal exact provisional publication handoff
+    needs: [baseline-admission, conformance, native-verifier]
     if: >-
       always() &&
       needs.baseline-admission.result == 'success' &&
       needs.baseline-admission.outputs.eligible == 'true' &&
-      needs.conformance.result == 'success'
+      needs.conformance.result == 'success' &&
+      needs.native-verifier.result == 'success'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     permissions:
+      actions: read
       contents: read
       issues: read
       pull-requests: read
@@ -542,20 +546,27 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           ref: ${{ env.OFARM_BASELINE_ADMISSION_POLICY_SHA }}
-          path: .baseline-admission-policy
+          path: .publication-policy
           persist-credentials: false
-      - name: Authenticate the immutable conformance publication policy
-        run: >-
-          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
-          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-      - name: Recheck live admission before conformance validation
-        id: publisher-start-admission
+      - name: Authenticate the immutable publication handoff policy
+        run: |
+          test "$(git -C .publication-policy rev-parse HEAD)" = \
+            "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+          printf '%s  %s\n' \
+            "${OFARM_EVIDENCE_PUBLICATION_WORKFLOW_SHA256#sha256:}" \
+            ".publication-policy/.github/workflows/evidence-publication.yml" \
+            | sha256sum --check --strict
+          git -C .publication-policy diff --exit-code --no-ext-diff
+          test -z "$(git -C .publication-policy status \
+            --porcelain=v1 --untracked-files=all)"
+      - name: Recheck admission and seal the exact provisional inventory
+        id: publication-handoff
         env:
           OFARM_ADMISSION_TOKEN: ${{ github.token }}
         run: >-
           /usr/bin/python3
-          .baseline-admission-policy/conformance/review_baseline_admission.py
-          --operation admit
+          .publication-policy/conformance/review_baseline_admission.py
+          --operation handoff
           --event-name "${GITHUB_EVENT_NAME}"
           --event-path "${GITHUB_EVENT_PATH}"
           --github-sha "${GITHUB_SHA}"
@@ -563,178 +574,20 @@ jobs:
           --workflow-ref "${GITHUB_WORKFLOW_REF}"
           --repository "${GITHUB_REPOSITORY}"
           --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
+          --source-run-id "${GITHUB_RUN_ID}"
+          --source-run-attempt "${GITHUB_RUN_ATTEMPT}"
+          --ticket-output
+          "${RUNNER_TEMP}/evidence-publication-ticket.json"
           --github-output "${GITHUB_OUTPUT}"
-          --evidence-output
-          "${RUNNER_TEMP}/conformance-publisher-admission-start.json"
-      - name: Bind conformance publisher to the admitted coordinates
-        env:
-          ADMITTED_COMMENT: ${{ needs.baseline-admission.outputs.admission_comment_id }}
-          ADMITTED_HEAD: ${{ needs.baseline-admission.outputs.reviewed_head_sha }}
-          ADMITTED_BASE: ${{ needs.baseline-admission.outputs.base_sha }}
-          ADMITTED_MERGE: ${{ needs.baseline-admission.outputs.execution_merge_sha }}
-          ADMITTED_BODY: ${{ needs.baseline-admission.outputs.review_body_sha256 }}
-          ADMITTED_STATE: ${{ needs.baseline-admission.outputs.review_state }}
-          ADMITTED_UPDATED: ${{ needs.baseline-admission.outputs.review_updated_at }}
-          ADMITTED_ASSOCIATION: ${{ needs.baseline-admission.outputs.reviewer_association }}
-          START_COMMENT: ${{ steps.publisher-start-admission.outputs.admission_comment_id }}
-          START_HEAD: ${{ steps.publisher-start-admission.outputs.reviewed_head_sha }}
-          START_BASE: ${{ steps.publisher-start-admission.outputs.base_sha }}
-          START_MERGE: ${{ steps.publisher-start-admission.outputs.execution_merge_sha }}
-          START_POLICY: ${{ steps.publisher-start-admission.outputs.policy_sha }}
-          START_BODY: ${{ steps.publisher-start-admission.outputs.review_body_sha256 }}
-          START_STATE: ${{ steps.publisher-start-admission.outputs.review_state }}
-          START_UPDATED: ${{ steps.publisher-start-admission.outputs.review_updated_at }}
-          START_ASSOCIATION: ${{ steps.publisher-start-admission.outputs.reviewer_association }}
-        run: |
-          test "${START_COMMENT}" = "${ADMITTED_COMMENT}"
-          test "${START_HEAD}" = "${ADMITTED_HEAD}"
-          test "${START_BASE}" = "${ADMITTED_BASE}"
-          test "${START_MERGE}" = "${ADMITTED_MERGE}"
-          test "${START_POLICY}" = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-          test "${START_BODY}" = "${ADMITTED_BODY}"
-          test "${START_STATE}" = "${ADMITTED_STATE}"
-          test "${START_UPDATED}" = "${ADMITTED_UPDATED}"
-          test "${START_ASSOCIATION}" = "${ADMITTED_ASSOCIATION}"
-      - name: Download provisional conformance evidence
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          name: conformance-provisional
-          path: .publisher-input/conformance
-      - name: Validate provisional conformance evidence
-        id: provisional-proof
-        run: |
-          /usr/bin/python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          root = Path(".publisher-input/conformance")
-          if not root.is_dir():
-              raise SystemExit("provisional conformance artifact is missing")
-          if any(path.is_symlink() for path in root.rglob("*")):
-              raise SystemExit("provisional conformance artifact contains a symlink")
-          if list(root.rglob("review-baseline-admission.json")):
-              raise SystemExit("producer supplied an untrusted admission receipt")
-          for run in ("run-1", "run-2"):
-              path = root / "review-baseline" / run / "review-baseline-evidence.json"
-              evidence = json.loads(path.read_text(encoding="utf-8"))
-              if (
-                  evidence.get("schemaVersion")
-                  != "ofarm.review-baseline-evidence.v2"
-                  or evidence.get("run", {}).get("outcome") != "passed"
-              ):
-                  raise SystemExit(f"unpublishable review baseline: {path}")
-          comparison_path = root / "review-baseline" / "equivalence.json"
-          comparison = json.loads(comparison_path.read_text(encoding="utf-8"))
-          if (
-              comparison.get("schemaVersion")
-              != "ofarm.review-baseline-comparison.v2"
-              or comparison.get("equivalent") is not True
-          ):
-              raise SystemExit("unpublishable review-baseline equivalence")
-          platform_files = list(
-              (root / "platform-evidence").glob("platform_mvp_results_*.json")
-          )
-          if len(platform_files) != 1:
-              raise SystemExit("platform evidence set is incomplete")
-          platform = json.loads(platform_files[0].read_text(encoding="utf-8"))
-          if (
-              platform.get("executed") is not True
-              or platform.get("allPassed") is not True
-              or platform.get("exitStatus") != 0
-              or not platform.get("results")
-          ):
-              raise SystemExit("platform evidence did not pass")
-          PY
-      - name: Re-authenticate conformance policy before publication
-        if: always()
-        id: final-policy-proof
-        run: >-
-          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
-          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-      - name: Recheck live admission before conformance publication
-        if: always() && steps.final-policy-proof.outcome == 'success'
-        id: final-admission
-        env:
-          OFARM_ADMISSION_TOKEN: ${{ github.token }}
-        run: >-
-          /usr/bin/python3
-          .baseline-admission-policy/conformance/review_baseline_admission.py
-          --operation admit
-          --event-name "${GITHUB_EVENT_NAME}"
-          --event-path "${GITHUB_EVENT_PATH}"
-          --github-sha "${GITHUB_SHA}"
-          --workflow-sha "${GITHUB_WORKFLOW_SHA}"
-          --workflow-ref "${GITHUB_WORKFLOW_REF}"
-          --repository "${GITHUB_REPOSITORY}"
-          --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-          --github-output "${GITHUB_OUTPUT}"
-          --evidence-output
-          "${RUNNER_TEMP}/conformance-publisher-admission-final.json"
-      - name: Prove complete conformance evidence is publishable
-        if: always()
-        id: success-artifact-proof
-        env:
-          PRIOR_JOB_STATUS: ${{ job.status }}
-          UPSTREAM_RESULT: ${{ needs.conformance.result }}
-          START_ADMISSION_OUTCOME: ${{ steps.publisher-start-admission.outcome }}
-          PROVISIONAL_PROOF_OUTCOME: ${{ steps.provisional-proof.outcome }}
-          FINAL_POLICY_OUTCOME: ${{ steps.final-policy-proof.outcome }}
-          FINAL_ADMISSION_OUTCOME: ${{ steps.final-admission.outcome }}
-        run: |
-          test "${PRIOR_JOB_STATUS}" = success
-          test "${UPSTREAM_RESULT}" = success
-          test "${START_ADMISSION_OUTCOME}" = success
-          test "${PROVISIONAL_PROOF_OUTCOME}" = success
-          test "${FINAL_POLICY_OUTCOME}" = success
-          test "${FINAL_ADMISSION_OUTCOME}" = success
-          test "${{ steps.final-admission.outputs.eligible }}" = true
-          /usr/bin/cmp \
-            "${RUNNER_TEMP}/conformance-publisher-admission-start.json" \
-            "${RUNNER_TEMP}/conformance-publisher-admission-final.json"
-          /usr/bin/cp \
-            "${RUNNER_TEMP}/conformance-publisher-admission-final.json" \
-            .publisher-input/conformance/review-baseline/review-baseline-admission.json
-          /usr/bin/cp \
-            "${RUNNER_TEMP}/conformance-publisher-admission-final.json" \
-            .publisher-input/conformance/platform-evidence/review-baseline-admission.json
-      - name: Upload deterministic review baseline
-        if: always() && steps.success-artifact-proof.outcome == 'success'
+      - name: Upload immutable evidence publication ticket last
+        id: publication-ticket
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: review-baseline
-          path: .publisher-input/conformance/review-baseline/
-          include-hidden-files: true
-          if-no-files-found: error
-      - name: Upload root platform MVP evidence
-        if: always() && steps.success-artifact-proof.outcome == 'success'
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: platform-mvp-evidence
-          path: .publisher-input/conformance/platform-evidence/
-          include-hidden-files: true
-          if-no-files-found: error
-      - name: Preserve failed conformance publication separately
-        if: >-
-          always() &&
-          steps.publisher-start-admission.outcome == 'success' &&
-          steps.success-artifact-proof.outcome != 'success'
-        id: failure-admission-receipt
-        run: |
-          /usr/bin/mkdir -p .publisher-failure/review-baseline-admission-failure
-          /usr/bin/cp \
-            "${RUNNER_TEMP}/conformance-publisher-admission-start.json" \
-            .publisher-failure/review-baseline-admission-failure/admission.json
-      - name: Upload failed conformance admission receipt
-        if: >-
-          always() &&
-          steps.failure-admission-receipt.outcome == 'success'
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: review-baseline-admission-failure
-          path: .publisher-failure/review-baseline-admission-failure/
-          include-hidden-files: true
+          name: evidence-publication-ticket
+          path: ${{ runner.temp }}/evidence-publication-ticket.json
           if-no-files-found: error
           retention-days: 14
+
 
   native-verifier:
     needs: baseline-admission
@@ -993,6 +846,30 @@ jobs:
           --source-commit "${{ needs.baseline-admission.outputs.execution_merge_sha }}"
           --output
           ".artifacts/native/${{ matrix.architecture }}/reproducibility.json"
+      - name: Seal both installed file sets for trusted publication
+        run: |
+          for build in first second
+          do
+            tar \
+              --create \
+              --file \
+                ".artifacts/native/${{ matrix.architecture }}/${build}-artifacts.tar" \
+              --format=ustar \
+              --sort=name \
+              --mtime='@0' \
+              --owner=0 \
+              --group=0 \
+              --numeric-owner \
+              --directory \
+                ".artifacts/native/${{ matrix.architecture }}/${build}" \
+              libsodium.a \
+              ofarm_ed25519.so \
+              ofarm_ed25519.control \
+              ofarm_ed25519--1.0.sql
+            test -s \
+              ".artifacts/native/${{ matrix.architecture }}/${build}-artifacts.tar"
+            rm -rf -- ".artifacts/native/${{ matrix.architecture }}/${build}"
+          done
       - name: Load and verify the authenticated clean native child
         run: |
           image="ofarm-ed25519-${{ matrix.architecture }}:second"
@@ -1016,12 +893,9 @@ jobs:
           fi
           test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' \
             "$image")" = "linux/${{ matrix.architecture }}"
-          rm -- \
-            ".artifacts/native/${{ matrix.architecture }}/first-image.docker.tar" \
-            ".artifacts/native/${{ matrix.architecture }}/second-image.docker.tar"
-          test ! -e \
+          test -s \
             ".artifacts/native/${{ matrix.architecture }}/first-image.docker.tar"
-          test ! -e \
+          test -s \
             ".artifacts/native/${{ matrix.architecture }}/second-image.docker.tar"
       - name: Run the exact live PostgreSQL verifier smoke
         run: |
@@ -1078,7 +952,7 @@ jobs:
               ".artifacts/native/${{ matrix.architecture }}/attestations"
           test "$(du --bytes --summarize \
             ".artifacts/native/${{ matrix.architecture }}" | cut --fields=1)" \
-            -le 600000000
+            -le 1600000000
       - name: Upload bounded native verifier evidence provisionally
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
@@ -1097,602 +971,3 @@ jobs:
           then
             "${ISSUE174_BUILDX}" rm "${ISSUE174_BUILDER}" || true
           fi
-
-  native-verifier-publisher:
-    name: publish verified native evidence (${{ matrix.architecture }})
-    needs: [baseline-admission, native-verifier]
-    if: >-
-      always() &&
-      needs.baseline-admission.result == 'success' &&
-      needs.baseline-admission.outputs.eligible == 'true' &&
-      needs.native-verifier.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        architecture: [amd64, arm64]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      issues: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        with:
-          ref: ${{ env.OFARM_BASELINE_ADMISSION_POLICY_SHA }}
-          path: .baseline-admission-policy
-          persist-credentials: false
-      - name: Authenticate the immutable native publication policy
-        run: >-
-          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
-          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-      - name: Recheck live admission before native validation
-        id: publisher-start-admission
-        env:
-          OFARM_ADMISSION_TOKEN: ${{ github.token }}
-        run: >-
-          /usr/bin/python3
-          .baseline-admission-policy/conformance/review_baseline_admission.py
-          --operation admit
-          --event-name "${GITHUB_EVENT_NAME}"
-          --event-path "${GITHUB_EVENT_PATH}"
-          --github-sha "${GITHUB_SHA}"
-          --workflow-sha "${GITHUB_WORKFLOW_SHA}"
-          --workflow-ref "${GITHUB_WORKFLOW_REF}"
-          --repository "${GITHUB_REPOSITORY}"
-          --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-          --github-output "${GITHUB_OUTPUT}"
-          --evidence-output
-          "${RUNNER_TEMP}/native-${{ matrix.architecture }}-publisher-admission-start.json"
-      - name: Bind native publisher to the admitted coordinates
-        env:
-          ADMITTED_COMMENT: ${{ needs.baseline-admission.outputs.admission_comment_id }}
-          ADMITTED_HEAD: ${{ needs.baseline-admission.outputs.reviewed_head_sha }}
-          ADMITTED_BASE: ${{ needs.baseline-admission.outputs.base_sha }}
-          ADMITTED_MERGE: ${{ needs.baseline-admission.outputs.execution_merge_sha }}
-          ADMITTED_BODY: ${{ needs.baseline-admission.outputs.review_body_sha256 }}
-          ADMITTED_STATE: ${{ needs.baseline-admission.outputs.review_state }}
-          ADMITTED_UPDATED: ${{ needs.baseline-admission.outputs.review_updated_at }}
-          ADMITTED_ASSOCIATION: ${{ needs.baseline-admission.outputs.reviewer_association }}
-          START_COMMENT: ${{ steps.publisher-start-admission.outputs.admission_comment_id }}
-          START_HEAD: ${{ steps.publisher-start-admission.outputs.reviewed_head_sha }}
-          START_BASE: ${{ steps.publisher-start-admission.outputs.base_sha }}
-          START_MERGE: ${{ steps.publisher-start-admission.outputs.execution_merge_sha }}
-          START_POLICY: ${{ steps.publisher-start-admission.outputs.policy_sha }}
-          START_BODY: ${{ steps.publisher-start-admission.outputs.review_body_sha256 }}
-          START_STATE: ${{ steps.publisher-start-admission.outputs.review_state }}
-          START_UPDATED: ${{ steps.publisher-start-admission.outputs.review_updated_at }}
-          START_ASSOCIATION: ${{ steps.publisher-start-admission.outputs.reviewer_association }}
-        run: |
-          test "${START_COMMENT}" = "${ADMITTED_COMMENT}"
-          test "${START_HEAD}" = "${ADMITTED_HEAD}"
-          test "${START_BASE}" = "${ADMITTED_BASE}"
-          test "${START_MERGE}" = "${ADMITTED_MERGE}"
-          test "${START_POLICY}" = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-          test "${START_BODY}" = "${ADMITTED_BODY}"
-          test "${START_STATE}" = "${ADMITTED_STATE}"
-          test "${START_UPDATED}" = "${ADMITTED_UPDATED}"
-          test "${START_ASSOCIATION}" = "${ADMITTED_ASSOCIATION}"
-      - name: Download provisional native evidence
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          name: native-verifier-${{ matrix.architecture }}-provisional
-          path: .publisher-input/native/${{ matrix.architecture }}
-      - name: Re-authenticate provisional native evidence with trusted code
-        id: trusted-native-proof
-        run: |
-          /usr/bin/python3 \
-            .baseline-admission-policy/deployment/postgresql/native_evidence.py \
-            collect-oci \
-            --archive \
-              ".publisher-input/native/${{ matrix.architecture }}/ofarm-ed25519.oci.tar" \
-            --reproducibility \
-              ".publisher-input/native/${{ matrix.architecture }}/reproducibility.json" \
-            --platform "linux/${{ matrix.architecture }}" \
-            --source-commit \
-              "${{ needs.baseline-admission.outputs.execution_merge_sha }}" \
-            --containerfile \
-              .baseline-admission-policy/deployment/postgresql/ofarm_ed25519/Containerfile \
-            --builder-id \
-              "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}" \
-            --output-directory \
-              ".publisher-verified/native/${{ matrix.architecture }}"
-          /usr/bin/cmp \
-            ".publisher-input/native/${{ matrix.architecture }}/attestations/oci-evidence.json" \
-            ".publisher-verified/native/${{ matrix.architecture }}/oci-evidence.json"
-          /usr/bin/cmp \
-            ".publisher-input/native/${{ matrix.architecture }}/attestations/sbom.spdx.in-toto.json" \
-            ".publisher-verified/native/${{ matrix.architecture }}/sbom.spdx.in-toto.json"
-          /usr/bin/cmp \
-            ".publisher-input/native/${{ matrix.architecture }}/attestations/provenance.slsa-v0.2.in-toto.json" \
-            ".publisher-verified/native/${{ matrix.architecture }}/provenance.slsa-v0.2.in-toto.json"
-      - name: Validate provisional native evidence
-        id: provisional-proof
-        env:
-          EXPECTED_PLATFORM: linux/${{ matrix.architecture }}
-          EXPECTED_SOURCE: ${{ needs.baseline-admission.outputs.execution_merge_sha }}
-        run: |
-          /usr/bin/python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          root = Path(".publisher-input/native") / os.environ[
-              "EXPECTED_PLATFORM"
-          ].split("/")[1]
-          if not root.is_dir():
-              raise SystemExit("provisional native artifact is missing")
-          if any(path.is_symlink() for path in root.rglob("*")):
-              raise SystemExit("provisional native artifact contains a symlink")
-          if (root / "review-baseline-admission.json").exists():
-              raise SystemExit("producer supplied an untrusted admission receipt")
-          archives = list(root.glob("*.oci.tar"))
-          reproducibility = json.loads(
-              (root / "reproducibility.json").read_text(encoding="utf-8")
-          )
-          evidence = json.loads(
-              (root / "attestations/oci-evidence.json").read_text(encoding="utf-8")
-          )
-          if len(archives) != 1 or archives[0].stat().st_size <= 0:
-              raise SystemExit("native OCI archive is missing")
-          if (
-              reproducibility.get("schema")
-              != "ofarm.native-reproducibility-evidence.v1"
-              or reproducibility.get("platform") != os.environ["EXPECTED_PLATFORM"]
-              or reproducibility.get("source_commit") != os.environ["EXPECTED_SOURCE"]
-          ):
-              raise SystemExit("native reproducibility evidence is inconsistent")
-          if (
-              evidence.get("schema") != "ofarm.native-oci-evidence.v1"
-              or evidence.get("platform") != os.environ["EXPECTED_PLATFORM"]
-              or evidence.get("source_commit") != os.environ["EXPECTED_SOURCE"]
-          ):
-              raise SystemExit("native OCI evidence is inconsistent")
-          for name in (
-              "attestations/sbom.spdx.in-toto.json",
-              "attestations/provenance.slsa-v0.2.in-toto.json",
-          ):
-              path = root / name
-              if not path.is_file() or path.stat().st_size <= 0:
-                  raise SystemExit(f"native attestation is missing: {name}")
-          PY
-      - name: Re-authenticate native policy before publication
-        if: always()
-        id: final-policy-proof
-        run: >-
-          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
-          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-      - name: Recheck live admission before native publication
-        if: always() && steps.final-policy-proof.outcome == 'success'
-        id: final-admission
-        env:
-          OFARM_ADMISSION_TOKEN: ${{ github.token }}
-        run: >-
-          /usr/bin/python3
-          .baseline-admission-policy/conformance/review_baseline_admission.py
-          --operation admit
-          --event-name "${GITHUB_EVENT_NAME}"
-          --event-path "${GITHUB_EVENT_PATH}"
-          --github-sha "${GITHUB_SHA}"
-          --workflow-sha "${GITHUB_WORKFLOW_SHA}"
-          --workflow-ref "${GITHUB_WORKFLOW_REF}"
-          --repository "${GITHUB_REPOSITORY}"
-          --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-          --github-output "${GITHUB_OUTPUT}"
-          --evidence-output
-          "${RUNNER_TEMP}/native-${{ matrix.architecture }}-publisher-admission-final.json"
-      - name: Prove complete native evidence is publishable
-        if: always()
-        id: success-artifact-proof
-        env:
-          PRIOR_JOB_STATUS: ${{ job.status }}
-          UPSTREAM_RESULT: ${{ needs.native-verifier.result }}
-          START_ADMISSION_OUTCOME: ${{ steps.publisher-start-admission.outcome }}
-          TRUSTED_NATIVE_PROOF_OUTCOME: ${{ steps.trusted-native-proof.outcome }}
-          PROVISIONAL_PROOF_OUTCOME: ${{ steps.provisional-proof.outcome }}
-          FINAL_POLICY_OUTCOME: ${{ steps.final-policy-proof.outcome }}
-          FINAL_ADMISSION_OUTCOME: ${{ steps.final-admission.outcome }}
-        run: |
-          test "${PRIOR_JOB_STATUS}" = success
-          test "${UPSTREAM_RESULT}" = success
-          test "${START_ADMISSION_OUTCOME}" = success
-          test "${TRUSTED_NATIVE_PROOF_OUTCOME}" = success
-          test "${PROVISIONAL_PROOF_OUTCOME}" = success
-          test "${FINAL_POLICY_OUTCOME}" = success
-          test "${FINAL_ADMISSION_OUTCOME}" = success
-          test "${{ steps.final-admission.outputs.eligible }}" = true
-          /usr/bin/cmp \
-            "${RUNNER_TEMP}/native-${{ matrix.architecture }}-publisher-admission-start.json" \
-            "${RUNNER_TEMP}/native-${{ matrix.architecture }}-publisher-admission-final.json"
-          /usr/bin/cp \
-            "${RUNNER_TEMP}/native-${{ matrix.architecture }}-publisher-admission-final.json" \
-            ".publisher-input/native/${{ matrix.architecture }}/review-baseline-admission.json"
-      - name: Upload bounded native verifier evidence
-        if: always() && steps.success-artifact-proof.outcome == 'success'
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: native-verifier-${{ matrix.architecture }}
-          path: .publisher-input/native/${{ matrix.architecture }}/
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
-      - name: Preserve failed native publication separately
-        if: >-
-          always() &&
-          steps.publisher-start-admission.outcome == 'success' &&
-          steps.success-artifact-proof.outcome != 'success'
-        id: failure-admission-receipt
-        run: |
-          /usr/bin/mkdir -p \
-            ".publisher-failure/native/${{ matrix.architecture }}"
-          /usr/bin/cp \
-            "${RUNNER_TEMP}/native-${{ matrix.architecture }}-publisher-admission-start.json" \
-            ".publisher-failure/native/${{ matrix.architecture }}/admission.json"
-      - name: Upload failed native admission receipt
-        if: >-
-          always() &&
-          steps.failure-admission-receipt.outcome == 'success'
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: native-verifier-${{ matrix.architecture }}-admission-failure
-          path: .publisher-failure/native/${{ matrix.architecture }}/
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
-
-  native-verifier-index:
-    name: native verifier canonical index
-    needs: [baseline-admission, native-verifier-publisher]
-    if: >-
-      needs.baseline-admission.outputs.eligible == 'true' &&
-      needs.native-verifier-publisher.result == 'success'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      issues: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        with:
-          ref: ${{ env.OFARM_BASELINE_ADMISSION_POLICY_SHA }}
-          path: .baseline-admission-policy
-          persist-credentials: false
-      - name: Authenticate the immutable admission policy before native indexing
-        run: >-
-          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
-          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-      - name: Recheck live admission before native indexing
-        id: start-admission
-        env:
-          OFARM_ADMISSION_TOKEN: ${{ github.token }}
-        run: >-
-          python3
-          .baseline-admission-policy/conformance/review_baseline_admission.py
-          --operation admit
-          --event-name "${GITHUB_EVENT_NAME}"
-          --event-path "${GITHUB_EVENT_PATH}"
-          --github-sha "${GITHUB_SHA}"
-          --workflow-sha "${GITHUB_WORKFLOW_SHA}"
-          --workflow-ref "${GITHUB_WORKFLOW_REF}"
-          --repository "${GITHUB_REPOSITORY}"
-          --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-          --github-output "${GITHUB_OUTPUT}"
-          --evidence-output
-          "${RUNNER_TEMP}/native-index-admission-start.json"
-      - name: Bind native indexing to the admitted coordinates
-        env:
-          ADMITTED_COMMENT: ${{ needs.baseline-admission.outputs.admission_comment_id }}
-          ADMITTED_HEAD: ${{ needs.baseline-admission.outputs.reviewed_head_sha }}
-          ADMITTED_BASE: ${{ needs.baseline-admission.outputs.base_sha }}
-          ADMITTED_MERGE: ${{ needs.baseline-admission.outputs.execution_merge_sha }}
-          ADMITTED_BODY: ${{ needs.baseline-admission.outputs.review_body_sha256 }}
-          ADMITTED_STATE: ${{ needs.baseline-admission.outputs.review_state }}
-          ADMITTED_UPDATED: ${{ needs.baseline-admission.outputs.review_updated_at }}
-          ADMITTED_ASSOCIATION: ${{ needs.baseline-admission.outputs.reviewer_association }}
-          START_COMMENT: ${{ steps.start-admission.outputs.admission_comment_id }}
-          START_HEAD: ${{ steps.start-admission.outputs.reviewed_head_sha }}
-          START_BASE: ${{ steps.start-admission.outputs.base_sha }}
-          START_MERGE: ${{ steps.start-admission.outputs.execution_merge_sha }}
-          START_POLICY: ${{ steps.start-admission.outputs.policy_sha }}
-          START_BODY: ${{ steps.start-admission.outputs.review_body_sha256 }}
-          START_STATE: ${{ steps.start-admission.outputs.review_state }}
-          START_UPDATED: ${{ steps.start-admission.outputs.review_updated_at }}
-          START_ASSOCIATION: ${{ steps.start-admission.outputs.reviewer_association }}
-        run: |
-          test "${START_COMMENT}" = "${ADMITTED_COMMENT}"
-          test "${START_HEAD}" = "${ADMITTED_HEAD}"
-          test "${START_BASE}" = "${ADMITTED_BASE}"
-          test "${START_MERGE}" = "${ADMITTED_MERGE}"
-          test "${START_POLICY}" = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-          test "${START_BODY}" = "${ADMITTED_BODY}"
-          test "${START_STATE}" = "${ADMITTED_STATE}"
-          test "${START_UPDATED}" = "${ADMITTED_UPDATED}"
-          test "${START_ASSOCIATION}" = "${ADMITTED_ASSOCIATION}"
-          rm -rf -- .baseline-admission-policy
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        with:
-          ref: ${{ needs.baseline-admission.outputs.execution_merge_sha }}
-          persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: "3.12.13"
-          architecture: x64
-      - name: Download authenticated amd64 evidence
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          name: native-verifier-amd64
-          path: .artifacts/native-fan-in/amd64
-      - name: Download authenticated arm64 evidence
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          name: native-verifier-arm64
-          path: .artifacts/native-fan-in/arm64
-      - name: Re-authenticate both native evidence archives
-        run: |
-          for architecture in amd64 arm64
-          do
-            python deployment/postgresql/native_evidence.py collect-oci \
-              --archive \
-                ".artifacts/native-fan-in/${architecture}/ofarm-ed25519.oci.tar" \
-              --reproducibility \
-                ".artifacts/native-fan-in/${architecture}/reproducibility.json" \
-              --platform "linux/${architecture}" \
-              --source-commit "${{ needs.baseline-admission.outputs.execution_merge_sha }}" \
-              --containerfile deployment/postgresql/ofarm_ed25519/Containerfile \
-              --builder-id \
-                "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}" \
-              --output-directory \
-                ".artifacts/native-fan-in/verified/${architecture}"
-          done
-      - name: Compose one canonical two-platform OCI index
-        run: |
-          python deployment/postgresql/native_evidence.py compose-index \
-            --amd64-evidence \
-              .artifacts/native-fan-in/verified/amd64/oci-evidence.json \
-            --arm64-evidence \
-              .artifacts/native-fan-in/verified/arm64/oci-evidence.json \
-            --source-commit "${{ needs.baseline-admission.outputs.execution_merge_sha }}" \
-            --index-output \
-              .artifacts/native-index/ofarm-ed25519.index.json \
-            --evidence-output \
-              .artifacts/native-index/ofarm-ed25519.index-evidence.json
-          test "$(du --bytes --summarize .artifacts/native-index | cut --fields=1)" \
-            -le 1000000
-      - name: Prepare or enforce the native release identity
-        id: native-release-identity
-        run: |
-          python deployment/postgresql/native_evidence.py \
-            prepare-release-identity \
-            --checked-identity \
-              deployment/postgresql/ofarm_ed25519/native_release_identity.json \
-            --checked-receipt \
-              deployment/postgresql/ofarm_ed25519/native_evidence_receipt.json \
-            --verification-currentness \
-              deployment/postgresql/ofarm_ed25519/native_evidence_verification_currentness.json \
-            --index-evidence \
-              .artifacts/native-index/ofarm-ed25519.index-evidence.json \
-            --index .artifacts/native-index/ofarm-ed25519.index.json \
-            --source-directory deployment/postgresql/ofarm_ed25519 \
-            --repository-root . \
-            --candidate-output \
-              .artifacts/native-index/native_release_identity.candidate.json \
-            --candidate-receipt-output \
-              .artifacts/native-index/native_evidence_receipt.candidate.json
-      - name: Upload provisional native index evidence
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: native-verifier-index-provisional
-          path: .artifacts/native-index/
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
-
-  native-verifier-index-publisher:
-    name: publish verified native index evidence
-    needs: [baseline-admission, native-verifier-index]
-    if: >-
-      always() &&
-      needs.baseline-admission.result == 'success' &&
-      needs.baseline-admission.outputs.eligible == 'true' &&
-      needs.native-verifier-index.result == 'success'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      issues: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        with:
-          ref: ${{ env.OFARM_BASELINE_ADMISSION_POLICY_SHA }}
-          path: .baseline-admission-policy
-          persist-credentials: false
-      - name: Authenticate the immutable native-index publication policy
-        run: >-
-          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
-          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-      - name: Recheck live admission before native-index validation
-        id: publisher-start-admission
-        env:
-          OFARM_ADMISSION_TOKEN: ${{ github.token }}
-        run: >-
-          /usr/bin/python3
-          .baseline-admission-policy/conformance/review_baseline_admission.py
-          --operation admit
-          --event-name "${GITHUB_EVENT_NAME}"
-          --event-path "${GITHUB_EVENT_PATH}"
-          --github-sha "${GITHUB_SHA}"
-          --workflow-sha "${GITHUB_WORKFLOW_SHA}"
-          --workflow-ref "${GITHUB_WORKFLOW_REF}"
-          --repository "${GITHUB_REPOSITORY}"
-          --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-          --github-output "${GITHUB_OUTPUT}"
-          --evidence-output
-          "${RUNNER_TEMP}/native-index-publisher-admission-start.json"
-      - name: Bind native-index publisher to the admitted coordinates
-        env:
-          ADMITTED_COMMENT: ${{ needs.baseline-admission.outputs.admission_comment_id }}
-          ADMITTED_HEAD: ${{ needs.baseline-admission.outputs.reviewed_head_sha }}
-          ADMITTED_BASE: ${{ needs.baseline-admission.outputs.base_sha }}
-          ADMITTED_MERGE: ${{ needs.baseline-admission.outputs.execution_merge_sha }}
-          ADMITTED_BODY: ${{ needs.baseline-admission.outputs.review_body_sha256 }}
-          ADMITTED_STATE: ${{ needs.baseline-admission.outputs.review_state }}
-          ADMITTED_UPDATED: ${{ needs.baseline-admission.outputs.review_updated_at }}
-          ADMITTED_ASSOCIATION: ${{ needs.baseline-admission.outputs.reviewer_association }}
-          START_COMMENT: ${{ steps.publisher-start-admission.outputs.admission_comment_id }}
-          START_HEAD: ${{ steps.publisher-start-admission.outputs.reviewed_head_sha }}
-          START_BASE: ${{ steps.publisher-start-admission.outputs.base_sha }}
-          START_MERGE: ${{ steps.publisher-start-admission.outputs.execution_merge_sha }}
-          START_POLICY: ${{ steps.publisher-start-admission.outputs.policy_sha }}
-          START_BODY: ${{ steps.publisher-start-admission.outputs.review_body_sha256 }}
-          START_STATE: ${{ steps.publisher-start-admission.outputs.review_state }}
-          START_UPDATED: ${{ steps.publisher-start-admission.outputs.review_updated_at }}
-          START_ASSOCIATION: ${{ steps.publisher-start-admission.outputs.reviewer_association }}
-        run: |
-          test "${START_COMMENT}" = "${ADMITTED_COMMENT}"
-          test "${START_HEAD}" = "${ADMITTED_HEAD}"
-          test "${START_BASE}" = "${ADMITTED_BASE}"
-          test "${START_MERGE}" = "${ADMITTED_MERGE}"
-          test "${START_POLICY}" = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-          test "${START_BODY}" = "${ADMITTED_BODY}"
-          test "${START_STATE}" = "${ADMITTED_STATE}"
-          test "${START_UPDATED}" = "${ADMITTED_UPDATED}"
-          test "${START_ASSOCIATION}" = "${ADMITTED_ASSOCIATION}"
-      - name: Download provisional native index evidence
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          name: native-verifier-index-provisional
-          path: .publisher-input/native-index
-      - name: Validate provisional native index evidence
-        id: provisional-proof
-        env:
-          EXPECTED_SOURCE: ${{ needs.baseline-admission.outputs.execution_merge_sha }}
-        run: |
-          /usr/bin/python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          root = Path(".publisher-input/native-index")
-          if not root.is_dir():
-              raise SystemExit("provisional native-index artifact is missing")
-          if any(path.is_symlink() for path in root.rglob("*")):
-              raise SystemExit("provisional native-index artifact contains a symlink")
-          if (root / "review-baseline-admission.json").exists():
-              raise SystemExit("producer supplied an untrusted admission receipt")
-          index = json.loads(
-              (root / "ofarm-ed25519.index.json").read_text(encoding="utf-8")
-          )
-          evidence = json.loads(
-              (root / "ofarm-ed25519.index-evidence.json").read_text(
-                  encoding="utf-8"
-              )
-          )
-          identity = json.loads(
-              (root / "native_release_identity.candidate.json").read_text(
-                  encoding="utf-8"
-              )
-          )
-          receipt = json.loads(
-              (root / "native_evidence_receipt.candidate.json").read_text(
-                  encoding="utf-8"
-              )
-          )
-          if index.get("schemaVersion") != 2 or len(index.get("manifests", [])) != 2:
-              raise SystemExit("native OCI index is incomplete")
-          if (
-              evidence.get("schema")
-              != "ofarm.native-multi-platform-index-evidence.v3"
-              or evidence.get("source_commit") != os.environ["EXPECTED_SOURCE"]
-              or len(evidence.get("platforms", [])) != 2
-          ):
-              raise SystemExit("native index evidence is inconsistent")
-          if (
-              identity.get("schemaVersion")
-              != "ofarm.native-verifier-release-identity.v1"
-              or receipt.get("schemaVersion")
-              != "ofarm.native-verifier-evidence-receipt.v2"
-          ):
-              raise SystemExit("native identity candidates are inconsistent")
-          PY
-      - name: Re-authenticate native-index policy before publication
-        if: always()
-        id: final-policy-proof
-        run: >-
-          test "$(git -C .baseline-admission-policy rev-parse HEAD)"
-          = "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-      - name: Recheck live admission before native-index publication
-        if: always() && steps.final-policy-proof.outcome == 'success'
-        id: final-admission
-        env:
-          OFARM_ADMISSION_TOKEN: ${{ github.token }}
-        run: >-
-          /usr/bin/python3
-          .baseline-admission-policy/conformance/review_baseline_admission.py
-          --operation admit
-          --event-name "${GITHUB_EVENT_NAME}"
-          --event-path "${GITHUB_EVENT_PATH}"
-          --github-sha "${GITHUB_SHA}"
-          --workflow-sha "${GITHUB_WORKFLOW_SHA}"
-          --workflow-ref "${GITHUB_WORKFLOW_REF}"
-          --repository "${GITHUB_REPOSITORY}"
-          --policy-sha "${OFARM_BASELINE_ADMISSION_POLICY_SHA}"
-          --github-output "${GITHUB_OUTPUT}"
-          --evidence-output
-          "${RUNNER_TEMP}/native-index-publisher-admission-final.json"
-      - name: Prove complete native index evidence is publishable
-        if: always()
-        id: success-artifact-proof
-        env:
-          PRIOR_JOB_STATUS: ${{ job.status }}
-          UPSTREAM_RESULT: ${{ needs.native-verifier-index.result }}
-          START_ADMISSION_OUTCOME: ${{ steps.publisher-start-admission.outcome }}
-          PROVISIONAL_PROOF_OUTCOME: ${{ steps.provisional-proof.outcome }}
-          FINAL_POLICY_OUTCOME: ${{ steps.final-policy-proof.outcome }}
-          FINAL_ADMISSION_OUTCOME: ${{ steps.final-admission.outcome }}
-        run: |
-          test "${PRIOR_JOB_STATUS}" = success
-          test "${UPSTREAM_RESULT}" = success
-          test "${START_ADMISSION_OUTCOME}" = success
-          test "${PROVISIONAL_PROOF_OUTCOME}" = success
-          test "${FINAL_POLICY_OUTCOME}" = success
-          test "${FINAL_ADMISSION_OUTCOME}" = success
-          test "${{ steps.final-admission.outputs.eligible }}" = true
-          /usr/bin/cmp \
-            "${RUNNER_TEMP}/native-index-publisher-admission-start.json" \
-            "${RUNNER_TEMP}/native-index-publisher-admission-final.json"
-          /usr/bin/cp \
-            "${RUNNER_TEMP}/native-index-publisher-admission-final.json" \
-            .publisher-input/native-index/review-baseline-admission.json
-      - name: Upload canonical two-platform OCI index evidence
-        if: always() && steps.success-artifact-proof.outcome == 'success'
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: native-verifier-index
-          path: .publisher-input/native-index/
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
-      - name: Preserve failed native-index publication separately
-        if: >-
-          always() &&
-          steps.publisher-start-admission.outcome == 'success' &&
-          steps.success-artifact-proof.outcome != 'success'
-        id: failure-admission-receipt
-        run: |
-          /usr/bin/mkdir -p .publisher-failure/native-index
-          /usr/bin/cp \
-            "${RUNNER_TEMP}/native-index-publisher-admission-start.json" \
-            .publisher-failure/native-index/admission.json
-      - name: Upload failed native-index admission receipt
-        if: >-
-          always() &&
-          steps.failure-admission-receipt.outcome == 'success'
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: native-verifier-index-admission-failure
-          path: .publisher-failure/native-index/
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14

@@ -124,15 +124,37 @@ Use this fail-closed sequence:
    check out pull-request code.
 6. Present an approval card only after the exact same reviewed head has both the
    zero-Blocker review and every required hosted baseline result. Normal success
-   artifact names may be published only after the substantive job and final
-   live admission proof both succeed. Jobs that execute pull-request code may
-   upload only explicitly provisional artifacts. Established authoritative
-   names may be uploaded only by fresh downstream publisher jobs whose runners
-   never check out or execute the admitted merge, require successful producer
-   job results, validate the provisional files with trusted policy code, bind
-   the original admission coordinates, and recheck live admission immediately
-   before upload. A main-branch post-merge run is not a pull-request admission
-   and remains automatic.
+   artifact names may be published only after the substantive jobs and live
+   admission proofs succeed. Jobs that execute pull-request code may upload only
+   explicitly provisional artifacts. Their final fresh handoff job must run
+   trusted policy only, reject every unexpected or pre-squatted artifact name,
+   bind the exact source workflow/run/attempt and provisional artifact IDs and
+   digests, and upload the immutable publication ticket last.
+7. Established authoritative names belong only to the separate default-branch
+   `workflow_run` publication workflow. Its fresh runners must never check out
+   or execute the admitted merge or any downloaded content. They must resolve
+   the exact successful source run and ticket by artifact ID, recheck live
+   admission and revocation, and validate downloaded files as untrusted data
+   with trusted policy code. Producer artifacts must be downloaded by exact ID,
+   digest-checked before extraction, and extracted only by trusted policy into a
+   fresh empty root that rejects traversal, links, special files, duplicates,
+   and size excess. Exact file inventories are required both before and after
+   trusted metadata is added. Git policy checks must ignore system and global
+   configuration and disable hooks and filesystem monitors. The publisher must
+   re-authenticate both architecture artifacts and derive the native index only
+   from those re-authenticated artifacts. Artifact names alone are never
+   authoritative. Authority requires a successful publication run plus its
+   final receipt binding the source and publisher workflow refs, policy SHAs,
+   run IDs/attempts, all four source artifact IDs/digests, and all five published
+   evidence artifact IDs/digests. The receipt artifact must be uploaded last in
+   that successful publisher run. A failed run that populated established names
+   but did not seal that receipt is incomplete and untrusted. Until a repository
+   consumer is added, this receipt is write-only evidence and external consumers
+   must validate it before trusting an artifact. A main-branch post-merge source
+   run is not a pull-request admission, has no live PR revocation to recheck, and
+   remains automatic, but it uses the same separate publisher. Because the
+   artifact API is not attempt-scoped, source and publisher workflow reruns fail
+   closed; start a fresh reviewed and admitted source run instead.
 
 Never create the admission comment while the content review has a remaining
 Blocker. Do not use labels, earlier-head reviews, green results from another
