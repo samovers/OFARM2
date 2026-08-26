@@ -1,6 +1,6 @@
 # OFARM Security Audit Surviving-Store Process-Crash Reconciliation RFC v0.1
 
-Status: **Phase A proposed; Phase B not authorized**
+Status: **Phase A reviewed; Phase B not authorized**
 
 - Decision: `ISSUE192-SECURITY-AUDIT-PROCESS-CRASH-RECONCILIATION-001`
 - Version: `1`
@@ -637,12 +637,16 @@ system in this pull request.
 
 ### 14.2 Review disposition
 
-- Blockers: exact-head Phase A content review pending.
+- Blockers: none demonstrated by the complete and affected-invariant review of
+  head `1e14b330293373d5e3edf74d1e331b7ffa6f6932`, recorded in
+  [PR #338 comment 5425185540](https://github.com/samovers/OFARM2/pull/338#issuecomment-5425185540).
 - Follow-ups: final cross-slice hostile evidence and closure audit remain in
   issue #192; the separate recorded items in section 11.5 remain outside this
   boundary.
 - Preferences: none recorded.
-- Full reviews: zero at this proposed head.
+- Full reviews: one; one affected-invariant review closed its interval-bound
+  Blocker. Final metadata-only exact-head review remains required after this
+  review record is committed.
 - Phase B: not authorized.
 - Production composition: unauthorized and non-deployable.
 
