@@ -405,6 +405,9 @@ def live_reader(
     head_sha: str = HEAD_SHA,
     base_sha: str = BASE_SHA,
     merge_sha: object = MERGE_SHA,
+    merge_ref_name: object = f"refs/pull/{PR_NUMBER}/merge",
+    merge_ref_type: object = "commit",
+    merge_ref_sha: object = MERGE_SHA,
     merge_parents: list[str] | None = None,
     association: str = "OWNER",
     created_at: str = CREATED_AT,
@@ -421,6 +424,13 @@ def live_reader(
             "head": {"sha": head_sha},
             "base": {"sha": base_sha},
             "merge_commit_sha": merge_sha,
+        },
+        f"/repos/{REPOSITORY}/git/ref/pull/{PR_NUMBER}/merge": {
+            "ref": merge_ref_name,
+            "object": {
+                "type": merge_ref_type,
+                "sha": merge_ref_sha,
+            },
         },
         f"/repos/{REPOSITORY}/issues/comments/{COMMENT_ID}": {
             "id": COMMENT_ID,
@@ -899,9 +909,22 @@ class ExecutorAdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(AdmissionError, "trusted main-branch gate"):
             decide_call(admitted_gate().inputs, workflow_ref="untrusted/workflow")
 
-    def test_null_execution_merge_refuses_admission(self) -> None:
+    def test_null_pull_merge_sha_uses_authenticated_merge_ref(self) -> None:
+        decision = admitted_gate(merge_sha=None)
+        self.assertTrue(decision.dispatch)
+        self.assertEqual(decision.inputs["execution_merge_sha"], MERGE_SHA)
+
+    def test_execution_merge_ref_name_is_exact(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "ref identity changed"):
+            admitted_gate(merge_ref_name=f"refs/pull/{PR_NUMBER + 1}/merge")
+
+    def test_execution_merge_ref_must_target_commit(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "must target a commit"):
+            admitted_gate(merge_ref_type="tag")
+
+    def test_execution_merge_ref_sha_must_be_full(self) -> None:
         with self.assertRaisesRegex(AdmissionError, "full lowercase commit SHA"):
-            admitted_gate(merge_sha=None)
+            admitted_gate(merge_ref_sha=None)
 
     def test_execution_merge_parents_bind_live_base_and_head(self) -> None:
         with self.assertRaisesRegex(AdmissionError, "parents do not bind"):
