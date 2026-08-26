@@ -313,10 +313,23 @@ def _bound_merge(
     reviewed_head_sha: str,
     fetch_json: FetchJson,
 ) -> tuple[str, str]:
+    pr_number = _positive_int(live_pr.get("number"), "live pull-request number")
     live_base = _object(live_pr.get("base"), "live pull-request base")
     base_sha = _full_sha(live_base.get("sha"), "live pull-request base sha")
+    merge_ref_name = f"refs/pull/{pr_number}/merge"
+    merge_ref = _object(
+        fetch_json(f"/repos/{repository}/git/ref/pull/{pr_number}/merge"),
+        "live execution merge ref",
+    )
+    if merge_ref.get("ref") != merge_ref_name:
+        raise AdmissionError("live execution merge ref identity changed")
+    merge_object = _object(
+        merge_ref.get("object"), "live execution merge ref object"
+    )
+    if merge_object.get("type") != "commit":
+        raise AdmissionError("live execution merge ref must target a commit")
     execution_merge_sha = _full_sha(
-        live_pr.get("merge_commit_sha"), "live execution merge sha"
+        merge_object.get("sha"), "live execution merge sha"
     )
     merge_commit = _object(
         fetch_json(f"/repos/{repository}/git/commits/{execution_merge_sha}"),
