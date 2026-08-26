@@ -2741,7 +2741,7 @@ def _statement_line(
     function: ast.FunctionDef,
     source: str,
 ) -> int | None:
-    expected = ast.dump(ast.parse(source).body[0], include_attributes=False)
+    expected = _statement_shape(source)
     matches = [
         node.lineno
         for node in ast.walk(function)
@@ -2749,6 +2749,10 @@ def _statement_line(
         and ast.dump(node, include_attributes=False) == expected
     ]
     return matches[0] if len(matches) == 1 else None
+
+
+def _statement_shape(source: str) -> str:
+    return ast.dump(ast.parse(source).body[0], include_attributes=False)
 
 
 def _call_name(node: ast.Call) -> str | None:
@@ -2899,19 +2903,32 @@ def _private_result_construction_violations(tree: ast.Module) -> list[str]:
     function = _top_level_function(tree, "_export_and_close")
     if function is None:
         return ["private closed-result construction owner is absent"]
+    terminal_sources = (
+        """_close_login(
+    dependencies,
+    preflight.routes.admin,
+    preflight.store_migration_execution_id,
+    expected_role,
+)""",
+        """if interrupted is not None:
+    raise interrupted""",
+        """if export_failed or exported is None:
+    raise _ConsumedFailure()""",
+        """return _ClosedSecurityAuditBreakGlassExport(
+    operation_id=approval.operation_id,
+    page_bytes=exported.page_bytes,
+)""",
+    )
+    expected_tail = tuple(_statement_shape(source) for source in terminal_sources)
+    observed_tail = tuple(
+        ast.dump(statement, include_attributes=False)
+        for statement in function.body[-4:]
+    )
     close_lines = _ordered_call_lines(function, ("_close_login",))
-    guard_lines = [
-        node.lineno
-        for node in ast.walk(function)
-        if isinstance(node, ast.If)
-        and {member.id for member in ast.walk(node.test) if isinstance(member, ast.Name)}
-        >= {"export_failed", "exported"}
-    ]
-    construction_line = constructions[0][1]
     if (
-        close_lines is None
-        or len(guard_lines) != 1
-        or not close_lines[0] < guard_lines[0] < construction_line
+        len(function.body) < 4
+        or observed_tail != expected_tail
+        or close_lines != (function.body[-4].lineno,)
     ):
         return ["private result is not constructed after closure and validation"]
     return []

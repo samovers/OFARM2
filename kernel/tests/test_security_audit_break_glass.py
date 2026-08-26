@@ -463,6 +463,17 @@ def test_architecture_result_surface_and_external_reference_rules():
     assert "private closed-result construction inventory differs" in _violations(duplicate)
     assert "private closed-result direct reference inventory differs" in _violations(duplicate)
     assert "private result is not constructed after closure and validation" in _violations(_before_close(source))
+    close_start = source.index("    _close_login(", source.index("def _export_and_close("))
+    close_end = source.index("\n    if interrupted is not None:", close_start)
+    close = source[close_start:close_end]
+    nested = "    " + close.replace("\n", "\n    ")
+    conditional = source.replace(close, "    if exported is None:\n" + nested, 1)
+    swallowed = source.replace(
+        close, "    try:\n" + nested + "\n    except Exception:\n        pass", 1
+    )
+    violation = "private result is not constructed after closure and validation"
+    assert violation in _violations(conditional)
+    assert violation in _violations(swallowed)
     life = ast.parse(source)
     external = ast.parse("from deployment.postgresql.security_audit_break_glass import _ClosedSecurityAuditBreakGlassExport\nimport deployment.postgresql.security_audit_break_glass as bg\nx = bg._ClosedSecurityAuditBreakGlassExport")
     assert architecture._private_result_reference_violations({"life": life, "other": external}, "life")
