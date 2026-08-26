@@ -4,16 +4,30 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
 from conformance.review_baseline_admission import (
     ADMISSION_MARKER,
     EVIDENCE_SCHEMA,
-    REVOCATION_MARKER,
     GRAPHQL_COMMENT_PREFIX,
+    GATE_WORKFLOW_PATH,
+    PROVISIONAL_ARTIFACT_NAMES,
+    PUBLICATION_ARTIFACT_NAMES,
+    PUBLICATION_RECEIPT_SCHEMA,
+    PUBLICATION_TICKET_NAME,
+    PUBLICATION_WORKFLOW_PATH,
+    REVOCATION_MARKER,
+    ArtifactReference,
     AdmissionError,
+    _artifact_references,
+    _publication_receipt_document,
+    _publication_source_from_event,
+    _publication_ticket_document,
+    _validate_publication_ticket,
     decide,
     gate_decision,
 )
@@ -29,11 +43,19 @@ PR_NUMBER = 336
 COMMENT_ID = 12345
 COMMENT_NODE_ID = "IC_kwDOExample"
 CREATED_AT = "2026-08-26T08:00:00Z"
+REVOCATION_AT = "2026-08-26T09:00:00Z"
+SOURCE_RUN_ID = 987654321
+SOURCE_RUN_ATTEMPT = 1
+PUBLISHER_RUN_ID = 123456789
+PUBLISHER_RUN_ATTEMPT = 1
 GATE_WORKFLOW_REF = (
     f"{REPOSITORY}/.github/workflows/review-baseline-gate.yml@refs/heads/main"
 )
 CONFORMANCE_WORKFLOW_REF = (
     f"{REPOSITORY}/.github/workflows/conformance.yml@refs/heads/main"
+)
+PUBLICATION_WORKFLOW_REF = (
+    f"{REPOSITORY}/{PUBLICATION_WORKFLOW_PATH}@refs/heads/main"
 )
 
 
@@ -146,6 +168,178 @@ def live_reader(
         },
     }
     return responses.__getitem__
+
+
+def source_run() -> dict[str, object]:
+    return {
+        "id": SOURCE_RUN_ID,
+        "run_attempt": SOURCE_RUN_ATTEMPT,
+        "event": "issue_comment",
+        "name": "reviewed-head baseline gate",
+        "path": GATE_WORKFLOW_PATH,
+        "head_branch": "main",
+        "head_sha": POLICY_SHA,
+        "status": "completed",
+        "conclusion": "success",
+        "workflow_id": 123456,
+        "repository": {"full_name": REPOSITORY},
+        "head_repository": {"full_name": REPOSITORY},
+    }
+
+
+def workflow_run_event() -> dict[str, object]:
+    return {
+        "action": "completed",
+        "repository": {"full_name": REPOSITORY},
+        "workflow_run": source_run(),
+    }
+
+
+def artifact_document(
+    name: str,
+    artifact_id: int,
+    digest_character: str,
+) -> dict[str, object]:
+    return {
+        "id": artifact_id,
+        "name": name,
+        "size_in_bytes": 1000 + artifact_id,
+        "expired": False,
+        "digest": "sha256:" + digest_character * 64,
+        "workflow_run": {"id": SOURCE_RUN_ID, "head_sha": POLICY_SHA},
+    }
+
+
+def published_artifact_document(
+    name: str,
+    artifact_id: int,
+    digest_character: str,
+    *,
+    publisher_run_id: int = PUBLISHER_RUN_ID,
+) -> dict[str, object]:
+    return {
+        "id": artifact_id,
+        "name": name,
+        "size_in_bytes": 2000 + artifact_id,
+        "expired": False,
+        "digest": "sha256:" + digest_character * 64,
+        "workflow_run": {
+            "id": publisher_run_id,
+            "head_sha": POLICY_SHA,
+        },
+    }
+
+
+def publisher_run() -> dict[str, object]:
+    return {
+        "id": PUBLISHER_RUN_ID,
+        "run_attempt": PUBLISHER_RUN_ATTEMPT,
+        "event": "workflow_run",
+        "name": "evidence-publication",
+        "path": PUBLICATION_WORKFLOW_PATH,
+        "head_branch": "main",
+        "head_sha": POLICY_SHA,
+        "status": "in_progress",
+        "conclusion": None,
+        "workflow_id": 654321,
+        "repository": {"full_name": REPOSITORY},
+        "head_repository": {"full_name": REPOSITORY},
+    }
+
+
+def source_artifact_documents(
+    *,
+    extra_name: str | None = None,
+) -> list[dict[str, object]]:
+    names = [*PROVISIONAL_ARTIFACT_NAMES, PUBLICATION_TICKET_NAME]
+    if extra_name is not None:
+        names.append(extra_name)
+    return [
+        artifact_document(name, index + 1, format(index + 1, "x"))
+        for index, name in enumerate(names)
+    ]
+
+
+def publication_reader(
+    *,
+    artifacts: list[dict[str, object]] | None = None,
+    revocation: bool = False,
+    live_run_mutation: tuple[str, object] | None = None,
+):
+    base_reader = live_reader()
+    run = source_run()
+    if live_run_mutation is not None:
+        run[live_run_mutation[0]] = live_run_mutation[1]
+    source_artifacts = (
+        source_artifact_documents() if artifacts is None else artifacts
+    )
+    comments: list[dict[str, object]] = []
+    if revocation:
+        comments.append(
+            {
+                "id": COMMENT_ID + 1,
+                "body": revocation_body(),
+                "author_association": "OWNER",
+                "created_at": REVOCATION_AT,
+            }
+        )
+    responses: dict[str, object] = {
+        f"/repos/{REPOSITORY}/actions/runs/{SOURCE_RUN_ID}": run,
+        (
+            f"/repos/{REPOSITORY}/actions/runs/{SOURCE_RUN_ID}/artifacts"
+            "?per_page=100"
+        ): {
+            "total_count": len(source_artifacts),
+            "artifacts": source_artifacts,
+        },
+        (
+            f"/repos/{REPOSITORY}/issues/{PR_NUMBER}/comments"
+            "?per_page=100&page=1"
+        ): comments,
+    }
+
+    def read(path: str):
+        if path in responses:
+            return responses[path]
+        return base_reader(path)
+
+    return read
+
+
+def publication_receipt_reader(
+    *,
+    publisher_run_mutation: tuple[str, object] | None = None,
+    artifact_run_id: int = PUBLISHER_RUN_ID,
+):
+    base_reader = publication_reader()
+    live_publisher_run = publisher_run()
+    if publisher_run_mutation is not None:
+        live_publisher_run[publisher_run_mutation[0]] = publisher_run_mutation[1]
+    documents = [
+        published_artifact_document(
+            name,
+            101 + index,
+            format(10 + index, "x"),
+            publisher_run_id=artifact_run_id,
+        )
+        for index, name in enumerate(PUBLICATION_ARTIFACT_NAMES)
+    ]
+    responses: dict[str, object] = {
+        f"/repos/{REPOSITORY}/actions/runs/{PUBLISHER_RUN_ID}": (
+            live_publisher_run
+        ),
+        **{
+            f"/repos/{REPOSITORY}/actions/artifacts/{document['id']}": document
+            for document in documents
+        },
+    }
+
+    def read(path: str):
+        if path in responses:
+            return responses[path]
+        return base_reader(path)
+
+    return read, documents
 
 
 def admitted_gate(**reader_options: object):
@@ -455,6 +649,251 @@ class ExecutorAdmissionTests(unittest.TestCase):
         self.assertEqual(admission.reason, "admission-comment-edited")
 
 
+class PublicationAdmissionTests(unittest.TestCase):
+    def resolve(self, reader=None):
+        live = publication_reader() if reader is None else reader
+        source = _publication_source_from_event(
+            event_name="workflow_run",
+            event=workflow_run_event(),
+            github_sha=POLICY_SHA,
+            workflow_sha=POLICY_SHA,
+            workflow_ref=PUBLICATION_WORKFLOW_REF,
+            repository=REPOSITORY,
+            policy_sha=POLICY_SHA,
+            fetch_json=live,
+        )
+        artifacts = _artifact_references(
+            repository=REPOSITORY,
+            source_run_id=SOURCE_RUN_ID,
+            source_head_sha=POLICY_SHA,
+            expected_names=(*PROVISIONAL_ARTIFACT_NAMES, PUBLICATION_TICKET_NAME),
+            fetch_json=live,
+        )
+        return live, source, artifacts
+
+    def ticket(self, artifacts: dict[str, ArtifactReference]):
+        admission = decide_call(admitted_gate().inputs)
+        return _publication_ticket_document(
+            admission=admission,
+            source_run_id=SOURCE_RUN_ID,
+            source_run_attempt=SOURCE_RUN_ATTEMPT,
+            source_workflow_ref=GATE_WORKFLOW_REF,
+            source_workflow_sha=POLICY_SHA,
+            provisional_artifacts={
+                name: artifacts[name] for name in PROVISIONAL_ARTIFACT_NAMES
+            },
+        )
+
+    def test_exact_source_run_and_artifact_identities_revalidate_live(self) -> None:
+        reader, source, artifacts = self.resolve()
+        admission = _validate_publication_ticket(
+            ticket=self.ticket(artifacts),
+            source=source,
+            artifacts=artifacts,
+            fetch_json=reader,
+        )
+
+        self.assertTrue(admission.eligible)
+        self.assertEqual(admission.reviewed_head_sha, HEAD_SHA)
+        self.assertEqual(admission.execution_merge_sha, MERGE_SHA)
+
+    def test_source_run_rejects_live_identity_change(self) -> None:
+        reader = publication_reader(live_run_mutation=("run_attempt", 2))
+
+        with self.assertRaisesRegex(AdmissionError, "run_attempt changed"):
+            self.resolve(reader)
+
+    def test_source_run_refuses_attempt_ambiguous_rerun(self) -> None:
+        event = workflow_run_event()
+        event_run = event["workflow_run"]
+        assert isinstance(event_run, dict)
+        event_run["run_attempt"] = 2
+        reader = publication_reader(live_run_mutation=("run_attempt", 2))
+
+        with self.assertRaisesRegex(AdmissionError, "rerun attempts are ambiguous"):
+            _publication_source_from_event(
+                event_name="workflow_run",
+                event=event,
+                github_sha=POLICY_SHA,
+                workflow_sha=POLICY_SHA,
+                workflow_ref=PUBLICATION_WORKFLOW_REF,
+                repository=REPOSITORY,
+                policy_sha=POLICY_SHA,
+                fetch_json=reader,
+            )
+
+    def test_source_inventory_rejects_established_name_pre_squat(self) -> None:
+        reader = publication_reader(
+            artifacts=source_artifact_documents(extra_name="review-baseline")
+        )
+
+        with self.assertRaisesRegex(AdmissionError, "names are not the exact"):
+            self.resolve(reader)
+
+    def test_source_inventory_rejects_admitted_index_fabrication(self) -> None:
+        reader = publication_reader(
+            artifacts=source_artifact_documents(
+                extra_name="native-verifier-index-provisional"
+            )
+        )
+
+        with self.assertRaisesRegex(AdmissionError, "names are not the exact"):
+            self.resolve(reader)
+
+    def test_source_inventory_rejects_oversized_untrusted_artifact(self) -> None:
+        artifacts = source_artifact_documents()
+        artifacts[0]["size_in_bytes"] = 512_000_001
+        reader = publication_reader(artifacts=artifacts)
+
+        with self.assertRaisesRegex(AdmissionError, "exceeds its size limit"):
+            self.resolve(reader)
+
+    def test_ticket_rejects_changed_provisional_artifact_digest(self) -> None:
+        reader, source, artifacts = self.resolve()
+        ticket = self.ticket(artifacts)
+        ticket_artifacts = ticket["provisionalArtifacts"]
+        assert isinstance(ticket_artifacts, list)
+        first = ticket_artifacts[0]
+        assert isinstance(first, dict)
+        first["digest"] = "sha256:" + "f" * 64
+
+        with self.assertRaisesRegex(AdmissionError, "artifact identities differ"):
+            _validate_publication_ticket(
+                ticket=ticket,
+                source=source,
+                artifacts=artifacts,
+                fetch_json=reader,
+            )
+
+    def test_live_standing_revocation_refuses_publication(self) -> None:
+        initial_reader, _, initial_artifacts = self.resolve()
+        ticket = self.ticket(initial_artifacts)
+        reader, source, artifacts = self.resolve(
+            publication_reader(revocation=True)
+        )
+        del initial_reader
+
+        with self.assertRaisesRegex(AdmissionError, "revocation is active"):
+            _validate_publication_ticket(
+                ticket=ticket,
+                source=source,
+                artifacts=artifacts,
+                fetch_json=reader,
+            )
+
+    def test_receipt_binds_source_publisher_and_exact_artifact_identities(
+        self,
+    ) -> None:
+        reader, published = publication_receipt_reader()
+        _, source, source_artifacts = self.resolve(reader)
+        ticket = self.ticket(source_artifacts)
+        admission = _validate_publication_ticket(
+            ticket=ticket,
+            source=source,
+            artifacts=source_artifacts,
+            fetch_json=reader,
+        )
+        candidate = [
+            {
+                "artifactId": item["id"],
+                "digest": str(item["digest"]).removeprefix("sha256:"),
+                "name": item["name"],
+            }
+            for item in published
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "candidate.json"
+            path.write_text(json.dumps(candidate), encoding="utf-8")
+            receipt = _publication_receipt_document(
+                path=path,
+                ticket=ticket,
+                admission=admission,
+                source=source,
+                source_artifacts=source_artifacts,
+                publisher_workflow_ref=PUBLICATION_WORKFLOW_REF,
+                publisher_workflow_sha=POLICY_SHA,
+                publisher_run_id=PUBLISHER_RUN_ID,
+                publisher_run_attempt=PUBLISHER_RUN_ATTEMPT,
+                fetch_json=reader,
+            )
+
+        self.assertEqual(receipt["schemaVersion"], PUBLICATION_RECEIPT_SCHEMA)
+        self.assertEqual(receipt["publisher"]["runId"], PUBLISHER_RUN_ID)
+        self.assertEqual(
+            [item["name"] for item in receipt["artifacts"]],
+            list(PUBLICATION_ARTIFACT_NAMES),
+        )
+        self.assertEqual(
+            [item["name"] for item in receipt["source"]["artifacts"]],
+            [*PROVISIONAL_ARTIFACT_NAMES, PUBLICATION_TICKET_NAME],
+        )
+
+    def test_receipt_rejects_artifact_from_another_publisher_run(self) -> None:
+        reader, published = publication_receipt_reader(
+            artifact_run_id=PUBLISHER_RUN_ID + 1
+        )
+        _, source, source_artifacts = self.resolve(reader)
+        ticket = self.ticket(source_artifacts)
+        admission = _validate_publication_ticket(
+            ticket=ticket,
+            source=source,
+            artifacts=source_artifacts,
+            fetch_json=reader,
+        )
+        candidate = [
+            {
+                "artifactId": item["id"],
+                "digest": item["digest"],
+                "name": item["name"],
+            }
+            for item in published
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "candidate.json"
+            path.write_text(json.dumps(candidate), encoding="utf-8")
+            with self.assertRaisesRegex(
+                AdmissionError,
+                "published artifact live identity differs",
+            ):
+                _publication_receipt_document(
+                    path=path,
+                    ticket=ticket,
+                    admission=admission,
+                    source=source,
+                    source_artifacts=source_artifacts,
+                    publisher_workflow_ref=PUBLICATION_WORKFLOW_REF,
+                    publisher_workflow_sha=POLICY_SHA,
+                    publisher_run_id=PUBLISHER_RUN_ID,
+                    publisher_run_attempt=PUBLISHER_RUN_ATTEMPT,
+                    fetch_json=reader,
+                )
+
+    def test_receipt_refuses_attempt_ambiguous_publisher_rerun(self) -> None:
+        reader, _ = publication_receipt_reader()
+        _, source, source_artifacts = self.resolve(reader)
+        ticket = self.ticket(source_artifacts)
+        admission = _validate_publication_ticket(
+            ticket=ticket,
+            source=source,
+            artifacts=source_artifacts,
+            fetch_json=reader,
+        )
+
+        with self.assertRaisesRegex(AdmissionError, "rerun attempts are ambiguous"):
+            _publication_receipt_document(
+                path=Path("unused-after-attempt-refusal.json"),
+                ticket=ticket,
+                admission=admission,
+                source=source,
+                source_artifacts=source_artifacts,
+                publisher_workflow_ref=PUBLICATION_WORKFLOW_REF,
+                publisher_workflow_sha=POLICY_SHA,
+                publisher_run_id=PUBLISHER_RUN_ID,
+                publisher_run_attempt=2,
+                fetch_json=reader,
+            )
+
+
 class WorkflowPolicyTests(unittest.TestCase):
     def test_default_branch_gate_never_checks_out_pull_request_code(self) -> None:
         workflow = Path(".github/workflows/review-baseline-gate.yml").read_text(
@@ -497,7 +936,7 @@ class WorkflowPolicyTests(unittest.TestCase):
         )
 
     def test_untrusted_jobs_upload_only_provisional_artifacts(self) -> None:
-        workflow = Path(".github/workflows/conformance.yml").read_text(
+        source_workflow = Path(".github/workflows/conformance.yml").read_text(
             encoding="utf-8"
         )
         producers = {
@@ -505,86 +944,155 @@ class WorkflowPolicyTests(unittest.TestCase):
             "native-verifier": (
                 "name: native-verifier-${{ matrix.architecture }}-provisional\n"
             ),
-            "native-verifier-index": "name: native-verifier-index-provisional\n",
         }
         authoritative_names = (
             "name: review-baseline\n",
             "name: platform-mvp-evidence\n",
-            "name: native-verifier-${{ matrix.architecture }}\n",
+            "name: native-verifier-amd64\n",
+            "name: native-verifier-arm64\n",
             "name: native-verifier-index\n",
+            "name: evidence-publication-receipt\n",
         )
         for job_name, provisional_name in producers.items():
-            section = workflow_job_section(workflow, job_name)
+            section = workflow_job_section(source_workflow, job_name)
             self.assertIn(provisional_name, section)
-            self.assertNotIn("id: final-admission", section)
-            self.assertNotIn("id: success-artifact-proof", section)
             for authoritative_name in authoritative_names:
                 self.assertNotIn(authoritative_name, section)
 
-    def test_authoritative_publishers_use_fresh_runners(self) -> None:
-        workflow = Path(".github/workflows/conformance.yml").read_text(
+        self.assertNotIn("\n  native-verifier-index:\n", source_workflow)
+        self.assertNotIn("compose-index", source_workflow)
+        self.assertNotIn("prepare-release-identity", source_workflow)
+        handoff = workflow_job_section(source_workflow, "publication-handoff")
+        self.assertIn(
+            "needs: [baseline-admission, conformance, native-verifier]",
+            handoff,
+        )
+        self.assertIn("--operation handoff", handoff)
+        self.assertIn("name: evidence-publication-ticket\n", handoff)
+        self.assertNotIn(
+            "ref: ${{ needs.baseline-admission.outputs.execution_merge_sha }}",
+            handoff,
+        )
+        self.assertIn("git -C .publication-policy diff --exit-code", handoff)
+        self.assertIn("--porcelain=v1 --untracked-files=all", handoff)
+        self.assertEqual(handoff.count("actions/upload-artifact@"), 1)
+
+    def test_cross_run_publisher_never_executes_admitted_code(self) -> None:
+        workflow = Path(".github/workflows/evidence-publication.yml").read_text(
             encoding="utf-8"
         )
-        publishers = {
-            "conformance-publisher": "conformance",
-            "native-verifier-publisher": "native-verifier",
-            "native-verifier-index-publisher": "native-verifier-index",
-        }
-        for publisher, producer in publishers.items():
-            section = workflow_job_section(workflow, publisher)
-            self.assertIn(f"needs.{producer}.result == 'success'", section)
-            self.assertEqual(section.count("--operation admit"), 2)
+        trigger = workflow.split("permissions: {}", 1)[0]
+        self.assertIn("  workflow_run:\n", trigger)
+        self.assertIn("      - conformance\n", trigger)
+        self.assertIn("      - reviewed-head baseline gate\n", trigger)
+        self.assertNotIn("workflow_dispatch", trigger)
+        self.assertNotIn("pull_request", trigger)
+        self.assertNotIn("push:", trigger)
+        self.assertIn("Refuse attempt-ambiguous publisher reruns", workflow)
+        self.assertIn('test "$GITHUB_RUN_ATTEMPT" = 1', workflow)
+
+        source_admission = workflow_job_section(workflow, "source-admission")
+        publisher = workflow_job_section(workflow, "publish")
+        for section in (source_admission, publisher):
+            self.assertIn("runs-on: ubuntu-24.04", section)
             self.assertIn(
-                "ref: ${{ env.OFARM_BASELINE_ADMISSION_POLICY_SHA }}", section
-            )
-            self.assertNotIn(
-                "ref: ${{ needs.baseline-admission.outputs.execution_merge_sha }}",
+                "ref: ${{ env.OFARM_PUBLICATION_POLICY_SHA }}",
                 section,
             )
             self.assertNotIn("actions/setup-python", section)
             self.assertNotIn("GITHUB_PATH", section)
             self.assertNotIn("GITHUB_ENV", section)
-            self.assertIn("actions/download-artifact@", section)
-            self.assertIn("producer supplied an untrusted admission receipt", section)
-            self.assertIn("id: publisher-start-admission", section)
-            self.assertIn("id: final-admission", section)
-            self.assertIn("id: success-artifact-proof", section)
-            self.assertIn(
-                "steps.success-artifact-proof.outcome == 'success'", section
+            self.assertNotIn("uses: ./", section)
+            self.assertNotIn(
+                "ref: ${{ steps.publisher-start.outputs.execution_merge_sha }}",
+                section,
             )
+            self.assertIn("git -C .publication-policy diff --exit-code", section)
+            self.assertIn("--porcelain=v1 --untracked-files=all", section)
 
-        index_producer = workflow_job_section(workflow, "native-verifier-index")
+        downloads = workflow.split("uses: actions/download-artifact@")[1:]
+        self.assertEqual(len(downloads), 7)
+        for download in downloads:
+            step = download.split("\n      - ", 1)[0]
+            self.assertIn("artifact-ids:", step)
+            self.assertIn("github-token:", step)
+            self.assertIn("repository:", step)
+            self.assertIn("run-id:", step)
+
+        self.assertEqual(publisher.count("collect-oci"), 2)
+        self.assertIn("compose-index", publisher)
+        self.assertIn("prepare-release-identity", publisher)
         self.assertIn(
-            "needs: [baseline-admission, native-verifier-publisher]",
-            index_producer,
+            "steps.upload-native-amd64.outputs.artifact-id",
+            publisher,
+        )
+        self.assertIn(
+            "steps.upload-native-arm64.outputs.artifact-id",
+            publisher,
+        )
+        self.assertIn("--published-artifacts-input", publisher)
+        self.assertIn("--publication-receipt-output", publisher)
+        self.assertIn("--publisher-run-id", publisher)
+        self.assertIn("--publisher-run-attempt", publisher)
+        self.assertIn(
+            "group: ${{ needs.source-admission.outputs."
+            "publication_concurrency_group }}",
+            publisher,
         )
 
-    def test_normal_artifact_names_are_owned_by_publishers(self) -> None:
-        workflow = Path(".github/workflows/conformance.yml").read_text(
+    def test_authoritative_names_belong_only_to_cross_run_publisher(self) -> None:
+        source_workflow = Path(".github/workflows/conformance.yml").read_text(
             encoding="utf-8"
         )
-        owners = {
-            "review-baseline": "conformance-publisher",
-            "platform-mvp-evidence": "conformance-publisher",
-            "native-verifier-${{ matrix.architecture }}": (
-                "native-verifier-publisher"
-            ),
-            "native-verifier-index": "native-verifier-index-publisher",
-        }
-        for artifact_name, publisher in owners.items():
-            matches = re.findall(
-                rf"^\s+name: {re.escape(artifact_name)}$", workflow, re.MULTILINE
-            )
-            self.assertEqual(len(matches), 1)
-            section = workflow_job_section(workflow, publisher)
-            self.assertIn(f"name: {artifact_name}\n", section)
-
-        self.assertIn("review-baseline-admission-failure", workflow)
-        self.assertIn(
-            "native-verifier-${{ matrix.architecture }}-admission-failure",
-            workflow,
+        publication_workflow = Path(
+            ".github/workflows/evidence-publication.yml"
+        ).read_text(
+            encoding="utf-8"
         )
-        self.assertIn("native-verifier-index-admission-failure", workflow)
+        authoritative_names = (
+            "review-baseline",
+            "platform-mvp-evidence",
+            "native-verifier-amd64",
+            "native-verifier-arm64",
+            "native-verifier-index",
+            "evidence-publication-receipt",
+        )
+        for artifact_name in authoritative_names:
+            source_matches = re.findall(
+                rf"^\s+name: {re.escape(artifact_name)}$",
+                source_workflow,
+                re.MULTILINE,
+            )
+            publisher_matches = re.findall(
+                rf"^\s+name: {re.escape(artifact_name)}$",
+                publication_workflow,
+                re.MULTILINE,
+            )
+            self.assertEqual(source_matches, [])
+            self.assertEqual(len(publisher_matches), 1)
+
+        self.assertEqual(
+            source_workflow.count("name: conformance-provisional\n"),
+            1,
+        )
+        self.assertEqual(
+            source_workflow.count(
+                "name: native-verifier-${{ matrix.architecture }}-provisional\n"
+            ),
+            1,
+        )
+        self.assertEqual(
+            source_workflow.count("name: evidence-publication-ticket\n"),
+            1,
+        )
+        receipt_position = publication_workflow.index(
+            "name: evidence-publication-receipt\n"
+        )
+        for name in authoritative_names[:-1]:
+            self.assertLess(
+                publication_workflow.index(f"name: {name}\n"),
+                receipt_position,
+            )
 
 
 if __name__ == "__main__":

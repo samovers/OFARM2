@@ -3910,10 +3910,69 @@ def test_multi_platform_index_refuses_ambiguous_reports(
         )
 
 
+def test_evidence_publication_policy_is_transitively_authenticated():
+    conformance_path = PACKAGE_ROOT / ".github/workflows/conformance.yml"
+    publication_path = (
+        PACKAGE_ROOT / ".github/workflows/evidence-publication.yml"
+    )
+    admission_path = PACKAGE_ROOT / "conformance/review_baseline_admission.py"
+    gate_path = PACKAGE_ROOT / ".github/workflows/review-baseline-gate.yml"
+    conformance_workflow = conformance_path.read_text()
+    publication_workflow = publication_path.read_text()
+
+    def pinned_digest(workflow: str, variable: str) -> str:
+        match = re.search(
+            rf"^  {variable}: >-\n    (sha256:[0-9a-f]{{64}})$",
+            workflow,
+            re.MULTILINE,
+        )
+        assert match is not None
+        return match.group(1)
+
+    assert pinned_digest(
+        conformance_workflow,
+        "OFARM_EVIDENCE_PUBLICATION_WORKFLOW_SHA256",
+    ) == _digest(publication_path.read_bytes())
+    assert pinned_digest(
+        publication_workflow,
+        "OFARM_REVIEW_BASELINE_ADMISSION_SHA256",
+    ) == _digest(admission_path.read_bytes())
+    assert pinned_digest(
+        publication_workflow,
+        "OFARM_REVIEW_BASELINE_GATE_WORKFLOW_SHA256",
+    ) == _digest(gate_path.read_bytes())
+
+    handoff_job = conformance_workflow.split(
+        "  publication-handoff:\n", 1
+    )[1].split("\n  native-verifier:", 1)[0]
+    assert "OFARM_EVIDENCE_PUBLICATION_WORKFLOW_SHA256#sha256:" in handoff_job
+    assert ".github/workflows/evidence-publication.yml" in handoff_job
+    assert "sha256sum --check --strict" in handoff_job
+
+    for variable, relative_path in (
+        (
+            "OFARM_REVIEW_BASELINE_ADMISSION_SHA256",
+            "conformance/review_baseline_admission.py",
+        ),
+        (
+            "OFARM_REVIEW_BASELINE_GATE_WORKFLOW_SHA256",
+            ".github/workflows/review-baseline-gate.yml",
+        ),
+    ):
+        assert publication_workflow.count(f"${{{variable}#sha256:}}") == 2
+        assert publication_workflow.count(relative_path) >= 2
+    assert publication_workflow.count("sha256sum --check --strict") == 2
+
+
 def test_native_workflow_closes_both_native_platform_evidence_lanes():
     workflow = PACKAGE_ROOT.joinpath(".github/workflows/conformance.yml").read_text()
+    publication_workflow = PACKAGE_ROOT.joinpath(
+        ".github/workflows/evidence-publication.yml"
+    ).read_text()
     action_lines = re.findall(
-        r"^\s*(?:-\s*)?uses:\s*(.+)$", workflow, re.MULTILINE
+        r"^\s*(?:-\s*)?uses:\s*(.+)$",
+        workflow + "\n" + publication_workflow,
+        re.MULTILINE,
     )
     observed_action_pins: dict[str, str] = {}
     for action_line in action_lines:
@@ -4123,11 +4182,17 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
         "79e7b013cbec16bbb436f312819a49a4a57752b2270c1a9332ae1a10fcc82a68"
     ) in workflow
     assert "collect-oci" in workflow
-    assert "compose-index" in workflow
-    assert "prepare-release-identity" in workflow
-    assert "native_release_identity.candidate.json" in workflow
+    assert "compose-index" not in workflow
+    assert "prepare-release-identity" not in workflow
+    assert "native_release_identity.candidate.json" not in workflow
+    assert "compose-index" in publication_workflow
+    assert "prepare-release-identity" in publication_workflow
+    assert "native_release_identity.candidate.json" in publication_workflow
     assert "native_evidence_receipt.json" in workflow
-    assert "native_evidence_receipt.candidate.json" in workflow
+    assert "native_evidence_receipt.candidate.json" in publication_workflow
+    assert "evidence-publication-receipt" in publication_workflow
+    assert "--published-artifacts-input" in publication_workflow
+    assert "--publisher-run-id" in publication_workflow
     assert "conformance-environment" in workflow
     assert 'cat .artifacts/derived-postgresql/environment >> "$GITHUB_ENV"' in workflow
     assert "REPLACE_WITH_FROZEN" not in workflow
@@ -4174,6 +4239,9 @@ def test_native_workflow_has_no_buildx_discovery_or_download_fallback():
 
 def test_conformance_workflow_authenticates_and_selects_exact_github_cli():
     workflow = PACKAGE_ROOT.joinpath(".github/workflows/conformance.yml").read_text()
+    publication_workflow = PACKAGE_ROOT.joinpath(
+        ".github/workflows/evidence-publication.yml"
+    ).read_text()
     conformance_job = workflow.split("  conformance:\n", 1)[1].split(
         "\n  native-verifier:", 1
     )[0]
@@ -4273,7 +4341,13 @@ def test_conformance_workflow_authenticates_and_selects_exact_github_cli():
     assert conformance_job.count(
         "native_evidence_verification_currentness.json"
     ) == 2
-    assert workflow.count("native_evidence_verification_currentness.json") == 3
+    assert workflow.count("native_evidence_verification_currentness.json") == 2
+    assert (
+        publication_workflow.count(
+            "native_evidence_verification_currentness.json"
+        )
+        == 1
+    )
 
 
 def test_native_build_sources_match_evidence_material_authority():

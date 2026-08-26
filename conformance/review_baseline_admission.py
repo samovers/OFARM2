@@ -12,6 +12,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import cast
 
@@ -27,7 +28,40 @@ SHA256 = re.compile(r"sha256:[0-9a-f]{64}")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 TIMESTAMP = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[^\r\n]+Z")
 EVIDENCE_SCHEMA = "ofarm.review-baseline-admission.v2"
+PUBLICATION_TICKET_SCHEMA = "ofarm.review-baseline-publication-ticket.v1"
+PUBLICATION_RECEIPT_SCHEMA = "ofarm.evidence-publication-receipt.v1"
+GITHUB_API_VERSION = "2026-03-10"
 GRAPHQL_COMMENT_PREFIX = "graphql:issue-comment:"
+CONFORMANCE_WORKFLOW_PATH = ".github/workflows/conformance.yml"
+GATE_WORKFLOW_PATH = ".github/workflows/review-baseline-gate.yml"
+PUBLICATION_WORKFLOW_PATH = ".github/workflows/evidence-publication.yml"
+PUBLICATION_TICKET_NAME = "evidence-publication-ticket"
+PROVISIONAL_ARTIFACT_NAMES = (
+    "conformance-provisional",
+    "native-verifier-amd64-provisional",
+    "native-verifier-arm64-provisional",
+)
+PUBLICATION_ARTIFACT_NAMES = (
+    "review-baseline",
+    "platform-mvp-evidence",
+    "native-verifier-amd64",
+    "native-verifier-arm64",
+    "native-verifier-index",
+)
+SOURCE_ARTIFACT_MAX_BYTES = {
+    "conformance-provisional": 512_000_000,
+    "native-verifier-amd64-provisional": 700_000_000,
+    "native-verifier-arm64-provisional": 700_000_000,
+    PUBLICATION_TICKET_NAME: 1_000_000,
+}
+SOURCE_WORKFLOW_NAMES = {
+    CONFORMANCE_WORKFLOW_PATH: "conformance",
+    GATE_WORKFLOW_PATH: "reviewed-head baseline gate",
+}
+SOURCE_WORKFLOW_EVENTS = {
+    CONFORMANCE_WORKFLOW_PATH: "push",
+    GATE_WORKFLOW_PATH: "issue_comment",
+}
 CALL_INPUT_FIELDS = frozenset(
     {
         "mode",
@@ -62,7 +96,7 @@ query AdmissionComment($id: ID!) {
 }
 """
 JsonObject = dict[str, object]
-FetchJson = Callable[[str], JsonObject]
+FetchJson = Callable[[str], object]
 
 
 class AdmissionError(ValueError):
@@ -100,6 +134,42 @@ class GateDecision:
     reason: str
 
 
+@dataclass(frozen=True)
+class ArtifactReference:
+    """One immutable artifact bound to one exact source workflow run."""
+
+    name: str
+    artifact_id: int
+    digest: str
+    size: int
+    source_run_id: int
+    source_head_sha: str
+
+    def evidence(self) -> JsonObject:
+        return {
+            "artifactId": self.artifact_id,
+            "digest": self.digest,
+            "name": self.name,
+            "size": self.size,
+            "sourceHeadSha": self.source_head_sha,
+            "sourceRunId": self.source_run_id,
+        }
+
+
+@dataclass(frozen=True)
+class PublicationSource:
+    """Trusted identity of the completed producer workflow run."""
+
+    repository: str
+    run_id: int
+    run_attempt: int
+    event_name: str
+    workflow_name: str
+    workflow_path: str
+    workflow_ref: str
+    workflow_sha: str
+
+
 def _full_sha(value: object, field: str) -> str:
     if not isinstance(value, str) or FULL_SHA.fullmatch(value) is None:
         raise AdmissionError(f"{field} must be a full lowercase commit SHA")
@@ -110,6 +180,12 @@ def _sha256(value: object, field: str) -> str:
     if not isinstance(value, str) or SHA256.fullmatch(value) is None:
         raise AdmissionError(f"{field} must be a SHA-256 digest")
     return value
+
+
+def _normalized_sha256(value: object, field: str) -> str:
+    if isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value):
+        value = f"sha256:{value}"
+    return _sha256(value, field)
 
 
 def _positive_int(value: object, field: str) -> int:
@@ -141,6 +217,22 @@ def _object(value: object, field: str) -> JsonObject:
     if not isinstance(value, dict):
         raise AdmissionError(f"{field} must be an object")
     return cast(JsonObject, value)
+
+
+def _array(value: object, field: str) -> list[object]:
+    if not isinstance(value, list):
+        raise AdmissionError(f"{field} must be an array")
+    return cast(list[object], value)
+
+
+def _canonical_json_bytes(value: JsonObject) -> bytes:
+    return (
+        json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode("utf-8")
+
+
+def _workflow_ref(repository: str, workflow_path: str) -> str:
+    return f"{repository}/{workflow_path}@refs/heads/main"
 
 
 def _body_digest(body: str) -> str:
@@ -188,7 +280,10 @@ def _live_pull_request(
     pr_number: int,
     fetch_json: FetchJson,
 ) -> JsonObject:
-    live_pr = fetch_json(f"/repos/{repository}/pulls/{pr_number}")
+    live_pr = _object(
+        fetch_json(f"/repos/{repository}/pulls/{pr_number}"),
+        "live pull request",
+    )
     if _positive_int(live_pr.get("number"), "live pull-request number") != pr_number:
         raise AdmissionError("live pull-request identity changed")
     if live_pr.get("state") != "open":
@@ -207,8 +302,9 @@ def _bound_merge(
     execution_merge_sha = _full_sha(
         live_pr.get("merge_commit_sha"), "live execution merge sha"
     )
-    merge_commit = fetch_json(
-        f"/repos/{repository}/git/commits/{execution_merge_sha}"
+    merge_commit = _object(
+        fetch_json(f"/repos/{repository}/git/commits/{execution_merge_sha}"),
+        "live execution merge commit",
     )
     if _full_sha(merge_commit.get("sha"), "live merge commit sha") != (
         execution_merge_sha
@@ -229,7 +325,10 @@ def _comment_admission(
     expected_body: str | None = None,
 ) -> Admission:
     live_pr = _live_pull_request(repository, pr_number, fetch_json)
-    live_comment = fetch_json(f"/repos/{repository}/issues/comments/{comment_id}")
+    live_comment = _object(
+        fetch_json(f"/repos/{repository}/issues/comments/{comment_id}"),
+        "live admission comment",
+    )
     if _positive_int(live_comment.get("id"), "live comment id") != comment_id:
         raise AdmissionError("live admission-comment identity changed")
     if not str(live_comment.get("issue_url", "")).endswith(
@@ -238,7 +337,10 @@ def _comment_admission(
         raise AdmissionError("live admission comment belongs to another pull request")
 
     node_id = _text(live_comment.get("node_id"), "live comment node id")
-    graph_comment = fetch_json(f"{GRAPHQL_COMMENT_PREFIX}{node_id}")
+    graph_comment = _object(
+        fetch_json(f"{GRAPHQL_COMMENT_PREFIX}{node_id}"),
+        "GraphQL admission comment",
+    )
     if _positive_int(
         graph_comment.get("databaseId"), "GraphQL comment database id"
     ) != comment_id:
@@ -309,6 +411,538 @@ def _comment_admission(
         cast(str, association),
         "live unedited exact-head zero-Blocker admission comment",
     )
+
+
+def _parsed_timestamp(value: str, field: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.removesuffix("Z") + "+00:00")
+    except ValueError as exc:
+        raise AdmissionError(f"{field} must be an ISO-8601 UTC timestamp") from exc
+    if parsed.utcoffset() is None:
+        raise AdmissionError(f"{field} must include a UTC offset")
+    return parsed
+
+
+def _ensure_no_live_revocation(
+    admission: Admission,
+    fetch_json: FetchJson,
+) -> None:
+    if admission.event_class != "ISSUE_COMMENT_ADMISSION":
+        return
+    if (
+        admission.pull_request_number is None
+        or admission.admission_comment_id is None
+    ):
+        raise AdmissionError("review admission has no live revocation identity")
+    admitted_at = _parsed_timestamp(
+        admission.review_updated_at,
+        "admission update time",
+    )
+    page = 1
+    while page <= 10:
+        comments = _array(
+            fetch_json(
+                f"/repos/{admission.repository}/issues/"
+                f"{admission.pull_request_number}/comments"
+                f"?per_page=100&page={page}"
+            ),
+            "live pull-request comments",
+        )
+        for item in comments:
+            comment = _object(item, "live pull-request comment")
+            comment_id = _positive_int(comment.get("id"), "live comment id")
+            if comment_id == admission.admission_comment_id:
+                continue
+            if comment.get("author_association") not in ALLOWED_ASSOCIATIONS:
+                continue
+            created_at = _timestamp(
+                comment.get("created_at"),
+                "live comment created_at",
+            )
+            if _parsed_timestamp(created_at, "live comment created_at") < admitted_at:
+                continue
+            revoked_head = _footer_head(
+                comment.get("body"),
+                REVOCATION_MARKER,
+                "live revocation comment",
+            )
+            if revoked_head == admission.reviewed_head_sha:
+                raise AdmissionError("live standing reviewer revocation is active")
+        if len(comments) < 100:
+            return
+        page += 1
+    raise AdmissionError("live revocation scan exceeded its bounded comment set")
+
+
+def _artifact_references(
+    *,
+    repository: str,
+    source_run_id: int,
+    source_head_sha: str,
+    expected_names: tuple[str, ...],
+    fetch_json: FetchJson,
+) -> dict[str, ArtifactReference]:
+    response = _object(
+        fetch_json(
+            f"/repos/{repository}/actions/runs/{source_run_id}/artifacts"
+            "?per_page=100"
+        ),
+        "source-run artifact response",
+    )
+    artifacts = _array(response.get("artifacts"), "source-run artifacts")
+    total_count = _positive_int(
+        response.get("total_count"),
+        "source-run artifact count",
+    )
+    if total_count != len(artifacts) or total_count > 100:
+        raise AdmissionError("source-run artifact inventory is incomplete")
+    references: dict[str, ArtifactReference] = {}
+    artifact_ids: set[int] = set()
+    for item in artifacts:
+        artifact = _object(item, "source-run artifact")
+        name = _text(artifact.get("name"), "source-run artifact name")
+        if name not in expected_names or name not in SOURCE_ARTIFACT_MAX_BYTES:
+            raise AdmissionError(
+                "source-run artifact names are not the exact inventory"
+            )
+        if name in references:
+            raise AdmissionError("source-run artifact name is duplicated")
+        workflow_run = _object(
+            artifact.get("workflow_run"),
+            "source-run artifact workflow identity",
+        )
+        bound_run_id = _positive_int(
+            workflow_run.get("id"),
+            "artifact source run id",
+        )
+        bound_head_sha = _full_sha(
+            workflow_run.get("head_sha"),
+            "artifact source head sha",
+        )
+        if bound_run_id != source_run_id or bound_head_sha != source_head_sha:
+            raise AdmissionError("artifact belongs to another source workflow run")
+        if artifact.get("expired") is not False:
+            raise AdmissionError("source-run artifact is expired")
+        artifact_id = _positive_int(
+            artifact.get("id"),
+            "source-run artifact id",
+        )
+        if artifact_id in artifact_ids:
+            raise AdmissionError("source-run artifact id is duplicated")
+        artifact_ids.add(artifact_id)
+        size = _positive_int(
+            artifact.get("size_in_bytes"),
+            "source-run artifact size",
+        )
+        if size > SOURCE_ARTIFACT_MAX_BYTES[name]:
+            raise AdmissionError("source-run artifact exceeds its size limit")
+        references[name] = ArtifactReference(
+            name=name,
+            artifact_id=artifact_id,
+            digest=_sha256(
+                artifact.get("digest"),
+                "source-run artifact digest",
+            ),
+            size=size,
+            source_run_id=bound_run_id,
+            source_head_sha=bound_head_sha,
+        )
+    if set(references) != set(expected_names):
+        raise AdmissionError("source-run artifact names are not the exact inventory")
+    return references
+
+
+def _publication_source_from_event(
+    *,
+    event_name: str,
+    event: JsonObject,
+    github_sha: str,
+    workflow_sha: str,
+    workflow_ref: str,
+    repository: str,
+    policy_sha: str,
+    fetch_json: FetchJson,
+) -> PublicationSource:
+    if event_name != "workflow_run":
+        raise AdmissionError("publication requires a workflow_run event")
+    _event_repository(event, repository)
+    if event.get("action") != "completed":
+        raise AdmissionError("publication source workflow is not completed")
+    trusted_policy_sha = _full_sha(policy_sha, "publication policy sha")
+    if (
+        _full_sha(github_sha, "publication GITHUB_SHA") != trusted_policy_sha
+        or _full_sha(workflow_sha, "publication workflow sha")
+        != trusted_policy_sha
+    ):
+        raise AdmissionError("publication workflow does not equal its policy commit")
+    if workflow_ref != _workflow_ref(repository, PUBLICATION_WORKFLOW_PATH):
+        raise AdmissionError("publication did not use the trusted main workflow")
+
+    event_run = _object(event.get("workflow_run"), "workflow_run source")
+    source_run_id = _positive_int(event_run.get("id"), "source run id")
+    live_run = _object(
+        fetch_json(f"/repos/{repository}/actions/runs/{source_run_id}"),
+        "live source workflow run",
+    )
+    exact_fields = (
+        "id",
+        "run_attempt",
+        "event",
+        "name",
+        "path",
+        "head_branch",
+        "head_sha",
+        "status",
+        "conclusion",
+        "workflow_id",
+    )
+    for field in exact_fields:
+        if live_run.get(field) != event_run.get(field):
+            raise AdmissionError(f"live source workflow {field} changed")
+    source_path = _text(event_run.get("path"), "source workflow path")
+    if source_path not in SOURCE_WORKFLOW_NAMES:
+        raise AdmissionError("source workflow path is not an allowed producer")
+    source_name = _text(event_run.get("name"), "source workflow name")
+    if source_name != SOURCE_WORKFLOW_NAMES[source_path]:
+        raise AdmissionError("source workflow name does not match its path")
+    source_event = _text(event_run.get("event"), "source workflow event")
+    if source_event != SOURCE_WORKFLOW_EVENTS[source_path]:
+        raise AdmissionError("source workflow event does not match its path")
+    if (
+        event_run.get("status") != "completed"
+        or event_run.get("conclusion") != "success"
+        or event_run.get("head_branch") != "main"
+    ):
+        raise AdmissionError("source workflow run is not a successful main run")
+    source_sha = _full_sha(event_run.get("head_sha"), "source workflow sha")
+    if source_sha != trusted_policy_sha:
+        raise AdmissionError("source and publisher policy commits differ")
+    source_run_attempt = _positive_int(
+        event_run.get("run_attempt"),
+        "source run attempt",
+    )
+    if source_run_attempt != 1:
+        raise AdmissionError("source workflow rerun attempts are ambiguous")
+    source_repository = _object(
+        event_run.get("repository"),
+        "source workflow repository",
+    )
+    head_repository = _object(
+        event_run.get("head_repository"),
+        "source workflow head repository",
+    )
+    if (
+        source_repository.get("full_name") != repository
+        or head_repository.get("full_name") != repository
+    ):
+        raise AdmissionError("source workflow belongs to another repository")
+    return PublicationSource(
+        repository=repository,
+        run_id=source_run_id,
+        run_attempt=source_run_attempt,
+        event_name=source_event,
+        workflow_name=source_name,
+        workflow_path=source_path,
+        workflow_ref=_workflow_ref(repository, source_path),
+        workflow_sha=source_sha,
+    )
+
+
+def _publication_ticket_document(
+    *,
+    admission: Admission,
+    source_run_id: int,
+    source_run_attempt: int,
+    source_workflow_ref: str,
+    source_workflow_sha: str,
+    provisional_artifacts: dict[str, ArtifactReference],
+) -> JsonObject:
+    expected_path = (
+        CONFORMANCE_WORKFLOW_PATH
+        if admission.event_class == "MAIN_PUSH"
+        else GATE_WORKFLOW_PATH
+    )
+    if source_workflow_ref != _workflow_ref(admission.repository, expected_path):
+        raise AdmissionError("publication handoff came from the wrong workflow")
+    if _full_sha(source_workflow_sha, "source workflow sha") != admission.policy_sha:
+        raise AdmissionError("publication handoff policy differs from admission")
+    if set(provisional_artifacts) != set(PROVISIONAL_ARTIFACT_NAMES):
+        raise AdmissionError("publication handoff artifact inventory is not exact")
+    bound_source_run_attempt = _positive_int(
+        source_run_attempt,
+        "source run attempt",
+    )
+    if bound_source_run_attempt != 1:
+        raise AdmissionError("source workflow rerun attempts are ambiguous")
+    return {
+        "admission": admission.evidence(),
+        "provisionalArtifacts": [
+            provisional_artifacts[name].evidence()
+            for name in PROVISIONAL_ARTIFACT_NAMES
+        ],
+        "repository": admission.repository,
+        "schemaVersion": PUBLICATION_TICKET_SCHEMA,
+        "source": {
+            "runAttempt": bound_source_run_attempt,
+            "runId": _positive_int(source_run_id, "source run id"),
+            "workflowRef": source_workflow_ref,
+            "workflowSha": source_workflow_sha,
+        },
+    }
+
+
+def _load_publication_ticket(path: Path) -> JsonObject:
+    try:
+        data = path.read_bytes()
+        document = json.loads(data)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AdmissionError("publication ticket is not readable JSON") from exc
+    ticket = _object(document, "publication ticket")
+    if _canonical_json_bytes(ticket) != data:
+        raise AdmissionError("publication ticket is not canonical JSON")
+    if set(ticket) != {
+        "admission",
+        "provisionalArtifacts",
+        "repository",
+        "schemaVersion",
+        "source",
+    }:
+        raise AdmissionError("publication ticket fields are not exact")
+    if ticket.get("schemaVersion") != PUBLICATION_TICKET_SCHEMA:
+        raise AdmissionError("publication ticket schema is not exact")
+    return ticket
+
+
+def _validate_publication_ticket(
+    *,
+    ticket: JsonObject,
+    source: PublicationSource,
+    artifacts: dict[str, ArtifactReference],
+    fetch_json: FetchJson,
+) -> Admission:
+    if ticket.get("repository") != source.repository:
+        raise AdmissionError("publication ticket repository differs")
+    expected_source = {
+        "runAttempt": source.run_attempt,
+        "runId": source.run_id,
+        "workflowRef": source.workflow_ref,
+        "workflowSha": source.workflow_sha,
+    }
+    if ticket.get("source") != expected_source:
+        raise AdmissionError("publication ticket source identity differs")
+    expected_artifacts = [
+        artifacts[name].evidence() for name in PROVISIONAL_ARTIFACT_NAMES
+    ]
+    if ticket.get("provisionalArtifacts") != expected_artifacts:
+        raise AdmissionError("publication ticket artifact identities differ")
+    admission_evidence = _object(ticket.get("admission"), "ticket admission")
+    if admission_evidence.get("schemaVersion") != EVIDENCE_SCHEMA:
+        raise AdmissionError("ticket admission schema is not exact")
+    if source.event_name == "push":
+        live_admission = Admission(
+            True,
+            "MAIN_PUSH",
+            source.repository,
+            None,
+            None,
+            source.workflow_sha,
+            "",
+            source.workflow_sha,
+            source.workflow_sha,
+            "",
+            "MAIN_PUSH",
+            "",
+            "",
+            "main-branch post-merge baseline",
+        )
+    else:
+        pr_number = _positive_int(
+            admission_evidence.get("pull_request_number"),
+            "ticket pull-request number",
+        )
+        comment_id = _positive_int(
+            admission_evidence.get("admission_comment_id"),
+            "ticket admission-comment id",
+        )
+        live_admission = _comment_admission(
+            repository=source.repository,
+            pr_number=pr_number,
+            comment_id=comment_id,
+            policy_sha=source.workflow_sha,
+            fetch_json=fetch_json,
+        )
+        _ensure_no_live_revocation(live_admission, fetch_json)
+    if admission_evidence != live_admission.evidence():
+        raise AdmissionError("publication ticket differs from live admission")
+    return live_admission
+
+
+def _publication_receipt_document(
+    *,
+    path: Path,
+    ticket: JsonObject,
+    admission: Admission,
+    source: PublicationSource,
+    source_artifacts: dict[str, ArtifactReference],
+    publisher_workflow_ref: str,
+    publisher_workflow_sha: str,
+    publisher_run_id: int,
+    publisher_run_attempt: int,
+    fetch_json: FetchJson,
+) -> JsonObject:
+    if set(source_artifacts) != {
+        *PROVISIONAL_ARTIFACT_NAMES,
+        PUBLICATION_TICKET_NAME,
+    }:
+        raise AdmissionError("publication receipt source inventory is not exact")
+    expected_publisher_ref = _workflow_ref(
+        source.repository,
+        PUBLICATION_WORKFLOW_PATH,
+    )
+    if publisher_workflow_ref != expected_publisher_ref:
+        raise AdmissionError("publication receipt workflow ref is not trusted")
+    publisher_sha = _full_sha(
+        publisher_workflow_sha,
+        "publisher workflow sha",
+    )
+    if publisher_sha != source.workflow_sha:
+        raise AdmissionError("publisher and source policy commits differ")
+    bound_publisher_run_id = _positive_int(
+        publisher_run_id,
+        "publisher run id",
+    )
+    bound_publisher_run_attempt = _positive_int(
+        publisher_run_attempt,
+        "publisher run attempt",
+    )
+    if bound_publisher_run_attempt != 1:
+        raise AdmissionError("publisher workflow rerun attempts are ambiguous")
+    publisher_run = _object(
+        fetch_json(
+            f"/repos/{source.repository}/actions/runs/{bound_publisher_run_id}"
+        ),
+        "live publisher workflow run",
+    )
+    publisher_repository = _object(
+        publisher_run.get("repository"),
+        "publisher workflow repository",
+    )
+    publisher_head_repository = _object(
+        publisher_run.get("head_repository"),
+        "publisher workflow head repository",
+    )
+    if (
+        _positive_int(publisher_run.get("id"), "live publisher run id")
+        != bound_publisher_run_id
+        or _positive_int(
+            publisher_run.get("run_attempt"),
+            "live publisher run attempt",
+        )
+        != bound_publisher_run_attempt
+        or publisher_run.get("event") != "workflow_run"
+        or publisher_run.get("name") != "evidence-publication"
+        or publisher_run.get("path") != PUBLICATION_WORKFLOW_PATH
+        or publisher_run.get("head_branch") != "main"
+        or _full_sha(
+            publisher_run.get("head_sha"),
+            "live publisher workflow sha",
+        )
+        != publisher_sha
+        or publisher_run.get("status") != "in_progress"
+        or publisher_run.get("conclusion") is not None
+        or publisher_repository.get("full_name") != source.repository
+        or publisher_head_repository.get("full_name") != source.repository
+    ):
+        raise AdmissionError("live publisher workflow identity differs")
+    _positive_int(
+        publisher_run.get("workflow_id"),
+        "live publisher workflow id",
+    )
+    try:
+        candidate = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AdmissionError("published artifact candidate is not readable JSON") from exc
+    items = _array(candidate, "published artifact candidate")
+    if len(items) != len(PUBLICATION_ARTIFACT_NAMES):
+        raise AdmissionError("published artifact candidate count is not exact")
+    observed: dict[str, JsonObject] = {}
+    for item in items:
+        proposed = _object(item, "published artifact candidate item")
+        if set(proposed) != {"artifactId", "digest", "name"}:
+            raise AdmissionError("published artifact candidate fields are not exact")
+        name = _text(proposed.get("name"), "published artifact name")
+        if name in observed:
+            raise AdmissionError("published artifact name is duplicated")
+        artifact_id_value = proposed.get("artifactId")
+        artifact_id = (
+            _positive_int_text(artifact_id_value, "published artifact id")
+            if isinstance(artifact_id_value, str)
+            else _positive_int(artifact_id_value, "published artifact id")
+        )
+        proposed_digest = _normalized_sha256(
+            proposed.get("digest"),
+            "published artifact digest",
+        )
+        live = _object(
+            fetch_json(
+                f"/repos/{source.repository}/actions/artifacts/{artifact_id}"
+            ),
+            "live published artifact",
+        )
+        live_workflow = _object(
+            live.get("workflow_run"),
+            "live published artifact workflow",
+        )
+        if (
+            _positive_int(live.get("id"), "live published artifact id")
+            != artifact_id
+            or live.get("name") != name
+            or _sha256(live.get("digest"), "live published artifact digest")
+            != proposed_digest
+            or live.get("expired") is not False
+            or _positive_int(
+                live_workflow.get("id"),
+                "live publisher run id",
+            )
+            != bound_publisher_run_id
+            or _full_sha(
+                live_workflow.get("head_sha"),
+                "live publisher workflow sha",
+            )
+            != publisher_sha
+        ):
+            raise AdmissionError("published artifact live identity differs")
+        observed[name] = {
+            "artifactId": artifact_id,
+            "digest": proposed_digest,
+            "name": name,
+            "publisherRunId": bound_publisher_run_id,
+            "size": _positive_int(
+                live.get("size_in_bytes"),
+                "live published artifact size",
+            ),
+        }
+    if set(observed) != set(PUBLICATION_ARTIFACT_NAMES):
+        raise AdmissionError("published artifact names are not exact")
+    return {
+        "admission": admission.evidence(),
+        "artifacts": [observed[name] for name in PUBLICATION_ARTIFACT_NAMES],
+        "publisher": {
+            "runAttempt": bound_publisher_run_attempt,
+            "runId": bound_publisher_run_id,
+            "workflowRef": publisher_workflow_ref,
+            "workflowSha": publisher_sha,
+        },
+        "repository": source.repository,
+        "schemaVersion": PUBLICATION_RECEIPT_SCHEMA,
+        "source": {
+            **_object(ticket.get("source"), "publication ticket source"),
+            "artifacts": [
+                source_artifacts[name].evidence()
+                for name in (*PROVISIONAL_ARTIFACT_NAMES, PUBLICATION_TICKET_NAME)
+            ],
+        },
+    }
 
 
 def _empty_inputs(
@@ -673,7 +1307,7 @@ class GitHubReader:
         self._api_url = api_url.rstrip("/")
         self._token = token
 
-    def __call__(self, path: str) -> JsonObject:
+    def __call__(self, path: str) -> object:
         data: bytes | None = None
         method = "GET"
         url = f"{self._api_url}{path}"
@@ -700,7 +1334,7 @@ class GitHubReader:
                 "Authorization": f"Bearer {self._token}",
                 "Content-Type": "application/json",
                 "User-Agent": "ofarm2-review-baseline-admission",
-                "X-GitHub-Api-Version": "2022-11-28",
+                "X-GitHub-Api-Version": GITHUB_API_VERSION,
             },
         )
         try:
@@ -708,9 +1342,9 @@ class GitHubReader:
                 payload = json.load(response)
         except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
             raise AdmissionError("live GitHub admission read failed") from exc
-        response = _object(payload, "live GitHub response")
         if not graphql:
-            return response
+            return payload
+        response = _object(payload, "live GitHub response")
         if response.get("errors") is not None:
             raise AdmissionError("live GitHub GraphQL admission read failed")
         graph_data = _object(response.get("data"), "GraphQL response data")
@@ -746,6 +1380,45 @@ def _write_admission_output(path: Path, admission: Admission) -> None:
     )
 
 
+def _write_publication_output(
+    path: Path,
+    *,
+    source: PublicationSource | None,
+    artifacts: dict[str, ArtifactReference],
+    admission: Admission | None = None,
+) -> None:
+    aliases = {
+        "conformance-provisional": "conformance",
+        "native-verifier-amd64-provisional": "native_amd64",
+        "native-verifier-arm64-provisional": "native_arm64",
+        PUBLICATION_TICKET_NAME: "ticket",
+    }
+    values: dict[str, object] = {}
+    for name, artifact in artifacts.items():
+        alias = aliases[name]
+        values[f"{alias}_artifact_id"] = artifact.artifact_id
+        values[f"{alias}_artifact_digest"] = artifact.digest
+        values[f"{alias}_artifact_size"] = artifact.size
+    if source is not None:
+        values.update(
+            {
+                "source_event_name": source.event_name,
+                "source_run_attempt": source.run_attempt,
+                "source_run_id": source.run_id,
+                "source_workflow_ref": source.workflow_ref,
+                "source_workflow_sha": source.workflow_sha,
+            }
+        )
+    if admission is not None:
+        values["publication_concurrency_group"] = (
+            f"ofarm-pr-{admission.pull_request_number}"
+            if admission.pull_request_number is not None
+            else f"ofarm-main-publication-{source.run_id if source else 'unknown'}"
+        )
+        values["pull_request_number"] = admission.pull_request_number or ""
+    _write_output(path, values)
+
+
 def _write_gate_output(path: Path, decision: GateDecision) -> None:
     call_outputs = {
         field: decision.inputs.get(field, "")
@@ -770,9 +1443,18 @@ def _write_json(path: Path, value: JsonObject) -> None:
     )
 
 
+def _write_canonical_json(path: Path, value: JsonObject) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(_canonical_json_bytes(value))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--operation", choices=("admit", "gate"), required=True)
+    parser.add_argument(
+        "--operation",
+        choices=("admit", "gate", "handoff", "resolve", "publish"),
+        required=True,
+    )
     parser.add_argument("--event-name", required=True)
     parser.add_argument("--event-path", type=Path, required=True)
     parser.add_argument("--github-sha", required=True)
@@ -782,13 +1464,25 @@ def main() -> int:
     parser.add_argument("--policy-sha", required=True)
     parser.add_argument("--github-output", type=Path, required=True)
     parser.add_argument("--evidence-output", type=Path)
+    parser.add_argument("--source-run-id", type=int)
+    parser.add_argument("--source-run-attempt", type=int)
+    parser.add_argument("--ticket-output", type=Path)
+    parser.add_argument("--ticket", type=Path)
+    parser.add_argument("--published-artifacts-input", type=Path)
+    parser.add_argument("--publication-receipt-output", type=Path)
+    parser.add_argument("--publisher-run-id", type=int)
+    parser.add_argument("--publisher-run-attempt", type=int)
     args = parser.parse_args()
 
     event = json.loads(args.event_path.read_text(encoding="utf-8"))
     if not isinstance(event, dict):
         raise AdmissionError("GitHub event payload must be an object")
     fetch_json: FetchJson | None = None
-    if args.event_name == "issue_comment":
+    if args.event_name == "issue_comment" or args.operation in {
+        "handoff",
+        "resolve",
+        "publish",
+    }:
         fetch_json = GitHubReader(
             os.environ.get("GITHUB_API_URL", "https://api.github.com"),
             os.environ.get("OFARM_ADMISSION_TOKEN", ""),
@@ -804,6 +1498,86 @@ def main() -> int:
         )
         _write_gate_output(args.github_output, decision)
         print(f"baseline gate: {decision.reason}; policy={args.policy_sha}")
+        return 0
+
+    if args.operation in {"resolve", "publish"}:
+        if fetch_json is None:
+            raise AdmissionError("publication requires a live GitHub reader")
+        source = _publication_source_from_event(
+            event_name=args.event_name,
+            event=cast(JsonObject, event),
+            github_sha=args.github_sha,
+            workflow_sha=args.workflow_sha,
+            workflow_ref=args.workflow_ref,
+            repository=args.repository,
+            policy_sha=args.policy_sha,
+            fetch_json=fetch_json,
+        )
+        artifacts = _artifact_references(
+            repository=args.repository,
+            source_run_id=source.run_id,
+            source_head_sha=source.workflow_sha,
+            expected_names=(*PROVISIONAL_ARTIFACT_NAMES, PUBLICATION_TICKET_NAME),
+            fetch_json=fetch_json,
+        )
+        if args.operation == "resolve":
+            _write_publication_output(
+                args.github_output,
+                source=source,
+                artifacts=artifacts,
+            )
+            print(
+                "publication source resolved: "
+                f"run={source.run_id}; policy={source.workflow_sha}"
+            )
+            return 0
+        if args.ticket is None:
+            raise AdmissionError("publication validation requires a ticket")
+        ticket = _load_publication_ticket(args.ticket)
+        admission = _validate_publication_ticket(
+            ticket=ticket,
+            source=source,
+            artifacts=artifacts,
+            fetch_json=fetch_json,
+        )
+        _write_admission_output(args.github_output, admission)
+        _write_publication_output(
+            args.github_output,
+            source=source,
+            artifacts=artifacts,
+            admission=admission,
+        )
+        if args.evidence_output is not None:
+            _write_json(args.evidence_output, admission.evidence())
+        receipt_arguments = (
+            args.published_artifacts_input,
+            args.publication_receipt_output,
+            args.publisher_run_id,
+            args.publisher_run_attempt,
+        )
+        if any(value is not None for value in receipt_arguments):
+            if not all(value is not None for value in receipt_arguments):
+                raise AdmissionError("publication receipt coordinates are incomplete")
+            receipt = _publication_receipt_document(
+                path=cast(Path, args.published_artifacts_input),
+                ticket=ticket,
+                admission=admission,
+                source=source,
+                source_artifacts=artifacts,
+                publisher_workflow_ref=args.workflow_ref,
+                publisher_workflow_sha=args.workflow_sha,
+                publisher_run_id=cast(int, args.publisher_run_id),
+                publisher_run_attempt=cast(int, args.publisher_run_attempt),
+                fetch_json=fetch_json,
+            )
+            _write_canonical_json(
+                cast(Path, args.publication_receipt_output),
+                receipt,
+            )
+        print(
+            "publication admission: "
+            f"{admission.reason}; source-run={source.run_id}"
+        )
         return 0
 
     call_inputs: JsonObject | None = None
@@ -825,6 +1599,62 @@ def main() -> int:
         call_inputs,
         fetch_json,
     )
+    if args.operation == "handoff":
+        if fetch_json is None:
+            raise AdmissionError("publication handoff requires a live GitHub reader")
+        if (
+            args.source_run_id is None
+            or args.source_run_attempt is None
+            or args.ticket_output is None
+        ):
+            raise AdmissionError("publication handoff coordinates are required")
+        if admission.event_class == "ISSUE_COMMENT_ADMISSION":
+            _ensure_no_live_revocation(admission, fetch_json)
+        source_path = (
+            CONFORMANCE_WORKFLOW_PATH
+            if args.event_name == "push"
+            else GATE_WORKFLOW_PATH
+        )
+        source = PublicationSource(
+            repository=args.repository,
+            run_id=_positive_int(args.source_run_id, "source run id"),
+            run_attempt=_positive_int(
+                args.source_run_attempt,
+                "source run attempt",
+            ),
+            event_name=args.event_name,
+            workflow_name=SOURCE_WORKFLOW_NAMES[source_path],
+            workflow_path=source_path,
+            workflow_ref=args.workflow_ref,
+            workflow_sha=args.workflow_sha,
+        )
+        artifacts = _artifact_references(
+            repository=args.repository,
+            source_run_id=source.run_id,
+            source_head_sha=source.workflow_sha,
+            expected_names=PROVISIONAL_ARTIFACT_NAMES,
+            fetch_json=fetch_json,
+        )
+        ticket = _publication_ticket_document(
+            admission=admission,
+            source_run_id=source.run_id,
+            source_run_attempt=source.run_attempt,
+            source_workflow_ref=source.workflow_ref,
+            source_workflow_sha=source.workflow_sha,
+            provisional_artifacts=artifacts,
+        )
+        _write_canonical_json(args.ticket_output, ticket)
+        _write_publication_output(
+            args.github_output,
+            source=source,
+            artifacts=artifacts,
+            admission=admission,
+        )
+        print(
+            "publication handoff: exact provisional inventory; "
+            f"source-run={source.run_id}"
+        )
+        return 0
     _write_admission_output(args.github_output, admission)
     if args.evidence_output is not None:
         _write_json(args.evidence_output, admission.evidence())

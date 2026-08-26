@@ -1,0 +1,900 @@
+# Trusted cross-run publisher for authoritative conformance evidence.
+# It never checks out or executes code from an admitted pull-request merge.
+name: evidence-publication
+
+on:
+  workflow_run:
+    workflows:
+      - conformance
+      - reviewed-head baseline gate
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: >-
+    ofarm-publication-source-${{ github.event.workflow_run.id }}-
+    ${{ github.event.workflow_run.run_attempt }}
+  cancel-in-progress: false
+
+env:
+  OFARM_PUBLICATION_POLICY_SHA: ${{ github.workflow_sha }}
+  OFARM_REVIEW_BASELINE_ADMISSION_SHA256: >-
+    sha256:f7ede964bd1a7d9a77ab19064e329c4805ff785c8d5e31933914f4a201211fff
+  OFARM_REVIEW_BASELINE_GATE_WORKFLOW_SHA256: >-
+    sha256:55613389e339f90a6731679d9f76c42bbc7d15a2b02b7f597550cecfd8e5b7c3
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  source-admission:
+    name: authenticate exact producer run and publication ticket
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      publication_concurrency_group: >-
+        ${{ steps.publication-start.outputs.publication_concurrency_group }}
+      source_run_id: ${{ steps.publication-start.outputs.source_run_id }}
+      source_workflow_sha: >-
+        ${{ steps.publication-start.outputs.source_workflow_sha }}
+    steps:
+      - name: Refuse attempt-ambiguous publisher reruns
+        run: test "$GITHUB_RUN_ATTEMPT" = 1
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ env.OFARM_PUBLICATION_POLICY_SHA }}
+          path: .publication-policy
+          persist-credentials: false
+      - name: Authenticate the immutable publication policy
+        run: |
+          test "$(git -C .publication-policy rev-parse HEAD)" = \
+            "${OFARM_PUBLICATION_POLICY_SHA}"
+          printf '%s  %s\n%s  %s\n' \
+            "${OFARM_REVIEW_BASELINE_ADMISSION_SHA256#sha256:}" \
+            ".publication-policy/conformance/review_baseline_admission.py" \
+            "${OFARM_REVIEW_BASELINE_GATE_WORKFLOW_SHA256#sha256:}" \
+            ".publication-policy/.github/workflows/review-baseline-gate.yml" \
+            | sha256sum --check --strict
+          git -C .publication-policy diff --exit-code --no-ext-diff
+          test -z "$(git -C .publication-policy status \
+            --porcelain=v1 --untracked-files=all)"
+      - name: Resolve the exact successful source-run artifact inventory
+        id: resolve-source
+        env:
+          OFARM_ADMISSION_TOKEN: ${{ github.token }}
+        run: >-
+          /usr/bin/python3
+          .publication-policy/conformance/review_baseline_admission.py
+          --operation resolve
+          --event-name "${GITHUB_EVENT_NAME}"
+          --event-path "${GITHUB_EVENT_PATH}"
+          --github-sha "${GITHUB_SHA}"
+          --workflow-sha "${GITHUB_WORKFLOW_SHA}"
+          --workflow-ref "${GITHUB_WORKFLOW_REF}"
+          --repository "${GITHUB_REPOSITORY}"
+          --policy-sha "${OFARM_PUBLICATION_POLICY_SHA}"
+          --github-output "${GITHUB_OUTPUT}"
+      - name: Download the trusted final handoff by artifact ID
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          artifact-ids: ${{ steps.resolve-source.outputs.ticket_artifact_id }}
+          path: ${{ runner.temp }}/ofarm-publication-ticket
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.resolve-source.outputs.source_run_id }}
+      - name: Re-authenticate policy after the ticket download
+        run: |
+          test "$(git -C .publication-policy rev-parse HEAD)" = \
+            "${OFARM_PUBLICATION_POLICY_SHA}"
+          git -C .publication-policy diff --exit-code --no-ext-diff
+          test -z "$(git -C .publication-policy status \
+            --porcelain=v1 --untracked-files=all)"
+      - name: Recheck live admission and authenticate the handoff
+        id: publication-start
+        env:
+          OFARM_ADMISSION_TOKEN: ${{ github.token }}
+        run: >-
+          /usr/bin/python3
+          .publication-policy/conformance/review_baseline_admission.py
+          --operation publish
+          --event-name "${GITHUB_EVENT_NAME}"
+          --event-path "${GITHUB_EVENT_PATH}"
+          --github-sha "${GITHUB_SHA}"
+          --workflow-sha "${GITHUB_WORKFLOW_SHA}"
+          --workflow-ref "${GITHUB_WORKFLOW_REF}"
+          --repository "${GITHUB_REPOSITORY}"
+          --policy-sha "${OFARM_PUBLICATION_POLICY_SHA}"
+          --ticket
+          "${RUNNER_TEMP}/ofarm-publication-ticket/evidence-publication-ticket.json"
+          --github-output "${GITHUB_OUTPUT}"
+          --evidence-output
+          "${RUNNER_TEMP}/source-publication-admission.json"
+      - name: Bind both source resolutions byte for byte
+        env:
+          FIRST_SOURCE_RUN: ${{ steps.resolve-source.outputs.source_run_id }}
+          SECOND_SOURCE_RUN: ${{ steps.publication-start.outputs.source_run_id }}
+          FIRST_TICKET_ID: ${{ steps.resolve-source.outputs.ticket_artifact_id }}
+          SECOND_TICKET_ID: ${{ steps.publication-start.outputs.ticket_artifact_id }}
+          FIRST_TICKET_DIGEST: >-
+            ${{ steps.resolve-source.outputs.ticket_artifact_digest }}
+          SECOND_TICKET_DIGEST: >-
+            ${{ steps.publication-start.outputs.ticket_artifact_digest }}
+        run: |
+          test "${FIRST_SOURCE_RUN}" = "${SECOND_SOURCE_RUN}"
+          test "${FIRST_TICKET_ID}" = "${SECOND_TICKET_ID}"
+          test "${FIRST_TICKET_DIGEST}" = "${SECOND_TICKET_DIGEST}"
+
+  publish:
+    name: derive and publish authoritative evidence
+    needs: source-admission
+    if: needs.source-admission.result == 'success'
+    concurrency:
+      group: ${{ needs.source-admission.outputs.publication_concurrency_group }}
+      cancel-in-progress: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ env.OFARM_PUBLICATION_POLICY_SHA }}
+          path: .publication-policy
+          persist-credentials: false
+      - name: Authenticate the immutable publication policy
+        run: |
+          test "$(git -C .publication-policy rev-parse HEAD)" = \
+            "${OFARM_PUBLICATION_POLICY_SHA}"
+          printf '%s  %s\n%s  %s\n' \
+            "${OFARM_REVIEW_BASELINE_ADMISSION_SHA256#sha256:}" \
+            ".publication-policy/conformance/review_baseline_admission.py" \
+            "${OFARM_REVIEW_BASELINE_GATE_WORKFLOW_SHA256#sha256:}" \
+            ".publication-policy/.github/workflows/review-baseline-gate.yml" \
+            | sha256sum --check --strict
+          git -C .publication-policy diff --exit-code --no-ext-diff
+          test -z "$(git -C .publication-policy status \
+            --porcelain=v1 --untracked-files=all)"
+      - name: Resolve the exact source artifacts again
+        id: resolve-source
+        env:
+          OFARM_ADMISSION_TOKEN: ${{ github.token }}
+        run: >-
+          /usr/bin/python3
+          .publication-policy/conformance/review_baseline_admission.py
+          --operation resolve
+          --event-name "${GITHUB_EVENT_NAME}"
+          --event-path "${GITHUB_EVENT_PATH}"
+          --github-sha "${GITHUB_SHA}"
+          --workflow-sha "${GITHUB_WORKFLOW_SHA}"
+          --workflow-ref "${GITHUB_WORKFLOW_REF}"
+          --repository "${GITHUB_REPOSITORY}"
+          --policy-sha "${OFARM_PUBLICATION_POLICY_SHA}"
+          --github-output "${GITHUB_OUTPUT}"
+      - name: Download the trusted handoff by exact artifact ID
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          artifact-ids: ${{ steps.resolve-source.outputs.ticket_artifact_id }}
+          path: ${{ runner.temp }}/ofarm-publication-ticket
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.resolve-source.outputs.source_run_id }}
+      - name: Re-authenticate policy after the ticket download
+        run: |
+          test "$(git -C .publication-policy rev-parse HEAD)" = \
+            "${OFARM_PUBLICATION_POLICY_SHA}"
+          git -C .publication-policy diff --exit-code --no-ext-diff
+          test -z "$(git -C .publication-policy status \
+            --porcelain=v1 --untracked-files=all)"
+      - name: Recheck live admission before validation
+        id: publisher-start
+        env:
+          OFARM_ADMISSION_TOKEN: ${{ github.token }}
+        run: >-
+          /usr/bin/python3
+          .publication-policy/conformance/review_baseline_admission.py
+          --operation publish
+          --event-name "${GITHUB_EVENT_NAME}"
+          --event-path "${GITHUB_EVENT_PATH}"
+          --github-sha "${GITHUB_SHA}"
+          --workflow-sha "${GITHUB_WORKFLOW_SHA}"
+          --workflow-ref "${GITHUB_WORKFLOW_REF}"
+          --repository "${GITHUB_REPOSITORY}"
+          --policy-sha "${OFARM_PUBLICATION_POLICY_SHA}"
+          --ticket
+          "${RUNNER_TEMP}/ofarm-publication-ticket/evidence-publication-ticket.json"
+          --github-output "${GITHUB_OUTPUT}"
+          --evidence-output
+          "${RUNNER_TEMP}/publisher-admission-start.json"
+      - name: Bind the publisher to the authenticated source job
+        env:
+          EXPECTED_SOURCE_RUN: ${{ needs.source-admission.outputs.source_run_id }}
+          OBSERVED_SOURCE_RUN: ${{ steps.publisher-start.outputs.source_run_id }}
+          EXPECTED_SOURCE_POLICY: >-
+            ${{ needs.source-admission.outputs.source_workflow_sha }}
+          OBSERVED_SOURCE_POLICY: >-
+            ${{ steps.publisher-start.outputs.source_workflow_sha }}
+        run: |
+          test "${OBSERVED_SOURCE_RUN}" = "${EXPECTED_SOURCE_RUN}"
+          test "${OBSERVED_SOURCE_POLICY}" = "${EXPECTED_SOURCE_POLICY}"
+          test "${OBSERVED_SOURCE_POLICY}" = "${OFARM_PUBLICATION_POLICY_SHA}"
+      - name: Download provisional conformance evidence by artifact ID
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          artifact-ids: ${{ steps.publisher-start.outputs.conformance_artifact_id }}
+          path: ${{ runner.temp }}/ofarm-publication-input/conformance
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.publisher-start.outputs.source_run_id }}
+      - name: Download provisional amd64 evidence by artifact ID
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          artifact-ids: ${{ steps.publisher-start.outputs.native_amd64_artifact_id }}
+          path: ${{ runner.temp }}/ofarm-publication-input/native/amd64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.publisher-start.outputs.source_run_id }}
+      - name: Download provisional arm64 evidence by artifact ID
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          artifact-ids: ${{ steps.publisher-start.outputs.native_arm64_artifact_id }}
+          path: ${{ runner.temp }}/ofarm-publication-input/native/arm64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.publisher-start.outputs.source_run_id }}
+      - name: Re-authenticate policy after all provisional downloads
+        run: |
+          test "$(git -C .publication-policy rev-parse HEAD)" = \
+            "${OFARM_PUBLICATION_POLICY_SHA}"
+          git -C .publication-policy diff --exit-code --no-ext-diff
+          test -z "$(git -C .publication-policy status \
+            --porcelain=v1 --untracked-files=all)"
+      - name: Validate provisional conformance evidence as untrusted data
+        env:
+          CONFORMANCE_INPUT: ${{ runner.temp }}/ofarm-publication-input/conformance
+        run: |
+          /usr/bin/python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["CONFORMANCE_INPUT"])
+          if not root.is_dir():
+              raise SystemExit("provisional conformance artifact is missing")
+          if any(path.is_symlink() for path in root.rglob("*")):
+              raise SystemExit("provisional conformance artifact contains a symlink")
+          forbidden = {
+              "evidence-publication-context.json",
+              "evidence-publication-receipt.json",
+              "review-baseline-admission.json",
+          }
+          if any(path.name in forbidden for path in root.rglob("*")):
+              raise SystemExit("producer supplied trusted publication metadata")
+          for run in ("run-1", "run-2"):
+              path = root / "review-baseline" / run / "review-baseline-evidence.json"
+              evidence = json.loads(path.read_text(encoding="utf-8"))
+              if (
+                  evidence.get("schemaVersion")
+                  != "ofarm.review-baseline-evidence.v2"
+                  or evidence.get("run", {}).get("outcome") != "passed"
+              ):
+                  raise SystemExit(f"unpublishable review baseline: {path}")
+          comparison = json.loads(
+              (root / "review-baseline" / "equivalence.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          if (
+              comparison.get("schemaVersion")
+              != "ofarm.review-baseline-comparison.v2"
+              or comparison.get("equivalent") is not True
+          ):
+              raise SystemExit("unpublishable review-baseline equivalence")
+          platform_files = list(
+              (root / "platform-evidence").glob("platform_mvp_results_*.json")
+          )
+          if len(platform_files) != 1:
+              raise SystemExit("platform evidence set is incomplete")
+          platform = json.loads(platform_files[0].read_text(encoding="utf-8"))
+          if (
+              platform.get("executed") is not True
+              or platform.get("allPassed") is not True
+              or platform.get("exitStatus") != 0
+              or not platform.get("results")
+          ):
+              raise SystemExit("platform evidence did not pass")
+          PY
+      - name: Re-authenticate both provisional native archives with trusted code
+        env:
+          NATIVE_INPUT: ${{ runner.temp }}/ofarm-publication-input/native
+          NATIVE_VERIFIED: ${{ runner.temp }}/ofarm-publication-verified/native
+          SOURCE_COMMIT: ${{ steps.publisher-start.outputs.execution_merge_sha }}
+          SOURCE_RUN_ATTEMPT: ${{ steps.publisher-start.outputs.source_run_attempt }}
+          SOURCE_RUN_ID: ${{ steps.publisher-start.outputs.source_run_id }}
+        run: |
+          for architecture in amd64 arm64
+          do
+            /usr/bin/python3 \
+              .publication-policy/deployment/postgresql/native_evidence.py \
+              collect-oci \
+              --archive "$NATIVE_INPUT/$architecture/ofarm-ed25519.oci.tar" \
+              --reproducibility "$NATIVE_INPUT/$architecture/reproducibility.json" \
+              --platform "linux/$architecture" \
+              --source-commit "$SOURCE_COMMIT" \
+              --containerfile \
+                .publication-policy/deployment/postgresql/ofarm_ed25519/Containerfile \
+              --builder-id \
+                "https://github.com/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/attempts/$SOURCE_RUN_ATTEMPT" \
+              --output-directory "$NATIVE_VERIFIED/$architecture"
+            for evidence in \
+              oci-evidence.json \
+              sbom.spdx.in-toto.json \
+              provenance.slsa-v0.2.in-toto.json
+            do
+              /usr/bin/cmp \
+                "$NATIVE_INPUT/$architecture/attestations/$evidence" \
+                "$NATIVE_VERIFIED/$architecture/$evidence"
+            done
+          done
+      - name: Validate both provisional native evidence sets
+        env:
+          NATIVE_INPUT: ${{ runner.temp }}/ofarm-publication-input/native
+          SOURCE_COMMIT: ${{ steps.publisher-start.outputs.execution_merge_sha }}
+        run: |
+          /usr/bin/python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["NATIVE_INPUT"])
+          forbidden = {
+              "evidence-publication-context.json",
+              "evidence-publication-receipt.json",
+              "review-baseline-admission.json",
+          }
+          for architecture in ("amd64", "arm64"):
+              platform = f"linux/{architecture}"
+              directory = root / architecture
+              if not directory.is_dir():
+                  raise SystemExit(f"provisional native artifact is missing: {platform}")
+              if any(path.is_symlink() for path in directory.rglob("*")):
+                  raise SystemExit(f"provisional native artifact has a symlink: {platform}")
+              if any(path.name in forbidden for path in directory.rglob("*")):
+                  raise SystemExit("producer supplied trusted publication metadata")
+              archives = list(directory.glob("*.oci.tar"))
+              if len(archives) != 1 or archives[0].stat().st_size <= 0:
+                  raise SystemExit(f"native OCI archive is missing: {platform}")
+              reproducibility = json.loads(
+                  (directory / "reproducibility.json").read_text(encoding="utf-8")
+              )
+              evidence = json.loads(
+                  (directory / "attestations" / "oci-evidence.json").read_text(
+                      encoding="utf-8"
+                  )
+              )
+              if (
+                  reproducibility.get("schema")
+                  != "ofarm.native-reproducibility-evidence.v1"
+                  or reproducibility.get("platform") != platform
+                  or reproducibility.get("source_commit")
+                  != os.environ["SOURCE_COMMIT"]
+              ):
+                  raise SystemExit(
+                      f"native reproducibility evidence is inconsistent: {platform}"
+                  )
+              if (
+                  evidence.get("schema") != "ofarm.native-oci-evidence.v1"
+                  or evidence.get("platform") != platform
+                  or evidence.get("source_commit") != os.environ["SOURCE_COMMIT"]
+              ):
+                  raise SystemExit(f"native OCI evidence is inconsistent: {platform}")
+              for name in (
+                  "sbom.spdx.in-toto.json",
+                  "provenance.slsa-v0.2.in-toto.json",
+              ):
+                  path = directory / "attestations" / name
+                  if not path.is_file() or path.stat().st_size <= 0:
+                      raise SystemExit(f"native attestation is missing: {platform}/{name}")
+          PY
+      - name: Re-authenticate policy immediately before established publication
+        run: |
+          test "$(git -C .publication-policy rev-parse HEAD)" = \
+            "$OFARM_PUBLICATION_POLICY_SHA"
+          git -C .publication-policy diff --exit-code --no-ext-diff
+          test -z "$(git -C .publication-policy status \
+            --porcelain=v1 --untracked-files=all)"
+      - name: Recheck live admission immediately before established publication
+        id: prepublish-admission
+        env:
+          OFARM_ADMISSION_TOKEN: ${{ github.token }}
+        run: >-
+          /usr/bin/python3
+          .publication-policy/conformance/review_baseline_admission.py
+          --operation publish
+          --event-name "$GITHUB_EVENT_NAME"
+          --event-path "$GITHUB_EVENT_PATH"
+          --github-sha "$GITHUB_SHA"
+          --workflow-sha "$GITHUB_WORKFLOW_SHA"
+          --workflow-ref "$GITHUB_WORKFLOW_REF"
+          --repository "$GITHUB_REPOSITORY"
+          --policy-sha "$OFARM_PUBLICATION_POLICY_SHA"
+          --ticket
+          "$RUNNER_TEMP/ofarm-publication-ticket/evidence-publication-ticket.json"
+          --github-output "$GITHUB_OUTPUT"
+          --evidence-output
+          "$RUNNER_TEMP/publisher-admission-prepublish.json"
+      - name: Bind validation to the final prepublication admission
+        run: >-
+          /usr/bin/cmp
+          "$RUNNER_TEMP/publisher-admission-start.json"
+          "$RUNNER_TEMP/publisher-admission-prepublish.json"
+      - name: Create trusted cross-run publication context
+        env:
+          ADMISSION_PATH: ${{ runner.temp }}/publisher-admission-prepublish.json
+          AMD64_DIGEST: ${{ steps.prepublish-admission.outputs.native_amd64_artifact_digest }}
+          AMD64_ID: ${{ steps.prepublish-admission.outputs.native_amd64_artifact_id }}
+          ARM64_DIGEST: ${{ steps.prepublish-admission.outputs.native_arm64_artifact_digest }}
+          ARM64_ID: ${{ steps.prepublish-admission.outputs.native_arm64_artifact_id }}
+          CONFORMANCE_DIGEST: ${{ steps.prepublish-admission.outputs.conformance_artifact_digest }}
+          CONFORMANCE_ID: ${{ steps.prepublish-admission.outputs.conformance_artifact_id }}
+          CONTEXT_PATH: ${{ runner.temp }}/evidence-publication-context.json
+          PUBLISHER_RUN_ATTEMPT: ${{ github.run_attempt }}
+          PUBLISHER_RUN_ID: ${{ github.run_id }}
+          PUBLISHER_WORKFLOW_REF: ${{ github.workflow_ref }}
+          PUBLISHER_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          SOURCE_EVENT: ${{ steps.prepublish-admission.outputs.source_event_name }}
+          SOURCE_RUN_ATTEMPT: ${{ steps.prepublish-admission.outputs.source_run_attempt }}
+          SOURCE_RUN_ID: ${{ steps.prepublish-admission.outputs.source_run_id }}
+          SOURCE_WORKFLOW_REF: ${{ steps.prepublish-admission.outputs.source_workflow_ref }}
+          SOURCE_WORKFLOW_SHA: ${{ steps.prepublish-admission.outputs.source_workflow_sha }}
+          TICKET_DIGEST: ${{ steps.prepublish-admission.outputs.ticket_artifact_digest }}
+          TICKET_ID: ${{ steps.prepublish-admission.outputs.ticket_artifact_id }}
+        run: |
+          /usr/bin/python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          artifacts = (
+              ("conformance-provisional", "CONFORMANCE_ID", "CONFORMANCE_DIGEST"),
+              ("native-verifier-amd64-provisional", "AMD64_ID", "AMD64_DIGEST"),
+              ("native-verifier-arm64-provisional", "ARM64_ID", "ARM64_DIGEST"),
+              ("evidence-publication-ticket", "TICKET_ID", "TICKET_DIGEST"),
+          )
+          context = {
+              "provisionalArtifacts": [
+                  {
+                      "artifactId": int(os.environ[artifact_id]),
+                      "digest": os.environ[digest],
+                      "name": name,
+                  }
+                  for name, artifact_id, digest in artifacts
+              ],
+              "publisher": {
+                  "runAttempt": int(os.environ["PUBLISHER_RUN_ATTEMPT"]),
+                  "runId": int(os.environ["PUBLISHER_RUN_ID"]),
+                  "workflowRef": os.environ["PUBLISHER_WORKFLOW_REF"],
+                  "workflowSha": os.environ["PUBLISHER_WORKFLOW_SHA"],
+              },
+              "schemaVersion": "ofarm.evidence-publication-context.v1",
+              "source": {
+                  "eventName": os.environ["SOURCE_EVENT"],
+                  "runAttempt": int(os.environ["SOURCE_RUN_ATTEMPT"]),
+                  "runId": int(os.environ["SOURCE_RUN_ID"]),
+                  "workflowRef": os.environ["SOURCE_WORKFLOW_REF"],
+                  "workflowSha": os.environ["SOURCE_WORKFLOW_SHA"],
+              },
+          }
+          Path(os.environ["CONTEXT_PATH"]).write_text(
+              json.dumps(context, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          /usr/bin/cp \
+            "$ADMISSION_PATH" \
+            "$RUNNER_TEMP/ofarm-publication-input/conformance/review-baseline/review-baseline-admission.json"
+          /usr/bin/cp \
+            "$ADMISSION_PATH" \
+            "$RUNNER_TEMP/ofarm-publication-input/conformance/platform-evidence/review-baseline-admission.json"
+          /usr/bin/cp \
+            "$CONTEXT_PATH" \
+            "$RUNNER_TEMP/ofarm-publication-input/conformance/review-baseline/evidence-publication-context.json"
+          /usr/bin/cp \
+            "$CONTEXT_PATH" \
+            "$RUNNER_TEMP/ofarm-publication-input/conformance/platform-evidence/evidence-publication-context.json"
+          for architecture in amd64 arm64
+          do
+            /usr/bin/cp \
+              "$ADMISSION_PATH" \
+              "$RUNNER_TEMP/ofarm-publication-input/native/$architecture/review-baseline-admission.json"
+            /usr/bin/cp \
+              "$CONTEXT_PATH" \
+              "$RUNNER_TEMP/ofarm-publication-input/native/$architecture/evidence-publication-context.json"
+          done
+      - name: Upload authoritative deterministic review baseline
+        id: upload-review-baseline
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: review-baseline
+          path: ${{ runner.temp }}/ofarm-publication-input/conformance/review-baseline/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload authoritative platform MVP evidence
+        id: upload-platform-evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: platform-mvp-evidence
+          path: ${{ runner.temp }}/ofarm-publication-input/conformance/platform-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload authoritative amd64 native evidence
+        id: upload-native-amd64
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: native-verifier-amd64
+          path: ${{ runner.temp }}/ofarm-publication-input/native/amd64/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload authoritative arm64 native evidence
+        id: upload-native-arm64
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: native-verifier-arm64
+          path: ${{ runner.temp }}/ofarm-publication-input/native/arm64/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Download authoritative amd64 evidence by publisher artifact ID
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          artifact-ids: ${{ steps.upload-native-amd64.outputs.artifact-id }}
+          path: ${{ runner.temp }}/ofarm-authoritative-input/amd64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+      - name: Download authoritative arm64 evidence by publisher artifact ID
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          artifact-ids: ${{ steps.upload-native-arm64.outputs.artifact-id }}
+          path: ${{ runner.temp }}/ofarm-authoritative-input/arm64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+      - name: Re-authenticate both authoritative native artifacts
+        env:
+          AUTHORITATIVE_INPUT: ${{ runner.temp }}/ofarm-authoritative-input
+          AUTHORITATIVE_VERIFIED: ${{ runner.temp }}/ofarm-authoritative-verified
+          CONTEXT_PATH: ${{ runner.temp }}/evidence-publication-context.json
+          SOURCE_COMMIT: ${{ steps.publisher-start.outputs.execution_merge_sha }}
+          SOURCE_RUN_ATTEMPT: ${{ steps.publisher-start.outputs.source_run_attempt }}
+          SOURCE_RUN_ID: ${{ steps.publisher-start.outputs.source_run_id }}
+        run: |
+          test "$(git -C .publication-policy rev-parse HEAD)" = \
+            "$OFARM_PUBLICATION_POLICY_SHA"
+          git -C .publication-policy diff --exit-code --no-ext-diff
+          test -z "$(git -C .publication-policy status \
+            --porcelain=v1 --untracked-files=all)"
+          for architecture in amd64 arm64
+          do
+            test -d "$AUTHORITATIVE_INPUT/$architecture"
+            if find "$AUTHORITATIVE_INPUT/$architecture" -type l -print -quit | \
+              grep --quiet .
+            then
+              exit 1
+            fi
+            /usr/bin/cmp \
+              "$CONTEXT_PATH" \
+              "$AUTHORITATIVE_INPUT/$architecture/evidence-publication-context.json"
+            /usr/bin/cmp \
+              "$RUNNER_TEMP/publisher-admission-prepublish.json" \
+              "$AUTHORITATIVE_INPUT/$architecture/review-baseline-admission.json"
+            /usr/bin/python3 \
+              .publication-policy/deployment/postgresql/native_evidence.py \
+              collect-oci \
+              --archive \
+                "$AUTHORITATIVE_INPUT/$architecture/ofarm-ed25519.oci.tar" \
+              --reproducibility \
+                "$AUTHORITATIVE_INPUT/$architecture/reproducibility.json" \
+              --platform "linux/$architecture" \
+              --source-commit "$SOURCE_COMMIT" \
+              --containerfile \
+                .publication-policy/deployment/postgresql/ofarm_ed25519/Containerfile \
+              --builder-id \
+                "https://github.com/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/attempts/$SOURCE_RUN_ATTEMPT" \
+              --output-directory "$AUTHORITATIVE_VERIFIED/$architecture"
+            for evidence in \
+              oci-evidence.json \
+              sbom.spdx.in-toto.json \
+              provenance.slsa-v0.2.in-toto.json
+            do
+              /usr/bin/cmp \
+                "$AUTHORITATIVE_INPUT/$architecture/attestations/$evidence" \
+                "$AUTHORITATIVE_VERIFIED/$architecture/$evidence"
+            done
+          done
+      - name: Derive the canonical index only with trusted publisher code
+        env:
+          AUTHORITATIVE_VERIFIED: ${{ runner.temp }}/ofarm-authoritative-verified
+          INDEX_OUTPUT: ${{ runner.temp }}/ofarm-authoritative-index
+          SOURCE_COMMIT: ${{ steps.publisher-start.outputs.execution_merge_sha }}
+        run: |
+          /usr/bin/python3 \
+            .publication-policy/deployment/postgresql/native_evidence.py \
+            compose-index \
+            --amd64-evidence \
+              "$AUTHORITATIVE_VERIFIED/amd64/oci-evidence.json" \
+            --arm64-evidence \
+              "$AUTHORITATIVE_VERIFIED/arm64/oci-evidence.json" \
+            --source-commit "$SOURCE_COMMIT" \
+            --index-output "$INDEX_OUTPUT/ofarm-ed25519.index.json" \
+            --evidence-output \
+              "$INDEX_OUTPUT/ofarm-ed25519.index-evidence.json"
+          /usr/bin/python3 \
+            .publication-policy/deployment/postgresql/native_evidence.py \
+            prepare-release-identity \
+            --checked-identity \
+              .publication-policy/deployment/postgresql/ofarm_ed25519/native_release_identity.json \
+            --checked-receipt \
+              .publication-policy/deployment/postgresql/ofarm_ed25519/native_evidence_receipt.json \
+            --verification-currentness \
+              .publication-policy/deployment/postgresql/ofarm_ed25519/native_evidence_verification_currentness.json \
+            --index-evidence \
+              "$INDEX_OUTPUT/ofarm-ed25519.index-evidence.json" \
+            --index "$INDEX_OUTPUT/ofarm-ed25519.index.json" \
+            --source-directory \
+              .publication-policy/deployment/postgresql/ofarm_ed25519 \
+            --repository-root .publication-policy \
+            --candidate-output \
+              "$INDEX_OUTPUT/native_release_identity.candidate.json" \
+            --candidate-receipt-output \
+              "$INDEX_OUTPUT/native_evidence_receipt.candidate.json"
+      - name: Validate the trusted native index before metadata is added
+        env:
+          INDEX_OUTPUT: ${{ runner.temp }}/ofarm-authoritative-index
+          SOURCE_COMMIT: ${{ steps.publisher-start.outputs.execution_merge_sha }}
+        run: |
+          /usr/bin/python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["INDEX_OUTPUT"])
+          expected = {
+              "native_evidence_receipt.candidate.json",
+              "native_release_identity.candidate.json",
+              "ofarm-ed25519.index-evidence.json",
+              "ofarm-ed25519.index.json",
+          }
+          observed = {
+              path.relative_to(root).as_posix()
+              for path in root.rglob("*")
+              if path.is_file()
+          }
+          if any(path.is_symlink() for path in root.rglob("*")):
+              raise SystemExit("trusted native index contains a symlink")
+          if observed != expected:
+              raise SystemExit("trusted native index file inventory is not exact")
+          index = json.loads(
+              (root / "ofarm-ed25519.index.json").read_text(encoding="utf-8")
+          )
+          evidence = json.loads(
+              (root / "ofarm-ed25519.index-evidence.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          identity = json.loads(
+              (root / "native_release_identity.candidate.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          receipt = json.loads(
+              (root / "native_evidence_receipt.candidate.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          if index.get("schemaVersion") != 2 or len(index.get("manifests", [])) != 2:
+              raise SystemExit("native OCI index is incomplete")
+          if (
+              evidence.get("schema")
+              != "ofarm.native-multi-platform-index-evidence.v3"
+              or evidence.get("source_commit") != os.environ["SOURCE_COMMIT"]
+              or len(evidence.get("platforms", [])) != 2
+          ):
+              raise SystemExit("native index evidence is inconsistent")
+          if (
+              identity.get("schemaVersion")
+              != "ofarm.native-verifier-release-identity.v1"
+              or receipt.get("schemaVersion")
+              != "ofarm.native-verifier-evidence-receipt.v2"
+          ):
+              raise SystemExit("native identity candidates are inconsistent")
+          PY
+      - name: Re-authenticate policy immediately before index publication
+        run: |
+          test "$(git -C .publication-policy rev-parse HEAD)" = \
+            "$OFARM_PUBLICATION_POLICY_SHA"
+          git -C .publication-policy diff --exit-code --no-ext-diff
+          test -z "$(git -C .publication-policy status \
+            --porcelain=v1 --untracked-files=all)"
+      - name: Recheck live admission immediately before index publication
+        id: preindex-admission
+        env:
+          OFARM_ADMISSION_TOKEN: ${{ github.token }}
+        run: >-
+          /usr/bin/python3
+          .publication-policy/conformance/review_baseline_admission.py
+          --operation publish
+          --event-name "$GITHUB_EVENT_NAME"
+          --event-path "$GITHUB_EVENT_PATH"
+          --github-sha "$GITHUB_SHA"
+          --workflow-sha "$GITHUB_WORKFLOW_SHA"
+          --workflow-ref "$GITHUB_WORKFLOW_REF"
+          --repository "$GITHUB_REPOSITORY"
+          --policy-sha "$OFARM_PUBLICATION_POLICY_SHA"
+          --ticket
+          "$RUNNER_TEMP/ofarm-publication-ticket/evidence-publication-ticket.json"
+          --github-output "$GITHUB_OUTPUT"
+          --evidence-output "$RUNNER_TEMP/publisher-admission-preindex.json"
+      - name: Bind index derivation to unchanged live admission
+        run: >-
+          /usr/bin/cmp
+          "$RUNNER_TEMP/publisher-admission-start.json"
+          "$RUNNER_TEMP/publisher-admission-preindex.json"
+      - name: Bind index inputs to authoritative publisher artifacts
+        env:
+          AMD64_DIGEST: ${{ steps.upload-native-amd64.outputs.artifact-digest }}
+          AMD64_ID: ${{ steps.upload-native-amd64.outputs.artifact-id }}
+          ARM64_DIGEST: ${{ steps.upload-native-arm64.outputs.artifact-digest }}
+          ARM64_ID: ${{ steps.upload-native-arm64.outputs.artifact-id }}
+          CONTEXT_PATH: ${{ runner.temp }}/evidence-publication-context.json
+          INDEX_CONTEXT_PATH: ${{ runner.temp }}/ofarm-authoritative-index/evidence-publication-context.json
+          INDEX_OUTPUT: ${{ runner.temp }}/ofarm-authoritative-index
+        run: |
+          /usr/bin/python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          context = json.loads(Path(os.environ["CONTEXT_PATH"]).read_text("utf-8"))
+
+          def digest(name: str) -> str:
+              value = os.environ[name]
+              return value if value.startswith("sha256:") else f"sha256:{value}"
+
+          context["authoritativeInputs"] = [
+              {
+                  "artifactId": int(os.environ["AMD64_ID"]),
+                  "digest": digest("AMD64_DIGEST"),
+                  "name": "native-verifier-amd64",
+              },
+              {
+                  "artifactId": int(os.environ["ARM64_ID"]),
+                  "digest": digest("ARM64_DIGEST"),
+                  "name": "native-verifier-arm64",
+              },
+          ]
+          Path(os.environ["INDEX_CONTEXT_PATH"]).write_text(
+              json.dumps(context, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          /usr/bin/cp \
+            "$RUNNER_TEMP/publisher-admission-preindex.json" \
+            "$INDEX_OUTPUT/review-baseline-admission.json"
+      - name: Upload authoritative canonical two-platform index evidence
+        id: upload-native-index
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: native-verifier-index
+          path: ${{ runner.temp }}/ofarm-authoritative-index/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Create the exact authoritative artifact candidate
+        env:
+          INDEX_DIGEST: ${{ steps.upload-native-index.outputs.artifact-digest }}
+          INDEX_ID: ${{ steps.upload-native-index.outputs.artifact-id }}
+          NATIVE_AMD64_DIGEST: ${{ steps.upload-native-amd64.outputs.artifact-digest }}
+          NATIVE_AMD64_ID: ${{ steps.upload-native-amd64.outputs.artifact-id }}
+          NATIVE_ARM64_DIGEST: ${{ steps.upload-native-arm64.outputs.artifact-digest }}
+          NATIVE_ARM64_ID: ${{ steps.upload-native-arm64.outputs.artifact-id }}
+          PLATFORM_DIGEST: ${{ steps.upload-platform-evidence.outputs.artifact-digest }}
+          PLATFORM_ID: ${{ steps.upload-platform-evidence.outputs.artifact-id }}
+          REVIEW_DIGEST: ${{ steps.upload-review-baseline.outputs.artifact-digest }}
+          REVIEW_ID: ${{ steps.upload-review-baseline.outputs.artifact-id }}
+        run: |
+          /usr/bin/python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          coordinates = (
+              ("review-baseline", "REVIEW_ID", "REVIEW_DIGEST"),
+              ("platform-mvp-evidence", "PLATFORM_ID", "PLATFORM_DIGEST"),
+              ("native-verifier-amd64", "NATIVE_AMD64_ID", "NATIVE_AMD64_DIGEST"),
+              ("native-verifier-arm64", "NATIVE_ARM64_ID", "NATIVE_ARM64_DIGEST"),
+              ("native-verifier-index", "INDEX_ID", "INDEX_DIGEST"),
+          )
+          candidate = [
+              {
+                  "artifactId": int(os.environ[artifact_id]),
+                  "digest": os.environ[digest],
+                  "name": name,
+              }
+              for name, artifact_id, digest in coordinates
+          ]
+          Path(
+              os.environ["RUNNER_TEMP"] + "/published-artifact-candidate.json"
+          ).write_text(
+              json.dumps(candidate, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Re-authenticate policy before sealing publication
+        run: |
+          test "$(git -C .publication-policy rev-parse HEAD)" = \
+            "$OFARM_PUBLICATION_POLICY_SHA"
+          git -C .publication-policy diff --exit-code --no-ext-diff
+          test -z "$(git -C .publication-policy status \
+            --porcelain=v1 --untracked-files=all)"
+      - name: Seal live source and publisher artifact identities
+        id: publication-receipt
+        env:
+          OFARM_ADMISSION_TOKEN: ${{ github.token }}
+        run: >-
+          /usr/bin/python3
+          .publication-policy/conformance/review_baseline_admission.py
+          --operation publish
+          --event-name "$GITHUB_EVENT_NAME"
+          --event-path "$GITHUB_EVENT_PATH"
+          --github-sha "$GITHUB_SHA"
+          --workflow-sha "$GITHUB_WORKFLOW_SHA"
+          --workflow-ref "$GITHUB_WORKFLOW_REF"
+          --repository "$GITHUB_REPOSITORY"
+          --policy-sha "$OFARM_PUBLICATION_POLICY_SHA"
+          --ticket
+          "$RUNNER_TEMP/ofarm-publication-ticket/evidence-publication-ticket.json"
+          --published-artifacts-input
+          "$RUNNER_TEMP/published-artifact-candidate.json"
+          --publication-receipt-output
+          "$RUNNER_TEMP/evidence-publication-receipt.json"
+          --publisher-run-id "$GITHUB_RUN_ID"
+          --publisher-run-attempt "$GITHUB_RUN_ATTEMPT"
+          --github-output "$GITHUB_OUTPUT"
+          --evidence-output "$RUNNER_TEMP/publisher-admission-final.json"
+      - name: Bind successful publication to unchanged live admission
+        run: >-
+          /usr/bin/cmp
+          "$RUNNER_TEMP/publisher-admission-start.json"
+          "$RUNNER_TEMP/publisher-admission-final.json"
+      - name: Upload authoritative evidence publication receipt last
+        id: upload-publication-receipt
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: evidence-publication-receipt
+          path: ${{ runner.temp }}/evidence-publication-receipt.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Record the authoritative publication identity
+        env:
+          RECEIPT_DIGEST: ${{ steps.upload-publication-receipt.outputs.artifact-digest }}
+          RECEIPT_ID: ${{ steps.upload-publication-receipt.outputs.artifact-id }}
+        run: |
+          {
+            echo "publisher-workflow-ref=$GITHUB_WORKFLOW_REF"
+            echo "publisher-workflow-sha=$GITHUB_WORKFLOW_SHA"
+            echo "publisher-run-id=$GITHUB_RUN_ID"
+            echo "publisher-run-attempt=$GITHUB_RUN_ATTEMPT"
+            echo "publication-receipt-artifact-id=$RECEIPT_ID"
+            echo "publication-receipt-artifact-digest=$RECEIPT_DIGEST"
+          } >> "$GITHUB_STEP_SUMMARY"
