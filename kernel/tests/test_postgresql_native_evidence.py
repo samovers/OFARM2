@@ -3919,6 +3919,7 @@ def test_evidence_publication_policy_is_transitively_authenticated():
     gate_path = PACKAGE_ROOT / ".github/workflows/review-baseline-gate.yml"
     conformance_workflow = conformance_path.read_text()
     publication_workflow = publication_path.read_text()
+    gate_workflow = gate_path.read_text()
 
     def pinned_digest(workflow: str, variable: str) -> str:
         match = re.search(
@@ -3941,6 +3942,21 @@ def test_evidence_publication_policy_is_transitively_authenticated():
         publication_workflow,
         "OFARM_REVIEW_BASELINE_GATE_WORKFLOW_SHA256",
     ) == _digest(gate_path.read_bytes())
+
+    execute_job = gate_workflow.split("  execute:\n", 1)[1]
+    execute_permissions = execute_job.split("    uses:", 1)[0].split(
+        "    permissions:\n", 1
+    )[1]
+    assert re.findall(
+        r"^      ([a-z-]+): ([a-z]+)$",
+        execute_permissions,
+        re.MULTILINE,
+    ) == [
+        ("actions", "read"),
+        ("contents", "read"),
+        ("issues", "read"),
+        ("pull-requests", "read"),
+    ]
 
     handoff_job = conformance_workflow.split(
         "  publication-handoff:\n", 1
