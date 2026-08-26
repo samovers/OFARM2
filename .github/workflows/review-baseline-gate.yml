@@ -1,0 +1,104 @@
+# Trusted default-branch dispatcher for expensive pull-request baselines.
+# It never checks out or executes pull-request code.
+name: reviewed-head baseline gate
+
+on:
+  issue_comment:
+    types: [created, edited, deleted]
+  pull_request_target:
+    types: [opened, reopened, synchronize, closed]
+
+permissions: {}
+
+concurrency:
+  group: >-
+    ${{ github.event_name == 'pull_request_target'
+        && format('ofarm-pr-{0}', github.event.pull_request.number)
+        || format(
+          'ofarm-gate-comment-{0}-{1}',
+          github.event.comment.id,
+          github.event.action
+        ) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
+
+jobs:
+  gate:
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      (github.event.issue.pull_request &&
+       contains(
+         fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+         github.event.comment.author_association
+       ))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      dispatch: ${{ steps.gate.outputs.dispatch }}
+      mode: ${{ steps.gate.outputs.mode }}
+      pull_request_number: ${{ steps.gate.outputs.pull_request_number }}
+      admission_comment_id: ${{ steps.gate.outputs.admission_comment_id }}
+      reviewed_head_sha: ${{ steps.gate.outputs.reviewed_head_sha }}
+      base_sha: ${{ steps.gate.outputs.base_sha }}
+      execution_merge_sha: ${{ steps.gate.outputs.execution_merge_sha }}
+      policy_sha: ${{ steps.gate.outputs.policy_sha }}
+      review_body_sha256: ${{ steps.gate.outputs.review_body_sha256 }}
+      review_metadata: ${{ steps.gate.outputs.review_metadata }}
+      revocation_reason: ${{ steps.gate.outputs.revocation_reason }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .baseline-admission-policy
+          persist-credentials: false
+      - name: Authenticate the default-branch gate policy
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          test "${DEFAULT_BRANCH}" = main
+          test "${GITHUB_REF}" = refs/heads/main
+          test "${GITHUB_SHA}" = "${GITHUB_WORKFLOW_SHA}"
+          test "$(git -C .baseline-admission-policy rev-parse HEAD)" = \
+            "${GITHUB_WORKFLOW_SHA}"
+      - name: Resolve the trusted gate transition
+        id: gate
+        env:
+          OFARM_ADMISSION_TOKEN: ${{ github.token }}
+        run: >-
+          python3
+          .baseline-admission-policy/conformance/review_baseline_admission.py
+          --operation gate
+          --event-name "${GITHUB_EVENT_NAME}"
+          --event-path "${GITHUB_EVENT_PATH}"
+          --github-sha "${GITHUB_SHA}"
+          --workflow-sha "${GITHUB_WORKFLOW_SHA}"
+          --workflow-ref "${GITHUB_WORKFLOW_REF}"
+          --repository "${GITHUB_REPOSITORY}"
+          --policy-sha "${GITHUB_WORKFLOW_SHA}"
+          --github-output "${GITHUB_OUTPUT}"
+
+  execute:
+    needs: gate
+    if: needs.gate.outputs.dispatch == 'true'
+    concurrency:
+      group: ofarm-pr-${{ needs.gate.outputs.pull_request_number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    uses: ./.github/workflows/conformance.yml
+    with:
+      mode: ${{ needs.gate.outputs.mode }}
+      pull_request_number: ${{ needs.gate.outputs.pull_request_number }}
+      admission_comment_id: ${{ needs.gate.outputs.admission_comment_id }}
+      reviewed_head_sha: ${{ needs.gate.outputs.reviewed_head_sha }}
+      base_sha: ${{ needs.gate.outputs.base_sha }}
+      execution_merge_sha: ${{ needs.gate.outputs.execution_merge_sha }}
+      policy_sha: ${{ needs.gate.outputs.policy_sha }}
+      review_body_sha256: ${{ needs.gate.outputs.review_body_sha256 }}
+      review_metadata: ${{ needs.gate.outputs.review_metadata }}
+      revocation_reason: ${{ needs.gate.outputs.revocation_reason }}
