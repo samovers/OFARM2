@@ -50,8 +50,8 @@ PUBLICATION_ARTIFACT_NAMES = (
 )
 SOURCE_ARTIFACT_MAX_BYTES = {
     "conformance-provisional": 512_000_000,
-    "native-verifier-amd64-provisional": 700_000_000,
-    "native-verifier-arm64-provisional": 700_000_000,
+    "native-verifier-amd64-provisional": 1_650_000_000,
+    "native-verifier-arm64-provisional": 1_650_000_000,
     PUBLICATION_TICKET_NAME: 1_000_000,
 }
 SOURCE_WORKFLOW_NAMES = {
@@ -59,8 +59,8 @@ SOURCE_WORKFLOW_NAMES = {
     GATE_WORKFLOW_PATH: "reviewed-head baseline gate",
 }
 SOURCE_WORKFLOW_EVENTS = {
-    CONFORMANCE_WORKFLOW_PATH: "push",
-    GATE_WORKFLOW_PATH: "issue_comment",
+    CONFORMANCE_WORKFLOW_PATH: frozenset({"push"}),
+    GATE_WORKFLOW_PATH: frozenset({"issue_comment", "pull_request_target"}),
 }
 CALL_INPUT_FIELDS = frozenset(
     {
@@ -170,6 +170,16 @@ class PublicationSource:
     workflow_sha: str
 
 
+@dataclass(frozen=True)
+class PublicationPlan:
+    """Authenticated decision about whether one source run may publish."""
+
+    publish: bool
+    reason: str
+    source: PublicationSource
+    artifacts: dict[str, ArtifactReference]
+
+
 def _full_sha(value: object, field: str) -> str:
     if not isinstance(value, str) or FULL_SHA.fullmatch(value) is None:
         raise AdmissionError(f"{field} must be a full lowercase commit SHA")
@@ -191,6 +201,12 @@ def _normalized_sha256(value: object, field: str) -> str:
 def _positive_int(value: object, field: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         raise AdmissionError(f"{field} must be a positive integer")
+    return value
+
+
+def _nonnegative_int(value: object, field: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise AdmissionError(f"{field} must be a non-negative integer")
     return value
 
 
@@ -481,6 +497,7 @@ def _artifact_references(
     source_head_sha: str,
     expected_names: tuple[str, ...],
     fetch_json: FetchJson,
+    allow_empty: bool = False,
 ) -> dict[str, ArtifactReference]:
     response = _object(
         fetch_json(
@@ -490,12 +507,16 @@ def _artifact_references(
         "source-run artifact response",
     )
     artifacts = _array(response.get("artifacts"), "source-run artifacts")
-    total_count = _positive_int(
+    total_count = _nonnegative_int(
         response.get("total_count"),
         "source-run artifact count",
     )
     if total_count != len(artifacts) or total_count > 100:
         raise AdmissionError("source-run artifact inventory is incomplete")
+    if total_count == 0:
+        if allow_empty:
+            return {}
+        raise AdmissionError("source-run artifact names are not the exact inventory")
     references: dict[str, ArtifactReference] = {}
     artifact_ids: set[int] = set()
     for item in artifacts:
@@ -606,16 +627,27 @@ def _publication_source_from_event(
     if source_name != SOURCE_WORKFLOW_NAMES[source_path]:
         raise AdmissionError("source workflow name does not match its path")
     source_event = _text(event_run.get("event"), "source workflow event")
-    if source_event != SOURCE_WORKFLOW_EVENTS[source_path]:
+    if source_event not in SOURCE_WORKFLOW_EVENTS[source_path]:
         raise AdmissionError("source workflow event does not match its path")
+    lifecycle_only = source_event == "pull_request_target"
     if (
         event_run.get("status") != "completed"
         or event_run.get("conclusion") != "success"
-        or event_run.get("head_branch") != "main"
+        or (
+            not lifecycle_only
+            and event_run.get("head_branch") != "main"
+        )
+        or (
+            lifecycle_only
+            and (
+                not isinstance(event_run.get("head_branch"), str)
+                or not event_run.get("head_branch")
+            )
+        )
     ):
-        raise AdmissionError("source workflow run is not a successful main run")
+        raise AdmissionError("source workflow run is not a successful trusted run")
     source_sha = _full_sha(event_run.get("head_sha"), "source workflow sha")
-    if source_sha != trusted_policy_sha:
+    if not lifecycle_only and source_sha != trusted_policy_sha:
         raise AdmissionError("source and publisher policy commits differ")
     source_run_attempt = _positive_int(
         event_run.get("run_attempt"),
@@ -645,6 +677,64 @@ def _publication_source_from_event(
         workflow_path=source_path,
         workflow_ref=_workflow_ref(repository, source_path),
         workflow_sha=source_sha,
+    )
+
+
+def _publication_plan(
+    *,
+    event_name: str,
+    event: JsonObject,
+    github_sha: str,
+    workflow_sha: str,
+    workflow_ref: str,
+    repository: str,
+    policy_sha: str,
+    fetch_json: FetchJson,
+) -> PublicationPlan:
+    """Classify authenticated completed runs without making absence an error."""
+
+    source = _publication_source_from_event(
+        event_name=event_name,
+        event=event,
+        github_sha=github_sha,
+        workflow_sha=workflow_sha,
+        workflow_ref=workflow_ref,
+        repository=repository,
+        policy_sha=policy_sha,
+        fetch_json=fetch_json,
+    )
+    gate_source = source.workflow_path == GATE_WORKFLOW_PATH
+    artifacts = _artifact_references(
+        repository=repository,
+        source_run_id=source.run_id,
+        source_head_sha=source.workflow_sha,
+        expected_names=(*PROVISIONAL_ARTIFACT_NAMES, PUBLICATION_TICKET_NAME),
+        fetch_json=fetch_json,
+        allow_empty=gate_source,
+    )
+    if source.event_name == "pull_request_target":
+        if artifacts:
+            raise AdmissionError(
+                "pull-request lifecycle gate run unexpectedly produced artifacts"
+            )
+        return PublicationPlan(
+            publish=False,
+            reason="pull-request lifecycle gate produced no publication",
+            source=source,
+            artifacts={},
+        )
+    if gate_source and not artifacts:
+        return PublicationPlan(
+            publish=False,
+            reason="gate comment produced no publication",
+            source=source,
+            artifacts={},
+        )
+    return PublicationPlan(
+        publish=True,
+        reason="exact publication inventory authenticated",
+        source=source,
+        artifacts=artifacts,
     )
 
 
@@ -1386,6 +1476,8 @@ def _write_publication_output(
     source: PublicationSource | None,
     artifacts: dict[str, ArtifactReference],
     admission: Admission | None = None,
+    publish: bool = True,
+    reason: str = "",
 ) -> None:
     aliases = {
         "conformance-provisional": "conformance",
@@ -1393,7 +1485,10 @@ def _write_publication_output(
         "native-verifier-arm64-provisional": "native_arm64",
         PUBLICATION_TICKET_NAME: "ticket",
     }
-    values: dict[str, object] = {}
+    values: dict[str, object] = {
+        "publish": "true" if publish else "false",
+        "publication_reason": reason,
+    }
     for name, artifact in artifacts.items():
         alias = aliases[name]
         values[f"{alias}_artifact_id"] = artifact.artifact_id
@@ -1503,7 +1598,7 @@ def main() -> int:
     if args.operation in {"resolve", "publish"}:
         if fetch_json is None:
             raise AdmissionError("publication requires a live GitHub reader")
-        source = _publication_source_from_event(
+        plan = _publication_plan(
             event_name=args.event_name,
             event=cast(JsonObject, event),
             github_sha=args.github_sha,
@@ -1513,24 +1608,24 @@ def main() -> int:
             policy_sha=args.policy_sha,
             fetch_json=fetch_json,
         )
-        artifacts = _artifact_references(
-            repository=args.repository,
-            source_run_id=source.run_id,
-            source_head_sha=source.workflow_sha,
-            expected_names=(*PROVISIONAL_ARTIFACT_NAMES, PUBLICATION_TICKET_NAME),
-            fetch_json=fetch_json,
-        )
+        source = plan.source
+        artifacts = plan.artifacts
         if args.operation == "resolve":
             _write_publication_output(
                 args.github_output,
                 source=source,
                 artifacts=artifacts,
+                publish=plan.publish,
+                reason=plan.reason,
             )
             print(
                 "publication source resolved: "
-                f"run={source.run_id}; policy={source.workflow_sha}"
+                f"publish={str(plan.publish).lower()}; run={source.run_id}; "
+                f"policy={source.workflow_sha}; reason={plan.reason}"
             )
             return 0
+        if not plan.publish:
+            raise AdmissionError("non-publication source cannot enter publication")
         if args.ticket is None:
             raise AdmissionError("publication validation requires a ticket")
         ticket = _load_publication_ticket(args.ticket)
@@ -1546,6 +1641,8 @@ def main() -> int:
             source=source,
             artifacts=artifacts,
             admission=admission,
+            publish=True,
+            reason=plan.reason,
         )
         if args.evidence_output is not None:
             _write_json(args.evidence_output, admission.evidence())

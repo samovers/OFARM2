@@ -61,7 +61,7 @@ env:
   OFARM_BASELINE_ADMISSION_POLICY_SHA: ${{ github.workflow_sha }}
   OFARM_BASELINE_ADMISSION_INPUTS: ${{ toJSON(inputs) }}
   OFARM_EVIDENCE_PUBLICATION_WORKFLOW_SHA256: >-
-    sha256:95b1ef1f4e5d1c41731ba1b17b0851f0aa2c3d1c77a1c8749ab056087fba09c2
+    sha256:b753659b896b041f56aa34c7013c48d2d0889e940a305391a00df17bf9efd9b6
 
 jobs:
   baseline-admission:
@@ -846,6 +846,30 @@ jobs:
           --source-commit "${{ needs.baseline-admission.outputs.execution_merge_sha }}"
           --output
           ".artifacts/native/${{ matrix.architecture }}/reproducibility.json"
+      - name: Seal both installed file sets for trusted publication
+        run: |
+          for build in first second
+          do
+            tar \
+              --create \
+              --file \
+                ".artifacts/native/${{ matrix.architecture }}/${build}-artifacts.tar" \
+              --format=ustar \
+              --sort=name \
+              --mtime='@0' \
+              --owner=0 \
+              --group=0 \
+              --numeric-owner \
+              --directory \
+                ".artifacts/native/${{ matrix.architecture }}/${build}" \
+              libsodium.a \
+              ofarm_ed25519.so \
+              ofarm_ed25519.control \
+              ofarm_ed25519--1.0.sql
+            test -s \
+              ".artifacts/native/${{ matrix.architecture }}/${build}-artifacts.tar"
+            rm -rf -- ".artifacts/native/${{ matrix.architecture }}/${build}"
+          done
       - name: Load and verify the authenticated clean native child
         run: |
           image="ofarm-ed25519-${{ matrix.architecture }}:second"
@@ -869,12 +893,9 @@ jobs:
           fi
           test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' \
             "$image")" = "linux/${{ matrix.architecture }}"
-          rm -- \
-            ".artifacts/native/${{ matrix.architecture }}/first-image.docker.tar" \
-            ".artifacts/native/${{ matrix.architecture }}/second-image.docker.tar"
-          test ! -e \
+          test -s \
             ".artifacts/native/${{ matrix.architecture }}/first-image.docker.tar"
-          test ! -e \
+          test -s \
             ".artifacts/native/${{ matrix.architecture }}/second-image.docker.tar"
       - name: Run the exact live PostgreSQL verifier smoke
         run: |
@@ -931,7 +952,7 @@ jobs:
               ".artifacts/native/${{ matrix.architecture }}/attestations"
           test "$(du --bytes --summarize \
             ".artifacts/native/${{ matrix.architecture }}" | cut --fields=1)" \
-            -le 600000000
+            -le 1600000000
       - name: Upload bounded native verifier evidence provisionally
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:

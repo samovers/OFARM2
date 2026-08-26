@@ -16,6 +16,10 @@ from pathlib import Path
 
 import pytest
 
+from conformance.evidence_publication_policy import (
+    NATIVE_AUTHORITATIVE_FILES,
+    stage_native_evidence,
+)
 from deployment.postgresql import native_evidence, native_release_identity
 from deployment.postgresql.native_evidence import (
     CURRENT_NATIVE_BUILD_PINS,
@@ -1616,6 +1620,81 @@ def _oci_fixture(
     containerfile = tmp_path / "Containerfile"
     containerfile.write_bytes(CONTAINERFILE_BYTES)
     return archive, runtime_digest, _digest(runtime_config), containerfile
+
+
+def _assert_trusted_publisher_reconstructs_native_claims_from_raw_inputs(
+    tmp_path: Path,
+) -> None:
+    archive, child_digest, config_digest, containerfile = _oci_fixture(tmp_path)
+    reproducibility = _reproducibility_fixture(
+        tmp_path,
+        child_digest,
+        config_digest,
+    )
+    provisional = tmp_path / "provisional"
+    provisional.mkdir()
+    shutil.copyfile(archive, provisional / "ofarm-ed25519.oci.tar")
+    shutil.copyfile(reproducibility, provisional / "reproducibility.json")
+    shutil.copyfile(
+        tmp_path / "first-clean.docker.tar",
+        provisional / "first-image.docker.tar",
+    )
+    shutil.copyfile(
+        tmp_path / "second-clean.docker.tar",
+        provisional / "second-image.docker.tar",
+    )
+    for build in ("first", "second"):
+        with tarfile.open(
+            provisional / f"{build}-artifacts.tar",
+            "w",
+            format=tarfile.USTAR_FORMAT,
+        ) as installed:
+            for name, data in ARTIFACTS.items():
+                member = tarfile.TarInfo(name)
+                member.size = len(data)
+                member.mode = 0o755 if name == "ofarm_ed25519.so" else 0o644
+                member.uid = member.gid = member.mtime = 0
+                installed.addfile(member, io.BytesIO(data))
+    collect_oci_evidence(
+        archive_path=provisional / "ofarm-ed25519.oci.tar",
+        reproducibility_path=provisional / "reproducibility.json",
+        platform=PLATFORM,
+        source_commit=SOURCE_COMMIT,
+        containerfile_path=containerfile,
+        builder_id=BUILDER_ID,
+        output_directory=provisional / "attestations",
+    )
+    for name in (
+        "address.log",
+        "attested-metadata.json",
+        "buildx-version.txt",
+        "invalid-sanitizer.log",
+        "undefined.log",
+    ):
+        (provisional / name).write_text(f"diagnostic {name}\n", encoding="utf-8")
+
+    staged = tmp_path / "staged"
+    stage_native_evidence(
+        input_root=provisional,
+        output_root=staged,
+        platform=PLATFORM,
+        source_commit=SOURCE_COMMIT,
+        containerfile=containerfile,
+        builder_id=BUILDER_ID,
+    )
+
+    assert {
+        path.relative_to(staged).as_posix()
+        for path in staged.rglob("*")
+        if path.is_file()
+    } == NATIVE_AUTHORITATIVE_FILES
+    assert not any((staged / name).exists() for name in (
+        "address.log",
+        "attested-metadata.json",
+        "buildx-version.txt",
+        "first-image.docker.tar",
+        "second-image.docker.tar",
+    ))
 
 
 @pytest.mark.parametrize("platform", ("linux/amd64", "linux/arm64"))
@@ -3991,7 +4070,9 @@ def test_evidence_publication_policy_is_transitively_authenticated():
     assert publication_workflow.count("sha256sum --check --strict") == 2
 
 
-def test_native_workflow_closes_both_native_platform_evidence_lanes():
+def test_native_workflow_closes_both_native_platform_evidence_lanes(
+    tmp_path: Path,
+):
     workflow = PACKAGE_ROOT.joinpath(".github/workflows/conformance.yml").read_text()
     publication_workflow = PACKAGE_ROOT.joinpath(
         ".github/workflows/evidence-publication.yml"
@@ -4087,12 +4168,23 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
     assert '--platform "linux/${{ matrix.architecture }}"' in clean_build_step
     compare_step = workflow.split(
         "- name: Prove child and installed-artifact reproducibility", 1
-    )[1].split("- name: Load and verify the authenticated clean native child", 1)[0]
+    )[1].split("- name: Seal both installed file sets for trusted publication", 1)[0]
     assert "--first-archive" in compare_step
     assert "first-image.docker.tar" in compare_step
     assert "--second-archive" in compare_step
     assert "second-image.docker.tar" in compare_step
     assert "metadata" not in compare_step
+    seal_step = workflow.split(
+        "- name: Seal both installed file sets for trusted publication", 1
+    )[1].split("- name: Load and verify the authenticated clean native child", 1)[0]
+    assert "first-artifacts.tar" not in seal_step
+    assert "${build}-artifacts.tar" in seal_step
+    assert "--format=ustar" in seal_step
+    assert "--mtime='@0'" in seal_step
+    assert "--owner=0" in seal_step
+    assert "--group=0" in seal_step
+    assert "--numeric-owner" in seal_step
+    assert seal_step.count("rm -rf --") == 1
     native_load_step = workflow.split(
         "- name: Load and verify the authenticated clean native child", 1
     )[1].split("- name: Run the exact live PostgreSQL verifier smoke", 1)[0]
@@ -4103,29 +4195,30 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
     assert "child_digest" in native_load_step
     assert "config_digest" in native_load_step
     assert "{{.Os}}/{{.Architecture}}" in native_load_step
-    assert native_load_step.count("rm --") == 1
-    assert native_load_step.count("test ! -e") == 2
+    assert "rm --" not in native_load_step
+    assert "test ! -e" not in native_load_step
+    assert native_load_step.count("test -s") == 2
     first_archive_path = (
         '".artifacts/native/${{ matrix.architecture }}/first-image.docker.tar"'
     )
     second_archive_path = (
         '".artifacts/native/${{ matrix.architecture }}/second-image.docker.tar"'
     )
-    assert native_load_step.count(first_archive_path) == 2
-    assert native_load_step.count(second_archive_path) == 3
+    assert native_load_step.count(first_archive_path) == 1
+    assert native_load_step.count(second_archive_path) == 2
     native_load_markers = (
         'if docker image inspect "$image"',
         "docker load --input",
         'observed_id="$(docker image inspect',
         "{{.Os}}/{{.Architecture}}",
-        "rm --",
-        "test ! -e",
+        "test -s",
     )
     assert [native_load_step.index(marker) for marker in native_load_markers] == sorted(
         native_load_step.index(marker) for marker in native_load_markers
     )
     native_step_names = (
         "- name: Prove child and installed-artifact reproducibility",
+        "- name: Seal both installed file sets for trusted publication",
         "- name: Load and verify the authenticated clean native child",
         "- name: Run the exact live PostgreSQL verifier smoke",
         "- name: Produce bounded OCI, SBOM, and max-provenance evidence",
@@ -4167,6 +4260,7 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
     assert [
         derived_load_step.index(marker) for marker in derived_load_markers
     ] == sorted(derived_load_step.index(marker) for marker in derived_load_markers)
+    _assert_trusted_publisher_reconstructs_native_claims_from_raw_inputs(tmp_path)
     derived_archive_path = (
         ".artifacts/derived-postgresql/"
         "ofarm-postgresql-conformance.docker.tar"

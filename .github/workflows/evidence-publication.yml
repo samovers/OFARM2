@@ -30,9 +30,9 @@ env:
   GIT_PAGER: cat
   OFARM_PUBLICATION_POLICY_SHA: ${{ github.workflow_sha }}
   OFARM_EVIDENCE_PUBLICATION_POLICY_SHA256: >-
-    sha256:023b4704248811b375fb899ddd25a0222ac21a9d23a9f013820b8f7e10417cb2
+    sha256:ff74546b4c734b23c66e12176d9018d30b97a591f45e5ed973a7c5f0277ea1ec
   OFARM_REVIEW_BASELINE_ADMISSION_SHA256: >-
-    sha256:f7ede964bd1a7d9a77ab19064e329c4805ff785c8d5e31933914f4a201211fff
+    sha256:27a769a2d55f20e0da9b4e304d88f50beb2d37e80272628c0892b421d7adcffd
   OFARM_REVIEW_BASELINE_GATE_WORKFLOW_SHA256: >-
     sha256:15fc15d0aae6a3c31bfae2b0658f90db204f4dcd8aa03aca55dc0d8835d6c378
   PYTHONDONTWRITEBYTECODE: "1"
@@ -49,6 +49,7 @@ jobs:
       issues: read
       pull-requests: read
     outputs:
+      publish: ${{ steps.resolve-source.outputs.publish }}
       publication_concurrency_group: >-
         ${{ steps.publication-start.outputs.publication_concurrency_group }}
       source_run_id: ${{ steps.publication-start.outputs.source_run_id }}
@@ -95,6 +96,7 @@ jobs:
           --policy-sha "${OFARM_PUBLICATION_POLICY_SHA}"
           --github-output "${GITHUB_OUTPUT}"
       - name: Download the trusted final handoff by artifact ID
+        if: steps.resolve-source.outputs.publish == 'true'
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           artifact-ids: ${{ steps.resolve-source.outputs.ticket_artifact_id }}
@@ -103,6 +105,7 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ steps.resolve-source.outputs.source_run_id }}
       - name: Re-authenticate policy after the ticket download
+        if: steps.resolve-source.outputs.publish == 'true'
         run: |
           test "$(git -C .publication-policy rev-parse HEAD)" = \
             "${OFARM_PUBLICATION_POLICY_SHA}"
@@ -110,6 +113,7 @@ jobs:
           test -z "$(git -C .publication-policy status \
             --porcelain=v1 --untracked-files=all)"
       - name: Recheck live admission and authenticate the handoff
+        if: steps.resolve-source.outputs.publish == 'true'
         id: publication-start
         env:
           OFARM_ADMISSION_TOKEN: ${{ github.token }}
@@ -130,6 +134,7 @@ jobs:
           --evidence-output
           "${RUNNER_TEMP}/source-publication-admission.json"
       - name: Bind both source resolutions byte for byte
+        if: steps.resolve-source.outputs.publish == 'true'
         env:
           FIRST_SOURCE_RUN: ${{ steps.resolve-source.outputs.source_run_id }}
           SECOND_SOURCE_RUN: ${{ steps.publication-start.outputs.source_run_id }}
@@ -147,7 +152,9 @@ jobs:
   publish:
     name: derive and publish authoritative evidence
     needs: source-admission
-    if: needs.source-admission.result == 'success'
+    if: >-
+      needs.source-admission.result == 'success' &&
+      needs.source-admission.outputs.publish == 'true'
     concurrency:
       group: ${{ needs.source-admission.outputs.publication_concurrency_group }}
       cancel-in-progress: true
@@ -300,69 +307,23 @@ jobs:
           git -C .publication-policy diff --exit-code --no-ext-diff
           test -z "$(git -C .publication-policy status \
             --porcelain=v1 --untracked-files=all)"
-      - name: Validate provisional conformance evidence as untrusted data
+      - name: Rebuild authoritative conformance claims with trusted policy
+        run: >-
+          /usr/bin/python3
+          .publication-policy/conformance/evidence_publication_policy.py
+          stage-conformance
+          --input-root
+          "${RUNNER_TEMP}/ofarm-publication-input/conformance"
+          --output-root
+          "${RUNNER_TEMP}/ofarm-publication-stage/conformance"
+          --source-commit
+          "${{ steps.publisher-start.outputs.execution_merge_sha }}"
+          --source-run-id
+          "${{ steps.publisher-start.outputs.source_run_id }}"
+          --source-run-attempt
+          "${{ steps.publisher-start.outputs.source_run_attempt }}"
+      - name: Rebuild both authoritative native claims with trusted policy
         env:
-          CONFORMANCE_INPUT: ${{ runner.temp }}/ofarm-publication-input/conformance
-        run: |
-          /usr/bin/python3 \
-            .publication-policy/conformance/evidence_publication_policy.py \
-            validate-conformance \
-            --root "$CONFORMANCE_INPUT"
-          /usr/bin/python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          root = Path(os.environ["CONFORMANCE_INPUT"])
-          if not root.is_dir():
-              raise SystemExit("provisional conformance artifact is missing")
-          if any(path.is_symlink() for path in root.rglob("*")):
-              raise SystemExit("provisional conformance artifact contains a symlink")
-          forbidden = {
-              "evidence-publication-context.json",
-              "evidence-publication-receipt.json",
-              "review-baseline-admission.json",
-          }
-          if any(path.name in forbidden for path in root.rglob("*")):
-              raise SystemExit("producer supplied trusted publication metadata")
-          for run in ("run-1", "run-2"):
-              path = root / "review-baseline" / run / "review-baseline-evidence.json"
-              evidence = json.loads(path.read_text(encoding="utf-8"))
-              if (
-                  evidence.get("schemaVersion")
-                  != "ofarm.review-baseline-evidence.v2"
-                  or evidence.get("run", {}).get("outcome") != "passed"
-              ):
-                  raise SystemExit(f"unpublishable review baseline: {path}")
-          comparison = json.loads(
-              (root / "review-baseline" / "equivalence.json").read_text(
-                  encoding="utf-8"
-              )
-          )
-          if (
-              comparison.get("schemaVersion")
-              != "ofarm.review-baseline-comparison.v2"
-              or comparison.get("equivalent") is not True
-          ):
-              raise SystemExit("unpublishable review-baseline equivalence")
-          platform_files = list(
-              (root / "platform-evidence").glob("platform_mvp_results_*.json")
-          )
-          if len(platform_files) != 1:
-              raise SystemExit("platform evidence set is incomplete")
-          platform = json.loads(platform_files[0].read_text(encoding="utf-8"))
-          if (
-              platform.get("executed") is not True
-              or platform.get("allPassed") is not True
-              or platform.get("exitStatus") != 0
-              or not platform.get("results")
-          ):
-              raise SystemExit("platform evidence did not pass")
-          PY
-      - name: Re-authenticate both provisional native archives with trusted code
-        env:
-          NATIVE_INPUT: ${{ runner.temp }}/ofarm-publication-input/native
-          NATIVE_VERIFIED: ${{ runner.temp }}/ofarm-publication-verified/native
           SOURCE_COMMIT: ${{ steps.publisher-start.outputs.execution_merge_sha }}
           SOURCE_RUN_ATTEMPT: ${{ steps.publisher-start.outputs.source_run_attempt }}
           SOURCE_RUN_ID: ${{ steps.publisher-start.outputs.source_run_id }}
@@ -370,94 +331,19 @@ jobs:
           for architecture in amd64 arm64
           do
             /usr/bin/python3 \
-              .publication-policy/deployment/postgresql/native_evidence.py \
-              collect-oci \
-              --archive "$NATIVE_INPUT/$architecture/ofarm-ed25519.oci.tar" \
-              --reproducibility "$NATIVE_INPUT/$architecture/reproducibility.json" \
+              .publication-policy/conformance/evidence_publication_policy.py \
+              stage-native \
+              --input-root \
+                "$RUNNER_TEMP/ofarm-publication-input/native/$architecture" \
+              --output-root \
+                "$RUNNER_TEMP/ofarm-publication-stage/native/$architecture" \
               --platform "linux/$architecture" \
               --source-commit "$SOURCE_COMMIT" \
               --containerfile \
                 .publication-policy/deployment/postgresql/ofarm_ed25519/Containerfile \
               --builder-id \
-                "https://github.com/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/attempts/$SOURCE_RUN_ATTEMPT" \
-              --output-directory "$NATIVE_VERIFIED/$architecture"
-            for evidence in \
-              oci-evidence.json \
-              sbom.spdx.in-toto.json \
-              provenance.slsa-v0.2.in-toto.json
-            do
-              /usr/bin/cmp \
-                "$NATIVE_INPUT/$architecture/attestations/$evidence" \
-                "$NATIVE_VERIFIED/$architecture/$evidence"
-            done
+                "https://github.com/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/attempts/$SOURCE_RUN_ATTEMPT"
           done
-      - name: Validate both provisional native evidence sets
-        env:
-          NATIVE_INPUT: ${{ runner.temp }}/ofarm-publication-input/native
-          SOURCE_COMMIT: ${{ steps.publisher-start.outputs.execution_merge_sha }}
-        run: |
-          for architecture in amd64 arm64
-          do
-            /usr/bin/python3 \
-              .publication-policy/conformance/evidence_publication_policy.py \
-              validate-native \
-              --root "$NATIVE_INPUT/$architecture"
-          done
-          /usr/bin/python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          root = Path(os.environ["NATIVE_INPUT"])
-          forbidden = {
-              "evidence-publication-context.json",
-              "evidence-publication-receipt.json",
-              "review-baseline-admission.json",
-          }
-          for architecture in ("amd64", "arm64"):
-              platform = f"linux/{architecture}"
-              directory = root / architecture
-              if not directory.is_dir():
-                  raise SystemExit(f"provisional native artifact is missing: {platform}")
-              if any(path.is_symlink() for path in directory.rglob("*")):
-                  raise SystemExit(f"provisional native artifact has a symlink: {platform}")
-              if any(path.name in forbidden for path in directory.rglob("*")):
-                  raise SystemExit("producer supplied trusted publication metadata")
-              archives = list(directory.glob("*.oci.tar"))
-              if len(archives) != 1 or archives[0].stat().st_size <= 0:
-                  raise SystemExit(f"native OCI archive is missing: {platform}")
-              reproducibility = json.loads(
-                  (directory / "reproducibility.json").read_text(encoding="utf-8")
-              )
-              evidence = json.loads(
-                  (directory / "attestations" / "oci-evidence.json").read_text(
-                      encoding="utf-8"
-                  )
-              )
-              if (
-                  reproducibility.get("schema")
-                  != "ofarm.native-reproducibility-evidence.v1"
-                  or reproducibility.get("platform") != platform
-                  or reproducibility.get("source_commit")
-                  != os.environ["SOURCE_COMMIT"]
-              ):
-                  raise SystemExit(
-                      f"native reproducibility evidence is inconsistent: {platform}"
-                  )
-              if (
-                  evidence.get("schema") != "ofarm.native-oci-evidence.v1"
-                  or evidence.get("platform") != platform
-                  or evidence.get("source_commit") != os.environ["SOURCE_COMMIT"]
-              ):
-                  raise SystemExit(f"native OCI evidence is inconsistent: {platform}")
-              for name in (
-                  "sbom.spdx.in-toto.json",
-                  "provenance.slsa-v0.2.in-toto.json",
-              ):
-                  path = directory / "attestations" / name
-                  if not path.is_file() or path.stat().st_size <= 0:
-                      raise SystemExit(f"native attestation is missing: {platform}/{name}")
-          PY
       - name: Re-authenticate policy immediately before established publication
         run: |
           test "$(git -C .publication-policy rev-parse HEAD)" = \
@@ -554,49 +440,56 @@ jobs:
           PY
           /usr/bin/cp \
             "$ADMISSION_PATH" \
-            "$RUNNER_TEMP/ofarm-publication-input/conformance/review-baseline/review-baseline-admission.json"
+            "$RUNNER_TEMP/ofarm-publication-stage/conformance/review-baseline/review-baseline-admission.json"
           /usr/bin/cp \
             "$ADMISSION_PATH" \
-            "$RUNNER_TEMP/ofarm-publication-input/conformance/platform-evidence/review-baseline-admission.json"
+            "$RUNNER_TEMP/ofarm-publication-stage/conformance/platform-evidence/review-baseline-admission.json"
           /usr/bin/cp \
             "$CONTEXT_PATH" \
-            "$RUNNER_TEMP/ofarm-publication-input/conformance/review-baseline/evidence-publication-context.json"
+            "$RUNNER_TEMP/ofarm-publication-stage/conformance/review-baseline/evidence-publication-context.json"
           /usr/bin/cp \
             "$CONTEXT_PATH" \
-            "$RUNNER_TEMP/ofarm-publication-input/conformance/platform-evidence/evidence-publication-context.json"
+            "$RUNNER_TEMP/ofarm-publication-stage/conformance/platform-evidence/evidence-publication-context.json"
           for architecture in amd64 arm64
           do
             /usr/bin/cp \
               "$ADMISSION_PATH" \
-              "$RUNNER_TEMP/ofarm-publication-input/native/$architecture/review-baseline-admission.json"
+              "$RUNNER_TEMP/ofarm-publication-stage/native/$architecture/review-baseline-admission.json"
             /usr/bin/cp \
               "$CONTEXT_PATH" \
-              "$RUNNER_TEMP/ofarm-publication-input/native/$architecture/evidence-publication-context.json"
+              "$RUNNER_TEMP/ofarm-publication-stage/native/$architecture/evidence-publication-context.json"
           done
       - name: Require exact authoritative file inventories
         env:
-          CONFORMANCE_INPUT: ${{ runner.temp }}/ofarm-publication-input/conformance
-          NATIVE_INPUT: ${{ runner.temp }}/ofarm-publication-input/native
+          CONFORMANCE_STAGE: ${{ runner.temp }}/ofarm-publication-stage/conformance
+          NATIVE_STAGE: ${{ runner.temp }}/ofarm-publication-stage/native
+          SOURCE_COMMIT: ${{ steps.publisher-start.outputs.execution_merge_sha }}
         run: |
           /usr/bin/python3 \
             .publication-policy/conformance/evidence_publication_policy.py \
             validate-conformance \
-            --root "$CONFORMANCE_INPUT" \
+            --root "$CONFORMANCE_STAGE" \
             --authoritative
           for architecture in amd64 arm64
           do
             /usr/bin/python3 \
               .publication-policy/conformance/evidence_publication_policy.py \
               validate-native \
-              --root "$NATIVE_INPUT/$architecture" \
+              --root "$NATIVE_STAGE/$architecture" \
               --authoritative
+            /usr/bin/python3 \
+              .publication-policy/conformance/evidence_publication_policy.py \
+              validate-native-claims \
+              --root "$NATIVE_STAGE/$architecture" \
+              --platform "linux/$architecture" \
+              --source-commit "$SOURCE_COMMIT"
           done
       - name: Upload authoritative deterministic review baseline
         id: upload-review-baseline
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: review-baseline
-          path: ${{ runner.temp }}/ofarm-publication-input/conformance/review-baseline/
+          path: ${{ runner.temp }}/ofarm-publication-stage/conformance/review-baseline/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -605,7 +498,7 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: platform-mvp-evidence
-          path: ${{ runner.temp }}/ofarm-publication-input/conformance/platform-evidence/
+          path: ${{ runner.temp }}/ofarm-publication-stage/conformance/platform-evidence/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -614,7 +507,7 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: native-verifier-amd64
-          path: ${{ runner.temp }}/ofarm-publication-input/native/amd64/
+          path: ${{ runner.temp }}/ofarm-publication-stage/native/amd64/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -623,7 +516,7 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: native-verifier-arm64
-          path: ${{ runner.temp }}/ofarm-publication-input/native/arm64/
+          path: ${{ runner.temp }}/ofarm-publication-stage/native/arm64/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -671,6 +564,12 @@ jobs:
             /usr/bin/cmp \
               "$RUNNER_TEMP/publisher-admission-prepublish.json" \
               "$AUTHORITATIVE_INPUT/$architecture/review-baseline-admission.json"
+            /usr/bin/python3 \
+              .publication-policy/conformance/evidence_publication_policy.py \
+              validate-native-claims \
+              --root "$AUTHORITATIVE_INPUT/$architecture" \
+              --platform "linux/$architecture" \
+              --source-commit "$SOURCE_COMMIT"
             /usr/bin/python3 \
               .publication-policy/deployment/postgresql/native_evidence.py \
               collect-oci \

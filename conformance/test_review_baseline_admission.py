@@ -8,20 +8,31 @@ import io
 import json
 import re
 import stat
+import tarfile
 import tempfile
 import unittest
 import warnings
 import zipfile
 from pathlib import Path
 
+from conformance import run_review_baseline as review_policy
 from conformance.evidence_publication_policy import (
+    NATIVE_AUTHORITATIVE_FILES,
     NATIVE_EVIDENCE_FILES,
+    PLATFORM_PUBLICATION_FILE,
+    PROVISIONAL_ARTIFACT_LIMITS,
     REVIEW_BASELINE_FILES,
     TRUSTED_METADATA_FILES,
     PublicationPolicyError,
     _HttpsOnlyRedirectHandler,
+    _extract_installed_artifacts,
+    _native_policy_module,
+    _validate_produced_artifact_binding,
+    _validate_test_results,
     download_and_extract_artifact,
+    stage_conformance_evidence,
     validate_conformance_inventory,
+    validate_native_claims,
     validate_native_inventory,
 )
 from conformance.review_baseline_admission import (
@@ -35,9 +46,11 @@ from conformance.review_baseline_admission import (
     PUBLICATION_TICKET_NAME,
     PUBLICATION_WORKFLOW_PATH,
     REVOCATION_MARKER,
+    SOURCE_ARTIFACT_MAX_BYTES,
     ArtifactReference,
     AdmissionError,
     _artifact_references,
+    _publication_plan,
     _publication_receipt_document,
     _publication_source_from_event,
     _publication_ticket_document,
@@ -108,6 +121,221 @@ def write_inventory(root: Path, names: set[str] | frozenset[str]) -> None:
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"evidence")
+
+
+def passing_test_results_fixture():
+    entry = {
+        "nodeid": "kernel/tests/test_example.py::test_passes",
+        "sourceModule": "kernel.tests.test_example",
+        "sourcePath": "kernel/tests/test_example.py",
+    }
+    entries_digest = hashlib.sha256(
+        (
+            json.dumps([entry], sort_keys=True, separators=(",", ":")) + "\n"
+        ).encode()
+    ).hexdigest()
+    inventory = {
+        "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
+        "testRoot": "kernel/tests",
+        "entryCount": 1,
+        "entriesSha256": entries_digest,
+        "entries": [entry],
+    }
+    warning_policy = {"mode": "exact-inventory", "expected": []}
+    results = {
+        "schemaVersion": "ofarm.review-baseline-pytest-results.v2",
+        "collection": {
+            "collected": [entry],
+            "selected": [entry],
+            "deselected": [],
+            "skippedCollectors": [],
+            "errors": [],
+        },
+        "execution": {
+            "outcomes": [
+                {
+                    **entry,
+                    "outcome": "passed",
+                    "phases": [
+                        {"phase": "setup", "outcome": "passed"},
+                        {"phase": "call", "outcome": "passed"},
+                        {"phase": "teardown", "outcome": "passed"},
+                    ],
+                }
+            ],
+            "skipped": [],
+            "unavailable": [],
+        },
+        "warnings": [],
+        "summary": {
+            "collected": 1,
+            "selected": 1,
+            "passed": 1,
+            "failed": 0,
+            "error": 0,
+            "xfailed": 0,
+            "xpassed": 0,
+            "skipped": 0,
+            "deselected": 0,
+            "collectionSkipped": 0,
+            "unavailable": 0,
+            "collectionErrors": 0,
+            "warnings": 0,
+            "pytestExitStatus": 0,
+        },
+    }
+    return results, inventory, warning_policy
+
+
+def complete_test_results_fixture(config, inventory):
+    entries = inventory["entries"]
+    phases = [
+        {"phase": "setup", "outcome": "passed"},
+        {"phase": "call", "outcome": "passed"},
+        {"phase": "teardown", "outcome": "passed"},
+    ]
+    warnings_inventory = config["warningPolicy"]["expected"]
+    count = len(entries)
+    return {
+        "schemaVersion": "ofarm.review-baseline-pytest-results.v2",
+        "collection": {
+            "collected": entries,
+            "selected": entries,
+            "deselected": [],
+            "skippedCollectors": [],
+            "errors": [],
+        },
+        "execution": {
+            "outcomes": [
+                {**entry, "outcome": "passed", "phases": phases}
+                for entry in entries
+            ],
+            "skipped": [],
+            "unavailable": [],
+        },
+        "warnings": warnings_inventory,
+        "summary": {
+            "collected": count,
+            "selected": count,
+            "passed": count,
+            "failed": 0,
+            "error": 0,
+            "xfailed": 0,
+            "xpassed": 0,
+            "skipped": 0,
+            "deselected": 0,
+            "collectionSkipped": 0,
+            "unavailable": 0,
+            "collectionErrors": 0,
+            "warnings": len(warnings_inventory),
+            "pytestExitStatus": 0,
+        },
+    }
+
+
+def complete_environment_fixture(config):
+    required = config["requiredEnvironment"]
+    locked = review_policy._parse_lock(
+        review_policy.ROOT / config["paths"]["dependencyLock"]
+    )
+    locked.update(
+        review_policy._parse_lock(
+            review_policy.ROOT / config["paths"]["packageManagerLock"]
+        )
+    )
+    installed = [
+        {"name": name, "version": locked[name]} for name in sorted(locked)
+    ]
+
+    def postgres(system_identifier, database):
+        return {
+            "available": True,
+            "version": required["postgresqlVersion"],
+            "rawVersion": "17.10 fixture",
+            "systemIdentifier": system_identifier,
+            "database": database,
+        }
+
+    return {
+        "platform": {
+            "operatingSystem": {
+                "required": required["operatingSystem"],
+                "actual": required["operatingSystem"],
+            },
+            "machine": {
+                "required": required["machine"],
+                "actual": required["machine"],
+            },
+        },
+        "python": {
+            "implementation": {
+                "required": required["pythonImplementation"],
+                "actual": required["pythonImplementation"],
+            },
+            "version": {
+                "required": required["pythonVersion"],
+                "actual": required["pythonVersion"],
+            },
+            "optimizationLevel": {
+                "required": required["pythonOptimizationLevel"],
+                "actual": required["pythonOptimizationLevel"],
+            },
+        },
+        "pip": {
+            "required": required["pipVersion"],
+            "actual": required["pipVersion"],
+        },
+        "postgresql": {
+            "requiredVersion": required["postgresqlVersion"],
+            "testConnectionSource": "derived-from-verified-admin-connection",
+            "testDatabase": required["testDatabaseName"],
+            "admin": postgres("1", "postgres"),
+            "tenantProvisioningAdmin": postgres("2", "postgres"),
+            "securityAuditAdmin": postgres("3", "postgres"),
+            "testStore": postgres("1", required["testDatabaseName"]),
+            "sameServer": True,
+            "tenantAuditSystemIdentifiersDistinct": True,
+            "testAndProvisioningSystemIdentifiersPairwiseDistinct": True,
+            "testAndProvisioningPostgresqlVersionsEqual": True,
+            "testAndProvisioningPostgresqlBuildsEqual": True,
+        },
+        "dependencies": {
+            "installed": installed,
+            "installedSetDigest": review_policy._sha256_bytes(
+                review_policy._canonical_bytes(installed)
+            ),
+            "missingOrMismatched": {},
+            "unexpected": {},
+            "pipCheckPassed": True,
+        },
+        "determinism": {
+            "pythonHashSeed": required["pythonHashSeed"],
+            "timezone": required["timezone"],
+            "locale": required["locale"],
+            "pytestPluginAutoloadDisabled": True,
+            "pythonNoUserSite": True,
+            "pythonDontWriteBytecode": True,
+            "scrubbedAmbientVariables": [
+                "PYTEST_ADDOPTS",
+                "PYTEST_PLUGINS",
+                "PYTHONOPTIMIZE",
+                "PYTHONPATH",
+                "PYTHONWARNINGS",
+                "OFARM_*",
+            ],
+            "allowedOfarmVariables": sorted(review_policy.ALLOWED_OFARM_ENV),
+            "derivedOfarmVariables": ["OFARM_PG_DSN"],
+        },
+        "ci": {
+            "configuredRunnerLabel": required["runner"],
+            "observedImageOs": "ubuntu24",
+            "observedImageVersion": "fixture",
+            "runId": str(SOURCE_RUN_ID),
+            "runAttempt": str(SOURCE_RUN_ATTEMPT),
+            "configuredActionPins": config["knownGreenBaseline"]["observedInRun"]["actions"],
+            "configuredPostgresqlImageDigest": config["knownGreenBaseline"]["observedInRun"]["postgresqlImageDigest"],
+        },
+    }
 
 
 def workflow_job_section(workflow: str, job_name: str) -> str:
@@ -221,11 +449,11 @@ def live_reader(
     return responses.__getitem__
 
 
-def source_run() -> dict[str, object]:
+def source_run(event_name: str = "issue_comment") -> dict[str, object]:
     return {
         "id": SOURCE_RUN_ID,
         "run_attempt": SOURCE_RUN_ATTEMPT,
-        "event": "issue_comment",
+        "event": event_name,
         "name": "reviewed-head baseline gate",
         "path": GATE_WORKFLOW_PATH,
         "head_branch": "main",
@@ -238,11 +466,11 @@ def source_run() -> dict[str, object]:
     }
 
 
-def workflow_run_event() -> dict[str, object]:
+def workflow_run_event(event_name: str = "issue_comment") -> dict[str, object]:
     return {
         "action": "completed",
         "repository": {"full_name": REPOSITORY},
-        "workflow_run": source_run(),
+        "workflow_run": source_run(event_name),
     }
 
 
@@ -250,6 +478,8 @@ def artifact_document(
     name: str,
     artifact_id: int,
     digest_character: str,
+    *,
+    head_sha: str = POLICY_SHA,
 ) -> dict[str, object]:
     return {
         "id": artifact_id,
@@ -257,7 +487,7 @@ def artifact_document(
         "size_in_bytes": 1000 + artifact_id,
         "expired": False,
         "digest": "sha256:" + digest_character * 64,
-        "workflow_run": {"id": SOURCE_RUN_ID, "head_sha": POLICY_SHA},
+        "workflow_run": {"id": SOURCE_RUN_ID, "head_sha": head_sha},
     }
 
 
@@ -301,12 +531,18 @@ def publisher_run() -> dict[str, object]:
 def source_artifact_documents(
     *,
     extra_name: str | None = None,
+    head_sha: str = POLICY_SHA,
 ) -> list[dict[str, object]]:
     names = [*PROVISIONAL_ARTIFACT_NAMES, PUBLICATION_TICKET_NAME]
     if extra_name is not None:
         names.append(extra_name)
     return [
-        artifact_document(name, index + 1, format(index + 1, "x"))
+        artifact_document(
+            name,
+            index + 1,
+            format(index + 1, "x"),
+            head_sha=head_sha,
+        )
         for index, name in enumerate(names)
     ]
 
@@ -316,9 +552,14 @@ def publication_reader(
     artifacts: list[dict[str, object]] | None = None,
     revocation: bool = False,
     live_run_mutation: tuple[str, object] | None = None,
+    source_event: str = "issue_comment",
+    source_branch: str = "main",
+    source_sha: str = POLICY_SHA,
 ):
     base_reader = live_reader()
-    run = source_run()
+    run = source_run(source_event)
+    run["head_branch"] = source_branch
+    run["head_sha"] = source_sha
     if live_run_mutation is not None:
         run[live_run_mutation[0]] = live_run_mutation[1]
     source_artifacts = (
@@ -701,6 +942,32 @@ class ExecutorAdmissionTests(unittest.TestCase):
 
 
 class PublicationAdmissionTests(unittest.TestCase):
+    def plan(self, *, source_event="issue_comment", artifacts=None):
+        lifecycle = source_event == "pull_request_target"
+        source_branch = "feature/lifecycle" if lifecycle else "main"
+        source_sha = HEAD_SHA if lifecycle else POLICY_SHA
+        reader = publication_reader(
+            artifacts=artifacts,
+            source_event=source_event,
+            source_branch=source_branch,
+            source_sha=source_sha,
+        )
+        event = workflow_run_event(source_event)
+        event_run = event["workflow_run"]
+        assert isinstance(event_run, dict)
+        event_run["head_branch"] = source_branch
+        event_run["head_sha"] = source_sha
+        return _publication_plan(
+            event_name="workflow_run",
+            event=event,
+            github_sha=POLICY_SHA,
+            workflow_sha=POLICY_SHA,
+            workflow_ref=PUBLICATION_WORKFLOW_REF,
+            repository=REPOSITORY,
+            policy_sha=POLICY_SHA,
+            fetch_json=reader,
+        )
+
     def resolve(self, reader=None):
         live = publication_reader() if reader is None else reader
         source = _publication_source_from_event(
@@ -747,6 +1014,43 @@ class PublicationAdmissionTests(unittest.TestCase):
         self.assertTrue(admission.eligible)
         self.assertEqual(admission.reviewed_head_sha, HEAD_SHA)
         self.assertEqual(admission.execution_merge_sha, MERGE_SHA)
+
+    def test_ordinary_and_revocation_comments_are_clean_non_publications(self) -> None:
+        for comment_kind in ("ordinary", "explicit-revocation"):
+            with self.subTest(comment_kind=comment_kind):
+                plan = self.plan(artifacts=[])
+                self.assertFalse(plan.publish)
+                self.assertEqual(plan.artifacts, {})
+                self.assertEqual(plan.reason, "gate comment produced no publication")
+
+    def test_pull_request_lifecycle_run_is_a_clean_non_publication(self) -> None:
+        plan = self.plan(source_event="pull_request_target", artifacts=[])
+
+        self.assertFalse(plan.publish)
+        self.assertEqual(plan.artifacts, {})
+        self.assertIn("lifecycle", plan.reason)
+
+    def test_exact_admitted_inventory_is_the_only_gate_publication(self) -> None:
+        plan = self.plan(artifacts=source_artifact_documents())
+
+        self.assertTrue(plan.publish)
+        self.assertEqual(
+            set(plan.artifacts),
+            {*PROVISIONAL_ARTIFACT_NAMES, PUBLICATION_TICKET_NAME},
+        )
+
+    def test_partial_gate_inventory_still_fails_closed(self) -> None:
+        partial = source_artifact_documents()[:-1]
+
+        with self.assertRaisesRegex(AdmissionError, "names are not the exact"):
+            self.plan(artifacts=partial)
+
+    def test_pull_request_lifecycle_artifact_is_never_publishable(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "lifecycle.*unexpectedly"):
+            self.plan(
+                source_event="pull_request_target",
+                artifacts=source_artifact_documents(head_sha=HEAD_SHA),
+            )
 
     def test_source_run_rejects_live_identity_change(self) -> None:
         reader = publication_reader(live_run_mutation=("run_attempt", 2))
@@ -946,6 +1250,313 @@ class PublicationAdmissionTests(unittest.TestCase):
 
 
 class EvidencePublicationPolicyTests(unittest.TestCase):
+    def test_trusted_conformance_stage_rebuilds_comparison_and_platform_claims(
+        self,
+    ) -> None:
+        config = review_policy._read_json(review_policy.CONFIG_PATH)
+        inventory = review_policy._load_test_inventory(config)
+        results = complete_test_results_fixture(config, inventory)
+        inventory_check = review_policy._test_inventory_check(
+            inventory,
+            results["collection"]["collected"],
+        )
+        warning_check = review_policy._warning_policy_check(
+            config["warningPolicy"],
+            results["warnings"],
+        )
+        paths = config["paths"]
+        clean_state = {
+            "sha": HEAD_SHA,
+            "treeSha": "f" * 40,
+            "dirty": False,
+            "dirtyEntryCount": 0,
+            "statusDigest": hashlib.sha256(b"\n").hexdigest(),
+        }
+        step_names = (
+            "package-self-check",
+            "pip-check",
+            "environment-preflight",
+            "verify-pinned-test-inventory",
+            "verify-warning-inventory",
+            "complete-kernel-tests",
+            "verify-generated-manifest",
+            "verify-test-store-postgresql",
+            "verify-post-run-git-state",
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            input_root = temporary / "input"
+            for index, run in enumerate(("run-1", "run-2"), start=1):
+                run_root = input_root / "review-baseline" / run
+                run_root.mkdir(parents=True)
+                results_path = run_root / "kernel-test-results.json"
+                results_path.write_text(
+                    json.dumps(results, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                evidence = {
+                    "schemaVersion": review_policy.EVIDENCE_SCHEMA,
+                    "normalizationPolicy": review_policy._normalization_policy(),
+                    "run": {
+                        "startedAt": f"2026-08-26T17:00:0{index}Z",
+                        "finishedAt": f"2026-08-26T17:01:0{index}Z",
+                        "canonicalCommand": config["canonicalCommand"],
+                        "outcome": "passed",
+                    },
+                    "git": {
+                        "start": clean_state,
+                        "end": clean_state,
+                        "unchanged": True,
+                    },
+                    "inputs": {
+                        "config": {
+                            "path": "conformance/review_baseline_config.json",
+                            "sha256": review_policy._sha256_file(
+                                review_policy.CONFIG_PATH
+                            ),
+                        },
+                        "dependencyLock": {
+                            "path": paths["dependencyLock"],
+                            "sha256": review_policy._sha256_file(
+                                review_policy.ROOT / paths["dependencyLock"]
+                            ),
+                        },
+                        "packageManagerLock": {
+                            "path": paths["packageManagerLock"],
+                            "sha256": review_policy._sha256_file(
+                                review_policy.ROOT / paths["packageManagerLock"]
+                            ),
+                        },
+                        "testInventory": {
+                            "path": paths["testInventory"],
+                            "sha256": review_policy._sha256_file(
+                                review_policy.ROOT / paths["testInventory"]
+                            ),
+                            "entriesSha256": inventory["entriesSha256"],
+                            "entryCount": inventory["entryCount"],
+                        },
+                        "schema": {
+                            "path": paths["schema"],
+                            "sha256": review_policy._sha256_file(
+                                review_policy.ROOT / paths["schema"]
+                            ),
+                        },
+                    },
+                    "environment": complete_environment_fixture(config),
+                    "tests": results,
+                    "testAcceptance": {
+                        "inventory": inventory_check,
+                        "warnings": warning_check,
+                    },
+                    "steps": [
+                        {
+                            "name": name,
+                            "command": [f"internal:{name}"],
+                            "outcome": "passed",
+                            "exitCode": 0,
+                        }
+                        for name in step_names
+                    ],
+                    "producedArtifacts": [
+                        {
+                            "path": results_path.name,
+                            "sha256": hashlib.sha256(
+                                results_path.read_bytes()
+                            ).hexdigest(),
+                            "bytes": results_path.stat().st_size,
+                        }
+                    ],
+                    "producedArtifactsNote": (
+                        "The evidence envelope excludes its own digest to avoid "
+                        "recursive self-reference. Its raw digest is recorded by "
+                        "the comparison proof."
+                    ),
+                    "verifiedArtifacts": [
+                        {
+                            "path": path,
+                            "sha256": review_policy._sha256_file(
+                                review_policy.ROOT / path
+                            ),
+                        }
+                        for path in config["verifiedArtifacts"]
+                    ],
+                }
+                (run_root / "review-baseline-evidence.json").write_text(
+                    json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+            comparison = input_root / "review-baseline/equivalence.json"
+            self.assertEqual(
+                review_policy.compare_evidence(
+                    str(
+                        input_root
+                        / "review-baseline/run-1/review-baseline-evidence.json"
+                    ),
+                    str(
+                        input_root
+                        / "review-baseline/run-2/review-baseline-evidence.json"
+                    ),
+                    str(comparison),
+                ),
+                0,
+            )
+            platform_results = [
+                {
+                    "test": entry["nodeid"],
+                    "outcome": "passed",
+                    "durationSeconds": 0.0,
+                }
+                for entry in inventory["entries"]
+                if entry["sourcePath"] == "kernel/tests/test_conformance.py"
+            ]
+            platform_root = input_root / "platform-evidence"
+            platform_root.mkdir()
+            (platform_root / "platform_mvp_results_2026-08-26T170000Z.json").write_text(
+                json.dumps(
+                    {
+                        "suite": (
+                            "conformance:ofarm2.platform-mvp."
+                            "tests-1-15-plus-regressions.v0_2"
+                        ),
+                        "executed": True,
+                        "executedAt": "2026-08-26T17:00:00Z",
+                        "runtimeVersion": "fixture",
+                        "exitStatus": 0,
+                        "allPassed": True,
+                        "results": platform_results,
+                        "details": {"producerOnly": True},
+                        "honestyNote": "fixture",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            output_root = temporary / "authoritative"
+            stage_conformance_evidence(
+                input_root=input_root,
+                output_root=output_root,
+                source_commit=HEAD_SHA,
+                source_run_id=SOURCE_RUN_ID,
+                source_run_attempt=SOURCE_RUN_ATTEMPT,
+            )
+
+            published_platform = json.loads(
+                (
+                    output_root
+                    / "platform-evidence"
+                    / PLATFORM_PUBLICATION_FILE
+                ).read_text(encoding="utf-8")
+            )
+            self.assertNotIn("details", published_platform)
+            self.assertNotIn("durationSeconds", published_platform["results"][0])
+            self.assertEqual(published_platform["source"]["commit"], HEAD_SHA)
+
+    def test_installed_artifact_tar_preserves_exact_files_and_modes(self) -> None:
+        native_policy = _native_policy_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive_path = root / "installed.tar"
+            with tarfile.open(archive_path, "w", format=tarfile.USTAR_FORMAT) as archive:
+                for name, (_maximum, mode) in native_policy.ARTIFACT_CONTRACTS.items():
+                    data = f"artifact-{name}\n".encode()
+                    member = tarfile.TarInfo(name)
+                    member.size = len(data)
+                    member.mode = int(mode, 8)
+                    member.uid = member.gid = member.mtime = 0
+                    archive.addfile(member, io.BytesIO(data))
+
+            output = root / "installed"
+            _extract_installed_artifacts(archive_path, output, native_policy)
+
+            self.assertEqual(
+                {path.name for path in output.iterdir()},
+                set(native_policy.ARTIFACT_CONTRACTS),
+            )
+            self.assertEqual(stat.S_IMODE((output / "ofarm_ed25519.so").stat().st_mode), 0o755)
+
+    def test_installed_artifact_tar_refuses_path_and_mode_tampering(self) -> None:
+        native_policy = _native_policy_module()
+        cases = (("../libsodium.a", "0644"), ("libsodium.a", "0777"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for index, (hostile_name, hostile_mode) in enumerate(cases):
+                archive_path = root / f"hostile-{index}.tar"
+                with tarfile.open(
+                    archive_path,
+                    "w",
+                    format=tarfile.USTAR_FORMAT,
+                ) as archive:
+                    for name, (_maximum, mode) in native_policy.ARTIFACT_CONTRACTS.items():
+                        data = b"artifact\n"
+                        member = tarfile.TarInfo(
+                            hostile_name if name == "libsodium.a" else name
+                        )
+                        member.size = len(data)
+                        member.mode = int(
+                            hostile_mode if name == "libsodium.a" else mode,
+                            8,
+                        )
+                        member.uid = member.gid = member.mtime = 0
+                        archive.addfile(member, io.BytesIO(data))
+                with self.subTest(hostile_name=hostile_name, mode=hostile_mode):
+                    with self.assertRaises(PublicationPolicyError):
+                        _extract_installed_artifacts(
+                            archive_path,
+                            root / f"output-{index}",
+                            native_policy,
+                        )
+
+    def test_produced_artifact_digest_and_size_bind_actual_results(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            results = Path(directory) / "kernel-test-results.json"
+            results.write_bytes(b'{"schemaVersion":"example"}\n')
+            binding = [
+                {
+                    "path": results.name,
+                    "sha256": hashlib.sha256(results.read_bytes()).hexdigest(),
+                    "bytes": results.stat().st_size,
+                }
+            ]
+            _validate_produced_artifact_binding(binding, results)
+            binding[0]["sha256"] = "0" * 64
+            with self.assertRaisesRegex(PublicationPolicyError, "binding differs"):
+                _validate_produced_artifact_binding(binding, results)
+
+    def test_trusted_result_validator_requires_complete_pinned_passes(self) -> None:
+        results, inventory, warning_policy = passing_test_results_fixture()
+
+        inventory_check, warning_check = _validate_test_results(
+            results,
+            expected_inventory=inventory,
+            warning_policy=warning_policy,
+        )
+
+        self.assertTrue(inventory_check["matches"])
+        self.assertTrue(warning_check["matches"])
+
+    def test_trusted_result_validator_refuses_claim_tampering(self) -> None:
+        mutations = {
+            "missing-outcome": lambda value: value["execution"]["outcomes"].clear(),
+            "changed-inventory": lambda value: value["collection"]["selected"][0].update(
+                nodeid="kernel/tests/test_example.py::test_fabricated"
+            ),
+            "warning": lambda value: value["warnings"].append(
+                {"nodeid": "", "when": "collect", "category": "Warning", "message": "hidden"}
+            ),
+            "extra-field": lambda value: value.update(fabricated=True),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                results, inventory, warning_policy = passing_test_results_fixture()
+                mutate(results)
+                with self.assertRaises(PublicationPolicyError):
+                    _validate_test_results(
+                        results,
+                        expected_inventory=inventory,
+                        warning_policy=warning_policy,
+                    )
+
     def test_secure_download_verifies_digest_and_extracts_inside_fresh_root(
         self,
     ) -> None:
@@ -1050,7 +1661,7 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
 
     def test_conformance_inventory_is_exact_before_and_after_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory) / "provisional"
             write_inventory(
                 root / "review-baseline",
                 REVIEW_BASELINE_FILES,
@@ -1068,16 +1679,23 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
             with self.assertRaisesRegex(PublicationPolicyError, "not exact"):
                 validate_conformance_inventory(root, authoritative=False)
             extra.unlink()
-            for subtree in ("review-baseline", "platform-evidence"):
-                write_inventory(root / subtree, TRUSTED_METADATA_FILES)
+            authoritative = Path(directory) / "authoritative"
+            write_inventory(
+                authoritative / "review-baseline",
+                REVIEW_BASELINE_FILES | TRUSTED_METADATA_FILES,
+            )
+            write_inventory(
+                authoritative / "platform-evidence",
+                {PLATFORM_PUBLICATION_FILE} | TRUSTED_METADATA_FILES,
+            )
             self.assertEqual(
-                validate_conformance_inventory(root, authoritative=True),
-                platform_name,
+                validate_conformance_inventory(authoritative, authoritative=True),
+                PLATFORM_PUBLICATION_FILE,
             )
 
     def test_native_inventory_is_exact_before_and_after_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory) / "provisional"
             write_inventory(root, NATIVE_EVIDENCE_FILES)
             validate_native_inventory(root, authoritative=False)
             extra = root / "native_evidence_receipt.json"
@@ -1085,8 +1703,74 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
             with self.assertRaisesRegex(PublicationPolicyError, "not exact"):
                 validate_native_inventory(root, authoritative=False)
             extra.unlink()
-            write_inventory(root, TRUSTED_METADATA_FILES)
-            validate_native_inventory(root, authoritative=True)
+            authoritative = Path(directory) / "authoritative"
+            write_inventory(
+                authoritative,
+                NATIVE_AUTHORITATIVE_FILES | TRUSTED_METADATA_FILES,
+            )
+            validate_native_inventory(authoritative, authoritative=True)
+
+    def test_native_claims_bind_both_installed_file_sets(self) -> None:
+        contracts = (
+            ("libsodium.a", "0644"),
+            ("ofarm_ed25519.so", "0755"),
+            ("ofarm_ed25519.control", "0644"),
+            ("ofarm_ed25519--1.0.sql", "0644"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            identities = []
+            for name, mode in contracts:
+                data = f"trusted-{name}\n".encode()
+                for build in ("first", "second"):
+                    path = root / build / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(data)
+                    path.chmod(int(mode, 8))
+                identities.append(
+                    {
+                        "name": name,
+                        "mode": mode,
+                        "sha256": "sha256:" + hashlib.sha256(data).hexdigest(),
+                        "size": len(data),
+                    }
+                )
+            (root / "reproducibility.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "ofarm.native-reproducibility-evidence.v1",
+                        "platform": "linux/amd64",
+                        "source_commit": HEAD_SHA,
+                        "child_digest": "sha256:" + "1" * 64,
+                        "config_digest": "sha256:" + "2" * 64,
+                        "artifacts": identities,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            validate_native_claims(
+                root,
+                platform="linux/amd64",
+                source_commit=HEAD_SHA,
+            )
+            (root / "second/ofarm_ed25519.so").write_bytes(b"fabricated")
+            (root / "second/ofarm_ed25519.so").chmod(0o755)
+            with self.assertRaisesRegex(PublicationPolicyError, "files differ"):
+                validate_native_claims(
+                    root,
+                    platform="linux/amd64",
+                    source_commit=HEAD_SHA,
+                )
+
+    def test_admission_and_extraction_size_limits_are_one_contract(self) -> None:
+        self.assertEqual(
+            {
+                name: SOURCE_ARTIFACT_MAX_BYTES[name]
+                for name in PROVISIONAL_ARTIFACT_LIMITS
+            },
+            PROVISIONAL_ARTIFACT_LIMITS,
+        )
 
 
 class WorkflowPolicyTests(unittest.TestCase):
@@ -1171,6 +1855,13 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("git -C .publication-policy diff --exit-code", handoff)
         self.assertIn("--porcelain=v1 --untracked-files=all", handoff)
         self.assertEqual(handoff.count("actions/upload-artifact@"), 1)
+        native = workflow_job_section(source_workflow, "native-verifier")
+        for archive in ("first-image.docker.tar", "second-image.docker.tar"):
+            self.assertIn(archive, native)
+        self.assertNotIn(
+            'rm -- \\\n+            ".artifacts/native/${{ matrix.architecture }}/first-image.docker.tar"',
+            native,
+        )
 
     def test_cross_run_publisher_never_executes_admitted_code(self) -> None:
         workflow = Path(".github/workflows/evidence-publication.yml").read_text(
@@ -1199,6 +1890,12 @@ class WorkflowPolicyTests(unittest.TestCase):
 
         source_admission = workflow_job_section(workflow, "source-admission")
         publisher = workflow_job_section(workflow, "publish")
+        self.assertIn("publish: ${{ steps.resolve-source.outputs.publish }}", source_admission)
+        self.assertEqual(
+            source_admission.count("if: steps.resolve-source.outputs.publish == 'true'"),
+            4,
+        )
+        self.assertIn("needs.source-admission.outputs.publish == 'true'", publisher)
         for section in (source_admission, publisher):
             self.assertIn("runs-on: ubuntu-24.04", section)
             self.assertIn(
@@ -1239,10 +1936,14 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("--artifact-digest", publisher)
         self.assertIn("validate-conformance", publisher)
         self.assertIn("validate-native", publisher)
+        self.assertIn("stage-conformance", publisher)
+        self.assertIn("stage-native", publisher)
+        self.assertIn("validate-native-claims", publisher)
+        self.assertIn("ofarm-publication-stage", publisher)
         self.assertIn("Require exact authoritative file inventories", publisher)
         self.assertIn("--authoritative", publisher)
 
-        self.assertEqual(publisher.count("collect-oci"), 2)
+        self.assertEqual(publisher.count("collect-oci"), 1)
         self.assertIn("compose-index", publisher)
         self.assertIn("prepare-release-identity", publisher)
         self.assertIn(
