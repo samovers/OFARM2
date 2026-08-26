@@ -6,7 +6,7 @@ Status: **Phase A proposed; Phase B not authorized**
 - Version: `1`
 - Issue: [#192](https://github.com/samovers/OFARM2/issues/192)
 - Base: `775e6fde6256f9c87a6e13dd5610d753115b7eaf`
-- Draft pull request: to be bound after this Phase A branch is published
+- Draft pull request: [#338](https://github.com/samovers/OFARM2/pull/338)
 - Primary trust boundary: one operator-triggered, independently witnessed,
   unknown-count process-crash interval recorded in the surviving security-audit
   PostgreSQL store
