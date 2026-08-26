@@ -19,6 +19,7 @@ import pytest
 from conformance.evidence_publication_policy import (
     NATIVE_AUTHORITATIVE_FILES,
     stage_native_evidence,
+    validate_native_claims,
 )
 from deployment.postgresql import native_evidence, native_release_identity
 from deployment.postgresql.native_evidence import (
@@ -1688,6 +1689,17 @@ def _assert_trusted_publisher_reconstructs_native_claims_from_raw_inputs(
         for path in staged.rglob("*")
         if path.is_file()
     } == NATIVE_AUTHORITATIVE_FILES
+    assert (staged / "first-artifacts.tar").read_bytes() == (
+        staged / "second-artifacts.tar"
+    ).read_bytes()
+    for path in staged.rglob("*"):
+        if path.is_file():
+            path.chmod(0o644)
+    validate_native_claims(
+        staged,
+        platform=PLATFORM,
+        source_commit=SOURCE_COMMIT,
+    )
     assert not any((staged / name).exists() for name in (
         "address.log",
         "attested-metadata.json",

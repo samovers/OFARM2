@@ -25,10 +25,15 @@ from conformance.evidence_publication_policy import (
     TRUSTED_METADATA_FILES,
     PublicationPolicyError,
     _HttpsOnlyRedirectHandler,
+    _canonical_json_bytes,
+    _expected_review_steps,
     _extract_installed_artifacts,
     _native_policy_module,
+    _produced_artifact_binding,
+    _read_json_object,
     _validate_produced_artifact_binding,
     _validate_test_results,
+    _write_installed_artifacts_archive,
     download_and_extract_artifact,
     stage_conformance_evidence,
     validate_conformance_inventory,
@@ -1272,18 +1277,6 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
             "dirtyEntryCount": 0,
             "statusDigest": hashlib.sha256(b"\n").hexdigest(),
         }
-        step_names = (
-            "package-self-check",
-            "pip-check",
-            "environment-preflight",
-            "verify-pinned-test-inventory",
-            "verify-warning-inventory",
-            "complete-kernel-tests",
-            "verify-generated-manifest",
-            "verify-test-store-postgresql",
-            "verify-post-run-git-state",
-        )
-
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
             input_root = temporary / "input"
@@ -1349,15 +1342,7 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
                         "inventory": inventory_check,
                         "warnings": warning_check,
                     },
-                    "steps": [
-                        {
-                            "name": name,
-                            "command": [f"internal:{name}"],
-                            "outcome": "passed",
-                            "exitCode": 0,
-                        }
-                        for name in step_names
-                    ],
+                    "steps": _expected_review_steps(config),
                     "producedArtifacts": [
                         {
                             "path": results_path.name,
@@ -1451,6 +1436,104 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
             self.assertNotIn("details", published_platform)
             self.assertNotIn("durationSeconds", published_platform["results"][0])
             self.assertEqual(published_platform["source"]["commit"], HEAD_SHA)
+
+            for run in ("run-1", "run-2"):
+                source_run = input_root / "review-baseline" / run
+                staged_run = output_root / "review-baseline" / run
+                staged_results = staged_run / "kernel-test-results.json"
+                staged_evidence = staged_run / "review-baseline-evidence.json"
+                results_document = _read_json_object(
+                    staged_results,
+                    "staged test results",
+                )
+                evidence_document = _read_json_object(
+                    staged_evidence,
+                    "staged review evidence",
+                )
+                self.assertEqual(
+                    staged_results.read_bytes(),
+                    _canonical_json_bytes(results_document),
+                )
+                self.assertEqual(
+                    staged_evidence.read_bytes(),
+                    _canonical_json_bytes(evidence_document),
+                )
+                self.assertNotEqual(
+                    staged_evidence.read_bytes(),
+                    (source_run / "review-baseline-evidence.json").read_bytes(),
+                )
+                self.assertEqual(
+                    evidence_document["producedArtifacts"],
+                    _produced_artifact_binding(staged_results),
+                )
+            staged_comparison = (
+                output_root / "review-baseline/equivalence.json"
+            )
+            comparison_document = _read_json_object(
+                staged_comparison,
+                "staged review comparison",
+            )
+            self.assertEqual(
+                staged_comparison.read_bytes(),
+                _canonical_json_bytes(comparison_document),
+            )
+
+            source_evidence = (
+                input_root
+                / "review-baseline/run-1/review-baseline-evidence.json"
+            )
+            original_evidence = source_evidence.read_bytes()
+            fabricated = json.loads(original_evidence)
+            fabricated["steps"][0]["command"] = ["producer:fabricated"]
+            source_evidence.write_text(
+                json.dumps(fabricated, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(PublicationPolicyError, "steps differ"):
+                stage_conformance_evidence(
+                    input_root=input_root,
+                    output_root=temporary / "fabricated-command",
+                    source_commit=HEAD_SHA,
+                    source_run_id=SOURCE_RUN_ID,
+                    source_run_attempt=SOURCE_RUN_ATTEMPT,
+                )
+            source_evidence.write_bytes(original_evidence)
+
+            invalid_timestamp = json.loads(original_evidence)
+            invalid_timestamp["run"]["startedAt"] = "2026-99-99T99:99:99Z"
+            source_evidence.write_text(
+                json.dumps(invalid_timestamp, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                PublicationPolicyError,
+                "canonical UTC timestamp",
+            ):
+                stage_conformance_evidence(
+                    input_root=input_root,
+                    output_root=temporary / "invalid-timestamp",
+                    source_commit=HEAD_SHA,
+                    source_run_id=SOURCE_RUN_ID,
+                    source_run_attempt=SOURCE_RUN_ATTEMPT,
+                )
+
+    def test_strict_json_refuses_duplicate_keys_and_non_finite_numbers(
+        self,
+    ) -> None:
+        cases = (
+            ('{"steps":[],"steps":["fabricated"]}', "duplicate object key"),
+            ('{"durationSeconds":NaN}', "forbidden number NaN"),
+            ('{"durationSeconds":Infinity}', "forbidden number Infinity"),
+            ('{"durationSeconds":1e9999}', "forbidden number 1e9999"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for index, (body, message) in enumerate(cases):
+                path = root / f"hostile-{index}.json"
+                path.write_text(body, encoding="utf-8")
+                with self.subTest(body=body):
+                    with self.assertRaisesRegex(PublicationPolicyError, message):
+                        _read_json_object(path, "hostile JSON")
 
     def test_installed_artifact_tar_preserves_exact_files_and_modes(self) -> None:
         native_policy = _native_policy_module()
@@ -1710,7 +1793,7 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
             )
             validate_native_inventory(authoritative, authoritative=True)
 
-    def test_native_claims_bind_both_installed_file_sets(self) -> None:
+    def test_native_claims_survive_transport_mode_normalization(self) -> None:
         contracts = (
             ("libsodium.a", "0644"),
             ("ofarm_ed25519.so", "0755"),
@@ -1718,12 +1801,15 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
             ("ofarm_ed25519--1.0.sql", "0644"),
         )
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            temporary = Path(directory)
+            source = temporary / "source"
+            root = temporary / "authoritative"
+            root.mkdir()
             identities = []
             for name, mode in contracts:
                 data = f"trusted-{name}\n".encode()
                 for build in ("first", "second"):
-                    path = root / build / name
+                    path = source / build / name
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(data)
                     path.chmod(int(mode, 8))
@@ -1734,6 +1820,13 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
                         "sha256": "sha256:" + hashlib.sha256(data).hexdigest(),
                         "size": len(data),
                     }
+                )
+            native_policy = _native_policy_module()
+            for build in ("first", "second"):
+                _write_installed_artifacts_archive(
+                    source / build,
+                    root / f"{build}-artifacts.tar",
+                    native_policy,
                 )
             (root / "reproducibility.json").write_text(
                 json.dumps(
@@ -1748,14 +1841,23 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            for path in root.iterdir():
+                path.chmod(0o644)
 
             validate_native_claims(
                 root,
                 platform="linux/amd64",
                 source_commit=HEAD_SHA,
             )
-            (root / "second/ofarm_ed25519.so").write_bytes(b"fabricated")
-            (root / "second/ofarm_ed25519.so").chmod(0o755)
+            (root / "second-artifacts.tar").unlink()
+            (source / "second/ofarm_ed25519.so").write_bytes(b"fabricated")
+            (source / "second/ofarm_ed25519.so").chmod(0o755)
+            _write_installed_artifacts_archive(
+                source / "second",
+                root / "second-artifacts.tar",
+                native_policy,
+            )
+            (root / "second-artifacts.tar").chmod(0o644)
             with self.assertRaisesRegex(PublicationPolicyError, "files differ"):
                 validate_native_claims(
                     root,

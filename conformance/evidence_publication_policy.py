@@ -4,14 +4,18 @@
 from __future__ import annotations
 
 import argparse
+import copy
+from datetime import datetime, timezone
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import re
 import stat
 import sys
 import tarfile
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -26,7 +30,12 @@ REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 PLATFORM_EVIDENCE_NAME = re.compile(
     r"platform_mvp_results_[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z[.]json"
 )
-TIMESTAMP = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[^\r\n]+Z")
+TIMESTAMP = re.compile(
+    r"[0-9]{4}-(?:0[1-9]|1[0-2])-"
+    r"(?:0[1-9]|[12][0-9]|3[01])T"
+    r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]"
+    r"(?:\.[0-9]{6})?Z"
+)
 GITHUB_API_VERSION = "2026-03-10"
 DOWNLOAD_CHUNK_BYTES = 1024 * 1024
 MAX_ZIP_ENTRIES = 256
@@ -81,16 +90,10 @@ NATIVE_AUTHORITATIVE_FILES = frozenset(
         "attestations/oci-evidence.json",
         "attestations/provenance.slsa-v0.2.in-toto.json",
         "attestations/sbom.spdx.in-toto.json",
-        "first/libsodium.a",
-        "first/ofarm_ed25519--1.0.sql",
-        "first/ofarm_ed25519.control",
-        "first/ofarm_ed25519.so",
+        "first-artifacts.tar",
         "ofarm-ed25519.oci.tar",
         "reproducibility.json",
-        "second/libsodium.a",
-        "second/ofarm_ed25519--1.0.sql",
-        "second/ofarm_ed25519.control",
-        "second/ofarm_ed25519.so",
+        "second-artifacts.tar",
     }
 )
 # Compatibility name for callers that inspect the provisional producer contract.
@@ -387,13 +390,39 @@ def _exact_keys(value: dict[str, Any], expected: set[str], label: str) -> None:
         raise PublicationPolicyError(f"{label} fields are not exact")
 
 
+def _reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise PublicationPolicyError("JSON contains a duplicate object key")
+        value[key] = item
+    return value
+
+
+def _reject_non_finite_json_number(value: str) -> None:
+    raise PublicationPolicyError(f"JSON contains forbidden number {value}")
+
+
+def _parse_finite_json_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise PublicationPolicyError(f"JSON contains forbidden number {value}")
+    return parsed
+
+
 def _read_json_object(path: Path, label: str) -> dict[str, Any]:
     try:
         file_stat = path.stat(follow_symlinks=False)
         if not stat.S_ISREG(file_stat.st_mode) or not 0 < file_stat.st_size <= MAX_JSON_BYTES:
             raise PublicationPolicyError(f"{label} is not one bounded regular file")
-        value = json.loads(path.read_bytes())
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        text = path.read_bytes().decode("utf-8")
+        value = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_json_keys,
+            parse_constant=_reject_non_finite_json_number,
+            parse_float=_parse_finite_json_float,
+        )
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
         raise PublicationPolicyError(f"{label} is not readable JSON") from exc
     return _object(value, label)
 
@@ -455,9 +484,26 @@ def _copy_regular_file(
         raise PublicationPolicyError("publication source file cannot be copied") from exc
 
 
+def _canonical_json_bytes(value: dict[str, Any]) -> bytes:
+    try:
+        return (
+            json.dumps(
+                value,
+                allow_nan=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode()
+    except (TypeError, ValueError) as exc:
+        raise PublicationPolicyError(
+            "trusted publication JSON is not canonicalizable"
+        ) from exc
+
+
 def _write_canonical_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    data = _canonical_json_bytes(value)
     try:
         with path.open("xb") as output:
             output.write(data)
@@ -746,15 +792,95 @@ def _validate_produced_artifact_binding(
     produced_artifacts: object,
     results_path: Path,
 ) -> None:
-    expected = [
+    if produced_artifacts != _produced_artifact_binding(results_path):
+        raise PublicationPolicyError("review baseline producedArtifacts binding differs")
+
+
+def _produced_artifact_binding(results_path: Path) -> list[dict[str, Any]]:
+    return [
         {
             "path": "kernel-test-results.json",
             "sha256": _sha256_hex_file(results_path),
             "bytes": results_path.stat().st_size,
         }
     ]
-    if produced_artifacts != expected:
-        raise PublicationPolicyError("review baseline producedArtifacts binding differs")
+
+
+def _canonical_utc_timestamp(value: object, label: str) -> datetime:
+    if not isinstance(value, str) or TIMESTAMP.fullmatch(value) is None:
+        raise PublicationPolicyError(f"{label} is not a canonical UTC timestamp")
+    try:
+        parsed = datetime.strptime(
+            value,
+            "%Y-%m-%dT%H:%M:%S.%fZ" if "." in value else "%Y-%m-%dT%H:%M:%SZ",
+        ).replace(tzinfo=timezone.utc)
+    except ValueError as exc:
+        raise PublicationPolicyError(
+            f"{label} is not a canonical UTC timestamp"
+        ) from exc
+    if parsed.isoformat().replace("+00:00", "Z") != value:
+        raise PublicationPolicyError(f"{label} is not a canonical UTC timestamp")
+    return parsed
+
+
+def _expected_review_steps(config: dict[str, Any]) -> list[dict[str, Any]]:
+    paths = _object(config.get("paths"), "review baseline paths")
+
+    def passed(name: str, command: list[str]) -> dict[str, Any]:
+        return {
+            "name": name,
+            "command": command,
+            "outcome": "passed",
+            "exitCode": 0,
+        }
+
+    return [
+        passed(
+            "package-self-check",
+            ["python", "conformance/ofarm_pkg_contract_check.py"],
+        ),
+        passed("pip-check", ["python", "-m", "pip", "check"]),
+        passed(
+            "environment-preflight",
+            ["internal:exact-environment-preflight"],
+        ),
+        passed(
+            "verify-pinned-test-inventory",
+            ["internal:pinned-test-inventory"],
+        ),
+        passed(
+            "verify-warning-inventory",
+            ["internal:exact-warning-inventory"],
+        ),
+        passed(
+            "complete-kernel-tests",
+            [
+                "python",
+                "-m",
+                "pytest",
+                paths["testRoot"],
+                "-q",
+                "-p",
+                "no:cacheprovider",
+                "-p",
+                "conformance.review_baseline_pytest",
+                "--review-baseline-results",
+                "kernel-test-results.json",
+            ],
+        ),
+        passed(
+            "verify-generated-manifest",
+            ["python", "-m", "kernel.manifest", "--verify-generated"],
+        ),
+        passed(
+            "verify-test-store-postgresql",
+            ["internal:postgresql-server-identity"],
+        ),
+        passed(
+            "verify-post-run-git-state",
+            ["internal:post-run-git-integrity"],
+        ),
+    ]
 
 
 def _validate_baseline_evidence(
@@ -794,14 +920,18 @@ def _validate_baseline_evidence(
         raise PublicationPolicyError("review baseline evidence schema is not exact")
     run = _object(evidence.get("run"), "review baseline run")
     _exact_keys(run, {"startedAt", "finishedAt", "canonicalCommand", "outcome"}, "review baseline run")
+    started_at = _canonical_utc_timestamp(
+        run.get("startedAt"),
+        "review baseline startedAt",
+    )
+    finished_at = _canonical_utc_timestamp(
+        run.get("finishedAt"),
+        "review baseline finishedAt",
+    )
     if (
         run.get("canonicalCommand") != config["canonicalCommand"]
         or run.get("outcome") != "passed"
-        or any(
-            not isinstance(run.get(field), str)
-            or TIMESTAMP.fullmatch(run[field]) is None
-            for field in ("startedAt", "finishedAt")
-        )
+        or finished_at < started_at
     ):
         raise PublicationPolicyError("review baseline run claim is inconsistent")
 
@@ -878,31 +1008,8 @@ def _validate_baseline_evidence(
     )
 
     steps = _array(evidence.get("steps"), "review baseline steps")
-    expected_step_names = [
-        "package-self-check",
-        "pip-check",
-        "environment-preflight",
-        "verify-pinned-test-inventory",
-        "verify-warning-inventory",
-        "complete-kernel-tests",
-        "verify-generated-manifest",
-        "verify-test-store-postgresql",
-        "verify-post-run-git-state",
-    ]
-    if len(steps) != len(expected_step_names):
-        raise PublicationPolicyError("review baseline step inventory is incomplete")
-    for step, expected_name in zip(steps, expected_step_names, strict=True):
-        item = _object(step, "review baseline step")
-        _exact_keys(item, {"name", "command", "outcome", "exitCode"}, "review baseline step")
-        if (
-            item.get("name") != expected_name
-            or item.get("outcome") != "passed"
-            or item.get("exitCode") != 0
-            or not isinstance(item.get("command"), list)
-            or not item.get("command")
-            or any(not isinstance(argument, str) or not argument for argument in item["command"])
-        ):
-            raise PublicationPolicyError("review baseline step did not pass exactly")
+    if steps != _expected_review_steps(config):
+        raise PublicationPolicyError("review baseline steps differ from trusted policy")
 
     _validate_produced_artifact_binding(evidence.get("producedArtifacts"), results_path)
     if evidence.get("producedArtifactsNote") != (
@@ -916,6 +1023,51 @@ def _validate_baseline_evidence(
     ]
     if evidence.get("verifiedArtifacts") != expected_verified:
         raise PublicationPolicyError("review baseline verified artifacts differ")
+
+
+def _validate_producer_comparison(
+    comparison: dict[str, Any],
+    *,
+    input_root: Path,
+    loaded: dict[str, tuple[dict[str, Any], dict[str, Any]]],
+) -> None:
+    review_policy = _review_policy_module()
+    normalized: dict[str, bytes] = {}
+    for run in ("run-1", "run-2"):
+        try:
+            normalized[run] = review_policy._normalised_evidence(loaded[run][1])
+        except ValueError as exc:
+            raise PublicationPolicyError(
+                "producer comparison input cannot be normalized"
+            ) from exc
+    expected = {
+        "schemaVersion": review_policy.COMPARISON_SCHEMA,
+        "normalizationPolicy": review_policy._normalization_policy(),
+        "left": {
+            "rawSha256": _sha256_hex_file(
+                input_root
+                / "review-baseline/run-1/review-baseline-evidence.json"
+            ),
+            "normalizedSha256": review_policy._sha256_bytes(
+                normalized["run-1"]
+            ),
+        },
+        "right": {
+            "rawSha256": _sha256_hex_file(
+                input_root
+                / "review-baseline/run-2/review-baseline-evidence.json"
+            ),
+            "normalizedSha256": review_policy._sha256_bytes(
+                normalized["run-2"]
+            ),
+        },
+        "equivalent": True,
+        "differenceJsonPointers": [],
+    }
+    if normalized["run-1"] != normalized["run-2"] or comparison != expected:
+        raise PublicationPolicyError(
+            "producer comparison differs from validated source evidence"
+        )
 
 
 def stage_conformance_evidence(
@@ -961,12 +1113,38 @@ def stage_conformance_evidence(
         )
         loaded[run] = (results, evidence)
 
+    producer_comparison = _read_json_object(
+        input_root / "review-baseline/equivalence.json",
+        "producer review baseline comparison",
+    )
+    _validate_producer_comparison(
+        producer_comparison,
+        input_root=input_root,
+        loaded=loaded,
+    )
+
     root = _fresh_output_root(output_root)
     for run in ("run-1", "run-2"):
-        source = input_root / "review-baseline" / run
         target = root / "review-baseline" / run
-        for name in ("kernel-test-results.json", "review-baseline-evidence.json"):
-            _copy_regular_file(source / name, target / name, maximum=MAX_JSON_BYTES)
+        results, source_evidence = loaded[run]
+        staged_results = target / "kernel-test-results.json"
+        _write_canonical_json(staged_results, results)
+        staged_evidence = copy.deepcopy(source_evidence)
+        staged_evidence["producedArtifacts"] = _produced_artifact_binding(
+            staged_results
+        )
+        staged_evidence_path = target / "review-baseline-evidence.json"
+        _write_canonical_json(staged_evidence_path, staged_evidence)
+        _validate_baseline_evidence(
+            staged_evidence,
+            results=results,
+            results_path=staged_results,
+            config=config,
+            expected_inventory=expected_inventory,
+            source_commit=source_commit,
+            source_run_id=source_run_id,
+            source_run_attempt=source_run_attempt,
+        )
     comparison_path = root / "review-baseline" / "equivalence.json"
     try:
         comparison_result = review_policy.compare_evidence(
@@ -978,9 +1156,17 @@ def stage_conformance_evidence(
         raise PublicationPolicyError("trusted review baseline comparison failed") from exc
     if comparison_result != 0:
         raise PublicationPolicyError("trusted review baseline comparison is not equivalent")
-    producer_comparison = input_root / "review-baseline/equivalence.json"
-    if _sha256_hex_file(producer_comparison) != _sha256_hex_file(comparison_path):
-        raise PublicationPolicyError("producer comparison differs from trusted comparison")
+    comparison_document = _read_json_object(
+        comparison_path,
+        "trusted review baseline comparison",
+    )
+    try:
+        comparison_path.unlink()
+    except OSError as exc:
+        raise PublicationPolicyError(
+            "trusted review baseline comparison cannot be finalized"
+        ) from exc
+    _write_canonical_json(comparison_path, comparison_document)
 
     first_results = loaded["run-1"][0]
     outcomes = _array(
@@ -1075,34 +1261,45 @@ def validate_native_claims(
         raise PublicationPolicyError("native reproducibility identity is inconsistent")
     expected_artifacts = _array(report.get("artifacts"), "native reproducibility artifacts")
     observed_sets: list[list[dict[str, Any]]] = []
-    for build in ("first", "second"):
-        identities: list[dict[str, Any]] = []
-        for name, (maximum, expected_mode) in native_policy.ARTIFACT_CONTRACTS.items():
-            path = root / build / name
-            try:
-                file_stat = path.stat(follow_symlinks=False)
-                if (
-                    not stat.S_ISREG(file_stat.st_mode)
-                    or not 0 < file_stat.st_size <= maximum
-                    or format(stat.S_IMODE(file_stat.st_mode), "04o") != expected_mode
-                ):
-                    raise PublicationPolicyError(
-                        f"published native artifact {build}/{name} violates its contract"
-                    )
-                data = path.read_bytes()
-            except OSError as exc:
-                raise PublicationPolicyError(
-                    f"published native artifact {build}/{name} is unreadable"
-                ) from exc
-            identities.append(
-                {
-                    "name": name,
-                    "mode": expected_mode,
-                    "sha256": "sha256:" + hashlib.sha256(data).hexdigest(),
-                    "size": len(data),
-                }
+    with tempfile.TemporaryDirectory(prefix="ofarm-native-claims-") as directory:
+        scratch = Path(directory)
+        for build in ("first", "second"):
+            _extract_installed_artifacts(
+                root / f"{build}-artifacts.tar",
+                scratch / build,
+                native_policy,
             )
-        observed_sets.append(identities)
+            identities: list[dict[str, Any]] = []
+            for name, (maximum, expected_mode) in (
+                native_policy.ARTIFACT_CONTRACTS.items()
+            ):
+                path = scratch / build / name
+                try:
+                    file_stat = path.stat(follow_symlinks=False)
+                    if (
+                        not stat.S_ISREG(file_stat.st_mode)
+                        or not 0 < file_stat.st_size <= maximum
+                        or format(stat.S_IMODE(file_stat.st_mode), "04o")
+                        != expected_mode
+                    ):
+                        raise PublicationPolicyError(
+                            "published native artifact "
+                            f"{build}/{name} violates its contract"
+                        )
+                    data = path.read_bytes()
+                except OSError as exc:
+                    raise PublicationPolicyError(
+                        f"published native artifact {build}/{name} is unreadable"
+                    ) from exc
+                identities.append(
+                    {
+                        "name": name,
+                        "mode": expected_mode,
+                        "sha256": "sha256:" + hashlib.sha256(data).hexdigest(),
+                        "size": len(data),
+                    }
+                )
+            observed_sets.append(identities)
     if observed_sets[0] != expected_artifacts or observed_sets[1] != expected_artifacts:
         raise PublicationPolicyError(
             "published native files differ from trusted reproducibility"
@@ -1189,6 +1386,86 @@ def _extract_installed_artifacts(
         raise PublicationPolicyError("installed-artifact archive is malformed") from exc
 
 
+def _write_installed_artifacts_archive(
+    source_directory: Path,
+    archive_path: Path,
+    native_policy: Any,
+) -> None:
+    """Write a deterministic mode-bearing archive from trusted extracted files."""
+
+    contracts = native_policy.ARTIFACT_CONTRACTS
+    if _regular_file_inventory(source_directory) != frozenset(contracts):
+        raise PublicationPolicyError(
+            "trusted installed-artifact source inventory is not exact"
+        )
+    archive_path.parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = -1
+    try:
+        descriptor = os.open(archive_path, flags, 0o600)
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb") as raw_archive:
+            descriptor = -1
+            with tarfile.open(
+                fileobj=raw_archive,
+                mode="w:",
+                format=tarfile.USTAR_FORMAT,
+            ) as archive:
+                for name in sorted(contracts):
+                    maximum, expected_mode = contracts[name]
+                    source_path = source_directory / name
+                    source_stat = source_path.stat(follow_symlinks=False)
+                    if (
+                        not stat.S_ISREG(source_stat.st_mode)
+                        or not 0 < source_stat.st_size <= maximum
+                        or format(stat.S_IMODE(source_stat.st_mode), "04o")
+                        != expected_mode
+                    ):
+                        raise PublicationPolicyError(
+                            "trusted installed-artifact source violates its contract"
+                        )
+                    member = tarfile.TarInfo(name)
+                    member.size = source_stat.st_size
+                    member.mode = int(expected_mode, 8)
+                    member.uid = 0
+                    member.gid = 0
+                    member.uname = ""
+                    member.gname = ""
+                    member.mtime = 0
+                    with source_path.open("rb") as source:
+                        archive.addfile(member, source)
+        archive_stat = archive_path.stat(follow_symlinks=False)
+        if (
+            not stat.S_ISREG(archive_stat.st_mode)
+            or not 0 < archive_stat.st_size <= MAX_INSTALLED_ARCHIVE_BYTES
+        ):
+            raise PublicationPolicyError(
+                "trusted installed-artifact archive is not bounded regular data"
+            )
+    except (OSError, tarfile.TarError) as exc:
+        raise PublicationPolicyError(
+            "trusted installed-artifact archive cannot be written"
+        ) from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _remove_installed_artifact_directory(
+    directory: Path,
+    native_policy: Any,
+) -> None:
+    try:
+        for name in native_policy.ARTIFACT_CONTRACTS:
+            (directory / name).unlink()
+        directory.rmdir()
+    except OSError as exc:
+        raise PublicationPolicyError(
+            "trusted installed-artifact staging cannot be finalized"
+        ) from exc
+
+
 def stage_native_evidence(
     *,
     input_root: Path,
@@ -1252,6 +1529,14 @@ def stage_native_evidence(
             raise PublicationPolicyError(
                 f"producer native {name} differs from trusted reconstruction"
             )
+    for build in ("first", "second"):
+        _write_installed_artifacts_archive(
+            root / build,
+            root / f"{build}-artifacts.tar",
+            native_policy,
+        )
+    for build in ("first", "second"):
+        _remove_installed_artifact_directory(root / build, native_policy)
     validate_native_claims(root, platform=platform, source_commit=source_commit)
     if _regular_file_inventory(root) != NATIVE_AUTHORITATIVE_FILES:
         raise PublicationPolicyError("trusted native staging inventory is not exact")
