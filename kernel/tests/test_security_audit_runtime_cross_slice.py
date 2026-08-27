@@ -74,8 +74,10 @@ REFUSED_TOKEN = "TOKEN-CANARY-REFUSED"
 UNAVAILABLE_TOKEN = "TOKEN-CANARY-UNAVAILABLE"
 UNKNOWN_ISSUER = "https://issuer-canary.example.test/tenant"
 UNKNOWN_SUBJECT = "SUBJECT-CANARY-UNKNOWN"
-BODY_CANARY = b"BODY-CANARY TENANT-CANARY PARTY-CANARY DSN-CANARY"
+BODY_CANARY = b"BODY-CANARY TENANT-CANARY PARTY-CANARY"
 ROUTE_CANARY = "ROUTE-CANARY"
+DSN_CANARY = "DSN-LABEL-CANARY"
+PASSWORD_CANARY = "PASSWORD-CANARY"
 EXCEPTION_CANARY = "EXCEPTION-CANARY"
 PRODUCER_OPTIONS = "-c statement_timeout=2000 -c lock_timeout=250"
 
@@ -148,7 +150,8 @@ class _SwitchableAuditFactory:
         self._failures = 0
         self._refused = psycopg.conninfo.make_conninfo(
             dsn,
-            host=f"/tmp/ofarm-cross-slice-refused-{uuid4().hex}",
+            host=f"/tmp/ofarm-cross-slice-{DSN_CANARY}-{uuid4().hex}",
+            password=PASSWORD_CANARY,
         )
 
     def refuse_once(self) -> None:
@@ -630,9 +633,12 @@ def test_post_binding_body_failure_rolls_back_without_audit(cross_slice: _Harnes
 
 def test_audit_failure_denies_then_later_lane_success_closes_gap(
     cross_slice: _Harness,
+    capsys: pytest.CaptureFixture[str],
 ):
     before = _audit_events(cross_slice)
     head = _knowledge_head(cross_slice.target, cross_slice.authority.tenant_id)
+    resolver_calls = cross_slice.resolver.calls
+    boundary_counts = cross_slice.boundary.counts
     records = cross_slice.authentication_appender.snapshot()
     cross_slice.authentication_factory.refuse_once()
     failed = _request(cross_slice, MALFORMED_TOKEN)
@@ -640,6 +646,8 @@ def test_audit_failure_denies_then_later_lane_success_closes_gap(
     assert cross_slice.health.readiness is SecurityAuditReadiness.NOT_READY
     assert cross_slice.gap.state is SecurityAuditGapState.OPEN
     assert cross_slice.authentication_appender.snapshot() == records
+    assert cross_slice.resolver.calls == resolver_calls
+    assert cross_slice.boundary.counts == boundary_counts
     assert _knowledge_head(cross_slice.target, cross_slice.authority.tenant_id) == head
 
     recovered = _request(cross_slice, REFUSED_TOKEN)
@@ -655,7 +663,22 @@ def test_audit_failure_denies_then_later_lane_success_closes_gap(
     assert cross_slice.authentication_appender.snapshot() == records + (
         ("VERIFICATION_REFUSED", failures[0].event_id),
     )
+    assert cross_slice.resolver.calls == resolver_calls
+    assert cross_slice.boundary.counts == boundary_counts
     assert _knowledge_head(cross_slice.target, cross_slice.authority.tenant_id) == head
+    captured = capsys.readouterr()
+    surface = repr([asdict(event) for event in delta])
+    surface += failed.text + recovered.text + captured.out + captured.err
+    assert all(
+        value not in surface
+        for value in (
+            MALFORMED_TOKEN,
+            REFUSED_TOKEN,
+            DSN_CANARY,
+            PASSWORD_CANARY,
+            EXCEPTION_CANARY,
+        )
+    )
 
 
 def test_concurrent_denial_and_commit_are_isolated_and_leak_free(
@@ -703,6 +726,7 @@ def test_concurrent_denial_and_commit_are_isolated_and_leak_free(
     surface += captured.out + captured.err
     forbidden = (
         VALID_TOKEN,
+        UNKNOWN_IDENTITY_TOKEN,
         MALFORMED_TOKEN,
         REFUSED_TOKEN,
         UNAVAILABLE_TOKEN,
@@ -718,7 +742,8 @@ def test_concurrent_denial_and_commit_are_isolated_and_leak_free(
         "BODY-CANARY",
         "TENANT-CANARY",
         "PARTY-CANARY",
-        "DSN-CANARY",
+        DSN_CANARY,
+        PASSWORD_CANARY,
         EXCEPTION_CANARY,
     )
     assert all(value not in surface for value in forbidden)

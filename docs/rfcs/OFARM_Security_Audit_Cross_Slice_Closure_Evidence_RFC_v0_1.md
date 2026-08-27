@@ -1,7 +1,7 @@
 # OFARM Security Audit Cross-Slice Closure Evidence RFC v0.1
 
-**Status:** Phase B implementation authorized in draft PR #344; exact-head
-implementation review pending
+**Status:** Phase B implementation in draft PR #344; the exact-head merge stop
+rule in section 14.5 applies
 
 **Decision:** `ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001`
 
@@ -673,13 +673,14 @@ the same path; a fourth path requires reapproval.
   review `5041228763`; its disposition is zero Blockers, no new Follow-ups,
   and zero Preferences at head
   `acfb97bf025f7a06dbc9039c0d0fa0d5023db22a`.
-- Blockers: none known in the implementation before exact-head Phase B review.
+- Phase B exact-head dispositions are recorded on PR #344. Only the most
+  recent unsuperseded review of the live head controls the merge stop rule.
 - Follow-ups: protected output custody; production prerequisite evidence;
   issue #334; complete execution-root/source-capability governance; and final
   issue #192 closure audit.
 - Preferences: none.
-- Phase B: authorized only for this decision and draft PR #344; implementation
-  review and new-head gates remain pending.
+- Phase B: authorized and implemented only for this decision and draft PR
+  #344; section 14.5 controls exact-head review, gates, and merge.
 - Production composition: unauthorized and non-deployable.
 
 ### 14.3 Approval record
@@ -710,8 +711,9 @@ mechanically from 3,570 to 3,581 entries. No production path is changed.
 
 Local execution intentionally skips all eleven nodes when the required hosted
 tenant or audit PostgreSQL admin route is absent. Hosted acceptance requires
-all eleven nodes to execute and pass. Exact-head review, admitted hosted gates,
-trusted publication, and the final scope/cancellation report remain required.
+all eleven nodes to execute and pass. Section 14.5 makes exact-head review,
+admitted hosted gates, trusted publication, and the final scope/cancellation
+report prerequisites to merge.
 
 ### 14.5 Merge stop rule
 
