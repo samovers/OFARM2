@@ -39,6 +39,7 @@ from deployment.postgresql.run_security_audit_process_crash import (
     _freeze_module_status,
     run_fixed_security_audit_process_crash_cli,
 )
+from deployment.postgresql.security_audit_query import SecurityAuditQueryRunner
 from deployment.postgresql.security_audit_process_crash import (
     ADMISSION_SQL,
     APPEND_GAP_SQL,
@@ -890,25 +891,25 @@ def live_process_crash_audit(tmp_path_factory) -> _LiveAudit:
         _remove_container(container)
 
 
-def _live_event_rows(reader_conninfo: str) -> list[tuple[object, ...]]:
-    with psycopg.connect(reader_conninfo, autocommit=True) as connection:
-        return connection.execute(
-            """
-            SELECT event_id,
-                   event_kind,
-                   interval_start,
-                   interval_end,
-                   interval_event_count,
-                   interval_count_unknown,
-                   reason,
-                   correlation_hmac_value,
-                   access_purpose
-            FROM ofarm_security.query_operational_security_events(
-                NULL, NULL, NULL, 100, 1048576
-            )
-            ORDER BY observed_at, event_id
-            """
-        ).fetchall()
+def _live_gap_rows(live: _LiveAudit) -> list[tuple[object, ...]]:
+    events = SecurityAuditQueryRunner().run(
+        live.control_raw_conninfo, live.reader_conninfo, None
+    ).events
+    return [
+        (
+            event.event_id,
+            event.event_kind,
+            event.interval_start,
+            event.interval_end,
+            event.interval_event_count,
+            event.interval_count_unknown,
+            event.reason,
+            event.correlation_hmac_value,
+            event.access_purpose,
+        )
+        for event in events
+        if event.event_kind == "AUDIT_GAP"
+    ]
 
 
 def test_live_postgresql_records_one_unknown_count_gap(
@@ -926,7 +927,7 @@ def test_live_postgresql_records_one_unknown_count_gap(
     assert report.interval_start == start
     assert report.interval_end > start
     assert report.observed_at >= report.interval_end
-    rows = _live_event_rows(live_process_crash_audit.reader_conninfo)
+    rows = _live_gap_rows(live_process_crash_audit)
     matching = [row for row in rows if row[0] == report.event_id]
     assert matching == [
         (
@@ -1142,7 +1143,7 @@ def test_live_request_bound_append_rolls_back_on_process_death(
     tmp_path: Path,
     termination: signal.Signals,
 ) -> None:
-    before = _live_event_rows(live_process_crash_audit.reader_conninfo)
+    before = _live_gap_rows(live_process_crash_audit)
     relay_directory = tmp_path / f"relay-{termination.name.lower()}"
     relay_directory.mkdir(mode=0o777)
     relay = _AppendBarrierRelay(
@@ -1201,7 +1202,7 @@ def test_live_request_bound_append_rolls_back_on_process_death(
         assert command.returncode == -signal.SIGTERM
         assert stdout == b""
         assert stderr == b""
-    assert _live_event_rows(live_process_crash_audit.reader_conninfo) == before
+    assert _live_gap_rows(live_process_crash_audit) == before
 
 
 def test_actual_module_entry_sigint_stress_has_only_phase_owned_status() -> None:
