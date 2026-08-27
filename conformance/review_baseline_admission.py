@@ -9,6 +9,7 @@ import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
@@ -307,16 +308,54 @@ def _live_pull_request(
     return live_pr
 
 
+def _live_base_sha(
+    repository: str,
+    live_base: JsonObject,
+    fetch_json: FetchJson,
+) -> str:
+    base_repository = _object(
+        live_base.get("repo"), "live pull-request base repository"
+    )
+    if base_repository.get("full_name") != repository:
+        raise AdmissionError("live pull-request base repository changed")
+    base_branch = _text(live_base.get("ref"), "live pull-request base ref")
+    base_ref_name = f"refs/heads/{base_branch}"
+    base_ref_path = urllib.parse.quote(f"heads/{base_branch}", safe="/")
+    base_ref = _object(
+        fetch_json(f"/repos/{repository}/git/ref/{base_ref_path}"),
+        "live pull-request base ref",
+    )
+    if base_ref.get("ref") != base_ref_name:
+        raise AdmissionError("live pull-request base ref identity changed")
+    base_object = _object(base_ref.get("object"), "live base ref object")
+    if base_object.get("type") != "commit":
+        raise AdmissionError("live pull-request base ref must target a commit")
+    return _full_sha(base_object.get("sha"), "live pull-request base sha")
+
+
 def _bound_merge(
     repository: str,
     live_pr: JsonObject,
     reviewed_head_sha: str,
     fetch_json: FetchJson,
 ) -> tuple[str, str]:
+    pr_number = _positive_int(live_pr.get("number"), "live pull-request number")
     live_base = _object(live_pr.get("base"), "live pull-request base")
-    base_sha = _full_sha(live_base.get("sha"), "live pull-request base sha")
+    base_sha = _live_base_sha(repository, live_base, fetch_json)
+    merge_ref_name = f"refs/pull/{pr_number}/merge"
+    merge_ref = _object(
+        fetch_json(f"/repos/{repository}/git/ref/pull/{pr_number}/merge"),
+        "live execution merge ref",
+    )
+    if merge_ref.get("ref") != merge_ref_name:
+        raise AdmissionError("live execution merge ref identity changed")
+    merge_object = _object(
+        merge_ref.get("object"), "live execution merge ref object"
+    )
+    if merge_object.get("type") != "commit":
+        raise AdmissionError("live execution merge ref must target a commit")
     execution_merge_sha = _full_sha(
-        live_pr.get("merge_commit_sha"), "live execution merge sha"
+        merge_object.get("sha"), "live execution merge sha"
     )
     merge_commit = _object(
         fetch_json(f"/repos/{repository}/git/commits/{execution_merge_sha}"),
