@@ -71,6 +71,7 @@ BASE_SHA = "c" * 40
 MERGE_SHA = "d" * 40
 POLICY_SHA = "e" * 40
 REPOSITORY = "samovers/OFARM2"
+BASE_REF = "main"
 PR_NUMBER = 336
 COMMENT_ID = 12345
 COMMENT_NODE_ID = "IC_kwDOExample"
@@ -403,7 +404,12 @@ def live_reader(
     *,
     body: str | None = None,
     head_sha: str = HEAD_SHA,
-    base_sha: str = BASE_SHA,
+    pull_base_sha: object = BASE_SHA,
+    pull_base_ref: object = BASE_REF,
+    pull_base_repository: object = REPOSITORY,
+    base_git_ref_name: object = f"refs/heads/{BASE_REF}",
+    base_git_ref_type: object = "commit",
+    base_git_ref_sha: object = BASE_SHA,
     merge_sha: object = MERGE_SHA,
     merge_ref_name: object = f"refs/pull/{PR_NUMBER}/merge",
     merge_ref_type: object = "commit",
@@ -416,14 +422,29 @@ def live_reader(
     minimized: bool = False,
 ):
     comment_body = admission_body() if body is None else body
-    parent_shas = merge_parents or [base_sha, head_sha]
+    parent_base_sha = (
+        base_git_ref_sha if isinstance(base_git_ref_sha, str) else BASE_SHA
+    )
+    parent_shas = merge_parents or [parent_base_sha, head_sha]
+    base_ref_path = pull_base_ref if isinstance(pull_base_ref, str) else BASE_REF
     responses = {
         f"/repos/{REPOSITORY}/pulls/{PR_NUMBER}": {
             "number": PR_NUMBER,
             "state": "open",
             "head": {"sha": head_sha},
-            "base": {"sha": base_sha},
+            "base": {
+                "sha": pull_base_sha,
+                "ref": pull_base_ref,
+                "repo": {"full_name": pull_base_repository},
+            },
             "merge_commit_sha": merge_sha,
+        },
+        f"/repos/{REPOSITORY}/git/ref/heads/{base_ref_path}": {
+            "ref": base_git_ref_name,
+            "object": {
+                "type": base_git_ref_type,
+                "sha": base_git_ref_sha,
+            },
         },
         f"/repos/{REPOSITORY}/git/ref/pull/{PR_NUMBER}/merge": {
             "ref": merge_ref_name,
@@ -913,6 +934,35 @@ class ExecutorAdmissionTests(unittest.TestCase):
         decision = admitted_gate(merge_sha=None)
         self.assertTrue(decision.dispatch)
         self.assertEqual(decision.inputs["execution_merge_sha"], MERGE_SHA)
+
+    def test_stale_pull_base_sha_uses_authenticated_live_base_ref(self) -> None:
+        decision = admitted_gate(pull_base_sha=NEXT_SHA)
+        self.assertTrue(decision.dispatch)
+        self.assertEqual(decision.inputs["base_sha"], BASE_SHA)
+
+    def test_live_base_repository_is_exact(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "base repository changed"):
+            admitted_gate(pull_base_repository="attacker/fork")
+
+    def test_live_base_ref_name_is_exact(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "base ref identity changed"):
+            admitted_gate(base_git_ref_name="refs/heads/other")
+
+    def test_live_base_ref_must_target_commit(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "must target a commit"):
+            admitted_gate(base_git_ref_type="tag")
+
+    def test_live_base_ref_sha_must_be_full(self) -> None:
+        with self.assertRaisesRegex(AdmissionError, "full lowercase commit SHA"):
+            admitted_gate(base_git_ref_sha=None)
+
+    def test_live_base_branch_with_slash_is_resolved_exactly(self) -> None:
+        decision = admitted_gate(
+            pull_base_ref="release/current",
+            base_git_ref_name="refs/heads/release/current",
+        )
+        self.assertTrue(decision.dispatch)
+        self.assertEqual(decision.inputs["base_sha"], BASE_SHA)
 
     def test_execution_merge_ref_name_is_exact(self) -> None:
         with self.assertRaisesRegex(AdmissionError, "ref identity changed"):
