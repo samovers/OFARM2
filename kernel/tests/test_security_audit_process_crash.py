@@ -798,7 +798,7 @@ def live_process_crash_audit(tmp_path_factory) -> _LiveAudit:
             f"{socket_directory}:/ofarm-pg-socket",
             image,
             "-c",
-            "unix_socket_directories=/ofarm-pg-socket",
+            "unix_socket_directories=/var/run/postgresql,/ofarm-pg-socket",
         )
         admin_dsn = _socket_dsn(
             socket_directory,
