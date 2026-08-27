@@ -74,6 +74,7 @@ INTERVAL_END = INTERVAL_START + timedelta(seconds=3)
 OBSERVED_AT = INTERVAL_END + timedelta(microseconds=1)
 PURGE_AFTER = OBSERVED_AT + timedelta(days=30)
 EVENT_ID = UUID("018f0f2a-6a38-7d9b-a4c8-33e9f27b2f70")
+FINAL_POSTGRES_LISTEN_ADDRESSES = "127.0.0.1"
 
 _INVALID = b"security-audit process-crash reconciliation command is invalid\n"
 _REFUSED = (
@@ -763,12 +764,41 @@ def _wait_for_socket_postgres(admin_dsn: str) -> None:
                 autocommit=True,
                 connect_timeout=1,
             ) as connection:
-                assert connection.execute("SELECT 1").fetchone() == (1,)
-            return
+                listen_addresses = connection.execute("SHOW listen_addresses").fetchone()
+            if listen_addresses == (FINAL_POSTGRES_LISTEN_ADDRESSES,):
+                return
+            last_error = AssertionError(
+                "socket-mounted PostgreSQL is still the bootstrap server: "
+                f"listen_addresses={listen_addresses!r}"
+            )
         except psycopg.Error as error:
             last_error = error
         time.sleep(0.2)
     raise AssertionError("socket-mounted PostgreSQL did not start") from last_error
+
+
+def test_socket_postgres_readiness_waits_for_final_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed_listen_addresses = iter(["", FINAL_POSTGRES_LISTEN_ADDRESSES])
+    attempts: list[str] = []
+    class _ReadinessConnection:
+        def __enter__(self) -> _ReadinessConnection:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def execute(self, _query: str) -> _Cursor:
+            listen_addresses = next(observed_listen_addresses)
+            attempts.append(listen_addresses)
+            return _Cursor([(listen_addresses,)])
+    monkeypatch.setattr(
+        psycopg, "connect", lambda *_args, **_kwargs: _ReadinessConnection()
+    )
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+    _wait_for_socket_postgres("postgresql://unused")
+    assert attempts == ["", FINAL_POSTGRES_LISTEN_ADDRESSES]
 
 
 @pytest.fixture(scope="module")
@@ -799,6 +829,8 @@ def live_process_crash_audit(tmp_path_factory) -> _LiveAudit:
             image,
             "-c",
             "unix_socket_directories=/var/run/postgresql,/ofarm-pg-socket",
+            "-c",
+            f"listen_addresses={FINAL_POSTGRES_LISTEN_ADDRESSES}",
         )
         admin_dsn = _socket_dsn(
             socket_directory,
