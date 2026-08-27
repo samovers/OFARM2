@@ -1,6 +1,7 @@
 # OFARM Security Audit Cross-Slice Closure Evidence RFC v0.1
 
-**Status:** Phase A design contract; Phase B is not authorized
+**Status:** Phase B implementation authorized in draft PR #344; exact-head
+implementation review pending
 
 **Decision:** `ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001`
 
@@ -668,25 +669,56 @@ the same path; a fourth path requires reapproval.
 
 ### 14.2 Current review disposition
 
-- Blockers: none known before exact-head Phase A review.
+- Phase A exact-head review `5042579603` supersedes and withdraws erroneous
+  review `5041228763`; its disposition is zero Blockers, no new Follow-ups,
+  and zero Preferences at head
+  `acfb97bf025f7a06dbc9039c0d0fa0d5023db22a`.
+- Blockers: none known in the implementation before exact-head Phase B review.
 - Follow-ups: protected output custody; production prerequisite evidence;
   issue #334; complete execution-root/source-capability governance; and final
   issue #192 closure audit.
 - Preferences: none.
-- Phase B: not authorized.
+- Phase B: authorized only for this decision and draft PR #344; implementation
+  review and new-head gates remain pending.
 - Production composition: unauthorized and non-deployable.
 
-### 14.3 Merge stop rule
+### 14.3 Approval record
 
-Phase A does not merge as an implementation. After this exact contract has a
-zero-Blocker review and the required admitted hosted gates and trusted
-publication pass, present one complete decision card naming the existing draft
-pull request and stop for the exact task-user approval sentence.
+The complete version-1 decision card was displayed in the governing Codex task
+after the exact Phase A contract, zero-Blocker review, admitted hosted source
+run `33066325206`, and trusted publication run `33067812712` were directly
+retrievable. After reading the complete review chain, the task user supplied
+this exact sentence as the entire later message:
 
-If Phase B is later approved, merge only after every invariant passes, the
-exact three-path envelope is preserved, the exact head has zero demonstrated
-Blockers, required admitted hosted gates and publication are green, the live
-card and approval remain retrievable in order, no later cancellation exists,
-and the required pre-merge scope report is posted. New ideas, Preferences,
-hypothetical deployment hardening, and separate trust boundaries become
-Follow-ups and do not reopen this decision.
+```text
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001 version 1.
+```
+
+That approval authorizes repository implementation only in draft PR #344 and
+only inside section 11.1's three-path envelope. It does not authorize
+deployment, release, production access, production composition, current or
+default promotion, certification, current compliance, issue #192 closure, or
+a security waiver.
+
+### 14.4 Implemented evidence surface
+
+The approved implementation adds one focused, test-owned ASGI composition in
+`kernel/tests/test_security_audit_runtime_cross_slice.py`. Its eleven fixed
+pytest nodes execute all thirteen `XSLICE-*` invariants through the accepted
+tenant and audit fixtures. The canonical review-baseline inventory is updated
+mechanically from 3,570 to 3,581 entries. No production path is changed.
+
+Local execution intentionally skips all eleven nodes when the required hosted
+tenant or audit PostgreSQL admin route is absent. Hosted acceptance requires
+all eleven nodes to execute and pass. Exact-head review, admitted hosted gates,
+trusted publication, and the final scope/cancellation report remain required.
+
+### 14.5 Merge stop rule
+
+Merge only after every invariant passes, the exact three-path envelope is
+preserved, the exact head has zero demonstrated Blockers, required admitted
+hosted gates and publication are green, the live card and approval remain
+retrievable in order, no later cancellation exists, and the required pre-merge
+scope report is posted. New ideas, Preferences, hypothetical deployment
+hardening, and separate trust boundaries become Follow-ups and do not reopen
+this decision.
