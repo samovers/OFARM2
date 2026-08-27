@@ -46,6 +46,7 @@ PROVISIONAL_ARTIFACT_LIMITS = {
 }
 MAX_JSON_BYTES = 64 * 1024 * 1024
 MAX_INSTALLED_ARCHIVE_BYTES = 32 * 1024 * 1024
+MAX_SOURCE_INPUT_BYTES = 8 * 1024 * 1024
 POLICY_ROOT = Path(__file__).resolve().parents[1]
 PLATFORM_PUBLICATION_FILE = "platform-mvp-evidence.json"
 PLATFORM_PUBLICATION_SCHEMA = "ofarm.platform-mvp-publication-evidence.v1"
@@ -136,6 +137,20 @@ def _checked_api_url(value: str) -> str:
     ):
         raise PublicationPolicyError("GitHub API URL is not canonical HTTPS")
     return value.rstrip("/")
+
+
+def _checked_source_path(value: object) -> str:
+    if not isinstance(value, str) or not value or "\\" in value or "\x00" in value:
+        raise PublicationPolicyError("source input path is not canonical")
+    raw_parts = value.split("/")
+    parts = PurePosixPath(value).parts
+    if (
+        value.startswith("/")
+        or parts != tuple(raw_parts)
+        or any(part in {"", ".", ".."} for part in raw_parts)
+    ):
+        raise PublicationPolicyError("source input path is not canonical")
+    return value
 
 
 def _fresh_output_root(path: Path) -> Path:
@@ -324,6 +339,64 @@ def download_and_extract_artifact(
     _regular_file_inventory(root)
 
 
+def _download_authenticated_source_file(
+    *,
+    api_url: str,
+    repository: str,
+    source_commit: str,
+    source_path: object,
+    token: str,
+    response_factory: ResponseFactory | None = None,
+) -> bytes:
+    if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+        raise PublicationPolicyError("source commit is not a full lowercase SHA")
+    if not token or "\n" in token or "\r" in token:
+        raise PublicationPolicyError("source input token is absent or malformed")
+    api_url = _checked_api_url(api_url)
+    repository = _checked_repository(repository)
+    checked_path = _checked_source_path(source_path)
+    encoded_path = urllib.parse.quote(checked_path, safe="/")
+    query = urllib.parse.urlencode({"ref": source_commit})
+    request = urllib.request.Request(
+        f"{api_url}/repos/{repository}/contents/{encoded_path}?{query}",
+        headers={
+            "Accept": "application/vnd.github.raw+json",
+            "Accept-Encoding": "identity",
+            "User-Agent": "ofarm-evidence-publication",
+            "X-GitHub-Api-Version": GITHUB_API_VERSION,
+        },
+    )
+    request.add_unredirected_header("Authorization", f"Bearer {token}")
+    try:
+        response_context = (
+            response_factory(request)
+            if response_factory is not None
+            else urllib.request.build_opener(_HttpsOnlyRedirectHandler()).open(
+                request,
+                timeout=30,
+            )
+        )
+        payload = bytearray()
+        with response_context as response:  # type: ignore[attr-defined]
+            if getattr(response, "status", 200) != 200:
+                raise PublicationPolicyError("source input read did not return HTTP 200")
+            final_url = getattr(response, "geturl", lambda: request.full_url)()
+            if final_url != request.full_url:
+                raise PublicationPolicyError("source input read was redirected")
+            while True:
+                chunk = response.read(DOWNLOAD_CHUNK_BYTES)
+                if not chunk:
+                    break
+                payload.extend(chunk)
+                if len(payload) > MAX_SOURCE_INPUT_BYTES:
+                    raise PublicationPolicyError("source input exceeds its size limit")
+    except (OSError, urllib.error.URLError) as exc:
+        raise PublicationPolicyError("source input read failed") from exc
+    if not payload:
+        raise PublicationPolicyError("source input is empty")
+    return bytes(payload)
+
+
 def _regular_file_inventory(root: Path) -> frozenset[str]:
     if not root.is_dir() or root.is_symlink():
         raise PublicationPolicyError("evidence inventory root is not a directory")
@@ -348,6 +421,29 @@ def _review_policy_module():
     from conformance import run_review_baseline as review_policy
 
     return review_policy
+
+
+def _load_source_test_inventory(
+    payload: bytes,
+    *,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    review_policy = _review_policy_module()
+    document = _decode_json_object(payload, "authenticated source test inventory")
+    try:
+        expected = review_policy._inventory_document(
+            config["paths"]["testRoot"],
+            document.get("entries"),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise PublicationPolicyError(
+            "authenticated source test inventory is invalid"
+        ) from exc
+    if document != expected:
+        raise PublicationPolicyError(
+            "authenticated source test inventory is stale or non-canonical"
+        )
+    return document
 
 
 def _native_policy_module():
@@ -410,12 +506,11 @@ def _parse_finite_json_float(value: str) -> float:
     return parsed
 
 
-def _read_json_object(path: Path, label: str) -> dict[str, Any]:
+def _decode_json_object(payload: bytes, label: str) -> dict[str, Any]:
+    if not 0 < len(payload) <= MAX_JSON_BYTES:
+        raise PublicationPolicyError(f"{label} is not bounded JSON")
     try:
-        file_stat = path.stat(follow_symlinks=False)
-        if not stat.S_ISREG(file_stat.st_mode) or not 0 < file_stat.st_size <= MAX_JSON_BYTES:
-            raise PublicationPolicyError(f"{label} is not one bounded regular file")
-        text = path.read_bytes().decode("utf-8")
+        text = payload.decode("utf-8")
         value = json.loads(
             text,
             object_pairs_hook=_reject_duplicate_json_keys,
@@ -425,6 +520,17 @@ def _read_json_object(path: Path, label: str) -> dict[str, Any]:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
         raise PublicationPolicyError(f"{label} is not readable JSON") from exc
     return _object(value, label)
+
+
+def _read_json_object(path: Path, label: str) -> dict[str, Any]:
+    try:
+        file_stat = path.stat(follow_symlinks=False)
+        if not stat.S_ISREG(file_stat.st_mode) or not 0 < file_stat.st_size <= MAX_JSON_BYTES:
+            raise PublicationPolicyError(f"{label} is not one bounded regular file")
+        payload = path.read_bytes()
+    except OSError as exc:
+        raise PublicationPolicyError(f"{label} is not readable JSON") from exc
+    return _decode_json_object(payload, label)
 
 
 def _sha256_hex_file(path: Path) -> str:
@@ -890,6 +996,7 @@ def _validate_baseline_evidence(
     results_path: Path,
     config: dict[str, Any],
     expected_inventory: dict[str, Any],
+    source_inventory_sha256: str,
     source_commit: str,
     source_run_id: int,
     source_run_attempt: int,
@@ -976,7 +1083,7 @@ def _validate_baseline_evidence(
         },
         "testInventory": {
             "path": paths["testInventory"],
-            "sha256": _sha256_hex_file(POLICY_ROOT / paths["testInventory"]),
+            "sha256": source_inventory_sha256,
             "entriesSha256": expected_inventory["entriesSha256"],
             "entryCount": expected_inventory["entryCount"],
         },
@@ -1074,9 +1181,13 @@ def stage_conformance_evidence(
     *,
     input_root: Path,
     output_root: Path,
+    source_api_url: str,
+    source_repository: str,
+    source_token: str,
     source_commit: str,
     source_run_id: int,
     source_run_attempt: int,
+    source_response_factory: ResponseFactory | None = None,
 ) -> None:
     """Rebuild authoritative conformance claims with trusted policy code."""
 
@@ -1093,7 +1204,20 @@ def stage_conformance_evidence(
         POLICY_ROOT / "conformance/review_baseline_config.json",
         "trusted review baseline config",
     )
-    expected_inventory = review_policy._load_test_inventory(config)
+    paths = _object(config.get("paths"), "trusted review baseline paths")
+    source_inventory_payload = _download_authenticated_source_file(
+        api_url=source_api_url,
+        repository=source_repository,
+        source_commit=source_commit,
+        source_path=paths.get("testInventory"),
+        token=source_token,
+        response_factory=source_response_factory,
+    )
+    expected_inventory = _load_source_test_inventory(
+        source_inventory_payload,
+        config=config,
+    )
+    source_inventory_sha256 = hashlib.sha256(source_inventory_payload).hexdigest()
     loaded: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
     for run in ("run-1", "run-2"):
         run_root = input_root / "review-baseline" / run
@@ -1107,6 +1231,7 @@ def stage_conformance_evidence(
             results_path=results_path,
             config=config,
             expected_inventory=expected_inventory,
+            source_inventory_sha256=source_inventory_sha256,
             source_commit=source_commit,
             source_run_id=source_run_id,
             source_run_attempt=source_run_attempt,
@@ -1141,6 +1266,7 @@ def stage_conformance_evidence(
             results_path=staged_results,
             config=config,
             expected_inventory=expected_inventory,
+            source_inventory_sha256=source_inventory_sha256,
             source_commit=source_commit,
             source_run_id=source_run_id,
             source_run_attempt=source_run_attempt,
@@ -1607,6 +1733,8 @@ def main(argv: list[str] | None = None) -> int:
     stage_conformance = commands.add_parser("stage-conformance")
     stage_conformance.add_argument("--input-root", type=Path, required=True)
     stage_conformance.add_argument("--output-root", type=Path, required=True)
+    stage_conformance.add_argument("--source-api-url", required=True)
+    stage_conformance.add_argument("--source-repository", required=True)
     stage_conformance.add_argument("--source-commit", required=True)
     stage_conformance.add_argument("--source-run-id", type=int, required=True)
     stage_conformance.add_argument("--source-run-attempt", type=int, required=True)
@@ -1649,6 +1777,9 @@ def main(argv: list[str] | None = None) -> int:
             stage_conformance_evidence(
                 input_root=args.input_root,
                 output_root=args.output_root,
+                source_api_url=args.source_api_url,
+                source_repository=args.source_repository,
+                source_token=os.environ.get("OFARM_SOURCE_INPUT_TOKEN", ""),
                 source_commit=args.source_commit,
                 source_run_id=args.source_run_id,
                 source_run_attempt=args.source_run_attempt,
