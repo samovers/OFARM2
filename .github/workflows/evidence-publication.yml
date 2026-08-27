@@ -30,7 +30,7 @@ env:
   GIT_PAGER: cat
   OFARM_PUBLICATION_POLICY_SHA: ${{ github.workflow_sha }}
   OFARM_EVIDENCE_PUBLICATION_POLICY_SHA256: >-
-    sha256:0d9ed4e54918993c16dbcd6b3b5915df97d244e05e1ec391c086624079a9a97d
+    sha256:3ca8d543044ddfc49277b45f182eb1ecfb1bb4e1b3c0c68ffbfb83f8c0c7903f
   OFARM_REVIEW_BASELINE_ADMISSION_SHA256: >-
     sha256:a1b380dafb9cabc9672f607a91912097a1deb9982067d73174c3b9eab7d2a660
   OFARM_REVIEW_BASELINE_GATE_WORKFLOW_SHA256: >-
@@ -308,6 +308,8 @@ jobs:
           test -z "$(git -C .publication-policy status \
             --porcelain=v1 --untracked-files=all)"
       - name: Rebuild authoritative conformance claims with trusted policy
+        env:
+          OFARM_SOURCE_INPUT_TOKEN: ${{ github.token }}
         run: >-
           /usr/bin/python3
           .publication-policy/conformance/evidence_publication_policy.py
@@ -316,6 +318,10 @@ jobs:
           "${RUNNER_TEMP}/ofarm-publication-input/conformance"
           --output-root
           "${RUNNER_TEMP}/ofarm-publication-stage/conformance"
+          --source-api-url
+          "${GITHUB_API_URL}"
+          --source-repository
+          "${GITHUB_REPOSITORY}"
           --source-commit
           "${{ steps.publisher-start.outputs.execution_merge_sha }}"
           --source-run-id

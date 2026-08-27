@@ -26,6 +26,7 @@ from conformance.evidence_publication_policy import (
     PublicationPolicyError,
     _HttpsOnlyRedirectHandler,
     _canonical_json_bytes,
+    _download_authenticated_source_file,
     _expected_review_steps,
     _extract_installed_artifacts,
     _native_policy_module,
@@ -97,6 +98,17 @@ class FakeArtifactResponse(io.BytesIO):
 
     def geturl(self) -> str:
         return "https://artifact-results.example.test/immutable.zip"
+
+
+class FakeSourceResponse(io.BytesIO):
+    status = 200
+
+    def __init__(self, payload: bytes, url: str) -> None:
+        super().__init__(payload)
+        self._url = url
+
+    def geturl(self) -> str:
+        return self._url
 
 
 def artifact_zip(
@@ -1332,7 +1344,30 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
         self,
     ) -> None:
         config = review_policy._read_json(review_policy.CONFIG_PATH)
-        inventory = review_policy._load_test_inventory(config)
+        policy_inventory = review_policy._load_test_inventory(config)
+        inventory = review_policy._inventory_document(
+            config["paths"]["testRoot"],
+            [
+                *policy_inventory["entries"],
+                {
+                    "nodeid": (
+                        "kernel/tests/test_authenticated_source_inventory.py::"
+                        "test_new_exact_head_case"
+                    ),
+                    "sourceModule": "kernel.tests.test_authenticated_source_inventory",
+                    "sourcePath": "kernel/tests/test_authenticated_source_inventory.py",
+                },
+            ],
+        )
+        source_inventory_payload = (
+            json.dumps(inventory, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+        self.assertNotEqual(
+            hashlib.sha256(source_inventory_payload).hexdigest(),
+            review_policy._sha256_file(
+                review_policy.ROOT / config["paths"]["testInventory"]
+            ),
+        )
         results = complete_test_results_fixture(config, inventory)
         inventory_check = review_policy._test_inventory_check(
             inventory,
@@ -1396,9 +1431,9 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
                         },
                         "testInventory": {
                             "path": paths["testInventory"],
-                            "sha256": review_policy._sha256_file(
-                                review_policy.ROOT / paths["testInventory"]
-                            ),
+                            "sha256": hashlib.sha256(
+                                source_inventory_payload
+                            ).hexdigest(),
                             "entriesSha256": inventory["entriesSha256"],
                             "entryCount": inventory["entryCount"],
                         },
@@ -1491,12 +1526,32 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
             )
 
             output_root = temporary / "authoritative"
+            source_requests = []
+
+            def source_response_factory(request):
+                source_requests.append(request)
+                return FakeSourceResponse(source_inventory_payload, request.full_url)
+
             stage_conformance_evidence(
                 input_root=input_root,
                 output_root=output_root,
+                source_api_url="https://api.github.com",
+                source_repository=REPOSITORY,
+                source_token="test-source-token",
                 source_commit=HEAD_SHA,
                 source_run_id=SOURCE_RUN_ID,
                 source_run_attempt=SOURCE_RUN_ATTEMPT,
+                source_response_factory=source_response_factory,
+            )
+            self.assertEqual(len(source_requests), 1)
+            self.assertEqual(
+                source_requests[0].full_url,
+                "https://api.github.com/repos/samovers/OFARM2/contents/"
+                "conformance/review_baseline_test_inventory.json?ref=" + HEAD_SHA,
+            )
+            self.assertEqual(
+                source_requests[0].get_header("Authorization"),
+                "Bearer test-source-token",
             )
 
             published_platform = json.loads(
@@ -1566,9 +1621,13 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
                 stage_conformance_evidence(
                     input_root=input_root,
                     output_root=temporary / "fabricated-command",
+                    source_api_url="https://api.github.com",
+                    source_repository=REPOSITORY,
+                    source_token="test-source-token",
                     source_commit=HEAD_SHA,
                     source_run_id=SOURCE_RUN_ID,
                     source_run_attempt=SOURCE_RUN_ATTEMPT,
+                    source_response_factory=source_response_factory,
                 )
             source_evidence.write_bytes(original_evidence)
 
@@ -1585,9 +1644,13 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
                 stage_conformance_evidence(
                     input_root=input_root,
                     output_root=temporary / "invalid-timestamp",
+                    source_api_url="https://api.github.com",
+                    source_repository=REPOSITORY,
+                    source_token="test-source-token",
                     source_commit=HEAD_SHA,
                     source_run_id=SOURCE_RUN_ID,
                     source_run_attempt=SOURCE_RUN_ATTEMPT,
+                    source_response_factory=source_response_factory,
                 )
 
     def test_strict_json_refuses_duplicate_keys_and_non_finite_numbers(
@@ -1711,6 +1774,62 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
                         results,
                         expected_inventory=inventory,
                         warning_policy=warning_policy,
+                    )
+
+    def test_source_input_read_is_bound_to_exact_commit_without_redirects(self) -> None:
+        payload = b'{"source":"exact"}\n'
+        captured = []
+
+        def response_factory(request):
+            captured.append(request)
+            return FakeSourceResponse(payload, request.full_url)
+
+        observed = _download_authenticated_source_file(
+            api_url="https://api.github.com",
+            repository=REPOSITORY,
+            source_commit=HEAD_SHA,
+            source_path="conformance/review_baseline_test_inventory.json",
+            token="test-source-token",
+            response_factory=response_factory,
+        )
+        self.assertEqual(observed, payload)
+        self.assertEqual(len(captured), 1)
+        self.assertEqual(
+            captured[0].full_url,
+            "https://api.github.com/repos/samovers/OFARM2/contents/"
+            "conformance/review_baseline_test_inventory.json?ref=" + HEAD_SHA,
+        )
+        self.assertEqual(
+            captured[0].get_header("Accept"),
+            "application/vnd.github.raw+json",
+        )
+
+        with self.assertRaisesRegex(PublicationPolicyError, "was redirected"):
+            _download_authenticated_source_file(
+                api_url="https://api.github.com",
+                repository=REPOSITORY,
+                source_commit=HEAD_SHA,
+                source_path="conformance/review_baseline_test_inventory.json",
+                token="test-source-token",
+                response_factory=lambda _request: FakeSourceResponse(
+                    payload,
+                    "https://redirected.example.test/source.json",
+                ),
+            )
+        for commit, path, token in (
+            ("A" * 40, "conformance/review_baseline_test_inventory.json", "token"),
+            (HEAD_SHA, "../review_baseline_test_inventory.json", "token"),
+            (HEAD_SHA, "conformance/review_baseline_test_inventory.json", ""),
+        ):
+            with self.subTest(commit=commit, path=path, token=bool(token)):
+                with self.assertRaises(PublicationPolicyError):
+                    _download_authenticated_source_file(
+                        api_url="https://api.github.com",
+                        repository=REPOSITORY,
+                        source_commit=commit,
+                        source_path=path,
+                        token=token,
+                        response_factory=response_factory,
                     )
 
     def test_secure_download_verifies_digest_and_extracts_inside_fresh_root(
@@ -2112,6 +2231,13 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("validate-conformance", publisher)
         self.assertIn("validate-native", publisher)
         self.assertIn("stage-conformance", publisher)
+        self.assertEqual(
+            publisher.count("OFARM_SOURCE_INPUT_TOKEN: ${{ github.token }}"),
+            1,
+        )
+        self.assertIn("--source-api-url", publisher)
+        self.assertIn("--source-repository", publisher)
+        self.assertIn("steps.publisher-start.outputs.execution_merge_sha", publisher)
         self.assertIn("stage-native", publisher)
         self.assertIn("validate-native-claims", publisher)
         self.assertIn("ofarm-publication-stage", publisher)
