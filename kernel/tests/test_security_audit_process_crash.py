@@ -935,7 +935,7 @@ def test_live_postgresql_records_one_unknown_count_gap(
             "AUDIT_GAP",
             start,
             report.interval_end,
-            0,
+            None,
             True,
             None,
             None,
@@ -962,9 +962,10 @@ class _AppendBarrierRelay:
         self._listener_path = relay_directory / f".s.PGSQL.{port}"
         self._listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._listener.bind(str(self._listener_path))
-        self._listener.listen(1)
+        self._listener.listen(2)
         self._listener.settimeout(15)
         self._stopped = Event()
+        self.response_release = Event()
         self.barrier = Event()
         self._errors: list[BaseException] = []
         self._client: socket.socket | None = None
@@ -1008,6 +1009,7 @@ class _AppendBarrierRelay:
 
     def close_upstream(self) -> None:
         self._stopped.set()
+        self.response_release.set()
         for connection in (self._upstream, self._client):
             if connection is None:
                 continue
@@ -1015,17 +1017,11 @@ class _AppendBarrierRelay:
                 connection.shutdown(socket.SHUT_RDWR)
             except OSError:
                 pass
-            try:
-                connection.close()
-            except OSError:
-                pass
+            connection.close()
 
     def close(self) -> None:
         self.close_upstream()
-        try:
-            self._listener.close()
-        except OSError:
-            pass
+        self._listener.close()
         self._thread.join(timeout=10)
         if self._thread.is_alive():
             raise AssertionError("process-crash relay did not stop")
@@ -1058,8 +1054,23 @@ class _AppendBarrierRelay:
             self._client, _address = self._listener.accept()
             self._upstream = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self._upstream.connect(self._upstream_path)
-            self._client.settimeout(15)
-            self._upstream.settimeout(15)
+            self._client.settimeout(5)
+            self._upstream.settimeout(5)
+
+            def forward_cancel() -> None:
+                try:
+                    client, _address = self._listener.accept()
+                    with client, socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as upstream:
+                        upstream.settimeout(5)
+                        upstream.connect(self._upstream_path)
+                        request = client.recv(16, socket.MSG_WAITALL)
+                        assert len(request) == 16 and struct.unpack_from("!II", request) == (16, 80877102)
+                        upstream.sendall(request)
+                        assert upstream.recv(1) == b""
+                    self.response_release.set()
+                except (OSError, AssertionError) as error:
+                    if not self._stopped.is_set():
+                        self._errors.append(error)
 
             def forward_client() -> None:
                 buffer = b""
@@ -1086,6 +1097,7 @@ class _AppendBarrierRelay:
             def forward_server() -> None:
                 buffer = b""
                 holding = False
+                held_frames: list[bytes] = []
                 try:
                     while not self._stopped.is_set():
                         data = self._upstream.recv(65536)
@@ -1096,29 +1108,20 @@ class _AppendBarrierRelay:
                         for frame in frames:
                             kind = frame[:1]
                             payload = frame[5:]
-                            target_ready = self.client_target_messages[-5:] == [
-                                "Parse",
-                                "Bind",
-                                "Describe",
-                                "Execute",
-                                "Sync",
-                            ]
-                            if (
-                                not holding
-                                and target_ready
-                                and kind == b"C"
-                                and payload == b"SELECT 1\x00"
-                            ):
+                            target_ready = self.client_target_messages[-5:] == ["Parse", "Bind", "Describe", "Execute", "Sync"]
+                            if not holding and target_ready and kind == b"C" and payload == b"SELECT 1\x00":
                                 holding = True
                             if holding:
-                                self.held_server_messages.append(
-                                    (kind.decode("ascii"), payload)
-                                )
+                                held_frames.append(frame)
+                                self.held_server_messages.append((kind.decode("ascii"), payload))
                                 if kind == b"Z" and payload == b"T":
                                     self.barrier.set()
+                                    assert self.response_release.wait(timeout=5)
+                                    self._client.sendall(b"".join(held_frames))
+                                    holding = False
                                 continue
                             self._client.sendall(frame)
-                except OSError as error:
+                except (OSError, AssertionError) as error:
                     if not self._stopped.is_set():
                         self._errors.append(error)
                 finally:
@@ -1126,6 +1129,7 @@ class _AppendBarrierRelay:
 
             client_thread = Thread(target=forward_client, daemon=True)
             server_thread = Thread(target=forward_server, daemon=True)
+            Thread(target=forward_cancel, daemon=True).start()
             client_thread.start()
             server_thread.start()
             client_thread.join()
@@ -1175,23 +1179,20 @@ def test_live_request_bound_append_rolls_back_on_process_death(
         assert relay.barrier.wait(timeout=15)
         barrier_time = time.monotonic()
         command.send_signal(termination)
-        time.sleep(0.05)
+        if termination == signal.SIGINT:
+            assert relay.response_release.wait(timeout=5)
+        else:
+            relay.close_upstream()
+        stdout, stderr = command.communicate(timeout=10)
         relay.close_upstream()
         assert time.monotonic() - barrier_time < 5
-        stdout, stderr = command.communicate(timeout=10)
     finally:
         if command.poll() is None:
             command.kill()
             command.wait(timeout=10)
         relay.close()
     assert relay.target_statement_name == b""
-    assert relay.client_target_messages[-5:] == [
-        "Parse",
-        "Bind",
-        "Describe",
-        "Execute",
-        "Sync",
-    ]
+    assert relay.client_target_messages[-5:] == ["Parse", "Bind", "Describe", "Execute", "Sync"]
     assert relay.held_server_messages[0] == ("C", b"SELECT 1\x00")
     assert relay.held_server_messages[-1] == ("Z", b"T")
     if termination == signal.SIGINT:
