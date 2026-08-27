@@ -13886,6 +13886,401 @@
       "sourcePath": "kernel/tests/test_security_audit_overflow.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_actual_module_entry_invalid_input_has_no_python_termination_surface",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_actual_module_entry_sigint_stress_has_only_phase_owned_status",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_ambient_pg_authority_refuses_before_runner[PGHOST]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_ambient_pg_authority_refuses_before_runner[PGPORT]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_ambient_pg_authority_refuses_before_runner[PGSERVICEFILE]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_cli_output_failure_is_reporting_failed_even_if_complete_looking[stdout0]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_cli_output_failure_is_reporting_failed_even_if_complete_looking[stdout1]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_cli_output_failure_is_reporting_failed_even_if_complete_looking[stdout2]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_cli_success_writes_and_flushes_exactly_once",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_cli_terminal_classes_have_exact_closed_protocol[value0-3-security-audit process-crash reconciliation was refused; no commit succeeded/n]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_cli_terminal_classes_have_exact_closed_protocol[value1-3-security-audit process-crash reconciliation was interrupted; no commit was sent; do not retry automatically/n]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_cli_terminal_classes_have_exact_closed_protocol[value2-4-security-audit process-crash reconciliation outcome is unknown; do not retry automatically/n]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_cli_terminal_classes_have_exact_closed_protocol[value3-5-security-audit process-crash reconciliation committed but reporting failed; do not retry automatically/n]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_close_failure_after_commit_does_not_revoke_success",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_closed_conninfo_rejects_every_alternate_authority[host='/tmp/ofarm process crash socket' port=/u0665/u0664/u0663/u0662 dbname=ofarm_security_audit user=ofarm_security_audit_control_login password='test password with //' quote' sslmode=disable]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_closed_conninfo_rejects_every_alternate_authority[host='/tmp/ofarm process crash socket' port=0 dbname=ofarm_security_audit user=ofarm_security_audit_control_login password='test password with //' quote' sslmode=disable]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_closed_conninfo_rejects_every_alternate_authority[host='/tmp/ofarm process crash socket' port=5432 dbname=ofarm_security_audit user=ofarm password='test password with //' quote' sslmode=disable]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_closed_conninfo_rejects_every_alternate_authority[host='/tmp/ofarm process crash socket' port=5432 dbname=ofarm_security_audit user=ofarm_security_audit_control_login password='test password with //' quote' sslmode=require]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_closed_conninfo_rejects_every_alternate_authority[host='/tmp/ofarm process crash socket' port=5432 dbname=postgres user=ofarm_security_audit_control_login password='test password with //' quote' sslmode=disable]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_closed_conninfo_rejects_every_alternate_authority[host='/tmp/ofarm process crash socket' port=65536 dbname=ofarm_security_audit user=ofarm_security_audit_control_login password='test password with //' quote' sslmode=disable]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_closed_conninfo_rejects_every_alternate_authority[host=/tmp/a host=/tmp/b port=5432 dbname=x user=y password=z sslmode=disable]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_closed_conninfo_rejects_every_alternate_authority[host=/tmp/a port=5432 dbname=x user=y password=z sslmode=disable service=x]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_closed_conninfo_rejects_every_alternate_authority[host=/tmp/a,/tmp/b port=5432 dbname=ofarm_security_audit user=ofarm_security_audit_control_login password='test password with //' quote' sslmode=disable]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_closed_conninfo_rejects_every_alternate_authority[host=127.0.0.1 port=5432 dbname=ofarm_security_audit user=ofarm_security_audit_control_login password='test password with //' quote' sslmode=disable]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_closed_conninfo_rejects_every_alternate_authority[postgresql://user:password@localhost/database]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_commit_without_acknowledgement_is_always_unknown[failure0]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_commit_without_acknowledgement_is_always_unknown[failure1]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_commit_without_acknowledgement_is_always_unknown[failure2]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_conninfo_bounds_and_minimum_libpq_refuse_before_parse_or_connect",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[0]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[10]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[11]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[12]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[13]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[14]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[1]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[2]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[3]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[4]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[5]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[6]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[7]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[8]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_each_database_admission_field_refuses_before_clock[9]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_invalid_cli_shape_refuses_before_environment_or_runner[argv0]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_invalid_cli_shape_refuses_before_environment_or_runner[argv1]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_invalid_cli_shape_refuses_before_environment_or_runner[argv2]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_invalid_cli_shape_refuses_before_environment_or_runner[argv3]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_invalid_cli_shape_refuses_before_environment_or_runner[argv4]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_invalid_cli_shape_refuses_before_environment_or_runner[argv5]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_invalid_cli_shape_refuses_before_environment_or_runner[argv6]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_invalid_clock_or_append_result_rolls_back_without_retry[append_event-value2]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_invalid_clock_or_append_result_rolls_back_without_retry[append_observed-value3]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_invalid_clock_or_append_result_rolls_back_without_retry[append_purge-value4]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_invalid_clock_or_append_result_rolls_back_without_retry[clock-value0]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_invalid_clock_or_append_result_rolls_back_without_retry[clock-value1]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_live_postgresql_records_one_unknown_count_gap",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_live_request_bound_append_rolls_back_on_process_death[15]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_live_request_bound_append_rolls_back_on_process_death[2]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_module_status_freezing_preserves_reported_success",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_module_status_freezing_rejects_caller_selected_systemexit",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_precommit_direct_baseexception_is_fixed_interruption[failure0]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_precommit_direct_baseexception_is_fixed_interruption[failure1]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_precommit_direct_baseexception_is_fixed_interruption[failure2]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_production_sql_has_only_admission_clock_and_existing_append",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_report_construction_failure_after_commit_is_fixed",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_report_flush_is_not_accidentally_supplied_by_unbuffered_python",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_runner_construction_interruption_uses_fixed_status[failure0]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_runner_construction_interruption_uses_fixed_status[failure1]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_runner_construction_interruption_uses_fixed_status[failure2]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_shared_audit_control_environment_is_not_an_input",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_socket_postgres_readiness_waits_for_final_server",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_stalled_sink_has_no_false_repository_wall_clock_claim",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_stderr_failure_preserves_controlled_status[stderr0]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_stderr_failure_preserves_controlled_status[stderr1]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_stderr_failure_preserves_controlled_status[stderr2]",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_success_uses_one_admitted_transaction_and_exact_report",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_terminal_architecture_has_one_nonreturning_exit_and_no_systemexit",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_typed_idle_timeout_at_commit_is_proven_refusal",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_query.py::test_cli_does_not_invent_state_for_nonconforming_runner_exception",
       "sourceModule": "kernel.tests.test_security_audit_query",
       "sourcePath": "kernel/tests/test_security_audit_query.py"
@@ -17456,8 +17851,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "1770b168c1c435f8517bcaaa3257f7a6404ea755213ecfeacac9cb8b9820a96a",
-  "entryCount": 3491,
+  "entriesSha256": "412c424119e83063966fd2439c6e0abd0669f300498c8e7ffd6e4c7d2e0e91a2",
+  "entryCount": 3570,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

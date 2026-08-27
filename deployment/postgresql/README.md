@@ -747,6 +747,45 @@ This command is not a scheduler or drain loop. It makes no deployment,
 readiness, continuity, lossless-retention, legal-hold, backup, replica, WAL,
 vacuum, media-sanitization, or physical-erasure claim.
 
+## Surviving-store security-audit process-crash reconciliation
+
+This command records one independently witnessed process-crash interval when
+the audit PostgreSQL store survived but the producing process did not. Before
+the first governed attempt, an external operations authority must retain a
+canonical conservative process-window lower bound. A timestamp first observed
+after the crash is not sufficient.
+
+The command accepts only one complete local Unix-socket conninfo through the
+operation-specific environment. It does not read the shared audit-control
+environment or any ambient `PG*` setting:
+
+```bash
+export OFARM_SECURITY_AUDIT_PROCESS_CRASH_CONTROL_PG_DSN='host=/run/postgresql port=5432 dbname=ofarm_security_audit user=ofarm_security_audit_control_login password=<direct-password> sslmode=disable'
+python -m deployment.postgresql.run_security_audit_process_crash \
+  --interval-start '2026-08-26T12:00:00.000000Z'
+```
+
+One invocation opens one admitted read-committed transaction, obtains its end
+from the database clock, calls the existing
+`append_audit_gap(start, end, 0, true)` function once, and reports success only
+after commit acknowledgement and one complete 298-byte canonical JSON line.
+
+Controlled exits are:
+
+- exit `0`: commit acknowledged and the exact report written and flushed;
+- exit `2`: invalid command, timestamp, environment, client, or conninfo;
+- exit `3`: known refusal, proven pre-commit rollback, or pre-commit
+  interruption;
+- exit `4`: commit invocation was not acknowledged; outcome unknown; and
+- exit `5`: commit acknowledged but reporting failed.
+
+Exit `4`, exit `5`, signal termination, and any incomplete terminal protocol
+must be quarantined from automatic retry. The command does not detect crashes,
+authenticate the external witness, persist process state, publish a runtime
+route, alter readiness, or authorize production composition. Deployment must
+separately govern witness retention, route custody, no-retry quarantine, and
+result consumption.
+
 ## One-shot security-audit store-loss recovery
 
 The store-loss command rebuilds only one absent, unpublished security-audit
