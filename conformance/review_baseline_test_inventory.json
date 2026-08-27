@@ -14241,6 +14241,11 @@
       "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_socket_postgres_readiness_waits_for_final_server",
+      "sourceModule": "kernel.tests.test_security_audit_process_crash",
+      "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_process_crash.py::test_stalled_sink_has_no_false_repository_wall_clock_claim",
       "sourceModule": "kernel.tests.test_security_audit_process_crash",
       "sourcePath": "kernel/tests/test_security_audit_process_crash.py"
@@ -17846,8 +17851,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "5fd2e1b6b2b8edfd85f5a7372f95b05d22a444293ec43c0f77b4c88f03b890a4",
-  "entryCount": 3569,
+  "entriesSha256": "412c424119e83063966fd2439c6e0abd0669f300498c8e7ffd6e4c7d2e0e91a2",
+  "entryCount": 3570,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
