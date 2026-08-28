@@ -668,6 +668,67 @@ class PythonImportEdgeV1(typing.NamedTuple):
     target: str
 
 
+class _ImportExecutionTransitionKindV1(str, enum.Enum):
+    FIXED_ROOT = "FIXED_ROOT"
+    EXPLICIT_IMPORT = "EXPLICIT_RETAINED_IMPORT"
+    REQUIRED_INITIALIZER = "REQUIRED_INITIALIZER"
+
+
+class _ImportExecutionFailureKindV1(str, enum.Enum):
+    UNRESOLVED_INTERNAL_IMPORT = "UNRESOLVED_INTERNAL_IMPORT"
+    PLAIN_MODULE_PACKAGE_CONFLICT = "PLAIN_MODULE_PACKAGE_CONFLICT"
+    INVALID_ABOVE_ROOT_RELATIVE = "INVALID_ABOVE_ROOT_RELATIVE"
+
+
+class _ImportExecutionTransitionV1(typing.NamedTuple):
+    kind: _ImportExecutionTransitionKindV1
+    predecessor: str | None
+    target: str
+    line: int | None
+
+
+_ImportExecutionPathV1: typing.TypeAlias = tuple[_ImportExecutionTransitionV1, ...]
+
+
+class _ImportExecutionClosuresV1(typing.NamedTuple):
+    production: collections.abc.Mapping[str, _ImportExecutionPathV1]
+    legacy: collections.abc.Mapping[str, _ImportExecutionPathV1]
+
+
+class _PackageTopologyV1(typing.NamedTuple):
+    regular_packages: frozenset[str]
+    plain_modules: frozenset[str]
+    namespace_prefixes: frozenset[str]
+    internal_top_levels: frozenset[str]
+
+
+class _NormalizedImportV1(typing.NamedTuple):
+    source_module: str
+    source_relative_path: str
+    line: int
+    form: str
+    base: str
+    candidates: tuple[str, ...]
+    relative: bool
+    above_root: bool
+
+
+class _ImportExecutionFailure(RuntimeError):
+    def __init__(
+        self,
+        kind: _ImportExecutionFailureKindV1,
+        relative_path: str,
+        line: int | None,
+        operand: str,
+    ) -> None:
+        self.kind = kind
+        self.relative_path = relative_path
+        self.line = line
+        self.operand = operand
+        location = relative_path if line is None else f"{relative_path}:{line}"
+        super().__init__(f"{location}: {kind.value}: {operand!r}")
+
+
 _FIXED_DESCRIPTOR_V1 = PythonSourceSnapshotDescriptorV1(
     interface_identity=_PYTHON_SOURCE_SNAPSHOT_INTERFACE_IDENTITY,
     python_implementation="CPython",
@@ -1593,6 +1654,355 @@ def _derive_reachability(
     return paths
 
 
+def _proper_module_prefixes(module: str) -> tuple[str, ...]:
+    components = module.split(".")
+    return tuple(".".join(components[:length]) for length in range(1, len(components)))
+
+
+def _package_topology(snapshot: PythonSourceSnapshotV1) -> _PackageTopologyV1:
+    modules = frozenset(snapshot.modules_by_name)
+    regular_packages = frozenset(
+        module
+        for module, unit in snapshot.modules_by_name.items()
+        if unit.relative_path == f"{module.replace('.', '/')}/__init__.py"
+    )
+    prefixes = frozenset(
+        prefix for module in modules for prefix in _proper_module_prefixes(module)
+    )
+    return _PackageTopologyV1(
+        regular_packages=regular_packages,
+        plain_modules=modules - regular_packages,
+        namespace_prefixes=prefixes - modules,
+        internal_top_levels=frozenset(module.partition(".")[0] for module in modules),
+    )
+
+
+def _relative_import_is_above_root(
+    module: str,
+    relative_path: str,
+    node: ast.ImportFrom,
+) -> bool:
+    if node.level == 0:
+        return False
+    package_depth = len(module.split("."))
+    if not relative_path.endswith("/__init__.py"):
+        package_depth -= 1
+    return node.level > package_depth
+
+
+def _normalized_imports(
+    module: str,
+    relative_path: str,
+    tree: ast.Module,
+) -> tuple[_NormalizedImportV1, ...]:
+    imports = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imports.extend(
+                _NormalizedImportV1(
+                    source_module=module,
+                    source_relative_path=relative_path,
+                    line=node.lineno,
+                    form="IMPORT",
+                    base=alias.name,
+                    candidates=(),
+                    relative=False,
+                    above_root=False,
+                )
+                for alias in node.names
+            )
+        elif isinstance(node, ast.ImportFrom):
+            base = _from_import_base(module, relative_path, node)
+            imports.append(
+                _NormalizedImportV1(
+                    source_module=module,
+                    source_relative_path=relative_path,
+                    line=node.lineno,
+                    form="FROM",
+                    base=base,
+                    candidates=tuple(
+                        sorted(
+                            f"{base}.{alias.name}" if base else alias.name
+                            for alias in node.names
+                            if alias.name != "*"
+                        )
+                    ),
+                    relative=node.level > 0,
+                    above_root=_relative_import_is_above_root(
+                        module,
+                        relative_path,
+                        node,
+                    ),
+                )
+            )
+    return tuple(
+        sorted(
+            imports,
+            key=lambda value: (
+                value.line,
+                value.form,
+                value.base,
+                value.candidates,
+            ),
+        )
+    )
+
+
+def _target_kind(
+    target: str,
+    *,
+    relative: bool,
+    topology: _PackageTopologyV1,
+) -> str:
+    if not relative and target.partition(".")[0] not in topology.internal_top_levels:
+        return "external"
+    if target in topology.regular_packages:
+        return "regular"
+    if target in topology.plain_modules:
+        return "plain"
+    if target in topology.namespace_prefixes:
+        return "namespace"
+    return "missing"
+
+
+def _raise_unresolved_target(
+    target: str,
+    topology: _PackageTopologyV1,
+    relative_path: str,
+    line: int,
+) -> typing.NoReturn:
+    plain_ancestor = next(
+        (
+            prefix
+            for prefix in _proper_module_prefixes(target)
+            if prefix in topology.plain_modules
+        ),
+        None,
+    )
+    if plain_ancestor is not None:
+        raise _ImportExecutionFailure(
+            _ImportExecutionFailureKindV1.PLAIN_MODULE_PACKAGE_CONFLICT,
+            relative_path,
+            line,
+            f"{target} via {plain_ancestor}",
+        )
+    raise _ImportExecutionFailure(
+        _ImportExecutionFailureKindV1.UNRESOLVED_INTERNAL_IMPORT,
+        relative_path,
+        line,
+        target,
+    )
+
+
+def _required_initializers(
+    target: str,
+    topology: _PackageTopologyV1,
+    relative_path: str,
+    line: int | None,
+) -> tuple[str, ...]:
+    required = []
+    for prefix in _proper_module_prefixes(target):
+        if prefix in topology.plain_modules:
+            raise _ImportExecutionFailure(
+                _ImportExecutionFailureKindV1.PLAIN_MODULE_PACKAGE_CONFLICT,
+                relative_path,
+                line,
+                f"{target} via {prefix}",
+            )
+        if prefix in topology.regular_packages:
+            required.append(prefix)
+    return tuple(required)
+
+
+def _namespace_initializer_requirements(
+    record: _NormalizedImportV1,
+    topology: _PackageTopologyV1,
+) -> tuple[str, ...]:
+    if record.above_root:
+        raise _ImportExecutionFailure(
+            _ImportExecutionFailureKindV1.INVALID_ABOVE_ROOT_RELATIVE,
+            record.source_relative_path,
+            record.line,
+            record.base,
+        )
+    base_kind = _target_kind(
+        record.base,
+        relative=record.relative,
+        topology=topology,
+    )
+    if base_kind == "external":
+        return ()
+    if base_kind == "missing":
+        _raise_unresolved_target(
+            record.base,
+            topology,
+            record.source_relative_path,
+            record.line,
+        )
+    base_initializers = _required_initializers(
+        record.base,
+        topology,
+        record.source_relative_path,
+        record.line,
+    )
+    required = list(base_initializers if base_kind == "namespace" else ())
+    if record.form == "IMPORT":
+        return tuple(required)
+    for target in record.candidates:
+        candidate_kind = _target_kind(
+            target,
+            relative=record.relative,
+            topology=topology,
+        )
+        if candidate_kind == "missing":
+            if base_kind in {"plain", "regular"}:
+                continue
+            _raise_unresolved_target(
+                target,
+                topology,
+                record.source_relative_path,
+                record.line,
+            )
+        candidate_initializers = _required_initializers(
+            target,
+            topology,
+            record.source_relative_path,
+            record.line,
+        )
+        if candidate_kind == "namespace":
+            required.extend(candidate_initializers)
+    return tuple(dict.fromkeys(required))
+
+
+def _path_failure_location(
+    snapshot: PythonSourceSnapshotV1,
+    path: _ImportExecutionPathV1,
+) -> tuple[str, int | None]:
+    transition = path[-1]
+    if (
+        transition.kind is _ImportExecutionTransitionKindV1.EXPLICIT_IMPORT
+        and transition.predecessor is not None
+    ):
+        return (
+            snapshot.modules_by_name[transition.predecessor].relative_path,
+            transition.line,
+        )
+    return snapshot.modules_by_name[transition.target].relative_path, None
+
+
+def _enqueue_initializers(
+    requiring_module: str,
+    required: tuple[str, ...],
+    paths: dict[str, _ImportExecutionPathV1],
+    pending: deque[str],
+) -> None:
+    for initializer in required:
+        if initializer in paths:
+            continue
+        transition = _ImportExecutionTransitionV1(
+            _ImportExecutionTransitionKindV1.REQUIRED_INITIALIZER,
+            requiring_module,
+            initializer,
+            None,
+        )
+        paths[initializer] = (*paths[requiring_module], transition)
+        pending.append(initializer)
+
+
+def _derive_import_execution_closure(
+    snapshot: PythonSourceSnapshotV1,
+    normalized: collections.abc.Mapping[str, tuple[_NormalizedImportV1, ...]],
+    topology: _PackageTopologyV1,
+    roots: tuple[str, ...],
+) -> collections.abc.Mapping[str, _ImportExecutionPathV1]:
+    paths: dict[str, _ImportExecutionPathV1] = {}
+    pending: deque[str] = deque()
+    for root in roots:
+        paths[root] = (
+            _ImportExecutionTransitionV1(
+                _ImportExecutionTransitionKindV1.FIXED_ROOT,
+                None,
+                root,
+                None,
+            ),
+        )
+        pending.append(root)
+    while pending:
+        module = pending.popleft()
+        relative_path, line = _path_failure_location(snapshot, paths[module])
+        _enqueue_initializers(
+            module,
+            _required_initializers(
+                module,
+                topology,
+                relative_path,
+                line,
+            ),
+            paths,
+            pending,
+        )
+        for record in normalized[module]:
+            _enqueue_initializers(
+                module,
+                _namespace_initializer_requirements(
+                    record,
+                    topology,
+                ),
+                paths,
+                pending,
+            )
+        for edge in snapshot.import_graph[module]:
+            if edge.target in paths:
+                continue
+            transition = _ImportExecutionTransitionV1(
+                _ImportExecutionTransitionKindV1.EXPLICIT_IMPORT,
+                module,
+                edge.target,
+                edge.line,
+            )
+            paths[edge.target] = (*paths[module], transition)
+            pending.append(edge.target)
+    return types.MappingProxyType(dict(paths))
+
+
+def _derive_import_execution_closures(
+    snapshot: PythonSourceSnapshotV1,
+    trees: collections.abc.Mapping[str, ast.Module],
+) -> _ImportExecutionClosuresV1:
+    if not _is_builder_snapshot(snapshot):
+        raise TypeError("snapshot must be builder-sealed")
+    if set(trees) != set(snapshot.modules_by_name) or any(
+        type(tree) is not ast.Module for tree in trees.values()
+    ):
+        raise TypeError("trees must be the complete detached AST mapping")
+    topology = _package_topology(snapshot)
+    normalized = types.MappingProxyType(
+        {
+            module: _normalized_imports(
+                module,
+                snapshot.modules_by_name[module].relative_path,
+                trees[module],
+            )
+            for module in sorted(trees)
+        }
+    )
+    descriptor = snapshot.descriptor
+    return _ImportExecutionClosuresV1(
+        production=_derive_import_execution_closure(
+            snapshot,
+            normalized,
+            topology,
+            descriptor.production_import_roots,
+        ),
+        legacy=_derive_import_execution_closure(
+            snapshot,
+            normalized,
+            topology,
+            descriptor.legacy_import_roots,
+        ),
+    )
+
+
 def _content_digest(
     modules: dict[str, PythonSourceUnitV1],
     graph: dict[str, tuple[PythonImportEdgeV1, ...]],
@@ -1889,17 +2299,38 @@ def _is_legacy_module(module: str) -> bool:
     )
 
 
-def _incoming_edge(
-    graph: collections.abc.Mapping[
-        str, tuple[PythonImportEdgeV1, ...]
-    ],
-    path: tuple[str, ...],
-) -> tuple[str, PythonImportEdgeV1] | None:
-    if len(path) < 2:
-        return None
-    source, target = path[-2:]
-    edge = next(edge for edge in graph[source] if edge.target == target)
-    return source, edge
+def _render_import_execution_path(
+    snapshot: PythonSourceSnapshotV1,
+    path: _ImportExecutionPathV1,
+) -> str:
+    rendered = [path[0].target]
+    for transition in path[1:]:
+        if transition.kind is _ImportExecutionTransitionKindV1.REQUIRED_INITIALIZER:
+            relative = snapshot.modules_by_name[transition.target].relative_path
+            rendered.append(f"[required initializer {relative}]")
+        else:
+            rendered.append(transition.target)
+    return " -> ".join(rendered)
+
+
+def _incoming_transition(
+    path: _ImportExecutionPathV1,
+) -> _ImportExecutionTransitionV1 | None:
+    return None if len(path) < 2 else path[-1]
+
+
+def _transition_location(
+    snapshot: PythonSourceSnapshotV1,
+    transition: _ImportExecutionTransitionV1,
+) -> str:
+    if (
+        transition.kind is _ImportExecutionTransitionKindV1.EXPLICIT_IMPORT
+        and transition.predecessor is not None
+        and transition.line is not None
+    ):
+        relative = snapshot.modules_by_name[transition.predecessor].relative_path
+        return f"{relative}:{transition.line}"
+    return snapshot.modules_by_name[transition.target].relative_path
 
 
 def _dynamic_import_violations(
@@ -2219,22 +2650,26 @@ def _profile_loader_violations(tree: ast.Module) -> list[tuple[int, str]]:
 def _check_import_firewall(
     source: pathlib.Path | PythonSourceSnapshotV1 = ROOT,
     trees: collections.abc.Mapping[str, ast.Module] | None = None,
+    execution_closures: _ImportExecutionClosuresV1 | None = None,
 ) -> list[str]:
     snapshot, trees = _snapshot_and_trees(source, trees)
     sources = snapshot.modules_by_name
-    graph = snapshot.import_graph
+    if execution_closures is None:
+        execution_closures = _derive_import_execution_closures(
+            snapshot,
+            trees,
+        )
     failures = []
 
-    production_paths = snapshot.production_reachability
+    production_paths = execution_closures.production
     for module, path in sorted(production_paths.items()):
-        rendered_path = " -> ".join(path)
+        rendered_path = _render_import_execution_path(snapshot, path)
         if _is_legacy_module(module):
-            incoming = _incoming_edge(graph, path)
+            incoming = _incoming_transition(path)
             if incoming is not None:
-                source, edge = incoming
-                relative = sources[source].relative_path
                 failures.append(
-                    f"{relative}:{edge.line}: production import path "
+                    f"{_transition_location(snapshot, incoming)}: "
+                    f"production import path "
                     f"{rendered_path} reaches legacy module {module!r}"
                 )
         for line, reason in _dynamic_import_violations(trees[module]):
@@ -2250,18 +2685,17 @@ def _check_import_firewall(
                 f"{resource!r}; production import path {rendered_path}"
             )
 
-    legacy_paths = snapshot.legacy_reachability
+    legacy_paths = execution_closures.legacy
     for module, path in sorted(legacy_paths.items()):
         if module not in PRODUCTION_COMPOSITION_MODULES:
             continue
-        incoming = _incoming_edge(graph, path)
+        incoming = _incoming_transition(path)
         if incoming is None:
             continue
-        source, edge = incoming
-        relative = sources[source].relative_path
         failures.append(
-            f"{relative}:{edge.line}: legacy import path "
-            f"{' -> '.join(path)} reaches production composition "
+            f"{_transition_location(snapshot, incoming)}: legacy import path "
+            f"{_render_import_execution_path(snapshot, path)} reaches "
+            f"production composition "
             f"module {module!r}"
         )
     for module in PROFILE_NEUTRAL_MODULES:
@@ -2481,13 +2915,16 @@ def _tenant_handle_escape_accesses(tree: ast.Module) -> list[tuple[int, str]]:
 def _check_tenant_uow_architecture(
     snapshot: PythonSourceSnapshotV1,
     trees: collections.abc.Mapping[str, ast.Module],
+    execution_closures: _ImportExecutionClosuresV1,
 ) -> list[str]:
     failures = [
         f"kernel/tenant_uow.py:{line}: {reason}"
         for line, reason in _tenant_uow_class_violations(trees[_TENANT_UOW_MODULE])
     ]
-    for module in sorted(snapshot.production_reachability):
-        if module == _TENANT_UOW_MODULE or not module.startswith("kernel."):
+    for module in sorted(execution_closures.production):
+        if module == _TENANT_UOW_MODULE or not (
+            module == "kernel" or module.startswith("kernel.")
+        ):
             continue
         relative = snapshot.modules_by_name[module].relative_path
         for line, attribute in _tenant_handle_escape_accesses(trees[module]):
@@ -3874,9 +4311,27 @@ def main() -> int:
         relative = f" ({exc.relative_path})" if exc.relative_path else ""
         print(f"FAIL Python source snapshot refused: {exc.code.value}{relative}")
         return 1
-    failures = _check_import_firewall(snapshot, trees)
+    try:
+        execution_closures = _derive_import_execution_closures(
+            snapshot,
+            trees,
+        )
+    except _ImportExecutionFailure as exc:
+        print(f"FAIL Python import-execution closure refused: {exc}")
+        return 1
+    failures = _check_import_firewall(
+        snapshot,
+        trees,
+        execution_closures,
+    )
     failures.extend(_check_provider_import_policy(snapshot, trees))
-    failures.extend(_check_tenant_uow_architecture(snapshot, trees))
+    failures.extend(
+        _check_tenant_uow_architecture(
+            snapshot,
+            trees,
+            execution_closures,
+        )
+    )
     failures.extend(_check_direct_import_bounds(snapshot))
     failures.extend(_check_security_audit_gap_surface(snapshot, trees))
     failures.extend(_check_security_audit_approval_surface(snapshot, trees))

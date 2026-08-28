@@ -1,6 +1,7 @@
 # OFARM2 Architecture Package Initializer Reachability — Phase A Contract v0.1
 
-**Status:** proposed and unapproved; Phase A documentation only; Phase B is
+**Status:** approved and implemented for exact-head Phase B review only in
+draft pull request `#347`; production composition and deployment remain
 unauthorized
 
 **Contract identity:**
@@ -658,6 +659,32 @@ version, Codex task/card/approval stable references, the exact sentence, the
 observed user role and ordering, the named PR, and the provisional-evidence
 limit. The user message remains authority; repository text is evidence only.
 
+### 15.1 Recorded approval evidence
+
+The AI directly retrieved and verified the following same-task evidence before
+recognizing Phase B authority:
+
+- Codex task: `01a04484-3c52-7fd2-bdfe-0a15690a9135`.
+- Complete live decision card: assistant turn
+  `01a04933-0786-7141-b4a9-50dd23ba5e3d`, message
+  `msg_020a6720c580efaf016a91bafa50f087d29836197315f0465d`, transcript
+  ordinal `4317`.
+- Exact later task-user approval: user turn
+  `01a04960-2644-7623-9484-dd19828f76b6`, message
+  `msg_01a04960-2aa4-7511-bad9-fa2bd86e40c3`, transcript ordinal `4323`.
+- Exact user-authored sentence:
+  `I approve OFARM2 decision ISSUE334-ARCHITECTURE-PACKAGE-INITIALIZER-REACHABILITY-001 version 1.`
+- Named and bound draft pull request:
+  `https://github.com/samovers/OFARM2/pull/347`.
+
+The card preceded the user-role approval, the stable references remained
+directly retrievable, and no later task-user cancellation or withdrawal was
+present when approval was recognized. This evidence authorizes only the
+approved four-path implementation and gated merge workflow in PR `#347`. The
+AI-assisted transport remains provisional repository-development evidence and
+creates no deployment, production, release, certification, current-compliance,
+or issue-#192 authority.
+
 ## 16. Reapproval triggers, provisional posture, and stop conditions
 
 ### 16.1 Reapproval triggers
@@ -712,12 +739,16 @@ Work stops before:
 
 Open decisions: none.
 
-- **Phase A design Blockers:** review pending.
+- **Phase A design Blockers:** zero at reviewed head
+  `e6ab3e0a51218a6ec626ef92e848944dd29e406b`; exact-head review
+  `https://github.com/samovers/OFARM2/pull/347#pullrequestreview-5053144405`.
 - **Follow-ups:** complete execution-root/source-capability governance remains a
   separate boundary; no new issue is created by this contract.
 - **Preferences:** none recorded.
 - **Cross-boundary exception:** none.
-- **Phase B:** unauthorized.
+- **Phase B:** implemented inside the approved envelope in draft PR `#347` and
+  `REVIEW_PENDING`; every new head requires an exact-head zero-Blocker Phase B
+  review.
 - **Production composition:** unauthorized and non-deployable.
 
 The pull request must remain Draft and must not implement while Phase A review
