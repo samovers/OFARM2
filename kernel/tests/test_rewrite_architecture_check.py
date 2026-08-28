@@ -404,6 +404,16 @@ def _snapshot_tree(
     return tmp_path
 
 
+def _execution_state(root: Path):
+    snapshot = rewrite_architecture_check.build_python_source_snapshot(root)
+    trees = rewrite_architecture_check._snapshot_trees(snapshot)
+    closures = rewrite_architecture_check._derive_import_execution_closures(
+        snapshot,
+        trees,
+    )
+    return snapshot, trees, closures
+
+
 def _assert_refusal(
     expected: rewrite_architecture_check.PythonSourceSnapshotRefusalCodeV1,
     build,
@@ -1816,3 +1826,598 @@ def test_main_builds_one_snapshot_and_uses_no_path_text_reads(monkeypatch):
 
     assert rewrite_architecture_check.main() == 0
     assert calls == 1
+
+
+def test_execution_closure_adds_root_initializer_and_firewall_scans_it(
+    tmp_path,
+):
+    _firewall_tree(tmp_path, "")
+    _write_module(tmp_path, "kernel/__init__.py", "import importlib\n")
+
+    snapshot, _trees, closures = _execution_state(tmp_path)
+
+    assert "kernel" not in snapshot.production_reachability
+    assert "kernel" in closures.production
+    assert type(closures.production) is types.MappingProxyType
+    assert closures.production["kernel"][-1] == (
+        rewrite_architecture_check._ImportExecutionTransitionV1(
+            rewrite_architecture_check._ImportExecutionTransitionKindV1.REQUIRED_INITIALIZER,
+            "kernel.api",
+            "kernel",
+            None,
+        )
+    )
+    assert rewrite_architecture_check._check_import_firewall(tmp_path) == [
+        "kernel/__init__.py:1: forbidden dynamic import mechanism "
+        "(import of 'importlib'); production import path kernel.api -> "
+        "[required initializer kernel/__init__.py]"
+    ]
+
+
+def test_initializer_imports_expand_to_fixed_point_with_provenance(tmp_path):
+    _firewall_tree(tmp_path, "")
+    _write_module(tmp_path, "kernel/__init__.py", "from . import helper\n")
+    _write_module(tmp_path, "kernel/helper.py", "from .deep import VALUE\n")
+    _write_module(tmp_path, "kernel/deep.py", "VALUE = 'schema.sql'\n")
+
+    _snapshot, _trees, closures = _execution_state(tmp_path)
+
+    assert {"kernel", "kernel.helper", "kernel.deep"} <= set(closures.production)
+    assert rewrite_architecture_check._check_import_firewall(tmp_path) == [
+        "kernel/deep.py:1: production references legacy resource "
+        "'schema.sql'; production import path kernel.api -> "
+        "[required initializer kernel/__init__.py] -> kernel.helper -> "
+        "kernel.deep"
+    ]
+
+
+def test_namespace_prefix_adds_only_retained_regular_ancestors(tmp_path):
+    root = _snapshot_tree(
+        tmp_path,
+        {
+            "kernel/__init__.py": "",
+            "kernel/api.py": "import deployment.namespace.worker\n",
+            "deployment/__init__.py": "",
+            "deployment/namespace/worker.py": "VALUE = 1\n",
+        },
+    )
+
+    snapshot, _trees, closures = _execution_state(root)
+
+    assert "deployment.namespace" not in snapshot.modules_by_name
+    assert "deployment.namespace" not in closures.production
+    assert "deployment" in closures.production
+    assert "deployment.namespace.worker" in closures.production
+
+
+def test_namespace_star_import_adds_no_guessed_member(tmp_path):
+    root = _snapshot_tree(
+        tmp_path,
+        {
+            "kernel/__init__.py": "",
+            "kernel/api.py": "from deployment.namespace import *\n",
+            "deployment/__init__.py": "",
+            "deployment/namespace/worker.py": "",
+        },
+    )
+
+    _snapshot, _trees, closures = _execution_state(root)
+
+    assert "deployment" in closures.production
+    assert "deployment.namespace" not in closures.production
+    assert "deployment.namespace.worker" not in closures.production
+
+
+@pytest.mark.parametrize(
+    ("api_source", "extra_sources", "kind", "operand"),
+    (
+        (
+            "import deployment.missing\n",
+            {"deployment/__init__.py": ""},
+            "UNRESOLVED_INTERNAL_IMPORT",
+            "deployment.missing",
+        ),
+        (
+            "import package.submodule\n",
+            {"package.py": "", "package/submodule.py": ""},
+            "PLAIN_MODULE_PACKAGE_CONFLICT",
+            "package.submodule via package",
+        ),
+        (
+            "from .. import missing\n",
+            {},
+            "INVALID_ABOVE_ROOT_RELATIVE",
+            "",
+        ),
+        (
+            "from deployment.namespace import missing\n",
+            {
+                "deployment/__init__.py": "",
+                "deployment/namespace/worker.py": "",
+            },
+            "UNRESOLVED_INTERNAL_IMPORT",
+            "deployment.namespace.missing",
+        ),
+    ),
+    ids=(
+        "missing-internal",
+        "plain-module-conflict",
+        "above-root-relative",
+        "namespace-missing-member",
+    ),
+)
+def test_reached_internal_resolution_fails_closed(
+    tmp_path,
+    api_source,
+    extra_sources,
+    kind,
+    operand,
+):
+    root = _snapshot_tree(
+        tmp_path,
+        {
+            "kernel/__init__.py": "",
+            "kernel/api.py": api_source,
+            **extra_sources,
+        },
+    )
+    snapshot = rewrite_architecture_check.build_python_source_snapshot(root)
+    trees = rewrite_architecture_check._snapshot_trees(snapshot)
+
+    with pytest.raises(rewrite_architecture_check._ImportExecutionFailure) as refused:
+        rewrite_architecture_check._derive_import_execution_closures(
+            snapshot,
+            trees,
+        )
+
+    assert refused.value.kind.value == kind
+    assert refused.value.relative_path == "kernel/api.py"
+    assert refused.value.line == 1
+    assert refused.value.operand == operand
+
+
+def test_external_import_remains_outside_resolution_claim(tmp_path):
+    root = _snapshot_tree(
+        tmp_path,
+        {
+            "kernel/__init__.py": "",
+            "kernel/api.py": "import external_dependency.missing\n",
+        },
+    )
+
+    _snapshot, _trees, closures = _execution_state(root)
+
+    assert all(
+        not module.startswith("external_dependency") for module in closures.production
+    )
+
+
+@pytest.mark.parametrize(
+    ("api_source", "extra_sources", "expected_module"),
+    (
+        (
+            "from deployment import configured_value\n",
+            {"deployment/__init__.py": "configured_value = 1\n"},
+            "deployment",
+        ),
+        (
+            "from helper import configured_value\n",
+            {"helper.py": "configured_value = 1\n"},
+            "helper",
+        ),
+    ),
+    ids=("regular-package-attribute", "plain-module-attribute"),
+)
+def test_absent_from_member_is_allowed_for_retained_base(
+    tmp_path,
+    api_source,
+    extra_sources,
+    expected_module,
+):
+    root = _snapshot_tree(
+        tmp_path,
+        {
+            "kernel/__init__.py": "",
+            "kernel/api.py": api_source,
+            **extra_sources,
+        },
+    )
+
+    _snapshot, _trees, closures = _execution_state(root)
+
+    assert expected_module in closures.production
+
+
+def test_public_graph_is_the_only_exact_import_transition_authority(tmp_path):
+    root = _snapshot_tree(
+        tmp_path,
+        {
+            "kernel/__init__.py": "",
+            "kernel/api.py": (
+                "import kernel.helper\n"
+                "from . import helper\n"
+                "import deployment.namespace\n"
+            ),
+            "kernel/helper.py": "",
+            "deployment/__init__.py": "",
+            "deployment/namespace/worker.py": "",
+        },
+    )
+
+    snapshot, trees, closures = _execution_state(root)
+    helper_path = closures.production["kernel.helper"]
+    normalized = rewrite_architecture_check._normalized_imports(
+        "kernel.api",
+        "kernel/api.py",
+        trees["kernel.api"],
+    )
+    exact_transitions = [
+        transition
+        for path in closures.production.values()
+        for transition in path
+        if transition.kind
+        is rewrite_architecture_check._ImportExecutionTransitionKindV1.EXPLICIT_IMPORT
+    ]
+
+    assert helper_path[-1].line == 1
+    assert {
+        (record.source_module, record.source_relative_path) for record in normalized
+    } == {("kernel.api", "kernel/api.py")}
+    assert {target for record in normalized for target in record.candidates} == {
+        "kernel.helper"
+    }
+    assert "deployment.namespace" not in closures.production
+    for transition in exact_transitions:
+        assert transition.predecessor is not None
+        assert (
+            rewrite_architecture_check.PythonImportEdgeV1(
+                transition.line,
+                transition.target,
+            )
+            in snapshot.import_graph[transition.predecessor]
+        )
+
+
+def test_execution_closure_provenance_is_deterministic(tmp_path):
+    sources = {
+        "kernel/__init__.py": "",
+        "kernel/api.py": "import kernel.helper\n",
+        "kernel/application_runtime.py": "import kernel.helper\n",
+        "kernel/helper.py": "import kernel.api\n",
+    }
+    first_root = _snapshot_tree(tmp_path / "first", sources)
+    second_root = _snapshot_tree(
+        tmp_path / "second",
+        dict(reversed(tuple(sources.items()))),
+    )
+
+    _first, _first_trees, first = _execution_state(first_root)
+    _second, _second_trees, second = _execution_state(second_root)
+
+    assert dict(first.production) == dict(second.production)
+    assert dict(first.legacy) == dict(second.legacy)
+    assert first.production["kernel.helper"][-1].predecessor == "kernel.api"
+
+
+def test_initializer_analysis_does_not_execute_retained_source(tmp_path):
+    sentinel = tmp_path / "initializer-executed"
+    root = _snapshot_tree(
+        tmp_path / "tree",
+        {
+            "kernel/__init__.py": (f"open({str(sentinel)!r}, 'w').write('executed')\n"),
+        },
+    )
+
+    _execution_state(root)
+
+    assert sentinel.exists() is False
+
+
+def test_closure_failure_prevents_every_policy_and_partial_fallback(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    root = _snapshot_tree(
+        tmp_path,
+        {
+            "kernel/__init__.py": "from . import helper\n",
+            "kernel/helper.py": "import deployment.missing\n",
+            "deployment/__init__.py": "",
+        },
+    )
+    snapshot = rewrite_architecture_check.build_python_source_snapshot(root)
+    trees = rewrite_architecture_check._snapshot_trees(snapshot)
+
+    def forbidden_policy(*_args, **_kwargs):
+        raise AssertionError("policy ran with a partial closure")
+
+    monkeypatch.setattr(
+        rewrite_architecture_check,
+        "build_python_source_snapshot",
+        lambda _root: snapshot,
+    )
+    monkeypatch.setattr(
+        rewrite_architecture_check,
+        "_snapshot_trees",
+        lambda _snapshot: trees,
+    )
+    monkeypatch.setattr(
+        rewrite_architecture_check,
+        "_check_import_firewall",
+        forbidden_policy,
+    )
+    monkeypatch.setattr(
+        rewrite_architecture_check,
+        "_check_tenant_uow_architecture",
+        forbidden_policy,
+    )
+
+    assert rewrite_architecture_check.main() == 1
+    assert "kernel/helper.py:1: UNRESOLVED_INTERNAL_IMPORT" in (capsys.readouterr().out)
+
+
+def test_deployment_initializer_is_scanned_by_production_firewall(tmp_path):
+    _firewall_tree(tmp_path, "import deployment.postgresql.worker\n")
+    _write_module(tmp_path, "deployment/__init__.py", "import importlib\n")
+    _write_module(tmp_path, "deployment/postgresql/__init__.py")
+    _write_module(tmp_path, "deployment/postgresql/worker.py")
+
+    assert rewrite_architecture_check._check_import_firewall(tmp_path) == [
+        "deployment/__init__.py:1: forbidden dynamic import mechanism "
+        "(import of 'importlib'); production import path kernel.api -> "
+        "deployment.postgresql.worker -> "
+        "[required initializer deployment/__init__.py]"
+    ]
+
+
+def test_initializer_transition_diagnostic_has_no_fabricated_line(tmp_path):
+    _firewall_tree(tmp_path, "import kernel.legacy_m1.worker\n")
+    _write_module(tmp_path, "kernel/legacy_m1/__init__.py")
+    _write_module(tmp_path, "kernel/legacy_m1/worker.py")
+
+    failures = rewrite_architecture_check._check_import_firewall(tmp_path)
+
+    assert failures[0] == (
+        "kernel/legacy_m1/__init__.py: production import path kernel.api -> "
+        "kernel.legacy_m1.worker -> "
+        "[required initializer kernel/legacy_m1/__init__.py] reaches legacy "
+        "module 'kernel.legacy_m1'"
+    )
+    assert "__init__.py:0:" not in failures[0]
+
+
+def test_legacy_initializer_reverse_import_uses_initializer_provenance(
+    tmp_path,
+):
+    _firewall_tree(tmp_path, "")
+    _write_module(
+        tmp_path,
+        "kernel/legacy_m1/__init__.py",
+        "import kernel.application_runtime\n",
+    )
+
+    assert rewrite_architecture_check._check_import_firewall(tmp_path) == [
+        "kernel/legacy_m1/__init__.py:1: legacy import path "
+        "kernel.legacy_m1.api -> "
+        "[required initializer kernel/legacy_m1/__init__.py] -> "
+        "kernel.application_runtime reaches production composition module "
+        "'kernel.application_runtime'"
+    ]
+
+
+_VALID_TENANT_UOW_SOURCE = """\
+class TenantUnitOfWork:
+    __slots__ = ("__binding", "__active", "__allocate_batch", "__batch")
+
+    def __init__(self, binding, allocate_batch):
+        self.__binding = binding
+        self.__active = False
+        self.__allocate_batch = allocate_batch
+        self.__batch = None
+
+    @property
+    def binding(self):
+        return self.__binding
+
+    @property
+    def batch(self):
+        return self.__batch
+
+    def begin_batch(self):
+        self.__batch = self.__allocate_batch()
+        return self.__batch
+"""
+
+
+@pytest.mark.parametrize(
+    ("initializer", "api_source", "extra_sources"),
+    (
+        ("kernel/__init__.py", "", {}),
+        (
+            "kernel/features/__init__.py",
+            "import kernel.features.worker\n",
+            {"kernel/features/worker.py": ""},
+        ),
+    ),
+    ids=("exact-kernel", "nested-kernel"),
+)
+def test_tenant_policy_scans_reached_kernel_initializers(
+    tmp_path,
+    initializer,
+    api_source,
+    extra_sources,
+):
+    sources = {
+        "kernel/__init__.py": "",
+        "kernel/api.py": api_source,
+        "kernel/tenant_uow.py": _VALID_TENANT_UOW_SOURCE,
+        **extra_sources,
+    }
+    sources[initializer] = "probe = holder._TenantUnitOfWork__connection\n"
+    root = _snapshot_tree(tmp_path, sources)
+    snapshot, trees, closures = _execution_state(root)
+
+    assert rewrite_architecture_check._check_tenant_uow_architecture(
+        snapshot,
+        trees,
+        closures,
+    ) == [
+        f"{initializer}:1: tenant UnitOfWork private-state access "
+        "'_TenantUnitOfWork__connection'"
+    ]
+
+
+def test_public_snapshot_golden_fixture_is_unchanged(tmp_path):
+    sources = {
+        "kernel/__init__.py": "PACKAGE = 'kernel'\n",
+        "kernel/api.py": "from .helper import VALUE\n",
+        "kernel/application_runtime.py": "RUNTIME = True\n",
+        "kernel/helper.py": "VALUE = 1\n",
+        "kernel/legacy_m1/__init__.py": "PACKAGE = 'legacy'\n",
+        "kernel/legacy_m1/api.py": "from . import runtime\n",
+        "kernel/legacy_m1/runtime.py": "LEGACY = True\n",
+    }
+    root = _snapshot_tree(tmp_path, sources)
+    snapshot = rewrite_architecture_check.build_python_source_snapshot(root)
+    second = rewrite_architecture_check.build_python_source_snapshot(root)
+    units = {
+        module: (
+            unit.module_name,
+            unit.relative_path,
+            unit.source_bytes,
+            unit.source_text,
+            unit.byte_length,
+            unit.sha256,
+            unit.ast_node_count,
+            unit.ast_depth,
+        )
+        for module, unit in snapshot.modules_by_name.items()
+    }
+    expected_unit_values = {
+        "kernel": (
+            19,
+            "ea7f7742220b4b0ef86f74d17fcd3e328e6f8438ee1066c62ff75428a161d2c4",
+            5,
+            4,
+        ),
+        "kernel.api": (
+            26,
+            "0899608dd32394baea0627f0556cd5ed7b430e9066df055e3f4ab674bc5b8bb9",
+            3,
+            3,
+        ),
+        "kernel.application_runtime": (
+            15,
+            "2081fb99765b1df11601111c4e906dbd807ed9167f6ccb9ee1215679730de2db",
+            5,
+            4,
+        ),
+        "kernel.helper": (
+            10,
+            "e13df8c44af5dea1e412403910b99cc5a48f2ccbf68a66b3374d6ab9cef9fc65",
+            5,
+            4,
+        ),
+        "kernel.legacy_m1": (
+            19,
+            "1af47a9f016c20c23c4475b8feef56d8def1ac8c2994733753faa9ed824e042e",
+            5,
+            4,
+        ),
+        "kernel.legacy_m1.api": (
+            22,
+            "d93e2f5b314700e236049b9d1ba8087fc6239d70ee10038546bc7ad5a59d9e98",
+            3,
+            3,
+        ),
+        "kernel.legacy_m1.runtime": (
+            14,
+            "2ef230c53a5ec069e39d8d320638b0cb7814a6ad31074f68e22a0ee93adc6565",
+            5,
+            4,
+        ),
+    }
+
+    assert snapshot == second
+    assert set(units) == set(expected_unit_values)
+    for module, value in units.items():
+        byte_length, digest, node_count, depth = expected_unit_values[module]
+        relative = module.replace(".", "/") + ".py"
+        if module in {"kernel", "kernel.legacy_m1"}:
+            relative = module.replace(".", "/") + "/__init__.py"
+        assert value == (
+            module,
+            relative,
+            sources[relative].encode("utf-8"),
+            sources[relative],
+            byte_length,
+            f"sha256:{digest}",
+            node_count,
+            depth,
+        )
+    assert dict(snapshot.import_graph) == {
+        "kernel": (),
+        "kernel.api": (
+            rewrite_architecture_check.PythonImportEdgeV1(
+                1,
+                "kernel.helper",
+            ),
+        ),
+        "kernel.application_runtime": (),
+        "kernel.helper": (),
+        "kernel.legacy_m1": (),
+        "kernel.legacy_m1.api": (
+            rewrite_architecture_check.PythonImportEdgeV1(
+                1,
+                "kernel.legacy_m1",
+            ),
+            rewrite_architecture_check.PythonImportEdgeV1(
+                1,
+                "kernel.legacy_m1.runtime",
+            ),
+        ),
+        "kernel.legacy_m1.runtime": (),
+    }
+    assert dict(snapshot.production_reachability) == {
+        "kernel.api": ("kernel.api",),
+        "kernel.application_runtime": ("kernel.application_runtime",),
+        "kernel.helper": ("kernel.api", "kernel.helper"),
+    }
+    assert dict(snapshot.legacy_reachability) == {
+        "kernel.legacy_m1.api": ("kernel.legacy_m1.api",),
+        "kernel.legacy_m1.runtime": ("kernel.legacy_m1.runtime",),
+        "kernel.legacy_m1": (
+            "kernel.legacy_m1.api",
+            "kernel.legacy_m1",
+        ),
+    }
+    assert (
+        snapshot.source_file_count,
+        snapshot.total_source_bytes,
+        snapshot.total_ast_nodes,
+        snapshot.total_import_edges,
+        snapshot.content_sha256,
+    ) == (
+        7,
+        125,
+        31,
+        3,
+        "sha256:b230d73cdfb094c35c0cd15817215fe959bcc9a1a0aa5333b9954976e9f8937c",
+    )
+
+
+def test_unreached_internal_error_remains_outside_fixed_root_claim(tmp_path):
+    root = _snapshot_tree(
+        tmp_path,
+        {
+            "kernel/__init__.py": "",
+            "deployment/__init__.py": "",
+            "operator_entry.py": "import deployment.missing\n",
+        },
+    )
+
+    _snapshot, _trees, closures = _execution_state(root)
+
+    assert "operator_entry" not in closures.production
+    assert "operator_entry" not in closures.legacy
