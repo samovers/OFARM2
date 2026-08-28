@@ -381,7 +381,9 @@ execution.
   policy run, or fallback to explicit-only public reachability.
 - **PIR-008 — Complete architecture-policy adoption.** The production and
   reverse import firewall use the corresponding import-execution closures, and
-  the tenant UnitOfWork private-state scan uses the production closure.
+  the tenant UnitOfWork private-state scan uses the production closure,
+  including the exact `kernel` package initializer as well as `kernel.*`
+  descendants.
 - **PIR-009 — Public-contract preservation.** Public snapshot types, fields,
   descriptor values, explicit-graph and reachability algorithms,
   content-digest algorithm and manifest schema, refusal vocabulary, external
@@ -419,7 +421,7 @@ state.
 | PIR-007 | Internal resolution fails after another valid member was discovered | no firewall or tenant policy runs on the partial discovery and the checker returns nonzero |
 | PIR-008 | `deployment/__init__.py` contains a forbidden production dynamic import or legacy resource | the production firewall fails even though the public production map remains explicit-only |
 | PIR-008 | A legacy-reached initializer explicitly reaches a production composition module | the reverse firewall fails with initializer-aware provenance |
-| PIR-008 | A newly included production initializer accesses `_TenantUnitOfWork__connection` | the tenant UnitOfWork scan reports the private-state access |
+| PIR-008 | Exact `kernel/__init__.py` or a nested reached Kernel initializer accesses `_TenantUnitOfWork__connection` | the tenant UnitOfWork scan reports the private-state access; exact module `kernel` is not excluded by a `kernel.`-only prefix test |
 | PIR-009 | A controlled source-tree fixture is compared with reviewed-base golden public values, including its exact content digest | post-change types, descriptor, units, graph, reachability, equality behavior, and fixture digest match the golden values; repository-root digest equality is not required |
 | PIR-009 | Existing temporal checks and temporal reachability fixtures run unchanged | they pass without path, contract, or assertion edits |
 | PIR-010 | An unclassified operator or console entry point imports a module outside both fixed closures | it remains outside this claim and is recorded only as the separate governance Follow-up |
@@ -435,7 +437,8 @@ closures. That object is passed to the two architecture-policy consumers that
 currently interpret public reachability as execution coverage:
 
 1. the production and reverse import firewall; and
-2. the tenant UnitOfWork architecture scan.
+2. the tenant UnitOfWork architecture scan, whose Kernel-module predicate must
+   include exact module `kernel` as well as `kernel.*` descendants.
 
 Direct-import bounds continue to consume the public explicit graph. Provider,
 profile-neutrality, source-budget, security-audit surface, and fixed-module
