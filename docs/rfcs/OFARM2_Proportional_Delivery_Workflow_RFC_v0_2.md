@@ -610,6 +610,6 @@ This Phase A stops before:
 - changing runtime, database, tenant, key, audit, or deployment behavior; or
 - implementing anything beyond this contract draft.
 
-The next lawful actions are to create the draft adoption pull request, bind its
-stable reference into section 13, complete exact-head Phase A review and the
-currently required hosted gates, then present one plain-English decision card.
+The next lawful actions are to complete exact-head Phase A review and the
+currently required hosted gates for draft PR #348, then present one
+plain-English decision card.
