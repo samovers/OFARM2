@@ -1,20 +1,27 @@
 # OFARM Security Audit Cross-Slice Closure Evidence RFC v0.1
 
-**Status:** Phase B implementation in draft PR #344; the exact-head merge stop
-rule in section 14.5 applies
+**Status:** version 1 merged through PR #344; version 2 is task-user approved
+for Phase B only in PR #345 and remains subject to exact-head review, hosted
+gates, publication, scope, cancellation, and merge-stop checks
 
 **Decision:** `ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001`
 
-**Decision version:** 1
+**Decision version:** 2; version 1 remains the historical
+authority for merged PR #344
 
 **Issue:** [#192](https://github.com/samovers/OFARM2/issues/192)
 
-**Reviewed base:** `c0bf97b263bc87a270c97e910e24adce4ec7c104`
+**Reviewed base for version 2:**
+`bbf8f0fb9235ffca4f891d789f25e6f1aed7fab8`
 
-**Primary trust boundary:** executed evidence that one real ASGI request path
-preserves the pre-binding security-audit boundary across one independently
-provisioned tenant PostgreSQL service and one independently provisioned
-security-audit PostgreSQL service.
+**Version 2 draft implementation PR:**
+<https://github.com/samovers/OFARM2/pull/345>
+
+**Version 2 primary trust boundary:** executed evidence that exact typed
+correlation-HMAC unavailability remains fail-closed across one real ASGI
+request path, one independently provisioned tenant PostgreSQL service, one
+independently provisioned security-audit PostgreSQL service, audit health, and
+durable live-gap reconciliation.
 
 This RFC creates no OFARM authority. It does not authorize deployment,
 production access, production composition, release, certification, current
@@ -724,3 +731,418 @@ retrievable in order, no later cancellation exists, and the required pre-merge
 scope report is posted. New ideas, Preferences, hypothetical deployment
 hardening, and separate trust boundaries become Follow-ups and do not reopen
 this decision.
+
+## 15. Version 2 closure-correction Phase A contract
+
+Sections 1 through 14 preserve the complete version 1 design and its
+historical approval and merge evidence. Version 2 does not reinterpret that
+work. This section is the complete controlling Phase A contract for the narrow
+post-closure correction. Where a version 1 statement excludes provider
+availability evidence, that exclusion continues to prohibit a live provider
+claim but no longer excludes executed evidence for the runtime's exact typed
+unavailability seam.
+
+### 15.1 Problem and goal
+
+Issue #192 explicitly requires real-ASGI/PostgreSQL hostile evidence for an
+unavailable key. Version 1 joined the accepted runtime and both PostgreSQL
+services, but its HMAC factory always succeeds. Lower-level KMS, HMAC, health,
+and gap tests do not prove the joined request ordering when HMAC creation
+refuses.
+
+The one problem is therefore a missing issue-level evidence case, not a
+currently demonstrated production-code defect. Version 2 must establish that
+one mapped authentication denial whose correlation-HMAC creation raises exact
+`CorrelationHmacUnavailable`:
+
+1. returns only the fixed audit-unavailable ASGI result;
+2. cannot start principal resolution or tenant UnitOfWork entry;
+3. cannot change tenant knowledge state or report an audit event as stored;
+4. marks the authentication health lane not ready and opens the bounded live
+   gap;
+5. exposes no protected input through the accepted evidence surfaces; and
+6. is followed by a later independent same-lane denial that stores its own
+   event, restores health, and durably closes the prior unknown-count gap
+   without retrying the failed request.
+
+If the focused case demonstrates that existing production code violates any
+of those conditions, implementation stops before changing production code and
+requires a versioned contract amendment.
+
+### 15.2 Learning value
+
+This correction validates that the accepted typed key-service failure crosses
+the same health, gap, producer, ASGI, tenant, and two-service composition as an
+audit-database connection failure. It reduces the demonstrated risk that
+issue-level closure inferred key-unavailability behavior from isolated unit
+tests that never executed the joined state transitions.
+
+### 15.3 Non-goals
+
+Version 2 does not:
+
+- change production Python, SQL, migrations, roles, grants, provisioning,
+  configuration, workflows, deployment, or HTTP routes;
+- call Cloud KMS or prove provider availability, IAM, key custody, key
+  readiness, rotation, destruction, clocks, or secret distribution;
+- change `CorrelationHmacUnavailable`, `SecurityAuditHealth`, live-gap
+  semantics, producer mapping, exception mapping, retry, or readiness;
+- add a key, credential, provider client, network call, scheduler, queue,
+  spool, timer, worker, or automatic retry;
+- suppress credential-bearing dataclass representations or resolve the
+  separate diagnostic-representation finding;
+- protect export-output custody or delivery;
+- change production clock, timer, route, provider, or secret-custody evidence;
+- repair issue #334 or complete execution-root/source-capability governance;
+- authorize production composition, deployment, release, certification,
+  current compliance, or issue closure; or
+- broaden the original version 1 test-owned ASGI evidence claim into a claim
+  that `kernel.api` publishes a governed production route.
+
+### 15.4 Trust model
+
+#### Protected assets
+
+The protected assets are denial preservation, tenant truth and knowledge
+state, the absence of a falsely reported audit append, the exact health lane,
+the bounded durable gap posture, the no-retry rule, and the absence of tokens,
+identity, tenant, Party, route, DSN, password, exception detail, or provider
+key material from responses, captured output, and durable audit evidence.
+
+#### Trusted components
+
+Version 2 trusts the exact reviewed repository head; the accepted tenant and
+audit fixtures; PostgreSQL authentication, `session_user`, transaction and
+clock behavior; the existing `ApplicationRuntime`, authentication producer,
+principal resolver, tenant UnitOfWork, audit client, health observer, live-gap
+controller, and bounded reader; and the existing test-owned FastAPI handler.
+
+One test-owned switchable HMAC factory is trusted only to implement the
+existing `CorrelationHmacFactory` protocol. On an explicitly armed next call,
+it raises the production type `CorrelationHmacUnavailable`. Otherwise it
+returns the same accepted deterministic `CorrelationHmac` carrier as version
+1. It is not a key authority, KMS emulator, provider readiness source, or
+source of production key material.
+
+#### Untrusted actors and inputs
+
+Authorization bytes, fictional tokens, request headers and bodies, ASGI
+ordering, all identity and tenant canaries, DSN and exception canaries, the
+typed HMAC refusal, database exception text, test output, and durable rows are
+untrusted until the exact assertions and conformance gates validate them.
+
+The supported runtime entry point is public
+`ApplicationRuntime.authenticate(token)` invoked by the already accepted
+test-owned ASGI handler. The handler creates no production route authority.
+The hostile state is reached through an explicit test protocol seam, not by
+mutating a private production field or monkeypatching production results.
+
+#### Explicitly excluded attacker capabilities
+
+Arbitrary in-process mutation, reflective object replacement, local source
+substitution after exact-head selection, compromised dependencies, arbitrary
+filesystem mutation, host or database-server compromise, repository-owner or
+trusted-operator compromise, KMS administrator compromise, and a malicious
+test runner are out of scope. Live KMS networking, IAM, custody, provider
+timing, and production secret injection are also out of scope. The test proves
+the joined runtime response to the exact typed failure only.
+
+### 15.5 Authority map
+
+| Decision | Sole authority | Explicit non-authorities |
+| --- | --- | --- |
+| ASGI scheduling and fixed terminal response | Existing test-owned FastAPI handler calling public runtime operations | A claim that `kernel.api` exposes a governed route |
+| Mapped authentication denial | Existing deterministic verifier and `AuthenticationAuditProducer` closed outcome map | HMAC seam, response text, caller-selected reason |
+| HMAC availability for this scenario | One next call of the switchable test factory, returning the accepted carrier or raising exact `CorrelationHmacUnavailable` | Generic exception, audit database, HTTP response, live provider posture |
+| Provider-specific failure semantics | Existing focused `GoogleKmsCorrelationHmac` tests | This cross-slice test or deterministic carrier |
+| Authentication health state | Existing `SecurityAuditHealth` start/completion ordering | HTTP status, gap state, test assertion order |
+| Live-gap state and close record | Existing `SecurityAuditGapController`, `SecurityAuditGapClient`, and audit PostgreSQL functions/clocks | Python wall clock, caller count, HMAC seam |
+| Audit append outcome | Exact audit producer LOGIN, `PreTenantAuditClient`, and audit PostgreSQL append function | Recorder contents alone, tenant database, response text |
+| Principal and tenant effects | Tenant PostgreSQL through `PrincipalBindingResolver` and `TenantUnitOfWorkManager` | Audit row, HMAC seam, request headers |
+| Audit observation | Existing committed access-intent and bounded-reader protocol | Direct table scan, COPY, export, break-glass, private state |
+| Test admission | Exact collected pytest node, canonical inventory, exact-head review, and admitted gates | RFC prose, skipped local node, earlier-head result |
+
+No fallback logger, tenant-table audit path, duplicate HMAC state, alternate
+gap writer, retry path, or production dependency-injection surface is added.
+
+### 15.6 State machine and ordering
+
+The first request follows this exact order:
+
+```text
+ASGI_REQUEST
+  -> MAPPED_AUTHENTICATION_DENIAL
+  -> AUTHENTICATION_GAP_ATTEMPT_STARTED
+  -> AUTHENTICATION_HEALTH_ATTEMPT_STARTED
+  -> CORRELATION_HMAC_UNAVAILABLE
+  -> HEALTH_ATTEMPT_FAILED
+  -> GAP_OPENED_WITH_UNKNOWN_COUNT
+  -> FIXED_AUDIT_UNAVAILABLE_RESPONSE
+  -> REQUEST_TERMINAL
+```
+
+HMAC refusal occurs before the audit appender receives a carrier. Principal
+resolution, tenant UnitOfWork entry, tenant SQL, and audit append are forbidden
+after that refusal. The health failure completes before the exception leaves
+the inner sink. The outer gap controller records the failed attempt and
+rethrows the original typed error. Because that type does not prove whether a
+durable audit event exists, the accepted gap count is unknown rather than an
+invented exact count.
+
+Recovery is a new request, never a retry:
+
+```text
+NEW_ASGI_REQUEST
+  -> DIFFERENT_MAPPED_AUTHENTICATION_DENIAL
+  -> GAP_AND_HEALTH_ATTEMPTS_STARTED
+  -> CORRELATION_HMAC_CREATED
+  -> PRE_TENANT_FAILURE_COMMITTED
+  -> HEALTH_ATTEMPT_SUCCEEDED
+  -> UNKNOWN_COUNT_GAP_COMMITTED_AND_CLEARED
+  -> ORIGINAL_AUTHENTICATION_DENIAL_RESPONSE
+  -> REQUEST_TERMINAL
+```
+
+The fixture must establish two distinct PostgreSQL system identifiers and take
+bounded before-snapshots before arming the failure. A lock protects the
+one-call switch so the test does not infer ordering from wall time. Audit
+PostgreSQL remains authoritative for event and gap time. There is no
+cross-database transaction and no time-of-check/time-of-use claim between the
+services.
+
+Forbidden transitions include HMAC refusal to appender invocation, principal
+resolution, tenant entry, tenant commit, HTTP success, or a claimed stored
+event; health recovery without a later successful same-lane attempt; gap clear
+without its durable close append; and replay of the failed request.
+
+### 15.7 Invariants and acceptance criteria
+
+All version 1 `XSLICE-001` through `XSLICE-013` invariants remain controlling.
+Version 2 adds exactly two stable invariants.
+
+#### `XSLICE-014` — typed HMAC unavailability is fail-closed before storage
+
+For a real ASGI request with a mapped authentication denial, exact
+`CorrelationHmacUnavailable` from the next HMAC creation returns the fixed 503
+audit-unavailable result. The audit appender records no returned result, no
+new `PRE_TENANT_FAILURE` is durably visible for that request, principal
+resolution and tenant UnitOfWork counts are unchanged, and the tenant
+knowledge head is unchanged. The authentication health lane is `NOT_READY`
+and the live-gap controller is `OPEN` when the request terminates.
+
+#### `XSLICE-015` — same-lane recovery is independent, bounded, and leak-free
+
+After HMAC availability is restored, one later independent mapped denial on
+the authentication lane stores exactly its own accepted event, changes health
+to `READY`, and closes the prior gap to `CLEAR`. The durable gap event reports
+an unknown interval count and does not claim the failed request was stored or
+retry it. Tokens, identity, tenant, Party, batch/request, route, DSN, password,
+and exception canaries are absent from the fixed responses, captured
+stdout/stderr, formatted accepted evidence, and durable event projection. The
+harness supplies no raw provider key material.
+
+Acceptance additionally requires the existing two-service, bounded-reader,
+finite-timeout, no-production-change, exact-inventory, and no-skip hosted
+invariants to remain true.
+
+### 15.8 Production-reachable negative cases
+
+| Invariant | Counterexample from the supported runtime boundary | Required result |
+| --- | --- | --- |
+| `XSLICE-014` | POST a mapped malformed credential to the accepted test ASGI handler after arming the next HMAC call to raise exact `CorrelationHmacUnavailable`. | Fixed 503; no appender result, resolver call, tenant entry, tenant head change, or durable pre-tenant event; health not ready and gap open. |
+| `XSLICE-015` | Restore the factory and POST a later distinct mapped refusal on the same lane. | The later event alone is stored; health becomes ready; one unknown-count gap closes; the first request is not retried and no canary leaks. |
+| `XSLICE-001` | Point the tenant and audit fixtures at the same PostgreSQL system. | Fixture fails before ASGI construction. |
+| `XSLICE-010` | Put unique canaries in both requests and accepted evidence surfaces. | No forbidden value appears in response, output, or durable event projection. |
+| `XSLICE-011` | Replace the bounded reader with direct or unbounded audit SQL. | Design fails review; such output is not acceptance evidence. |
+| `XSLICE-012` | Skip the new node in admitted hosted execution, add an unbounded wait, or omit its canonical inventory entry. | Hosted or conformance admission fails. |
+| `XSLICE-013` | Change production code, provider configuration, SQL, workflow, or a fourth path to make the case pass. | Stop for a new version or separate boundary before editing. |
+
+No negative case mutates a private production field, monkeypatches a
+production result, or invents an unsupported runtime state.
+
+### 15.9 Proposed architecture and smallest change
+
+Within `kernel/tests/test_security_audit_runtime_cross_slice.py` only:
+
+1. replace the test-only `_DeterministicHmac` with `_SwitchableHmac`;
+2. give it a lock, a one-shot next-call refusal flag, and `refuse_once()`;
+3. make `create()` atomically consume one armed refusal and raise exact
+   `CorrelationHmacUnavailable`, otherwise returning the existing accepted
+   deterministic carrier;
+4. expose that same factory on `_Harness` while continuing to bind it to both
+   existing health lanes; and
+5. add one finite test named
+   `test_hmac_failure_denies_then_later_lane_success_closes_gap` that executes
+   the state transitions and observations above.
+
+The canonical inventory changes mechanically from 3,581 to 3,582 collected
+nodes. The test module must remain at or below its existing 800-line
+architecture budget. No production source, shared test framework, new fixture
+module, generic provider emulator, or architecture-checker change is needed.
+
+This is the minimum coherent solution because an isolated unit test would
+repeat the evidence gap, a live KMS call would add unrelated custody and
+provider boundaries, and a production route or injection seam would create
+authority solely for testing.
+
+### 15.10 Elegance audit
+
+- **Sources of truth:** one typed test availability switch, one tenant
+  PostgreSQL authority, one audit PostgreSQL authority, one health owner, one
+  gap owner, and one canonical test result.
+- **Authoritative transitions:** HMAC `create()`, health completion, audit
+  append commit, gap close append, and request terminal response.
+- **Duplicated fields:** none in production. The existing deterministic HMAC
+  carrier shape remains defined once.
+- **Compatibility surfaces:** none. No alias, optional provider bag, fallback,
+  mutable global, or production constructor is introduced.
+- **New abstraction count:** zero outside the existing test module; the
+  existing test factory is renamed and gains one bounded behavior.
+- **Deletion:** the obsolete always-successful test class name is removed.
+  No accepted production behavior is deleted.
+- **Rewrite assessment:** modifying the existing focused harness is cleaner
+  than a new test application or production rewrite.
+
+### 15.11 Pull request boundary
+
+The one implementation PR is draft PR
+<https://github.com/samovers/OFARM2/pull/345>.
+
+The exact Phase A path allowlist is:
+
+1. `docs/rfcs/OFARM_Security_Audit_Cross_Slice_Closure_Evidence_RFC_v0_1.md`
+
+After exact later approval, the exact Phase B path allowlist is:
+
+1. `docs/rfcs/OFARM_Security_Audit_Cross_Slice_Closure_Evidence_RFC_v0_1.md`
+2. `kernel/tests/test_security_audit_runtime_cross_slice.py`
+3. `conformance/review_baseline_test_inventory.json`
+
+The reviewed base is
+`bbf8f0fb9235ffca4f891d789f25e6f1aed7fab8`. There is no stacked pull-request
+dependency. Reviewers must not require live KMS/provider evidence, production
+code, a production route, new SQL or authority, credential-representation
+hardening, source-governance changes, issue #334, deployment evidence, or
+issue closure from this PR.
+
+Separate Follow-ups remain:
+
+- credential-bearing diagnostic representation correction recorded in the
+  [post-closure issue comment](https://github.com/samovers/OFARM2/issues/192#issuecomment-5444455513);
+- protected export-output custody and delivery;
+- production clock, timer, route, provider, and secret-custody evidence;
+- issue #334 package-initializer reachability; and
+- complete execution-root/source-capability governance.
+
+Stop and require a new decision version before editing if implementation or
+review needs production code, another exception contract, a different health
+or gap semantic, live provider credentials, a fourth path, more than 800 test
+module lines, an architecture rule change, or any material change to the trust
+model, authority map, invariant, non-goal, or effect. A production defect
+revealed by the test is evidence for a separate amended boundary, not
+permission to fix it in this version.
+
+### 15.12 Provisional design record
+
+Not provisional for the stated evidence scope. A typed protocol failure is the
+correct composition seam because this decision tests runtime ordering after
+the provider has refused, not why the external provider refused. It does not
+stand in for KMS custody, IAM, readiness, or production-route evidence.
+
+The AI-assisted approval remains provisional pre-deployment repository
+authority only. Before deployment it must be replaced by independently
+human-controlled and independently verifiable approval. Evidence requiring
+redesign includes inability to reach the state through the public runtime
+surface, a need to mutate private production state, a need for production code
+or provider credentials, or failure to fit the exact three-path and 800-line
+envelope.
+
+### 15.13 Traceability and verification
+
+| Invariant | Owning code exercised | Negative test | Acceptance evidence | Smallest verification |
+| --- | --- | --- | --- | --- |
+| `XSLICE-001` | Existing tenant and audit fixtures and system-ID check | Same-system routes | Distinct nonempty PostgreSQL system IDs | Focused hosted module and both migration preflights |
+| `XSLICE-007` | Existing audit client, health, and gap path | Refused audit connection | Existing connection-failure recovery remains passing | Focused module plus health/gap suites |
+| `XSLICE-010` | Closed event projection and fixed ASGI results | Unique input and exception canaries | Forbidden-value absence | Focused module plus existing leakage suites |
+| `XSLICE-011` | Existing bounded query runner | Direct/unbounded observation | Accepted bounded event page only | Bounded-query suite and focused module |
+| `XSLICE-012` | Pytest inventory and conformance pipeline | Skip, timeout, or inventory drift | 3,582 exact hosted nodes with the new node executed | Collection, inventory check, admitted baselines |
+| `XSLICE-013` | Exact Git diff and architecture check | Production or fourth-path edit | Exact three-path equality and unchanged production tree | Package contract, architecture, diff check |
+| `XSLICE-014` | HMAC factory, health sink, gap wrapper, authentication producer, ASGI handler, both stores | Exact typed refusal on mapped denial | Fixed 503, no appender/tenant effect, not-ready/open posture | New focused node plus HMAC/health/gap suites |
+| `XSLICE-015` | Same components plus real audit append and gap close | Later same-lane independent denial | One later event, one unknown-count gap, ready/clear posture, no leakage | New focused node plus bounded reader and gap suites |
+
+Required Phase A verification is the CPython 3.12 package contract, exact
+one-path equality, `git diff --check`, exact-head contract review, and zero
+demonstrated Phase A Blockers. A hosted baseline is not evidence for an
+RFC-only head and must not run before that review.
+
+After approval, required local Phase B verification is:
+
+- both tenant and audit migration preflights;
+- focused cross-slice collection and execution, with honest local skips only
+  when hosted routes are absent;
+- focused Google KMS HMAC, authentication producer, principal resolver,
+  request-router, audit client, health, live-gap, bounded-reader, application
+  runtime, tenant UnitOfWork, and concurrency suites;
+- canonical inventory regeneration and exact comparison;
+- CPython 3.12 package contract and architecture constraints;
+- Ruff, `git diff --check`, the 800-line budget, and exact three-path equality.
+
+Review-before-baseline ordering is mandatory. First review the exact Phase B
+head against this contract to zero demonstrated Blockers. Only then admit one
+hosted source run whose two 3,582-test baselines execute without skips, match
+the canonical inventory, pass equivalence, and pass both native lanes. The
+trusted publication run must then publish that exact source result. No
+earlier-head evidence carries forward.
+
+### 15.14 Open decisions and review disposition
+
+Open decisions: none. Exact `CorrelationHmacUnavailable` is the selected
+failure; the existing deterministic carrier is the selected recovery seam;
+the existing unknown-count gap rule is preserved; and live provider behavior
+remains outside this decision.
+
+Current review disposition:
+
+- Phase A design Blockers: zero at exact head
+  `0dfffecf6d62f61d5b9fc2943871f069ad9aafa5`, recorded in
+  [review `5050976539`](https://github.com/samovers/OFARM2/pull/345#pullrequestreview-5050976539);
+- issue-level evidence Blockers: one, closed only by passing and reviewed
+  `XSLICE-014` and `XSLICE-015` evidence;
+- Follow-ups: the five separate boundaries listed in section 15.11;
+- Preferences: none;
+- Phase B: task-user approved only for decision version 2 and PR #345;
+- production composition: unauthorized and non-deployable.
+
+After this exact Phase A head has zero demonstrated Blockers, one complete live
+card may name decision
+`ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001`, version `2`, and
+draft PR <https://github.com/samovers/OFARM2/pull/345>. Only this exact later
+same-task task-user message can approve Phase B:
+
+```text
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001 version 2.
+```
+
+Merge only after the approved invariants pass, the exact three-path boundary
+is preserved, the exact head has zero demonstrated Blockers, required hosted
+source and publication gates pass, the live card and approval remain directly
+retrievable in order, no cancellation exists, and the required exact-head
+scope report is posted. The PR does not close issue #192 automatically.
+
+### 15.15 Compact task-user approval evidence
+
+- **Decision:**
+  `ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001`, version `2`.
+- **Codex task:** `01a04484-3c52-7fd2-bdfe-0a15690a9135`.
+- **Complete live card:** stable agent-message reference
+  `msg_020a6720c580efaf016a917c5b3f5c87d29b3fe8f329432440`.
+- **Task-user approval:** stable user-message reference
+  `01a04858-934c-7ad2-9d32-f6d088b0a457`, observed as a later user message in
+  the same task with no intervening or later cancellation.
+- **Exact approval sentence:**
+  `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001 version 2.`
+- **Implementation PR:** <https://github.com/samovers/OFARM2/pull/345>.
+- **Evidence posture:** these task references and role/order observations are
+  provisional AI-attested evidence of the task-user decision. The original
+  task message remains authority. This appendix is not deployment authority,
+  issue-closure authority, or an independently verifiable identity claim.
