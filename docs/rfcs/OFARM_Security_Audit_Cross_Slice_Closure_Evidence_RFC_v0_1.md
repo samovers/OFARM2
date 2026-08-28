@@ -1,21 +1,31 @@
 # OFARM Security Audit Cross-Slice Closure Evidence RFC v0.1
 
-**Status:** version 1 merged through PR #344; version 2 is task-user approved
-for Phase B only in PR #345 and remains subject to exact-head review, hosted
-gates, publication, scope, cancellation, and merge-stop checks
+**Status:** version 1 merged through PR #344; version 2 merged through PR #345;
+version 3 is task-user approved for its bounded implementation/conformance
+correction and remains subject to exact-head review, hosted gates, publication,
+scope, cancellation, and merge-stop checks
 
 **Decision:** `ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001`
 
-**Decision version:** 2; version 1 remains the historical
-authority for merged PR #344
+**Decision version:** 3; versions 1 and 2 remain the historical authorities for
+merged PRs #344 and #345
 
 **Issue:** [#192](https://github.com/samovers/OFARM2/issues/192)
 
 **Reviewed base for version 2:**
 `bbf8f0fb9235ffca4f891d789f25e6f1aed7fab8`
 
-**Version 2 draft implementation PR:**
+**Version 2 merged implementation PR:**
 <https://github.com/samovers/OFARM2/pull/345>
+
+**Version 2 merge commit:**
+`39e976d3ef172b60ab9ffd74c66e08aa29b74bc3`
+
+**Reviewed base for version 3:**
+`39e976d3ef172b60ab9ffd74c66e08aa29b74bc3`
+
+**Version 3 correction trigger:**
+[post-merge review `5052115574`](https://github.com/samovers/OFARM2/pull/345#pullrequestreview-5052115574)
 
 **Version 2 primary trust boundary:** executed evidence that exact typed
 correlation-HMAC unavailability remains fail-closed across one real ASGI
@@ -1146,3 +1156,473 @@ scope report is posted. The PR does not close issue #192 automatically.
   provisional AI-attested evidence of the task-user decision. The original
   task message remains authority. This appendix is not deployment authority,
   issue-closure authority, or an independently verifiable identity claim.
+
+## 16. Version 3 post-merge evidence-conformance correction
+
+Sections 1 through 15 remain the historical version 1 and version 2 design,
+approval, implementation, and merge record. Version 2 merged through PR #345
+as `39e976d3ef172b60ab9ffd74c66e08aa29b74bc3`, preserving reviewed head
+`841bc79ecdb5ff2b6a2712d7a48b6992c8414efc` as its second parent. Its admitted
+source run executed both 3,582-test baselines without skips and its trusted
+publication succeeded.
+
+Post-merge review
+[`5052115574`](https://github.com/samovers/OFARM2/pull/345#pullrequestreview-5052115574)
+then demonstrated that the version 2 test did not execute every leakage
+category claimed by `XSLICE-015` and did not directly observe the stronger
+section 15.6 prohibition against appender invocation. That review reports no
+production-runtime defect. This section is the complete controlling version 3
+contract for those evidence/conformance corrections and for current-state
+record normalization.
+
+### 16.1 Problem and goal
+
+The version 2 hostile requests used distinct malformed and refused tokens but
+shared one body, supplied no batch or request headers, did not supply the route
+canary, and did not put distinct identity values into either request. Its
+forbidden set omitted identity, batch/request, and route categories. Its
+recorder appended a result only after successful delegation, so an unchanged
+result snapshot proved no returned result rather than no invocation.
+
+Version 3 establishes exactly that:
+
+1. the failed and recovery requests each carry a separate closed bundle of
+   token, issuer, subject, tenant, Party, body, batch, request, and route
+   canaries;
+2. shared DSN, password, and exception canaries remain harness values rather
+   than being misrepresented as request fields;
+3. every exact value in the closed forbidden union is absent from one closed
+   accepted evidence surface;
+4. one atomic baseline-relative recorder snapshot proves zero additional
+   appender invocations after HMAC refusal and exactly one additional
+   invocation and one matching successful result after recovery; and
+5. all accepted version 2 response, tenant, event, health, gap, no-retry,
+   two-service, bounded-reader, inventory, and no-production-change results
+   remain true.
+
+If this evidence exposes a production defect, implementation stops before
+editing production code and requires a separate amended decision.
+
+### 16.2 Learning value
+
+The correction replaces two source-level inferences with falsifiable executed
+evidence: the complete hostile-value surface is enumerated and scanned, and
+the storage boundary is instrumented before delegation. It reduces the risk
+that an issue-level closure report claims categories or ordering that the
+accepted test never executed.
+
+### 16.3 Non-goals
+
+Version 3 does not:
+
+- change production Python, SQL, migrations, roles, grants, configuration,
+  workflows, deployment, routes, provider clients, HMAC semantics, health,
+  live-gap behavior, retry, readiness, or durable event structure;
+- call Cloud KMS or establish provider availability, IAM, key custody,
+  readiness, rotation, destruction, clocks, or secret distribution;
+- resolve credential-bearing diagnostic representations;
+- protect export-output custody or delivery;
+- change production clock, timer, route, provider, or secret-custody evidence;
+- repair issue #334 package-initializer reachability;
+- complete execution-root/source-capability governance;
+- add, remove, or rename a pytest node or change the 3,582-node inventory;
+- authorize production composition, deployment, release, certification,
+  current compliance, or issue closure; or
+- turn attacker-controlled body labels into a trusted `VerifiedIdentity`,
+  `TenantBinding`, tenant identity, or Party attribution.
+
+### 16.4 Trust model
+
+#### Protected assets
+
+The protected assets are denial preservation, tenant truth and knowledge
+state, exact pre-storage non-invocation, honest successful-result reporting,
+the authentication health lane, the bounded durable gap posture, the no-retry
+rule, and absence of the exact hostile values from the accepted evidence
+surface.
+
+#### Trusted components
+
+Version 3 trusts the exact reviewed repository head; the accepted test-owned
+ASGI handler; public `ApplicationRuntime.authenticate`; the existing verifier,
+authentication producer, principal resolver, tenant UnitOfWork, audit client,
+health observer, gap controller, bounded reader, and distinct tenant and audit
+PostgreSQL fixtures; and pytest capture and assertion behavior.
+
+The switchable HMAC factory remains trusted only to implement the existing
+test protocol seam. The recorder is trusted only to increment one locked
+invocation count before delegation and to append a successful result after the
+inner appender returns. Neither is a production authority.
+
+#### Untrusted actors and inputs
+
+The two Authorization values; opaque issuer, subject, tenant, Party, and body
+labels; batch and request headers; route/query values; shared DSN, password,
+and exception values; response bytes and headers; captured output; and durable
+bounded projections are untrusted until the exact assertions pass.
+
+The issuer, subject, tenant, and Party request labels are opaque
+attacker-controlled body fragments. The verifier does not convert them into a
+trusted identity and the runtime does not treat them as tenant or Party
+authority.
+
+#### Explicitly excluded attacker capabilities
+
+Arbitrary in-process mutation, reflective replacement, source substitution
+after exact-head selection, compromised dependencies, arbitrary filesystem
+mutation, host or database-server compromise, repository-owner or operator
+compromise, KMS-administrator compromise, a malicious test runner, and live
+provider networking and timing remain out of scope.
+
+### 16.5 Authority map
+
+| Decision | Sole authority | Explicit non-authorities |
+| --- | --- | --- |
+| Mapped authentication denial | Existing deterministic verifier and `AuthenticationAuditProducer` | Body labels, HMAC seam, response text |
+| HMAC refusal | One armed call of the locked switchable factory raising exact `CorrelationHmacUnavailable` | Generic exception, audit database, HTTP status |
+| Appender invocation | Locked recorder counter incremented before delegation | Successful-result tuple, source reading alone |
+| Successful append | Existing audit client, exact producer LOGIN, and audit PostgreSQL append authority | Invocation counter, tenant database, response text |
+| Health state | Existing `SecurityAuditHealth` attempt ordering | Gap state, response, recorder |
+| Gap state and close record | Existing gap controller, gap client, and audit PostgreSQL functions and clocks | Python time, HMAC factory, recorder |
+| Tenant effects | Existing resolver, UnitOfWork manager, and tenant PostgreSQL | Request labels, audit rows, recorder |
+| Durable observation | Existing committed access-intent and bounded-reader protocol | Direct SQL, COPY, export, private state |
+| Forbidden union | Exact failed-request set `F`, recovery-request set `R`, and shared harness set `H` | Broad name matching or inferred categories |
+| Accepted surface | Exact response, bounded-delta, checkpoint, health/gap, stdout, and stderr projection below | Debugger, crash reporter, unbounded output |
+| Test admission | Exact pytest node, byte-identical canonical inventory, exact-head review, and admitted gates | RFC prose, skipped local result, earlier-head run |
+
+No fallback logger, duplicate HMAC state, alternate appender, alternate gap
+writer, retry path, or production injection surface is added.
+
+### 16.6 Exact canary taxonomy
+
+All request-borne values are distinct fixed ASCII strings. For the HMAC-failed
+request, `F` contains:
+
+- the existing malformed token in the Authorization header;
+- separate failed issuer, subject, tenant, Party, and body labels in the raw
+  request body;
+- one failed batch ID in `X-Batch-Id`;
+- one failed request ID in `X-Request-Id`; and
+- one failed route value in the query string.
+
+For the recovery request, `R` contains:
+
+- the existing refused token in the Authorization header;
+- separate recovery issuer, subject, tenant, Party, and body labels in the raw
+  request body;
+- one recovery batch ID in `X-Batch-Id`;
+- one recovery request ID in `X-Request-Id`; and
+- one recovery route value in the query string.
+
+`H` contains only the existing `DSN_CANARY`, `PASSWORD_CANARY`, and
+`EXCEPTION_CANARY`. They originate from the harness and verifier exception
+detail, not from either request.
+
+```text
+forbidden_union = F union R union H
+```
+
+No unrelated token or fixture value is silently added to this version 3
+forbidden union. The existing concurrent leakage test retains its broader
+historical forbidden set.
+
+### 16.7 Exact accepted evidence surface
+
+Each response projection is exactly:
+
+```text
+(
+  status_code,
+  raw response body bytes,
+  every response-header occurrence as a sorted lower-case-name/value tuple
+)
+```
+
+Header enumeration must preserve duplicate occurrences before sorting; a
+mapping projection that collapses duplicate names is forbidden.
+
+The durable event projection is exactly:
+
+```python
+event_projection = tuple(asdict(event) for event in bounded_delta)
+```
+
+`bounded_delta` contains only new `PRE_TENANT_FAILURE` and `AUDIT_GAP` events
+returned by the accepted bounded reader between the before and after
+snapshots. `tuple(asdict(event))`, which would retain only mapping keys, is not
+equivalent and is forbidden.
+
+The formatted evidence projection contains:
+
+- both response projections;
+- the bounded event delta projection;
+- recorder checkpoints `before`, `after_failed`, and `after_recovery`;
+- tenant-posture checkpoints at the same three points; and
+- post-failure and post-recovery health and gap states.
+
+The complete scanned string is the representation of that formatted
+projection followed by captured stdout and stderr. Every exact member of
+`F union R union H` must be absent.
+
+Pre-existing module-scoped events, direct SQL, unbounded output, private object
+state, debugger output, and hypothetical crash-reporting surfaces are
+explicitly outside the accepted surface. Unique request values cannot predate
+the before-snapshot, so only the bounded delta owns the durable evidence for
+these requests.
+
+### 16.8 State machine and ordering
+
+The failed request follows:
+
+```text
+HOSTILE_ASGI_REQUEST_F
+  -> AUTHENTICATION_GAP_ATTEMPT_STARTED
+  -> AUTHENTICATION_HEALTH_ATTEMPT_STARTED
+  -> CORRELATION_HMAC_UNAVAILABLE
+  -> RECORDER_INVOCATION_DELTA_ZERO
+  -> HEALTH_NOT_READY
+  -> UNKNOWN_COUNT_GAP_OPEN
+  -> FIXED_503
+  -> REQUEST_TERMINAL
+```
+
+The later request follows:
+
+```text
+DISTINCT_HOSTILE_ASGI_REQUEST_R
+  -> GAP_AND_HEALTH_ATTEMPTS_STARTED
+  -> CORRELATION_HMAC_CREATED
+  -> RECORDER_INVOCATION_DELTA_ONE
+  -> ONE_SUCCESSFUL_RESULT_AND_EVENT
+  -> HEALTH_READY
+  -> UNKNOWN_COUNT_GAP_DURABLY_CLOSED
+  -> FIXED_AUTHENTICATION_DENIAL
+  -> REQUEST_TERMINAL
+```
+
+The recorder fixture is module-scoped and may contain earlier results. All
+assertions are therefore baseline-relative:
+
+```text
+after_failed.invocations == before.invocations
+after_failed.successful_results == before.successful_results
+
+after_recovery.invocations == before.invocations + 1
+after_recovery.successful_results
+  == before.successful_results + one exact recovery result
+```
+
+The counter increments under the recorder lock before delegation. Results are
+recorded only after the inner call returns. HMAC refusal to appender
+invocation, resolver call, tenant entry, durable failure event, HTTP success,
+retry, premature health recovery, or gap close remains forbidden.
+
+### 16.9 Stable invariants and acceptance criteria
+
+All accepted `XSLICE-001` through `XSLICE-015` invariants remain controlling.
+Version 3 adds only evidence witnesses; it does not change their runtime
+semantics.
+
+#### `V3-EVID-001` — closed hostile surface
+
+Every exact member of `F union R union H` is absent from the closed accepted
+surface in section 16.7. The two request sets are distinct and the identity,
+tenant, and Party labels remain opaque body input.
+
+#### `V3-EVID-002` — direct baseline-relative non-invocation
+
+The atomic recorder checkpoint is unchanged after HMAC refusal. After the
+later independent recovery request, its invocation count increases by exactly
+one and its successful-result tuple gains exactly the recovery event.
+
+#### `V3-EVID-003` — accepted runtime posture remains true
+
+The failed request still returns the fixed 503 with unchanged tenant posture,
+not-ready health, open unknown-count gap, and no durable failure event. The
+later request alone stores its event, restores ready health, durably clears the
+gap, and does not retry the first request.
+
+#### `V3-SCOPE-001` — bounded implementation
+
+The base-to-head diff changes exactly this RFC and the focused cross-slice test.
+The test remains at or below 800 physical lines, retains every existing pytest
+node identity, and leaves the canonical 3,582-node inventory byte-identical.
+
+#### `V3-REC-001` — current repository record
+
+The current-status record identifies PR #345 and its merge as completed,
+preserves the historical version 1 and version 2 sections, records the
+post-merge finding, leaves issue #192 open, and states that production
+composition remains unauthorized and non-deployable.
+
+### 16.10 Production-reachable negative cases
+
+| Invariant | Counterexample from the supported boundary | Required result |
+| --- | --- | --- |
+| `V3-EVID-001` | POST the failed and recovery bundles through the accepted test-owned ASGI handler calling public `ApplicationRuntime.authenticate`. | Any exact forbidden value in the closed surface fails the node. |
+| `V3-EVID-002` | Arm exact HMAC refusal and execute the mapped malformed denial. | Any recorder invocation delta fails; recovery must add exactly one invocation and one matching result. |
+| `V3-EVID-003` | Execute the separate recovery refusal after the HMAC-failed request. | Only recovery stores; health becomes ready; one unknown-count gap clears; tenant posture is unchanged. |
+| `V3-SCOPE-001` | Add production code, a third path, a node, inventory delta, or line 801. | Package or review fails and implementation stops. |
+| `V3-REC-001` | Present PR #345 as draft or version 2 evidence as awaiting execution. | Exact review rejects the current-status record. |
+
+The runtime cases use the supported public runtime boundary. They do not
+mutate a private production field, monkeypatch a production result, or create
+production route authority. `V3-REC-001` is a repository-record criterion and
+has no runtime entry point.
+
+### 16.11 Proposed architecture and smallest change
+
+Only `kernel/tests/test_security_audit_runtime_cross_slice.py` changes runtime
+evidence:
+
+1. the test recorder gains one locked invocation counter incremented before
+   delegation and returns an atomic `(invocations, successful_results)`
+   snapshot;
+2. request construction accepts explicit body and route values while
+   preserving existing defaults;
+3. one request-bundle helper creates the exact failed or recovery bundle;
+4. one response projection preserves raw bytes and every header occurrence;
+5. one leakage helper creates the exact event and formatted surface;
+6. one shared failure/recovery executor preserves the two existing pytest node
+   identities while removing duplicated assertions; and
+7. mechanical test-only import, fixture-alias, and DSN consolidation supplies
+   the remaining line budget without changing fixture scope or authority.
+
+The existing audit-database failure node uses the shared executor with its own
+exact expected invocation delta and exact-count gap posture. The HMAC node uses
+zero failed-request invocation delta and unknown-count gap posture. The
+concurrent leakage node reuses the same response/event projection while
+retaining its broader established forbidden set.
+
+No new test module, shared production abstraction, architecture exception,
+provider emulator, or production seam is introduced. This is the smallest
+coherent solution because source reading cannot replace executable invocation
+evidence, an isolated unit test would repeat the composition gap, and a live
+provider or production route would add unrelated authority.
+
+### 16.12 Elegance audit
+
+- **Production sources of truth:** unchanged.
+- **Test evidence sources:** one explicit request bundle, one recorder, one
+  bounded reader, one response projection, and one formatted surface.
+- **Authoritative transitions:** HMAC creation, recorder entry, audit commit,
+  health completion, gap close, and request terminal result.
+- **Duplicated state:** no production state; the shared executor deletes the
+  duplicated failure/recovery assertion path.
+- **Compatibility surfaces:** none.
+- **Production abstractions added:** zero.
+- **Deletion:** duplicated leakage construction and pass-through fixture
+  aliases are removed.
+- **Rewrite assessment:** focused consolidation is clearer and smaller than a
+  new module or production rewrite.
+
+### 16.13 Pull request boundary and Follow-ups
+
+The exact version 3 Phase B allowlist is:
+
+1. `docs/rfcs/OFARM_Security_Audit_Cross_Slice_Closure_Evidence_RFC_v0_1.md`
+2. `kernel/tests/test_security_audit_runtime_cross_slice.py`
+
+The reviewed base is
+`39e976d3ef172b60ab9ffd74c66e08aa29b74bc3`. There is no stacked dependency.
+The canonical inventory must remain byte-identical. Any third path, node
+change, inventory change, production change, architecture-rule change, or test
+module growth above 800 lines requires stopping for a versioned amendment.
+
+Reviewers must not require live KMS/provider evidence, production code, a
+production route, new SQL or authority, credential-representation hardening,
+output custody, source-governance changes, issue #334, deployment evidence, or
+issue closure from this pull request.
+
+The five established Follow-ups remain exactly:
+
+1. credential-bearing diagnostic representation correction;
+2. protected export-output custody and delivery;
+3. production clock, timer, route, provider, and secret-custody evidence;
+4. issue #334 package-initializer reachability; and
+5. complete execution-root/source-capability governance.
+
+### 16.14 Provisional design record
+
+Not provisional for the stated evidence scope. The typed test seam and
+pre-delegation recorder are the correct witnesses for runtime ordering after a
+provider refusal. They make no live-provider claim.
+
+The AI-assisted task approval remains provisional pre-deployment repository
+authority only. Before deployment it must be replaced by independently
+human-controlled and independently verifiable authority. A need for production
+code, provider credentials, private-state mutation, a third path, a new node,
+or a larger module requires redesign and a new decision version.
+
+### 16.15 Traceability and verification
+
+| Invariant | Owning code exercised | Negative test | Acceptance evidence | Smallest verification |
+| --- | --- | --- | --- | --- |
+| `V3-EVID-001` | Request helper, accepted ASGI handler, bounded reader, response/event projection | Distinct failed and recovery bundles plus shared harness canaries | Exact union absent from exact closed surface | Focused node and existing leakage node |
+| `V3-EVID-002` | Recorder before health-owned appender delegation | Armed HMAC refusal | Unchanged failed checkpoint; one recovery invocation and result | Focused HMAC node |
+| `V3-EVID-003` | Runtime, authentication producer, health, gap, both stores | Failed HMAC followed by distinct same-lane denial | Fixed responses, tenant checkpoints, one event, ready/clear posture | Focused module plus health/gap/runtime suites |
+| `V3-SCOPE-001` | Git diff, pytest collection, canonical inventory, architecture budget | Third path, node drift, inventory drift, or line 801 | Exact two paths, 3,582 nodes, byte-identical inventory, at most 800 lines | Package/architecture, collection, inventory, diff checks |
+| `V3-REC-001` | This RFC's current-status and version 3 sections | Stale draft or pre-merge statement | Accurate merge and finding record with preserved history | Exact-head review |
+
+Before every commit, the CPython 3.12 package contract must pass. Local Phase B
+verification requires both migration preflights; focused cross-slice
+collection and execution with honest route-dependent skips only when the two
+hosted database routes are absent; focused HMAC, authentication, principal,
+request-router, audit-client, health, gap, bounded-reader, runtime, tenant
+UnitOfWork, and concurrency suites; canonical inventory regeneration and exact
+comparison; Ruff; architecture checks; `git diff --check`; the 800-line
+ceiling; and exact two-path equality.
+
+Review-before-baseline ordering is mandatory. One unconstrained review of the
+exact Phase B head must report zero demonstrated Blockers before baseline
+admission. Only then may one source run execute both 3,582-test baselines
+without skips, match the byte-identical inventory, pass equivalence, and pass
+both native lanes. Trusted publication must then publish that exact result. No
+earlier-head run carries forward.
+
+### 16.16 Phase A review and approval record
+
+The first complete version 3 Phase A draft was reviewed with one design
+Blocker: it did not close the exact canary taxonomy, accepted surface, or
+baseline-relative recorder semantics. The same-task amendment defined
+`F union R union H`, enumerated every accepted surface, required duplicate
+header preservation and exact event projection, and pinned all recorder
+assertions to the module-scoped before-snapshot.
+
+The bounded re-review disposition for that affected subset was:
+
+- Blockers: zero;
+- new Follow-ups: zero;
+- outstanding Preferences: zero;
+- production-runtime defects demonstrated: zero; and
+- Phase B: unauthorized until the exact later task-user approval.
+
+The same task then supplied the exact later approval sentence:
+
+```text
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001 version 3.
+```
+
+No later task-user cancellation, replacement decision, or narrowing is present
+at implementation start. This is provisional AI-attested task evidence, not
+deployment authority or an independently verifiable identity claim.
+
+### 16.17 Current review disposition and merge stop rule
+
+- Phase A design Blockers: zero after the bounded re-review;
+- implementation/evidence Blockers: one from post-merge review `5052115574`,
+  closed only by passing and reviewed `V3-EVID-001` through `V3-EVID-003`;
+- Follow-ups: the five separate boundaries in section 16.13;
+- Preferences: zero;
+- Phase B: task-user approved only for decision version 3 and the exact
+  two-path boundary;
+- issue #192: remains open; and
+- production composition: unauthorized and non-deployable.
+
+Merge only after the invariants pass, the inventory remains byte-identical,
+the exact two-path boundary is preserved, the exact head has zero demonstrated
+Blockers, required source and publication gates pass, approval and cancellation
+evidence remain directly retrievable in order, and the final exact-head scope
+report is posted. This correction does not close issue #192 automatically and
+does not establish production readiness, deployment or release authority,
+certification, or current compliance.
