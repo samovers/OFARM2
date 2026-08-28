@@ -27,6 +27,9 @@ merged PRs #344 and #345
 **Version 3 correction trigger:**
 [post-merge review `5052115574`](https://github.com/samovers/OFARM2/pull/345#pullrequestreview-5052115574)
 
+**Version 3 draft implementation PR:**
+<https://github.com/samovers/OFARM2/pull/346>
+
 **Version 2 primary trust boundary:** executed evidence that exact typed
 correlation-HMAC unavailability remains fail-closed across one real ASGI
 request path, one independently provisioned tenant PostgreSQL service, one
@@ -1517,6 +1520,9 @@ provider or production route would add unrelated authority.
   new module or production rewrite.
 
 ### 16.13 Pull request boundary and Follow-ups
+
+The version 3 implementation is draft PR
+<https://github.com/samovers/OFARM2/pull/346>.
 
 The exact version 3 Phase B allowlist is:
 
