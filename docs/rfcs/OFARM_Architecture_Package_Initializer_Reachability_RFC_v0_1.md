@@ -337,6 +337,11 @@ kind and exact retained relative path; they render a line only when the public
 graph supplies one. The object is private, ephemeral, and excluded from the
 public snapshot equality and content digest.
 
+The recorded tuple is derivation provenance, not a claim that its displayed
+order is CPython's temporal execution order. An initializer transition means
+that CPython executes the named initializer before the requiring submodule even
+when the deterministic discovery path is rendered from root to derived member.
+
 The checker-private failure surface distinguishes at least:
 
 - unresolved internally rooted import operand;
@@ -462,6 +467,12 @@ insertion over the old graph would leave namespace-only imports and malformed
 internal operands under-modeled. A second filesystem walker or runtime import
 would recreate the authority and execution defects that the sealed snapshot was
 designed to remove.
+
+The correction resolves issue #334 by stopping architecture policies from
+treating the public explicit-only reachability maps as complete execution
+coverage. The public v1 maps retain their accepted static meaning. A different
+consumer that wants execution-coverage semantics must obtain its own reviewed
+owner instead of silently inheriting this private closure.
 
 One private closure over the existing sealed evidence is therefore the smallest
 change that corrects the architecture checker while staying inside one trust
