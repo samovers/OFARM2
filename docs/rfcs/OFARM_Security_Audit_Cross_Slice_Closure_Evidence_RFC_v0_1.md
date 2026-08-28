@@ -1,15 +1,22 @@
 # OFARM Security Audit Cross-Slice Closure Evidence RFC v0.1
 
-**Status:** Phase B implementation in draft PR #344; the exact-head merge stop
-rule in section 14.5 applies
+**Status:** version 1 merged through PR #344; version 2 closure-correction
+Phase A is being prepared on a dedicated draft branch and is not approved for
+implementation
 
 **Decision:** `ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001`
 
-**Decision version:** 1
+**Decision version:** proposed version 2; version 1 remains the historical
+authority for merged PR #344
 
 **Issue:** [#192](https://github.com/samovers/OFARM2/issues/192)
 
-**Reviewed base:** `c0bf97b263bc87a270c97e910e24adce4ec7c104`
+**Reviewed base for version 2:**
+`bbf8f0fb9235ffca4f891d789f25e6f1aed7fab8`
+
+**Version 2 draft implementation PR:** pending creation from the dedicated
+Phase A branch; no live approval card may be shown until its stable PR
+reference replaces this sentence
 
 **Primary trust boundary:** executed evidence that one real ASGI request path
 preserves the pre-binding security-audit boundary across one independently
