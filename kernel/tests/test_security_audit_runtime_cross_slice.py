@@ -24,6 +24,7 @@ from kernel.authentication import (
     VerifiedIdentity,
 )
 from kernel.authentication_audit import AuthenticationAuditProducer
+from kernel.google_kms_correlation_hmac import CorrelationHmacUnavailable
 from kernel.principal import PrincipalResolutionError
 from kernel.principal_resolver import PrincipalBindingResolver
 from kernel.request_router_audit import RequestRouterAuditProducer
@@ -80,6 +81,14 @@ DSN_CANARY = "DSN-LABEL-CANARY"
 PASSWORD_CANARY = "PASSWORD-CANARY"
 EXCEPTION_CANARY = "EXCEPTION-CANARY"
 PRODUCER_OPTIONS = "-c statement_timeout=2000 -c lock_timeout=250"
+FAILURE_CANARIES = (
+    MALFORMED_TOKEN,
+    REFUSED_TOKEN,
+    *BODY_CANARY.decode().split(),
+    DSN_CANARY,
+    PASSWORD_CANARY,
+    EXCEPTION_CANARY,
+)
 
 
 def _producer(component: str):
@@ -136,8 +145,19 @@ class _DeterministicVerifier:
         )
 
 
-class _DeterministicHmac:
+class _SwitchableHmac:
+    def __init__(self) -> None:
+        self._lock, self._refuse = Lock(), False
+
+    def refuse_once(self) -> None:
+        with self._lock:
+            self._refuse = True
+
     def create(self) -> CorrelationHmac:
+        with self._lock:
+            refused, self._refuse = self._refuse, False
+        if refused:
+            raise CorrelationHmacUnavailable()
         version = SECURITY_AUDIT_CONTRACT.correlation_hmac.key_version
         assert version is not None
         return CorrelationHmac(b"c" * 32, version)
@@ -256,6 +276,7 @@ class _Harness:
     target: TenantTarget
     authority: TenantAuthority
     verifier: _DeterministicVerifier
+    hmac: _SwitchableHmac
     minter: _SwitchableMinter
     resolver: _RecordingResolver
     boundary: _RecordingBoundary
@@ -331,7 +352,7 @@ def cross_slice(
         PreTenantAuditClient(request_router_factory, REQUEST_ROUTER)
     )
     health = SecurityAuditHealth()
-    hmac = _DeterministicHmac()
+    hmac = _SwitchableHmac()
     gap = SecurityAuditGapController(
         SecurityAuditGapClient(
             role_dsn(audit_state, "ofarm_security_audit_control_login")
@@ -419,6 +440,7 @@ def cross_slice(
                 target=target,
                 authority=tenant_authority,
                 verifier=verifier,
+                hmac=hmac,
                 minter=minter,
                 resolver=resolver,
                 boundary=boundary,
@@ -480,6 +502,14 @@ def _audit_events(harness: _Harness) -> dict[object, object]:
 
 def _audit_delta(before: dict[object, object], after: dict[object, object]):
     return tuple(after[event_id] for event_id in after.keys() - before.keys())
+
+
+def _tenant_posture(harness: _Harness):
+    return (
+        _knowledge_head(harness.target, harness.authority.tenant_id),
+        harness.resolver.calls,
+        harness.boundary.counts,
+    )
 
 
 def _batch_row(harness: _Harness, batch_id: str):
@@ -636,9 +666,7 @@ def test_audit_failure_denies_then_later_lane_success_closes_gap(
     capsys: pytest.CaptureFixture[str],
 ):
     before = _audit_events(cross_slice)
-    head = _knowledge_head(cross_slice.target, cross_slice.authority.tenant_id)
-    resolver_calls = cross_slice.resolver.calls
-    boundary_counts = cross_slice.boundary.counts
+    tenant_before = _tenant_posture(cross_slice)
     records = cross_slice.authentication_appender.snapshot()
     cross_slice.authentication_factory.refuse_once()
     failed = _request(cross_slice, MALFORMED_TOKEN)
@@ -646,9 +674,7 @@ def test_audit_failure_denies_then_later_lane_success_closes_gap(
     assert cross_slice.health.readiness is SecurityAuditReadiness.NOT_READY
     assert cross_slice.gap.state is SecurityAuditGapState.OPEN
     assert cross_slice.authentication_appender.snapshot() == records
-    assert cross_slice.resolver.calls == resolver_calls
-    assert cross_slice.boundary.counts == boundary_counts
-    assert _knowledge_head(cross_slice.target, cross_slice.authority.tenant_id) == head
+    assert _tenant_posture(cross_slice) == tenant_before
 
     recovered = _request(cross_slice, REFUSED_TOKEN)
     delta = _audit_delta(before, _audit_events(cross_slice))
@@ -663,22 +689,46 @@ def test_audit_failure_denies_then_later_lane_success_closes_gap(
     assert cross_slice.authentication_appender.snapshot() == records + (
         ("VERIFICATION_REFUSED", failures[0].event_id),
     )
-    assert cross_slice.resolver.calls == resolver_calls
-    assert cross_slice.boundary.counts == boundary_counts
-    assert _knowledge_head(cross_slice.target, cross_slice.authority.tenant_id) == head
+    assert _tenant_posture(cross_slice) == tenant_before
     captured = capsys.readouterr()
     surface = repr([asdict(event) for event in delta])
     surface += failed.text + recovered.text + captured.out + captured.err
-    assert all(
-        value not in surface
-        for value in (
-            MALFORMED_TOKEN,
-            REFUSED_TOKEN,
-            DSN_CANARY,
-            PASSWORD_CANARY,
-            EXCEPTION_CANARY,
-        )
+    assert all(value not in surface for value in FAILURE_CANARIES)
+
+
+def test_hmac_failure_denies_then_later_lane_success_closes_gap(
+    cross_slice: _Harness,
+    capsys: pytest.CaptureFixture[str],
+):
+    before, tenant_before = _audit_events(cross_slice), _tenant_posture(cross_slice)
+    records = cross_slice.authentication_appender.snapshot()
+    cross_slice.hmac.refuse_once()
+
+    failed = _request(cross_slice, MALFORMED_TOKEN)
+    assert (failed.status_code, failed.text) == (503, "audit unavailable\n")
+    assert cross_slice.health.readiness is SecurityAuditReadiness.NOT_READY
+    assert cross_slice.gap.state is SecurityAuditGapState.OPEN
+    assert cross_slice.authentication_appender.snapshot() == records
+    assert _tenant_posture(cross_slice) == tenant_before
+
+    recovered = _request(cross_slice, REFUSED_TOKEN)
+    delta = _audit_delta(before, _audit_events(cross_slice))
+    failures = [event for event in delta if event.event_kind == "PRE_TENANT_FAILURE"]
+    gaps = [event for event in delta if event.event_kind == "AUDIT_GAP"]
+    assert (recovered.status_code, recovered.text) == (401, "authentication refused\n")
+    assert cross_slice.health.readiness is SecurityAuditReadiness.READY
+    assert cross_slice.gap.state is SecurityAuditGapState.CLEAR
+    assert len(failures) == len(gaps) == 1
+    _assert_event(failures[0], AUTHENTICATION, "VERIFICATION_REFUSED")
+    assert gaps[0].interval_event_count is None and gaps[0].interval_count_unknown
+    assert cross_slice.authentication_appender.snapshot() == records + (
+        ("VERIFICATION_REFUSED", failures[0].event_id),
     )
+    assert _tenant_posture(cross_slice) == tenant_before
+    captured = capsys.readouterr()
+    surface = repr([asdict(event) for event in delta])
+    surface += failed.text + recovered.text + captured.out + captured.err
+    assert all(value not in surface for value in FAILURE_CANARIES)
 
 
 def test_concurrent_denial_and_commit_are_isolated_and_leak_free(

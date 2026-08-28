@@ -1,12 +1,12 @@
 # OFARM Security Audit Cross-Slice Closure Evidence RFC v0.1
 
-**Status:** version 1 merged through PR #344; version 2 closure-correction
-Phase A is complete in draft PR #345, awaits exact-head review and task-user
-approval, and is not approved for implementation
+**Status:** version 1 merged through PR #344; version 2 is task-user approved
+for Phase B only in PR #345 and remains subject to exact-head review, hosted
+gates, publication, scope, cancellation, and merge-stop checks
 
 **Decision:** `ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001`
 
-**Decision version:** proposed version 2; version 1 remains the historical
+**Decision version:** 2; version 1 remains the historical
 authority for merged PR #344
 
 **Issue:** [#192](https://github.com/samovers/OFARM2/issues/192)
@@ -1103,12 +1103,14 @@ remains outside this decision.
 
 Current review disposition:
 
-- Phase A design Blockers: exact-head review pending;
+- Phase A design Blockers: zero at exact head
+  `0dfffecf6d62f61d5b9fc2943871f069ad9aafa5`, recorded in
+  [review `5050976539`](https://github.com/samovers/OFARM2/pull/345#pullrequestreview-5050976539);
 - issue-level evidence Blockers: one, closed only by passing and reviewed
   `XSLICE-014` and `XSLICE-015` evidence;
 - Follow-ups: the five separate boundaries listed in section 15.11;
 - Preferences: none;
-- Phase B: not approved and not started;
+- Phase B: task-user approved only for decision version 2 and PR #345;
 - production composition: unauthorized and non-deployable.
 
 After this exact Phase A head has zero demonstrated Blockers, one complete live
@@ -1126,3 +1128,21 @@ is preserved, the exact head has zero demonstrated Blockers, required hosted
 source and publication gates pass, the live card and approval remain directly
 retrievable in order, no cancellation exists, and the required exact-head
 scope report is posted. The PR does not close issue #192 automatically.
+
+### 15.15 Compact task-user approval evidence
+
+- **Decision:**
+  `ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001`, version `2`.
+- **Codex task:** `01a04484-3c52-7fd2-bdfe-0a15690a9135`.
+- **Complete live card:** stable agent-message reference
+  `msg_020a6720c580efaf016a917c5b3f5c87d29b3fe8f329432440`.
+- **Task-user approval:** stable user-message reference
+  `01a04858-934c-7ad2-9d32-f6d088b0a457`, observed as a later user message in
+  the same task with no intervening or later cancellation.
+- **Exact approval sentence:**
+  `I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001 version 2.`
+- **Implementation PR:** <https://github.com/samovers/OFARM2/pull/345>.
+- **Evidence posture:** these task references and role/order observations are
+  provisional AI-attested evidence of the task-user decision. The original
+  task message remains authority. This appendix is not deployment authority,
+  issue-closure authority, or an independently verifiable identity claim.
