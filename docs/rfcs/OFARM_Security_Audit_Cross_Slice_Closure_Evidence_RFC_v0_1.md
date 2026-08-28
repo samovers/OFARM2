@@ -1,8 +1,8 @@
 # OFARM Security Audit Cross-Slice Closure Evidence RFC v0.1
 
 **Status:** version 1 merged through PR #344; version 2 closure-correction
-Phase A is being prepared on a dedicated draft branch and is not approved for
-implementation
+Phase A is complete in draft PR #345, awaits exact-head review and task-user
+approval, and is not approved for implementation
 
 **Decision:** `ISSUE192-SECURITY-AUDIT-CROSS-SLICE-CLOSURE-EVIDENCE-001`
 
@@ -965,7 +965,7 @@ production result, or invents an unsupported runtime state.
 Within `kernel/tests/test_security_audit_runtime_cross_slice.py` only:
 
 1. replace the test-only `_DeterministicHmac` with `_SwitchableHmac`;
-2. give it a lock, a bounded next-call failure count, and `refuse_once()`;
+2. give it a lock, a one-shot next-call refusal flag, and `refuse_once()`;
 3. make `create()` atomically consume one armed refusal and raise exact
    `CorrelationHmacUnavailable`, otherwise returning the existing accepted
    deterministic carrier;
@@ -1028,7 +1028,7 @@ issue closure from this PR.
 Separate Follow-ups remain:
 
 - credential-bearing diagnostic representation correction recorded in the
-  post-closure issue comment;
+  [post-closure issue comment](https://github.com/samovers/OFARM2/issues/192#issuecomment-5444455513);
 - protected export-output custody and delivery;
 - production clock, timer, route, provider, and secret-custody evidence;
 - issue #334 package-initializer reachability; and
@@ -1103,8 +1103,9 @@ remains outside this decision.
 
 Current review disposition:
 
-- Blockers: one open issue-level evidence Blocker, closed only by passing and
-  reviewed `XSLICE-014` and `XSLICE-015` evidence;
+- Phase A design Blockers: exact-head review pending;
+- issue-level evidence Blockers: one, closed only by passing and reviewed
+  `XSLICE-014` and `XSLICE-015` evidence;
 - Follow-ups: the five separate boundaries listed in section 15.11;
 - Preferences: none;
 - Phase B: not approved and not started;
