@@ -13,9 +13,7 @@ unauthorized
 
 **Issue:** `https://github.com/samovers/OFARM2/issues/334`
 
-**Draft pull request:** pending assignment after the first documentation-only
-push; the stable reference must be inserted and reviewed before a live decision
-card is displayed
+**Draft pull request:** `https://github.com/samovers/OFARM2/pull/347`
 
 **Primary trust boundary:** architecture-checker accuracy for retained Python
 source that CPython implicitly executes as regular-package initializers
