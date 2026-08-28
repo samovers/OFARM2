@@ -513,9 +513,9 @@ After approval, Phase B may change only:
 - `CONTRIBUTING.md`; and
 - `.github/PULL_REQUEST_TEMPLATE.md`.
 
-The adoption pull request will be assigned after this Phase A draft is first
-published. It must be bound into this section before exact-head Phase A review
-and before a decision card is shown.
+The one already-created draft adoption pull request is
+`https://github.com/samovers/OFARM2/pull/348`. Approval cannot be transferred to
+or consumed by another pull request.
 
 No workflow YAML, conformance executor, admission checker, evidence publisher,
 runtime code, migration, schema, test inventory, or historical RFC may change.
