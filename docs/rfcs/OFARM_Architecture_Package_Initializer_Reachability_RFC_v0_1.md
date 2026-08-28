@@ -89,7 +89,9 @@ This decision does not:
 
 - change `PythonSourceSnapshotV1`, its public types or properties, its builder
   signature, descriptor, graph semantics, root tuples, limits, refusal codes,
-  equality, content digest, or public reachability maps;
+  equality rules, content-digest algorithm or manifest schema, or public
+  reachability semantics; the repository-root digest value will naturally
+  change when retained checker or test bytes change;
 - edit or amend
   `docs/rfcs/OFARM_Architecture_Python_Source_Snapshot_Admission_RFC_v0_1.md`;
 - change `conformance/temporal_contract_candidate_check.py`, temporal contracts,
@@ -180,7 +182,7 @@ An excluded compromise does not become a reason to widen this pull request.
 | Retained source membership and exact bytes | builder-sealed `PythonSourceSnapshotV1` | second walk, path reread, live import, cache, caller map |
 | Dotted module identity and relative path | `modules_by_name` and each retained `PythonSourceUnitV1.relative_path` | filesystem probing after seal, `sys.modules`, `sys.path` |
 | Explicit edges to retained modules | public `snapshot.import_graph` | a second independently authoritative graph |
-| Import operands needed only for internal-resolution and namespace validation | one private normalizer over the shared detached AST mapping | regexes, source-text rescans, runtime imports |
+| Import operands needed only for unresolved-internal and namespace-only validation | one private normalizer over the shared detached AST mapping | retained-module traversal, regexes, source-text rescans, runtime imports |
 | Regular initializer identity | exact retained unit path equals the dotted module path plus `/__init__.py` | naming convention alone, directory existence alone |
 | Namespace prefix | a proper dotted prefix of a retained module with no retained unit at that identity | synthetic module record or executable placeholder |
 | Plain module | retained unit at an identity whose path is not an initializer path | treating it as a package because descendants exist |
@@ -243,9 +245,13 @@ base calculation as the public v1 graph.
   - an exact retained base is followed through its public graph edge;
   - each exact retained or known-namespace candidate `X.Y` contributes its
     regular-package ancestry, and an exact retained candidate is followed
-    through its public graph edge;
-  - an absent `Y` is permitted after a resolved base because it may be an
-    attribute rather than a submodule; and
+    only through its public graph edge;
+  - an absent `Y` is permitted only when the resolved base is a retained
+    regular package or plain module, because retained source may define it as
+    an attribute rather than a submodule;
+  - an absent `Y` under a namespace-only base fails closed because the
+    namespace has no retained initializer source that can define the attribute;
+    and
   - a missing internally rooted base, invalid above-root relative base, or
     descendant beneath a retained plain module fails closed.
 
@@ -253,11 +259,12 @@ base calculation as the public v1 graph.
 functions, classes, or `TYPE_CHECKING` remains static evidence exactly as in the
 public graph. Dynamic loading syntax creates no guessed target.
 
-For every exact retained-module target found by the normalizer, the public graph
-must contain the same `(line, target)` edge. A mismatch is a trusted-code defect
-and fails the checker; the implementation may not choose whichever graph is
-more permissive. The public graph remains the only authority for explicit
-retained-module traversal.
+The private normalizer never creates a retained-module traversal edge. Exact
+retained targets are followed only from `snapshot.import_graph`; the normalizer
+owns only unresolved-internal refusal and namespace-only initializer
+requirements. Existing graph tests remain the conformance evidence for exact
+retained edges. This construction makes the public graph the sole traversal
+authority instead of adding a runtime choice between two graphs.
 
 ## 7. State machine and ordering
 
@@ -269,8 +276,8 @@ UNOBSERVED
 SNAPSHOT_SEALED
   -> one bounded detached AST map
 ASTS_DETACHED
-  -> classify topology and normalize validation operands
-TOPOLOGY_VALIDATED
+  -> classify topology and prepare validation operands
+TOPOLOGY_PREPARED
   -> derive production and legacy closures from exact descriptor roots
 CLOSURES_SEALED
   -> run every execution-reachability architecture policy
@@ -292,10 +299,16 @@ For production and legacy independently:
 7. Enqueue a retained module only on first discovery.
 8. Repeat until the queue is empty, then seal immutable path provenance.
 
+Classification may be prepared for the sealed inventory, but topology and
+operand validity affect the result only when a source or import is reached from
+one of the fixed root tuples. An unrelated retained module does not widen the
+closure or cause an execution-reachability refusal merely because it contains a
+malformed internal import.
+
 The closure is complete before the import firewall or tenant UnitOfWork policy
-runs. Any topology, resolution, graph-agreement, or resource failure forbids all
-policy evaluation and returns a failed checker result; no partial map and no
-public-map fallback is permitted.
+runs. Any reached topology, resolution, or resource failure forbids all policy
+evaluation and returns a failed checker result; no partial map and no public-map
+fallback is permitted.
 
 Each retained module appears at most once in a pending queue. Membership is
 bounded by the snapshot's maximum 512 sources, ancestry by its maximum depth,
@@ -328,8 +341,7 @@ The checker-private failure surface distinguishes at least:
 
 - unresolved internally rooted import operand;
 - retained plain-module/package ancestry conflict; and
-- disagreement between normalized exact targets and the authenticated public
-  graph.
+- invalid above-root relative import resolution.
 
 These are architecture-check failures, not new public
 `PythonSourceSnapshotRefusalCodeV1` members. A failure includes the retained
@@ -353,7 +365,8 @@ execution.
   an invalid relative base fail before policy evaluation.
 - **PIR-005 — One explicit-edge authority.** Every retained-module import
   transition is backed by the exact public `(line, target)` edge. Validation
-  syntax cannot silently add, remove, or override a public edge.
+  syntax can require namespace initializers or refusal, but cannot create,
+  remove, or override a retained-module traversal edge.
 - **PIR-006 — Deterministic and bounded provenance.** Equal sealed snapshots,
   detached trees, and fixed root tuples produce equal closure membership and
   equal first-discovered transition paths within existing snapshot limits.
@@ -365,9 +378,11 @@ execution.
   reverse import firewall use the corresponding import-execution closures, and
   the tenant UnitOfWork private-state scan uses the production closure.
 - **PIR-009 — Public-contract preservation.** Public snapshot types, fields,
-  descriptor values, explicit graph, public reachability maps, content digest,
-  refusal vocabulary, external temporal consumers, and their accepted RFCs are
-  unchanged.
+  descriptor values, explicit-graph and reachability algorithms,
+  content-digest algorithm and manifest schema, refusal vocabulary, external
+  temporal consumers, and their accepted RFCs are unchanged. Identical fixture
+  inputs produce identical public values before and after this change; the
+  repository-root digest value may change with retained source bytes.
 - **PIR-010 — Honest claim limit.** Passing proves only retained static
   import-execution closure under the existing fixed roots. It does not prove
   complete repository, deployment, dynamic capability, or production
@@ -392,14 +407,15 @@ state.
 | PIR-004 | `package.py` and `package/submodule.py` are retained and a fixed-root path reaches `package.submodule` | closure derivation fails for plain-module/package ancestry ambiguity |
 | PIR-004 | A reached module uses an above-root relative import | closure derivation fails rather than treating it as external or empty |
 | PIR-004 | A reached module imports `external_dependency.missing` and no retained module has that top-level name | the operand remains external and does not create a repository failure or member |
-| PIR-005 | A normalized exact retained target lacks the matching public graph edge, represented by a focused trusted-code consistency fixture | the checker fails; it does not traverse a second graph or ignore the mismatch |
+| PIR-004 | A reached module executes `from deployment.namespace import missing` where the base is namespace-only and the candidate is absent | closure derivation fails instead of pretending source-less namespace state can supply an attribute |
+| PIR-005 | A reached module contains repeated absolute and relative imports of one retained helper plus a namespace-only import | the helper transitions use only the public sorted edges; validation adds no duplicate helper edge and invents no namespace member |
 | PIR-006 | Equivalent trees are created in reverse directory order and contain cycles plus two root paths to the same helper | both closures and first-discovered transition paths are equal |
 | PIR-007 | A reached initializer would write a sentinel if imported | analysis fails or passes according to syntax while the sentinel remains absent and no path is reread |
 | PIR-007 | Internal resolution fails after another valid member was discovered | no firewall or tenant policy runs on the partial discovery and the checker returns nonzero |
 | PIR-008 | `deployment/__init__.py` contains a forbidden production dynamic import or legacy resource | the production firewall fails even though the public production map remains explicit-only |
 | PIR-008 | A legacy-reached initializer explicitly reaches a production composition module | the reverse firewall fails with initializer-aware provenance |
 | PIR-008 | A newly included production initializer accesses `_TenantUnitOfWork__connection` | the tenant UnitOfWork scan reports the private-state access |
-| PIR-009 | The post-change public snapshot is compared with the pre-change fixture for types, descriptor, graph, reachability, equality, and digest | every public value remains equal; any difference stops the pull request |
+| PIR-009 | A controlled source-tree fixture is compared with reviewed-base golden public values, including its exact content digest | post-change types, descriptor, units, graph, reachability, equality behavior, and fixture digest match the golden values; repository-root digest equality is not required |
 | PIR-009 | Existing temporal checks and temporal reachability fixtures run unchanged | they pass without path, contract, or assertion edits |
 | PIR-010 | An unclassified operator or console entry point imports a module outside both fixed closures | it remains outside this claim and is recorded only as the separate governance Follow-up |
 | PIR-011 | Any changed path is outside the exact allowlist, or inventory bytes change without a canonical node-ID change | merge stops |
@@ -424,11 +440,11 @@ their existing accepted contract.
 
 ### 11.2 Single normalization rule
 
-One private import-operand normalizer owns relative-base calculation and
-validation-only operands. The existing public graph remains authoritative for
-exact retained-module edges. The implementation must either reuse the same
-normalization primitive without changing public graph output or mechanically
-cross-check every exact target; it may not leave two disagreeing parsers.
+One private import-operand normalizer owns relative-base calculation,
+unresolved-internal refusal, and namespace-only initializer requirements. The
+existing public graph alone owns exact retained-module edges. The normalizer
+does not return or traverse a retained-module edge, so the implementation has
+no competing graph and no permissive fallback.
 
 ### 11.3 Diagnostics
 
@@ -532,11 +548,11 @@ required verification all pass. This Phase A contract alone does not close it.
 | PIR-002 | one first-discovered work queue | initializer-to-helper-to-deep chain and cycle | complete fixed point with no duplicate processing | focused checker tests |
 | PIR-003 | namespace-prefix classifier | nested namespace between regular ancestor and worker | no synthetic namespace member; regular ancestor included | focused checker tests |
 | PIR-004 | private import-operand validator | missing internal base, above-root relative import, plain-module ancestor, allowed external import | all invalid internal cases fail before policies; external case remains external | focused checker tests and checker execution |
-| PIR-005 | public-edge agreement check | exact normalized target without corresponding edge | no independently authoritative retained-module transition | focused consistency tests plus existing graph tests |
+| PIR-005 | public graph traversal plus validation-only normalizer | repeated exact imports mixed with namespace-only import | no independently authoritative or duplicate retained-module transition | focused authority test plus existing graph tests |
 | PIR-006 | ordered immutable transition paths | reversed enumeration, cycles, competing root paths | equal membership and first provenance | deterministic snapshot/closure tests |
 | PIR-007 | snapshot/AST-only composition and fail-before-policy gate | sentinel initializer and partial-discovery failure | no sentinel, reread, execution, or partial fallback | focused tests plus existing one-snapshot/no-reread test |
 | PIR-008 | import firewall and tenant UnitOfWork composition | production initializer, legacy initializer, tenant private access | all three policy families consume corrected closures | focused policy tests and full architecture checker |
-| PIR-009 | unchanged public snapshot code contract and external consumers | exact public-value and temporal regression fixtures | public contract and temporal suites unchanged and green | focused snapshot tests, temporal tests, temporal checker |
+| PIR-009 | unchanged public snapshot code contract and external consumers | reviewed-base golden fixture plus temporal regression fixtures | golden public values and digest match; temporal suites remain unchanged and green | focused snapshot tests, temporal tests, temporal checker |
 | PIR-010 | RFC claim language and final scope report | unclassified operator entry point | no complete-governance or production claim | diff and review |
 | PIR-011 | exact path and inventory gates | fifth path or unexplained inventory delta | allowlist equality and canonical inventory reproduction | Git diff, GitHub file list, inventory comparison |
 
