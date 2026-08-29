@@ -1,37 +1,54 @@
 # OFARM Security Audit Credential Diagnostic Representation RFC v0.1
 
-**Status:** decision version 2 approved for Phase B implementation in pull
-request #349; implementation-head review, fresh admission, required hosted
-gates, and merge remain pending
+**Status:** decision version 2 was implemented and merged through pull request
+#349; decision version 3 is a proposed post-merge conformance correction for
+Delivery issue #352 and has no Phase B approval
 
 **Decision:**
 `ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001`
 
-**Decision version:** 2
+**Decision version:** 3 proposed; version 2 remains the historical approved and
+merged decision
 
 **Version history:** version 1 was an unapproved, pre-pull-request task draft.
-Version 2 supersedes it because the bounded Phase A review required two
-additional derived carriers and a narrower captured-locals invariant. No
-version-1 approval was recognized.
+Version 2 superseded it because the bounded Phase A review required two
+additional derived carriers and a narrower captured-locals invariant. The task
+user approved version 2, and pull request #349 merged its implementation.
+Version 3 is a new prospective decision because post-merge review demonstrated
+that the `CDR-006` checker implementation did not recognize every
+class-namespace binding form, and the correction requires a new named pull
+request. Version 3 preserves the accepted five-carrier runtime posture and
+changes only structural conformance enforcement.
 
-**Issue context:** [#192](https://github.com/samovers/OFARM2/issues/192)
+**Issue context:** Tracking Epic
+[#192](https://github.com/samovers/OFARM2/issues/192), original Delivery outcome
+[#350](https://github.com/samovers/OFARM2/issues/350), and correction Delivery
+issue [#352](https://github.com/samovers/OFARM2/issues/352)
 
-**Reviewed base:** `1f538f5b34ea2372ce84c82511fc5b5092f1ef88`
+**Version-3 base:** `a1e2d343b59a5715e07fcb550a459b61dc6541da`
 
-**Draft pull request:** [#349](https://github.com/samovers/OFARM2/pull/349)
+**Merged version-2 pull request:**
+[#349](https://github.com/samovers/OFARM2/pull/349)
 
-**Approval evidence:** the task user approved the exact sentence `I approve
+**Draft version-3 pull request:** pending creation from the RFC-only Phase A
+bootstrap head; it must be bound here before the version-3 review head and live
+decision card
+
+**Version-2 approval evidence:** the task user approved the exact sentence `I approve
 OFARM2 decision ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001
 version 2.` on 2026-08-29. The
 [pull-request navigation copy](https://github.com/samovers/OFARM2/pull/349#issuecomment-5461601281)
 is non-authoritative; the task record remains the approval authority.
 
-**Primary trust boundary:** credential-bearing diagnostic representation
-non-disclosure for five exact dataclass carriers already reached by the
-production runtime, process-crash reconciliation, and store-loss recovery
+No version-3 approval exists. Version-2 approval cannot transfer to a new pull
+request or authorize the post-merge correction.
+
+**Primary trust boundary:** credential-bearing diagnostic-representation
+structural conformance for the five exact dataclass carriers already reached by
+the production runtime, process-crash reconciliation, and store-loss recovery
 compositions
 
-**Maximum implementation path envelope:**
+**Historical version-2 maximum implementation path envelope:**
 
 1. `docs/rfcs/OFARM_Security_Audit_Credential_Diagnostic_Representation_RFC_v0_1.md`
 2. `kernel/runtime_config.py`
@@ -41,6 +58,15 @@ compositions
 6. `conformance/rewrite_architecture_check.py`
 7. `kernel/tests/test_rewrite_architecture_check.py`
 8. `conformance/review_baseline_test_inventory.json`
+
+**Version-3 expected repository areas, as scope prediction rather than approval
+authority:**
+
+1. `docs/rfcs/OFARM_Security_Audit_Credential_Diagnostic_Representation_RFC_v0_1.md`
+2. `conformance/rewrite_architecture_check.py`
+3. `kernel/tests/test_rewrite_architecture_check.py`
+4. `conformance/review_baseline_test_inventory.json`, only when mechanically
+   required by changed canonical test node IDs
 
 This contract creates no OFARM authority. It does not authorize deployment,
 production access, production composition, release, certification, current
@@ -722,3 +748,464 @@ Phase A is complete and the exact approval is recognized. Phase B may proceed
 only inside the approved credential-bearing diagnostic representation boundary.
 Nothing in this status transition authorizes production composition,
 deployment, certification, current-compliance claims, or issue #192 changes.
+
+## 15. Decision version 3 — post-merge structural-conformance correction
+
+Section 15 is the prospective version-3 amendment. Sections 1 through 14 remain
+the historical version-2 design and evidence record. Where current workflow,
+pull-request identity, checker enforcement, or status differs, this section is
+controlling. It does not withdraw the accepted version-2 carrier behavior.
+
+### 15.1 Historical result, problem, and capability
+
+Pull request #349 merged reviewed head
+`ce06ab8b1d8c1f28dd81584945a90c0b1e57092f` as
+`a1e2d343b59a5715e07fcb550a459b61dc6541da`. The merge preserved live base
+`3d2de4b96a7d99e1e93c2d63b6db2fa46f073564` as its first parent and the
+reviewed head as its second parent. Its admitted source run and trusted
+publication run succeeded. The approved eight-path boundary was preserved.
+
+The five merged carriers remain opaque on the accepted version-2 diagnostic
+surface. No current credential disclosure, governed runtime regression, or
+database regression has been demonstrated.
+
+Post-merge review
+[#5057956079](https://github.com/samovers/OFARM2/pull/349#pullrequestreview-5057956079)
+nevertheless demonstrated one `CDR-006` conformance failure. The checker builds
+its member inventory only from direct target-class statements. This valid
+target-class source therefore acquires a field-bearing `__repr__` while the
+checker returns no forbidden-display violation:
+
+```python
+if True:
+    __repr__ = lambda self: self.first
+```
+
+An import can create the same missed class-namespace binding:
+
+```python
+from helper import leaking_repr as __repr__
+```
+
+The one independently reviewable version-3 capability is a fail-closed
+class-namespace binding analysis for the existing exact five-carrier
+architecture rule. Its system-visible outcome is that every statically
+expressed class-scope binding or deletion of the forbidden display, hash, and
+equality names is rejected before a candidate source tree can receive a
+passing architecture verdict.
+
+Delivery issue #352 owns this correction. Pull request #349 is merged and is
+not recoverable. Delivery issue #350 already owns that merged implementation
+and cannot own a second merged implementation pull request under the current
+proportional-delivery procedure. Completion of #352 may support a later
+read-only closure assessment for #350 and #192, but this decision grants no
+issue-state authority.
+
+### 15.2 Primary boundary, effects, and authority map
+
+The one primary trust boundary is credential-bearing diagnostic-
+representation structural conformance for these five exact classes:
+
+1. `RuntimeConfig`;
+2. `ProcessCrashReconciliationSecrets`;
+3. `StoreLossRecoverySecrets`;
+4. `_Routes`; and
+5. `_ValidatedInvocation`.
+
+Permitted effects are limited to:
+
+- replace the shallow special-member scan with one class-namespace binding and
+  deletion analysis over the already authenticated detached AST;
+- add hostile checker tests for every admitted class-scope binding category
+  and for scope boundaries that must not be mistaken for the target class;
+- mechanically regenerate the canonical test inventory if collected node IDs
+  change; and
+- preserve the historical record while adding this current post-merge
+  disposition and version-3 design.
+
+The change has these required non-effects:
+
+- no edit to any of the five carrier declarations;
+- no representation, formatting, equality, hash, constructor, validation,
+  runtime, runner, report, database, or state-machine behavior change;
+- no credential creation, access, derivation, ownership, custody, handoff, or
+  destruction change;
+- no SQL, migration, role, grant, provider, IAM, deployment, production-
+  composition, release, certification, or current-compliance effect;
+- no new diagnostic or serialization surface;
+- no direct filesystem reread, target-module import, or target-code execution
+  by the checker; and
+- no automatic close, reopen, relabel, or other state change for #192, #350,
+  or #352.
+
+| Decision | Sole authority | Rejected alternate or duplicate authority |
+| --- | --- | --- |
+| Governed source and class inventory | Existing `_CREDENTIAL_DIAGNOSTIC_CARRIERS` exact path/class descriptors | Name heuristic, import-graph inference, test list alone |
+| Source bytes and syntax tree | Existing authenticated `PythonSourceSnapshotV1` and its detached AST map | Filesystem reread, imported live module, regex-only scan |
+| Forbidden display and hash names | Exact closed set `__repr__`, `__str__`, `__format__`, and `__hash__` | Credential-name heuristic, reviewer-selected subset |
+| Equality binding | The one direct synchronous `FunctionDef` named `__eq__` whose body passes the unchanged exact equality-shape rule | Generated equality, nested definition, alias, assignment, deletion, second binding |
+| Class-namespace binding and deletion events | Closed syntax-directed event collector in section 15.5 | Direct-body member list, final-name set that loses duplicate events, runtime reflection |
+| Architecture verdict | Existing rewrite architecture checker after all exact carrier and event rules pass | Behavioral tests alone, a successful import, design prose |
+| Human approval | Exact later task-user approval of the unique live version-3 card naming the existing draft pull request | Version-2 approval, GitHub activity, review, admission, CI, or AI-authored text |
+
+The original target, protected-field, declared-field, decorator, equality, and
+hash authorities remain unchanged. Version 3 adds no alternate carrier or
+field inventory.
+
+### 15.3 High-risk trust floor and credential custody
+
+#### Protected assets
+
+The protected assets remain the exact password-bearing values reachable
+through the five target carriers and the integrity of the architecture verdict
+that prevents their generated or custom diagnostic expansion from being
+accepted.
+
+The correction checker does not receive live credentials. It receives source
+bytes and detached syntax trees. Its diagnostics must name only bounded path,
+class, special member, and rule categories; they must not include source
+literal values or runtime carrier contents.
+
+#### Trusted components
+
+The correction trusts:
+
+- CPython 3.12.13 parsing and AST node semantics used by the repository
+  baseline;
+- the existing authenticated source snapshot and detached AST construction;
+- the exact `_CREDENTIAL_DIAGNOSTIC_CARRIERS` descriptors;
+- the unchanged exact `__eq__` structural validator; and
+- the non-malicious checker implementation at the reviewed commit.
+
+#### Untrusted actors and inputs
+
+Within this boundary, future edits to any governed target-class suite are
+untrusted. That includes a contributor who places a special-name binding in an
+import, assignment, class-scope control-flow branch, loop target,
+context-manager target, exception handler, match pattern, assignment
+expression, type alias, or nested definition statement.
+
+The source may be syntactically valid while selecting a branch only at class
+construction time. The checker cannot treat an apparently false constant
+branch as harmless because the source expression or later edit can change.
+
+#### Explicitly excluded attacker capabilities
+
+The exclusions from section 4.4 continue to apply. In particular, arbitrary
+class mutation after construction, a compromised interpreter or dependency,
+post-snapshot filesystem substitution, debugger or operator compromise, and
+arbitrary code already executing in-process are outside this structural source
+check.
+
+The event collector governs Python binding and deletion syntax plus the direct
+unbounded constructs named below. It does not claim to prove the side effects
+of an arbitrary called helper. Direct wildcard import and direct use of
+`exec`, `eval`, `locals`, or `vars` in expressions evaluated in the target
+class namespace are therefore rejected as unbounded rather than treated as
+safe. An indirect namespace mutation hidden inside otherwise ordinary called
+code remains outside this syntax-directed claim and cannot be used as passing
+acceptance evidence.
+
+#### Primary risk and containment rule
+
+The primary risk is a false-success architecture verdict: a target class binds
+a credential-bearing display method or destroys the explicit equality method
+through valid class-scope syntax that the checker never observes.
+
+The containment rule is event-based and fail-closed. The checker must collect
+every binding and deletion event in the target class execution scope, preserve
+duplicates and origin, reject every event for a forbidden display or hash name,
+and accept exactly one `__eq__` event only when that event is the direct
+synchronous function definition already validated structurally. Unknown or
+unbounded class-namespace binding constructs fail rather than silently pass.
+
+#### Custody preservation
+
+Credential custody does not move. The five runtime compositions retain their
+existing values and owners. The checker sees authenticated source, not runtime
+secrets, creates no credential-bearing artifact, and hands off only bounded
+conformance diagnostics and a pass/fail verdict.
+
+### 15.4 Checker ordering and failure model
+
+This correction is stateless and non-transactional. Its complete ordering is:
+
+```text
+AUTHENTICATED_SOURCE_SNAPSHOT
+  -> DETACHED_AST_RESOLVED_FOR_EXACT_PATH
+  -> EXACT_TARGET_CLASS_RESOLVED
+  -> CLASS_NAMESPACE_EVENTS_COLLECTED
+  -> FORBIDDEN_BINDINGS_AND_DELETIONS_EVALUATED
+  -> EXACT_DIRECT_EQUALITY_SHAPE_EVALUATED
+  -> PASS_OR_BOUNDED_FAILURE
+```
+
+Missing authenticated source, a missing or duplicate class, an unbounded
+binding construct, an event-collection ambiguity, or any forbidden event ends
+in failure. The equality-shape validator runs against the same detached tree;
+there is no second read or time-of-check/time-of-use handoff. No runtime or
+database side effect occurs in any state.
+
+### 15.5 Version-3 invariants and closed event taxonomy
+
+#### `CDR3-001` — accepted carrier source remains unchanged
+
+The base-to-head implementation diff contains no change to
+`kernel/runtime_config.py`,
+`deployment/postgresql/security_audit_process_crash.py`, or
+`deployment/postgresql/security_audit_store_loss.py`. The exact five merged
+classes must continue to pass the strengthened checker without a runtime edit.
+
+#### `CDR3-002` — class-namespace event collection is closed
+
+For the target class suite, the checker emits ordered binding and deletion
+events for the following syntax:
+
+| Syntax | Required event behavior |
+| --- | --- |
+| `FunctionDef`, `AsyncFunctionDef`, and nested `ClassDef` statements executed in the target class suite | Bind the defined name; preserve whether the accepted `__eq__` node is the direct target-class statement |
+| `Import` and `ImportFrom` | Bind each effective alias using Python import binding rules; reject wildcard import as unbounded |
+| `Assign`, `AnnAssign`, `AugAssign`, and `NamedExpr` | Bind every class-namespace `Name` target, including starred and tuple/list destructuring |
+| `Delete` | Emit a deletion for every class-namespace `Name` target |
+| `For` and `AsyncFor` | Bind every loop-target name; inspect the iterator expression; recurse through body and `else` suites |
+| `With` and `AsyncWith` | Bind every `as` target; inspect context expressions; recurse through the body |
+| `Try` and `TryStar` | Recurse through body, handlers, `else`, and `finally`; bind every exception-handler name |
+| `Match` | Bind every capture in `MatchAs`, `MatchStar`, mapping rest, sequence, mapping, class, and OR patterns; inspect subject and guards; recurse through case bodies |
+| `TypeAlias` supported by pinned CPython | Bind the alias target; type-parameter scopes do not become target-class scope |
+| `Global` or `Nonlocal` naming a governed special member | Reject as ambiguous authority redirection rather than treating it as a safe class binding |
+
+The collector recurses through `if`, `while`, loop, context-manager, exception,
+and match suites executed as part of the target class body. It inspects
+definition-time expressions evaluated in the surrounding class namespace,
+including decorators, bases, keywords, annotations, defaults, return
+annotations, guards, tests, iterators, context expressions, and assignment
+expression values.
+
+It does not descend into nested function, async-function, lambda,
+comprehension, or nested-class bodies because those bodies do not execute in
+the target class namespace. It may inspect their definition-time expressions
+without treating parameters, comprehension targets, or body locals as target-
+class bindings. Direct calls to `exec`, `eval`, `locals`, or `vars` in that
+outer execution surface, and wildcard imports there, fail as unbounded.
+
+Every event is retained. A set of final names is insufficient because a valid
+direct `__eq__` followed by a hidden rebinding or deletion must not collapse to
+one apparently acceptable name.
+
+#### `CDR3-003` — display and hash bindings fail closed
+
+Any binding or deletion event for `__repr__`, `__str__`, `__format__`, or
+`__hash__` fails the target class. This applies regardless of control-flow
+reachability, order, later rebinding, or later deletion.
+
+#### `CDR3-004` — equality has one accepted authority
+
+There is exactly one `__eq__` binding event. It must be the direct synchronous
+`FunctionDef` in the target class body and the same AST node accepted by the
+unchanged exact three-step equality validator. A nested definition, async
+definition, import, alias, assignment, loop or context target, exception name,
+match capture, assignment expression, type alias, second binding, global or
+nonlocal declaration, or deletion of `__eq__` fails.
+
+#### `CDR3-005` — nested scopes neither bypass nor overreach
+
+A special-name binding in a class-scope control-flow suite is a target-class
+event and fails. The same spelling used only as a local inside a nested
+function, lambda, comprehension, or nested-class body is not a target-class
+event and does not fail by itself. Definition-time expressions remain governed
+as specified in `CDR3-002`.
+
+#### `CDR3-006` — authenticated inputs and bounded diagnostics are preserved
+
+The strengthened rule consumes only the existing authenticated snapshot and
+detached AST map. It does not reread source paths, import target modules,
+execute target code, inspect runtime objects, or include source values in a
+diagnostic.
+
+All six invariants fail closed. A syntax form that can bind the governed names
+in the target namespace but has no defined event handling is a checker failure,
+not permission to accept the source.
+
+### 15.6 Production-reachable negative cases
+
+| Invariant | Supported entry, preconditions, and counterexample | Material consequence and required result |
+| --- | --- | --- |
+| `CDR3-001` | `kernel.api.create_app()` constructs `RuntimeConfig`; a proposed checker fix also edits `RuntimeConfig` even though the merged declaration already passes | Runtime behavior could change outside the correction; path audit and review reject the carrier edit |
+| `CDR3-002` | A future `RuntimeConfig` source places `if True: __repr__ = lambda self: self.pg_dsn` in the class suite; valid production configuration contains a password-bearing DSN | Routine representation can disclose the DSN; event collection sees the nested assignment and the checker fails |
+| `CDR3-003` | A target class uses `from helper import leaking_repr as __repr__`, or binds `__hash__` as a loop, context, exception, match, named-expression, or type-alias target | A forbidden member can exist or dataclass hash posture can change while shallow scanning passes; every event variant fails |
+| `CDR3-004` | `StoreLossRecoverySecrets` defines the accepted direct `__eq__`, then a class-scope branch executes `del __eq__`; dataclass decoration can restore generated field-drilling equality | Pinned pytest may expose a differing password; the deletion remains a second event and fails |
+| `CDR3-005` | `_Routes` contains a harmless ordinary method whose local variable is named `__repr__`, and separately a hostile nested-class-scope branch binds outer `__repr__` | The local does not alter `_Routes` and must not create a false failure; the outer class-suite binding must fail |
+| `CDR3-006` | The governed architecture entry receives an authenticated detached `_ValidatedInvocation` AST; a proposed fix rereads the file or imports the module to inspect final attributes | Source substitution or execution could split authority and expose values; authenticated-input hostile tests fail the alternate path |
+
+No negative case requires private-field mutation, a fabricated runtime state,
+or production credentials. Fictional format-valid canaries and detached hostile
+syntax trees are sufficient.
+
+### 15.7 Proposed architecture and smallest complete vertical slice
+
+The checker will replace the current shallow `members` list construction with
+one private syntax-directed collector that returns ordered class-namespace
+events. An event needs only kind (`bind`, `delete`, or `unbounded`), name when
+known, origin node category, and whether it is the exact direct function node.
+It is checker-local evidence, not a runtime authority object.
+
+The collector owns traversal. The existing carrier descriptor map continues
+to own target and field identity, and `_credential_eq_violations()` continues
+to own equality-body structure. `_credential_diagnostic_carrier_violations()`
+combines those existing authorities with the event verdict:
+
+1. collect all target-class events;
+2. reject unbounded events;
+3. reject every display or hash event;
+4. require exactly one accepted direct `__eq__` binding and no equality
+   deletion or alternate binding; and
+5. run the existing exact equality-body validation on that same function node.
+
+Hostile tests will use detached source strings and the existing helper. At
+minimum they cover the review's nested-`if` and import reproductions, each
+event category in `CDR3-002`, duplicate and deletion preservation, wildcard
+and direct dynamic-namespace refusal, a nested-scope non-overreach case, and
+continued acceptance of the exact five authenticated carrier trees.
+
+This is the smallest coherent vertical slice because the defect is in one
+structural guard. Editing any carrier, adding runtime redaction, reflecting on
+live classes, importing target modules, or introducing a general Python symbol
+framework would broaden the trust boundary. Adding only an `ImportFrom` case
+would leave the demonstrated control-flow family open. A single closed event
+collector removes the shallow loop and provides one reviewable authority for
+the whole demonstrated gap.
+
+The RFC remains in the same pull request because the exact class-namespace
+acceptance model must remain useful after the correction pull request closes.
+The checker, hostile tests, RFC, and mechanically required inventory are
+companions of one independently testable capability, not separate delivery
+units.
+
+### 15.8 Elegance and durable-architecture audit
+
+- **Sources of truth:** one existing carrier descriptor map, one event
+  collector for class-namespace semantics, and one existing equality-body
+  validator.
+- **Authoritative transition points:** authenticated snapshot resolution,
+  event collection, and the final carrier violation function; no runtime
+  transition is added.
+- **Duplicated state:** no second special-name inventory may appear in tests or
+  helpers as an independent authority. Tests may assert the exact accepted set
+  as conformance evidence.
+- **Deletion:** remove the shallow direct-member collection rather than retain
+  it beside the new collector.
+- **Compatibility surface:** none. No fallback, flag, legacy path, or runtime
+  shim is introduced.
+- **Rewrite judgment:** a focused replacement of the shallow scan is clearer
+  than rewriting the 4,700-line architecture checker or changing the carrier
+  design.
+
+### 15.9 Pull-request boundary and complete-slice companions
+
+The version-3 Phase A bootstrap changes this RFC only. The one later approved
+implementation pull request may change the four expected areas listed in the
+header when needed for the complete slice. Those areas are scope prediction,
+not independent approval authority.
+
+The base dependency is merged pull request #349. There is no stacked unmerged
+pull request. Pull request #349 review, approval, admission, baselines, and
+publication remain historical evidence only and cannot be reused for the new
+candidate head.
+
+Reviewers must not require this correction to change a carrier, add a general
+redaction framework, sanitize raw runner locals, alter credentials or custody,
+change runtime or database behavior, compose production providers, or change
+issue state. Evidence that any such change is required stops for separate
+Delivery work or a new decision version.
+
+The separate follow-ups remain:
+
+1. protected export-output custody and delivery;
+2. production clock, timer, route, provider, and secret-custody evidence under
+   parked Tracking Epic #351;
+3. complete execution-root and source-capability governance; and
+4. read-only tracker closure assessment after bounded corrections.
+
+### 15.10 Traceability and verification
+
+| Invariant | Owning implementation | Hostile or negative test | Acceptance evidence | Smallest verification |
+| --- | --- | --- | --- | --- |
+| `CDR3-001` | No carrier implementation path; base-to-head exclusion | Detect any diff in the three carrier modules | Exact current five carriers pass strengthened rule unchanged | Path diff plus focused checker suite |
+| `CDR3-002` | New private class-namespace event collector | Parametrized definitions, imports, assignments, loops, contexts, exceptions, match, walrus, type alias, global/nonlocal, wildcard, and direct dynamic cases | Every supported event is observed or refused | Focused `test_rewrite_architecture_check.py` cases |
+| `CDR3-003` | Event verdict in `_credential_diagnostic_carrier_violations()` | Bind and delete each display/hash name through direct and nested forms | Every mutation produces bounded violation | Focused hostile checker matrix |
+| `CDR3-004` | Event verdict plus existing `_credential_eq_violations()` | Nested, async, imported, assigned, duplicated, and deleted `__eq__` | One direct exact method passes; every alternate event fails | Focused equality-binding cases |
+| `CDR3-005` | Collector scope boundaries | Special names inside nested bodies versus outer definition-time expressions | Nested locals do not fail; outer events do fail | Paired non-overreach/bypass cases |
+| `CDR3-006` | Existing `_check_credential_diagnostic_carriers()` snapshot interface | Missing snapshot/AST and filesystem/import substitution attempts | Detached authenticated trees alone determine verdict | Existing and extended authenticated-input tests |
+
+Phase A permits only mandatory cheap checks. Before each Phase A commit,
+`python3 conformance/ofarm_pkg_contract_check.py` must pass under the pinned
+CPython 3.12 baseline environment. The RFC-only head receives one exact-head
+Phase A review. No expensive hosted baseline is requested, monitored,
+diagnosed, or reused for the design-only head.
+
+After a valid version-3 approval, Phase B verification is:
+
+1. reproduce this traceability and confirm the named draft pull request and
+   absence of cancellation;
+2. run the package contract check before every commit;
+3. run the focused rewrite-architecture hostile tests;
+4. run the complete rewrite architecture checker;
+5. run Ruff and diff hygiene for changed Python;
+6. regenerate the canonical review-baseline inventory only when collected node
+   IDs change;
+7. verify the three carrier implementation paths have no diff;
+8. obtain one zero-Blocker exact-head content review after cheap local checks;
+9. only then create fresh exact-head baseline admission and complete required
+   hosted baselines, native lanes, trusted publication, and final receipt;
+10. post the compact final scope and approval-preservation report; and
+11. merge and close Delivery issue #352 only after every gate passes.
+
+### 15.11 Provisional posture
+
+**Technical design:** Not provisional.
+
+The syntax-directed event model is the intended pre-deployment structural
+guard for these exact five classes. Evidence requiring a new decision version
+would be a Python class-namespace binding form absent from the closed taxonomy,
+a need to inspect runtime classes or execute target code, a required edit to a
+carrier, or a change to credential custody, runtime behavior, deployment, or
+production posture.
+
+The repository approval mechanism remains provisional repository development.
+It grants no deployment, release, production access, certification, current-
+compliance, or security-waiver authority.
+
+### 15.12 Open decisions, review disposition, and approval stop
+
+The proposed design closes the demonstrated syntax taxonomy and chooses the
+event collector over a one-off import check or a broad runtime reflection
+mechanism. No material design decision is intentionally left open before
+exact-head Phase A review.
+
+Current disposition:
+
+- **Post-merge version-2 conformance Blockers:** one, `CDR-006`, demonstrated
+  by review #5057956079;
+- **Version-3 Phase A content Blockers:** pending exact-head review;
+- **New Follow-ups introduced by version 3:** none;
+- **Existing separate Follow-ups:** four in section 15.9;
+- **Preferences:** none recorded;
+- **Current credential disclosure demonstrated in the merged carriers:** zero;
+- **Governed runtime or database regressions demonstrated:** zero; and
+- **Version-3 Phase B:** unauthorized.
+
+After the draft pull request is created, this RFC and its Phase A description
+must bind that exact pull request. The exact Phase A head must then receive one
+full design review. Every demonstrated design Blocker must be resolved at a new
+head and the affected contract re-reviewed before a live card is shown.
+
+Only the unique complete version-3 decision card in the same Codex task may
+request this exact later user message:
+
+```text
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001 version 3.
+```
+
+Version-2 approval does not satisfy that sentence. Phase A stops for the new
+approval. No implementation, admission, expensive hosted baseline, merge, or
+issue-state change is authorized before it.
