@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum, auto
-from typing import Protocol, cast
+from typing import Protocol, Self, cast
 from uuid import UUID
 
 import psycopg
@@ -109,9 +109,15 @@ class ProcessCrashReconciliationRequest:
     interval_start: datetime
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class ProcessCrashReconciliationSecrets:
     control_conninfo: str
+
+    def __eq__(self, other: object) -> bool:
+        if other.__class__ is not self.__class__:
+            return NotImplemented
+        other_carrier = cast(Self, other)
+        return (self.control_conninfo,) == (other_carrier.control_conninfo,)
 
 
 @dataclass(frozen=True, slots=True)

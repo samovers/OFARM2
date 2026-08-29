@@ -76,7 +76,7 @@ MODULE_BUDGETS = {
     "kernel/tenant_uow.py": 450,
     "kernel/api.py": 120,
     "kernel/deployment_identity.py": 50,
-    "kernel/runtime_config.py": 140,
+    "kernel/runtime_config.py": 180,
     "kernel/application_runtime.py": 230,
     "kernel/legacy_m1/api.py": 370,
     "kernel/legacy_m1/runtime.py": 100,
@@ -94,7 +94,7 @@ MODULE_BUDGETS = {
     "deployment/postgresql/security_audit_break_glass.py": 1_325,
     "deployment/postgresql/security_audit_authority.py": 388,
     "deployment/postgresql/security_audit_process_crash.py": 650,
-    "deployment/postgresql/security_audit_store_loss.py": 1_000,
+    "deployment/postgresql/security_audit_store_loss.py": 1_025,
     SECURITY_AUDIT_OBSERVER_ROOT_RELATIVE_PATH: 1_747,
 }
 COMMAND_MODULE_BUDGETS = {
@@ -215,6 +215,74 @@ GROUP_BUDGETS = {
         ),
     ),
 }
+
+_CREDENTIAL_DIAGNOSTIC_CARRIERS = (
+    (
+        "kernel/runtime_config.py",
+        "RuntimeConfig",
+        (
+            "pg_dsn",
+            "tenant_readiness_pg_dsn",
+            "security_audit_readiness_pg_dsn",
+            "security_audit_authentication_pg_dsn",
+            "security_audit_request_router_pg_dsn",
+            "security_audit_control_pg_dsn",
+        ),
+        (
+            "mode",
+            "deployment_image_digest",
+            "oidc_issuer",
+            "oidc_audience",
+            "oidc_jwks_url",
+            "pg_dsn",
+            "tenant_readiness_pg_dsn",
+            "security_audit_readiness_pg_dsn",
+            "security_audit_authentication_pg_dsn",
+            "security_audit_request_router_pg_dsn",
+            "security_audit_control_pg_dsn",
+            "correlation_hmac_kms_key_resource",
+            "tenant_capability_kid",
+            "signing_evidence_receipt_path",
+            "signing_evidence_observer_public_key",
+        ),
+    ),
+    (
+        "deployment/postgresql/security_audit_process_crash.py",
+        "ProcessCrashReconciliationSecrets",
+        ("control_conninfo",),
+        ("control_conninfo",),
+    ),
+    (
+        "deployment/postgresql/security_audit_store_loss.py",
+        "StoreLossRecoverySecrets",
+        ("admin_dsn", "migrator_dsn", "control_dsn", "login_passwords"),
+        ("admin_dsn", "migrator_dsn", "control_dsn", "login_passwords"),
+    ),
+    (
+        "deployment/postgresql/security_audit_store_loss.py",
+        "_Routes",
+        (
+            "admin_long",
+            "admin_short",
+            "admin_target_short",
+            "migrator_long",
+            "control_short",
+        ),
+        (
+            "admin_long",
+            "admin_short",
+            "admin_target_short",
+            "migrator_long",
+            "control_short",
+        ),
+    ),
+    (
+        "deployment/postgresql/security_audit_store_loss.py",
+        "_ValidatedInvocation",
+        ("routes", "login_passwords"),
+        ("request", "routes", "login_passwords"),
+    ),
+)
 TEST_GLOBS = (
     "kernel/tests/*profile_runtime*.py",
     "kernel/tests/*oidc*.py",
@@ -3195,6 +3263,277 @@ def _top_level_dataclass_options(
     }
 
 
+def _credential_dataclass_options(
+    target: ast.ClassDef,
+) -> dict[str, bool] | None:
+    if len(target.decorator_list) != 1:
+        return None
+    decorator = target.decorator_list[0]
+    if (
+        not isinstance(decorator, ast.Call)
+        or not isinstance(decorator.func, ast.Name)
+        or decorator.func.id != "dataclass"
+        or decorator.args
+    ):
+        return None
+    options: dict[str, bool] = {}
+    for keyword in decorator.keywords:
+        if (
+            keyword.arg is None
+            or keyword.arg in options
+            or not isinstance(keyword.value, ast.Constant)
+            or type(keyword.value.value) is not bool
+        ):
+            return None
+        options[keyword.arg] = keyword.value.value
+    return options
+
+
+def _credential_named_attribute(
+    node: ast.AST,
+    owner: str,
+    attribute: str,
+) -> bool:
+    return (
+        isinstance(node, ast.Attribute)
+        and isinstance(node.ctx, ast.Load)
+        and node.attr == attribute
+        and isinstance(node.value, ast.Name)
+        and isinstance(node.value.ctx, ast.Load)
+        and node.value.id == owner
+    )
+
+
+def _credential_class_rejection(statement: ast.stmt) -> bool:
+    if not isinstance(statement, ast.If) or statement.orelse:
+        return False
+    test = statement.test
+    if (
+        not isinstance(test, ast.Compare)
+        or len(test.ops) != 1
+        or not isinstance(test.ops[0], ast.IsNot)
+        or len(test.comparators) != 1
+        or not _credential_named_attribute(test.left, "other", "__class__")
+        or not _credential_named_attribute(
+            test.comparators[0], "self", "__class__"
+        )
+        or len(statement.body) != 1
+    ):
+        return False
+    returned = statement.body[0]
+    return (
+        isinstance(returned, ast.Return)
+        and isinstance(returned.value, ast.Name)
+        and returned.value.id == "NotImplemented"
+    )
+
+
+def _credential_cast_assignment(statement: ast.stmt) -> bool:
+    if (
+        not isinstance(statement, ast.Assign)
+        or len(statement.targets) != 1
+        or not isinstance(statement.targets[0], ast.Name)
+        or statement.targets[0].id != "other_carrier"
+        or not isinstance(statement.value, ast.Call)
+    ):
+        return False
+    call = statement.value
+    return (
+        isinstance(call.func, ast.Name)
+        and call.func.id == "cast"
+        and len(call.args) == 2
+        and not call.keywords
+        and isinstance(call.args[0], ast.Name)
+        and call.args[0].id == "Self"
+        and isinstance(call.args[1], ast.Name)
+        and call.args[1].id == "other"
+    )
+
+
+def _credential_field_tuple(
+    node: ast.AST,
+    owner: str,
+) -> tuple[str, ...] | None:
+    if not isinstance(node, ast.Tuple) or not isinstance(node.ctx, ast.Load):
+        return None
+    fields = []
+    for element in node.elts:
+        if (
+            not isinstance(element, ast.Attribute)
+            or not isinstance(element.ctx, ast.Load)
+            or not isinstance(element.value, ast.Name)
+            or not isinstance(element.value.ctx, ast.Load)
+            or element.value.id != owner
+        ):
+            return None
+        fields.append(element.attr)
+    return tuple(fields)
+
+
+def _credential_bound_names(target: ast.AST) -> tuple[str, ...]:
+    if isinstance(target, ast.Name):
+        return (target.id,)
+    if isinstance(target, ast.Starred):
+        return _credential_bound_names(target.value)
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return tuple(
+            name
+            for element in target.elts
+            for name in _credential_bound_names(element)
+        )
+    return ()
+
+
+def _credential_eq_violations(
+    method: ast.FunctionDef,
+    declared_fields: tuple[str, ...],
+) -> list[str]:
+    violations = []
+    arguments = method.args
+    if (
+        method.decorator_list
+        or arguments.posonlyargs
+        or tuple(argument.arg for argument in arguments.args)
+        != ("self", "other")
+        or arguments.vararg is not None
+        or arguments.kwonlyargs
+        or arguments.kwarg is not None
+        or arguments.defaults
+        or arguments.kw_defaults
+    ):
+        violations.append("__eq__ signature differs from the exact contract")
+    if len(method.body) != 3:
+        violations.append("__eq__ body is not the exact three-step operation")
+        return violations
+    if not _credential_class_rejection(method.body[0]):
+        violations.append("__eq__ lacks exact-class NotImplemented rejection")
+    if not _credential_cast_assignment(method.body[1]):
+        violations.append("__eq__ cast step differs from the exact contract")
+    returned = method.body[2]
+    if not isinstance(returned, ast.Return) or not isinstance(
+        returned.value, ast.Compare
+    ):
+        violations.append("__eq__ does not return direct tuple equality")
+        return violations
+    comparison = returned.value
+    if (
+        len(comparison.ops) != 1
+        or not isinstance(comparison.ops[0], ast.Eq)
+        or len(comparison.comparators) != 1
+    ):
+        violations.append("__eq__ comparison is not one direct equality")
+        return violations
+    left_fields = _credential_field_tuple(comparison.left, "self")
+    right_fields = _credential_field_tuple(
+        comparison.comparators[0], "other_carrier"
+    )
+    if left_fields != declared_fields or right_fields != declared_fields:
+        violations.append("__eq__ field tuples differ from declared fields")
+    return violations
+
+
+def _credential_diagnostic_carrier_violations(
+    tree: ast.Module,
+    class_name: str,
+    protected_fields: tuple[str, ...],
+    declared_fields: tuple[str, ...],
+) -> list[str]:
+    prefix = f"{class_name}: "
+    classes = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == class_name
+    ]
+    if len(classes) != 1:
+        return [prefix + "exact top-level class is missing or duplicated"]
+    target = classes[0]
+    violations = []
+    if (
+        not protected_fields
+        or len(set(protected_fields)) != len(protected_fields)
+        or any(field not in declared_fields for field in protected_fields)
+    ):
+        violations.append("protected-field authority is invalid")
+    if _top_level_class_fields(tree, class_name) != declared_fields:
+        violations.append("declared fields differ from the exact inventory")
+    if target.bases or target.keywords:
+        violations.append("class must inherit directly from object")
+    accepted_options = (
+        {"frozen": True, "slots": True, "repr": False},
+        {"frozen": True, "slots": True, "repr": False, "eq": True},
+    )
+    if _credential_dataclass_options(target) not in accepted_options:
+        violations.append("dataclass options differ from the opaque posture")
+    members = []
+    for node in target.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            members.append(node.name)
+        elif isinstance(node, ast.Assign):
+            for assigned in node.targets:
+                members.extend(_credential_bound_names(assigned))
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+            members.extend(_credential_bound_names(node.target))
+        elif isinstance(node, ast.Delete):
+            for deleted in node.targets:
+                members.extend(_credential_bound_names(deleted))
+    prohibited = sorted(
+        {"__hash__", "__repr__", "__str__", "__format__"}.intersection(
+            members
+        )
+    )
+    if prohibited:
+        violations.append("class defines forbidden display or hash members")
+    equality_methods = [
+        node
+        for node in target.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == "__eq__"
+    ]
+    if (
+        members.count("__eq__") != 1
+        or len(equality_methods) != 1
+        or not isinstance(equality_methods[0], ast.FunctionDef)
+    ):
+        violations.append("class must define exactly one synchronous __eq__")
+    else:
+        violations.extend(
+            _credential_eq_violations(equality_methods[0], declared_fields)
+        )
+    return [prefix + violation for violation in sorted(set(violations))]
+
+
+def _check_credential_diagnostic_carriers(
+    snapshot: PythonSourceSnapshotV1,
+    trees: collections.abc.Mapping[str, ast.Module],
+) -> list[str]:
+    failures = []
+    for relative, class_name, protected_fields, declared_fields in (
+        _CREDENTIAL_DIAGNOSTIC_CARRIERS
+    ):
+        unit = snapshot.modules_by_relative_path.get(relative)
+        if unit is None:
+            failures.append(
+                f"{relative}:{class_name}: authenticated module is missing"
+            )
+            continue
+        tree = trees.get(unit.module_name)
+        if tree is None:
+            failures.append(
+                f"{relative}:{class_name}: detached AST is missing"
+            )
+            continue
+        failures.extend(
+            f"{relative}:{violation}"
+            for violation in _credential_diagnostic_carrier_violations(
+                tree,
+                class_name,
+                protected_fields,
+                declared_fields,
+            )
+        )
+    return sorted(set(failures))
+
+
 def _statement_line(
     function: ast.FunctionDef,
     source: str,
@@ -4338,6 +4677,7 @@ def main() -> int:
     failures.extend(_check_security_audit_break_glass_surface(snapshot, trees))
     failures.extend(_check_security_audit_authority_surface(snapshot, trees))
     failures.extend(_check_security_audit_observer_root_surface(snapshot, trees))
+    failures.extend(_check_credential_diagnostic_carriers(snapshot, trees))
     for relative, budget in MODULE_BUDGETS.items():
         failures.extend(_check_production(snapshot, trees, relative, budget))
     for relative, budget in COMMAND_MODULE_BUDGETS.items():

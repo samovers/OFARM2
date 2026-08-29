@@ -9196,6 +9196,171 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_checker_uses_authenticated_module_and_detached_ast",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_authority_map_is_exact",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_accepts_exact_shape[default]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_accepts_exact_shape[explicit]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_display_and_hash_members[__format__]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_display_and_hash_members[__hash__]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_display_and_hash_members[__repr__]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_display_and_hash_members[__str__]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_duplicate_target_class",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[alternate-type-branch]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[async-equality]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[class-base]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[class-name]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[decorated-equality]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[eq-false]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[equality-deletion]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[equality-rebinding]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[extra-class-decorator]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[false-type-result]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[field-inventory]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[generated-repr]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[helper-selected-fields]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[left-field-omitted]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[left-fields-reordered]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[missing-cast]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[non-equality-comparison]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[repr-true]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[right-field-omitted]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[tuple-display-binding]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[unsafe-hash]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_invalid_protected_authority[duplicate]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_invalid_protected_authority[empty]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_invalid_protected_authority[outside-declared-inventory]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_declared_total_source_byte_limit_refuses_before_reads",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -12169,6 +12334,61 @@
       "nodeid": "kernel/tests/test_security_audit_client.py::test_wrong_session_user_refuses_before_append",
       "sourceModule": "kernel.tests.test_security_audit_client",
       "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_credential_diagnostics.py::test_closed_diagnostic_projection_omits_every_protected_value[process-crash-secrets]",
+      "sourceModule": "kernel.tests.test_security_audit_credential_diagnostics",
+      "sourcePath": "kernel/tests/test_security_audit_credential_diagnostics.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_credential_diagnostics.py::test_closed_diagnostic_projection_omits_every_protected_value[runtime-config]",
+      "sourceModule": "kernel.tests.test_security_audit_credential_diagnostics",
+      "sourcePath": "kernel/tests/test_security_audit_credential_diagnostics.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_credential_diagnostics.py::test_closed_diagnostic_projection_omits_every_protected_value[store-loss-invocation]",
+      "sourceModule": "kernel.tests.test_security_audit_credential_diagnostics",
+      "sourcePath": "kernel/tests/test_security_audit_credential_diagnostics.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_credential_diagnostics.py::test_closed_diagnostic_projection_omits_every_protected_value[store-loss-routes]",
+      "sourceModule": "kernel.tests.test_security_audit_credential_diagnostics",
+      "sourcePath": "kernel/tests/test_security_audit_credential_diagnostics.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_credential_diagnostics.py::test_closed_diagnostic_projection_omits_every_protected_value[store-loss-secrets]",
+      "sourceModule": "kernel.tests.test_security_audit_credential_diagnostics",
+      "sourcePath": "kernel/tests/test_security_audit_credential_diagnostics.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_credential_diagnostics.py::test_exact_value_equality_and_generated_frozen_hash_cover_every_field[process-crash-secrets]",
+      "sourceModule": "kernel.tests.test_security_audit_credential_diagnostics",
+      "sourcePath": "kernel/tests/test_security_audit_credential_diagnostics.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_credential_diagnostics.py::test_exact_value_equality_and_generated_frozen_hash_cover_every_field[runtime-config]",
+      "sourceModule": "kernel.tests.test_security_audit_credential_diagnostics",
+      "sourcePath": "kernel/tests/test_security_audit_credential_diagnostics.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_credential_diagnostics.py::test_exact_value_equality_and_generated_frozen_hash_cover_every_field[store-loss-invocation]",
+      "sourceModule": "kernel.tests.test_security_audit_credential_diagnostics",
+      "sourcePath": "kernel/tests/test_security_audit_credential_diagnostics.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_credential_diagnostics.py::test_exact_value_equality_and_generated_frozen_hash_cover_every_field[store-loss-routes]",
+      "sourceModule": "kernel.tests.test_security_audit_credential_diagnostics",
+      "sourcePath": "kernel/tests/test_security_audit_credential_diagnostics.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_credential_diagnostics.py::test_exact_value_equality_and_generated_frozen_hash_cover_every_field[store-loss-secrets]",
+      "sourceModule": "kernel.tests.test_security_audit_credential_diagnostics",
+      "sourcePath": "kernel/tests/test_security_audit_credential_diagnostics.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_credential_diagnostics.py::test_supported_store_loss_derivation_reaches_both_opaque_carriers",
+      "sourceModule": "kernel.tests.test_security_audit_credential_diagnostics",
+      "sourcePath": "kernel/tests/test_security_audit_credential_diagnostics.py"
     },
     {
       "nodeid": "kernel/tests/test_security_audit_export.py::test_base_exception_is_propagated_without_becoming_a_closed_outcome[commit]",
@@ -18021,8 +18241,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "5bfa29d42a34e2281ff931a349918d729f8252ca5c2ecdd590fdf18afd365afb",
-  "entryCount": 3604,
+  "entriesSha256": "00562276906c61f11b79e5d8b6f653b5fc496561166c1e4b46fc930b1e8140f4",
+  "entryCount": 3648,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
