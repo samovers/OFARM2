@@ -13,7 +13,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Protocol, Self, cast
 from uuid import UUID
 
 import psycopg
@@ -247,12 +247,28 @@ class StoreLossRecoveryRequest:
     execution_id: UUID
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class StoreLossRecoverySecrets:
     admin_dsn: str
     migrator_dsn: str
     control_dsn: str
     login_passwords: tuple[tuple[str, str], ...]
+
+    def __eq__(self, other: object) -> bool:
+        if other.__class__ is not self.__class__:
+            return NotImplemented
+        other_carrier = cast(Self, other)
+        return (
+            self.admin_dsn,
+            self.migrator_dsn,
+            self.control_dsn,
+            self.login_passwords,
+        ) == (
+            other_carrier.admin_dsn,
+            other_carrier.migrator_dsn,
+            other_carrier.control_dsn,
+            other_carrier.login_passwords,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,7 +289,7 @@ class StoreLossRecoveryReport:
         return _render_report(self)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class _Routes:
     admin_long: str
     admin_short: str
@@ -281,12 +297,42 @@ class _Routes:
     migrator_long: str
     control_short: str
 
-
-@dataclass(frozen=True, slots=True)
+    def __eq__(self, other: object) -> bool:
+        if other.__class__ is not self.__class__:
+            return NotImplemented
+        other_carrier = cast(Self, other)
+        return (
+            self.admin_long,
+            self.admin_short,
+            self.admin_target_short,
+            self.migrator_long,
+            self.control_short,
+        ) == (
+            other_carrier.admin_long,
+            other_carrier.admin_short,
+            other_carrier.admin_target_short,
+            other_carrier.migrator_long,
+            other_carrier.control_short,
+        )
+@dataclass(frozen=True, slots=True, repr=False)
 class _ValidatedInvocation:
     request: StoreLossRecoveryRequest
     routes: _Routes
     login_passwords: tuple[tuple[str, str], ...]
+
+    def __eq__(self, other: object) -> bool:
+        if other.__class__ is not self.__class__:
+            return NotImplemented
+        other_carrier = cast(Self, other)
+        return (
+            self.request,
+            self.routes,
+            self.login_passwords,
+        ) == (
+            other_carrier.request,
+            other_carrier.routes,
+            other_carrier.login_passwords,
+        )
 
 
 @dataclass(frozen=True, slots=True)

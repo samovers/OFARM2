@@ -1,7 +1,8 @@
 # OFARM Security Audit Credential Diagnostic Representation RFC v0.1
 
-**Status:** Phase A RFC-only draft in pull request #349; exact-head review and
-required hosted gates are pending; Phase B is unauthorized
+**Status:** decision version 2 approved for Phase B implementation in pull
+request #349; implementation-head review, fresh admission, required hosted
+gates, and merge remain pending
 
 **Decision:**
 `ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001`
@@ -18,6 +19,12 @@ version-1 approval was recognized.
 **Reviewed base:** `1f538f5b34ea2372ce84c82511fc5b5092f1ef88`
 
 **Draft pull request:** [#349](https://github.com/samovers/OFARM2/pull/349)
+
+**Approval evidence:** the task user approved the exact sentence `I approve
+OFARM2 decision ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001
+version 2.` on 2026-08-29. The
+[pull-request navigation copy](https://github.com/samovers/OFARM2/pull/349#issuecomment-5461601281)
+is non-authoritative; the task record remains the approval authority.
 
 **Primary trust boundary:** credential-bearing diagnostic representation
 non-disclosure for five exact dataclass carriers already reached by the
@@ -542,9 +549,11 @@ claim.
 ### 11.1 Primary boundary and intended pull request
 
 Draft pull request #349 owns only credential-bearing diagnostic representation
-non-disclosure. The current Phase A head changes only this RFC; Phase B may
-begin only after a later complete live decision card and exact task-user
-approval.
+non-disclosure. Phase A completed at
+`07b51d4516e3ef201212dce9b45f8a590aad983c`, and the task user subsequently
+approved this exact decision version for Phase B. Implementation remains
+limited to the same capability, effects, authority, invariants, and pull
+request.
 
 ### 11.2 Exact technical allowlist
 
@@ -561,6 +570,11 @@ docs/rfcs/OFARM_Security_Audit_Credential_Diagnostic_Representation_RFC_v0_1.md
 The second RFC-only Phase A commit may change only that same path to bind the
 created draft pull request and resolve Phase A review findings. No production,
 test, checker, or inventory path may change before approval.
+
+That pre-approval restriction is now satisfied. Phase B may change only the
+remaining paths needed to implement and verify the approved boundary. The
+eight-path envelope remains the maximum scope prediction; the approved
+capability and trust boundary remain the semantic authority.
 
 ### 11.3 Dependencies and reviewer limits
 
@@ -624,16 +638,22 @@ the technical change provisional and would never authorize deployment.
 | `CDR-007` | Existing runtime/process-crash/store-loss implementations | Change validation, report, database, or state-machine behavior | Existing focused suites remain green with no runtime diff outside declarations | Existing targeted suites plus base-to-head path/diff audit |
 | `CDR-008` | `_Routes`, `_ValidatedInvocation`, and exact five-class checker map | Protect only the three public/input carriers | Derived carriers pass the same projection, equality, and checker rules | Store-loss derivation representation cases and checker tests |
 
-Phase A verification, before a decision card:
+Phase A verification completed before the decision card:
 
-1. package contract check passes before each RFC-only commit;
-2. the draft pull request contains only this RFC;
-3. one exact-head Phase A content review names the full commit and reports zero
-   Blockers;
-4. only after that review may the exact head receive baseline admission under
-   the repository workflow; and
-5. every required hosted result for that same admitted head must pass before
-   the live decision card is shown.
+1. package contract checks passed before the RFC-only commits;
+2. the draft pull request contained only this RFC at the Phase A head;
+3. the exact Phase A head
+   `07b51d4516e3ef201212dce9b45f8a590aad983c` received
+   [zero-Blocker review](https://github.com/samovers/OFARM2/pull/349#pullrequestreview-5057422093);
+4. admitted source run
+   [33243805049](https://github.com/samovers/OFARM2/actions/runs/33243805049)
+   passed; and
+5. trusted publication run
+   [33244754972](https://github.com/samovers/OFARM2/actions/runs/33244754972)
+   passed before the live decision card and exact task-user approval.
+
+Those Phase A runs are historical design evidence only. They are not reused as
+implementation-head acceptance evidence.
 
 Phase B verification, if later approved:
 
@@ -673,12 +693,12 @@ evidence and will not be monitored, diagnosed, or retried.
 
 ### 14.2 Current disposition
 
-- **Content Blockers addressed in this draft:** complete derived-carrier
-  inventory; honest bounded traceback claim.
-- **Workflow Blockers:** exact-head Phase A review and required same-head hosted
-  gates pending.
-- **Implementation Blockers:** Phase B lacks a complete live decision card and
-  exact later task-user approval.
+- **Phase A content Blockers:** zero after exact-head review.
+- **Approval:** exact decision version 2 approval recognized on 2026-08-29.
+- **Implementation Blockers:** zero known inside the approved boundary.
+- **Workflow remaining:** implementation, cheap local checks, exact-head
+  zero-Blocker review, fresh admission, hosted baselines and trusted
+  publication, scope report, cancellation recheck, and merge-stop recheck.
 - **Follow-ups:** four separate items in section 11.4.
 - **Preferences:** none outstanding.
 - **Production-runtime defects demonstrated by this Phase A review:** none.
@@ -698,6 +718,7 @@ demonstrated Blocker remains, merge the pull request. New ideas, Preferences,
 hypothetical risks, and out-of-boundary hardening remain Follow-ups and do not
 reopen review.
 
-Phase A stops here. The approval sentence must not be presented until the RFC
-names the existing draft pull request, its exact head has a zero-Blocker review,
-and all required same-head hosted Phase A gates have passed.
+Phase A is complete and the exact approval is recognized. Phase B may proceed
+only inside the approved credential-bearing diagnostic representation boundary.
+Nothing in this status transition authorizes production composition,
+deployment, certification, current-compliance claims, or issue #192 changes.

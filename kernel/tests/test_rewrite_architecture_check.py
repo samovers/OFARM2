@@ -2421,3 +2421,260 @@ def test_unreached_internal_error_remains_outside_fixed_root_claim(tmp_path):
 
     assert "operator_entry" not in closures.production
     assert "operator_entry" not in closures.legacy
+
+
+_VALID_CREDENTIAL_DIAGNOSTIC_SOURCE = """\
+from dataclasses import dataclass
+from typing import Self, cast
+
+@dataclass(frozen=True, slots=True, repr=False)
+class SecretCarrier:
+    first: str
+    second: str
+
+    def __eq__(self, other: object) -> bool:
+        if other.__class__ is not self.__class__:
+            return NotImplemented
+        other_carrier = cast(Self, other)
+        return (
+            self.first,
+            self.second,
+        ) == (
+            other_carrier.first,
+            other_carrier.second,
+        )
+"""
+
+
+def _credential_violations(
+    source,
+    protected_fields=("first",),
+    declared_fields=("first", "second"),
+):
+    return (
+        rewrite_architecture_check._credential_diagnostic_carrier_violations(
+            ast.parse(source),
+            "SecretCarrier",
+            protected_fields,
+            declared_fields,
+        )
+    )
+
+
+def test_credential_diagnostic_authority_map_is_exact():
+    assert rewrite_architecture_check._CREDENTIAL_DIAGNOSTIC_CARRIERS == (
+        (
+            "kernel/runtime_config.py",
+            "RuntimeConfig",
+            (
+                "pg_dsn",
+                "tenant_readiness_pg_dsn",
+                "security_audit_readiness_pg_dsn",
+                "security_audit_authentication_pg_dsn",
+                "security_audit_request_router_pg_dsn",
+                "security_audit_control_pg_dsn",
+            ),
+            (
+                "mode",
+                "deployment_image_digest",
+                "oidc_issuer",
+                "oidc_audience",
+                "oidc_jwks_url",
+                "pg_dsn",
+                "tenant_readiness_pg_dsn",
+                "security_audit_readiness_pg_dsn",
+                "security_audit_authentication_pg_dsn",
+                "security_audit_request_router_pg_dsn",
+                "security_audit_control_pg_dsn",
+                "correlation_hmac_kms_key_resource",
+                "tenant_capability_kid",
+                "signing_evidence_receipt_path",
+                "signing_evidence_observer_public_key",
+            ),
+        ),
+        (
+            "deployment/postgresql/security_audit_process_crash.py",
+            "ProcessCrashReconciliationSecrets",
+            ("control_conninfo",),
+            ("control_conninfo",),
+        ),
+        (
+            "deployment/postgresql/security_audit_store_loss.py",
+            "StoreLossRecoverySecrets",
+            ("admin_dsn", "migrator_dsn", "control_dsn", "login_passwords"),
+            ("admin_dsn", "migrator_dsn", "control_dsn", "login_passwords"),
+        ),
+        (
+            "deployment/postgresql/security_audit_store_loss.py",
+            "_Routes",
+            (
+                "admin_long",
+                "admin_short",
+                "admin_target_short",
+                "migrator_long",
+                "control_short",
+            ),
+            (
+                "admin_long",
+                "admin_short",
+                "admin_target_short",
+                "migrator_long",
+                "control_short",
+            ),
+        ),
+        (
+            "deployment/postgresql/security_audit_store_loss.py",
+            "_ValidatedInvocation",
+            ("routes", "login_passwords"),
+            ("request", "routes", "login_passwords"),
+        ),
+    )
+
+
+@pytest.mark.parametrize("explicit_eq", (False, True), ids=("default", "explicit"))
+def test_credential_diagnostic_rule_accepts_exact_shape(explicit_eq):
+    source = _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE
+    if explicit_eq:
+        source = source.replace("repr=False)", "repr=False, eq=True)", 1)
+
+    assert _credential_violations(source) == []
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    (
+        ("class SecretCarrier:", "class DifferentCarrier:"),
+        ("second: str", "different: str"),
+        (", repr=False", ""),
+        ("repr=False", "repr=True"),
+        ("repr=False", "repr=False, eq=False"),
+        ("repr=False", "repr=False, unsafe_hash=True"),
+        (
+            "@dataclass(frozen=True, slots=True, repr=False)",
+            "@caller\n@dataclass(frozen=True, slots=True, repr=False)",
+        ),
+        ("def __eq__", "async def __eq__"),
+        (
+            "if other.__class__ is not self.__class__:",
+            "if type(other) is not type(self):",
+        ),
+        ("return NotImplemented", "return False"),
+        ("other_carrier = cast(Self, other)", "other_carrier = other"),
+        ("            self.second,\n", ""),
+        ("            other_carrier.second,\n", ""),
+        (
+            "            self.first,\n            self.second,",
+            "            self.second,\n            self.first,",
+        ),
+        (
+            "        ) == (",
+            "        ) != (",
+        ),
+        (
+            "        return (\n            self.first,",
+            "        return fields(self) == fields(other_carrier)\n"
+            "        return (\n            self.first,",
+        ),
+        (
+            "    def __eq__(self, other: object) -> bool:",
+            "    @staticmethod\n"
+            "    def __eq__(self, other: object) -> bool:",
+        ),
+    ),
+    ids=(
+        "class-name",
+        "field-inventory",
+        "generated-repr",
+        "repr-true",
+        "eq-false",
+        "unsafe-hash",
+        "extra-class-decorator",
+        "async-equality",
+        "alternate-type-branch",
+        "false-type-result",
+        "missing-cast",
+        "left-field-omitted",
+        "right-field-omitted",
+        "left-fields-reordered",
+        "non-equality-comparison",
+        "helper-selected-fields",
+        "decorated-equality",
+    ),
+)
+def test_credential_diagnostic_rule_rejects_hostile_shapes(old, new):
+    mutated = _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE.replace(old, new, 1)
+
+    assert mutated != _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE
+    assert _credential_violations(mutated)
+
+
+@pytest.mark.parametrize(
+    "member",
+    ("__hash__", "__repr__", "__str__", "__format__"),
+)
+def test_credential_diagnostic_rule_rejects_display_and_hash_members(member):
+    added = f"    def {member}(self):\n        return 'forbidden'\n\n"
+    mutated = _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE.replace(
+        "    def __eq__",
+        added + "    def __eq__",
+        1,
+    )
+
+    assert _credential_violations(mutated)
+
+
+@pytest.mark.parametrize(
+    "protected_fields",
+    ((), ("first", "first"), ("missing",)),
+    ids=("empty", "duplicate", "outside-declared-inventory"),
+)
+def test_credential_diagnostic_rule_rejects_invalid_protected_authority(
+    protected_fields,
+):
+    assert _credential_violations(
+        _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE,
+        protected_fields=protected_fields,
+    )
+
+
+def test_credential_diagnostic_rule_rejects_duplicate_target_class():
+    assert _credential_violations(
+        _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE
+        + _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE
+    )
+
+
+def test_credential_checker_uses_authenticated_module_and_detached_ast(
+    monkeypatch,
+):
+    descriptor = (
+        "governed/carrier.py",
+        "SecretCarrier",
+        ("first",),
+        ("first", "second"),
+    )
+    monkeypatch.setattr(
+        rewrite_architecture_check,
+        "_CREDENTIAL_DIAGNOSTIC_CARRIERS",
+        (descriptor,),
+    )
+    missing = types.SimpleNamespace(modules_by_relative_path={})
+    assert rewrite_architecture_check._check_credential_diagnostic_carriers(
+        missing,
+        {},
+    ) == [
+        "governed/carrier.py:SecretCarrier: authenticated module is missing"
+    ]
+
+    unit = types.SimpleNamespace(module_name="governed.carrier")
+    snapshot = types.SimpleNamespace(
+        modules_by_relative_path={"governed/carrier.py": unit}
+    )
+    assert rewrite_architecture_check._check_credential_diagnostic_carriers(
+        snapshot,
+        {},
+    ) == ["governed/carrier.py:SecretCarrier: detached AST is missing"]
+    assert rewrite_architecture_check._check_credential_diagnostic_carriers(
+        snapshot,
+        {"governed.carrier": ast.parse(_VALID_CREDENTIAL_DIAGNOSTIC_SOURCE)},
+    ) == []

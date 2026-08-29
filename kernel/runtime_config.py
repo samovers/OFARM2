@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import Self, cast
 
 from psycopg import ProgrammingError
 from psycopg.conninfo import conninfo_to_dict
@@ -63,7 +64,7 @@ def _dsn(values: dict[str, str], name: str) -> str:
     return value
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class RuntimeConfig:
     mode: RuntimeMode
     deployment_image_digest: str
@@ -80,6 +81,44 @@ class RuntimeConfig:
     tenant_capability_kid: str
     signing_evidence_receipt_path: Path
     signing_evidence_observer_public_key: bytes
+
+    def __eq__(self, other: object) -> bool:
+        if other.__class__ is not self.__class__:
+            return NotImplemented
+        other_carrier = cast(Self, other)
+        return (
+            self.mode,
+            self.deployment_image_digest,
+            self.oidc_issuer,
+            self.oidc_audience,
+            self.oidc_jwks_url,
+            self.pg_dsn,
+            self.tenant_readiness_pg_dsn,
+            self.security_audit_readiness_pg_dsn,
+            self.security_audit_authentication_pg_dsn,
+            self.security_audit_request_router_pg_dsn,
+            self.security_audit_control_pg_dsn,
+            self.correlation_hmac_kms_key_resource,
+            self.tenant_capability_kid,
+            self.signing_evidence_receipt_path,
+            self.signing_evidence_observer_public_key,
+        ) == (
+            other_carrier.mode,
+            other_carrier.deployment_image_digest,
+            other_carrier.oidc_issuer,
+            other_carrier.oidc_audience,
+            other_carrier.oidc_jwks_url,
+            other_carrier.pg_dsn,
+            other_carrier.tenant_readiness_pg_dsn,
+            other_carrier.security_audit_readiness_pg_dsn,
+            other_carrier.security_audit_authentication_pg_dsn,
+            other_carrier.security_audit_request_router_pg_dsn,
+            other_carrier.security_audit_control_pg_dsn,
+            other_carrier.correlation_hmac_kms_key_resource,
+            other_carrier.tenant_capability_kid,
+            other_carrier.signing_evidence_receipt_path,
+            other_carrier.signing_evidence_observer_public_key,
+        )
 
     @classmethod
     def from_env(cls) -> RuntimeConfig:
