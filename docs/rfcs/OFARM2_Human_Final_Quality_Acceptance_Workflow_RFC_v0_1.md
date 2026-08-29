@@ -212,6 +212,8 @@ task, and the AI may not infer permission from such an external possibility.
   producer as a substitute for the one authorized transition;
 - a successful pre-write read as proof that the target cannot change before a
   later ordinary merge call;
+- the pull-request object's historical or cached `base.sha` field as a
+  substitute for reading the live target ref;
 - current open state without transition history as proof that no close/reopen
   cycle occurred;
 - green tests or zero-Blocker agent review as proof that the user inspected the
@@ -354,7 +356,8 @@ The immutable candidate identity is:
 - repository identity `samovers/OFARM2`;
 - pull-request number;
 - full target ref `refs/heads/<TARGET_BRANCH>`;
-- full live base commit SHA `B`;
+- full live base commit SHA `B`, read from that target ref rather than the
+  pull-request object's `base.sha` snapshot;
 - full pull-request head commit SHA `H`;
 - full authoritative merge-commit SHA `M` from
   `refs/pull/<NUMBER>/merge`;
@@ -616,6 +619,8 @@ Phase A verification:
   maps back to its invariant;
 - confirm the sole merge-ref candidate binds target, base, head, exact merge
   commit, ordered parents, and tree;
+- confirm `B` comes from the live target ref and not the pull-request object's
+  potentially older base snapshot;
 - confirm the explicit expected-base lease is part of the same server ref
   transaction as the exact candidate write;
 - confirm ordinary merge calls, local candidates, squash/rebase, fallback
