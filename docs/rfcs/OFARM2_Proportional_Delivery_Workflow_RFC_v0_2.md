@@ -1,12 +1,13 @@
 # OFARM2 Proportional Delivery Workflow — Phase A Contract v0.2
 
-**Status:** Phase A draft; decision version 1 was withdrawn without approval;
-no implementation or merge authority exists; this workflow is inactive until
-its adoption pull request merges
+**Status:** approved for Phase B under decision version 2; authority is limited
+to draft PR #348 and the five-path adoption boundary, subject to every final
+gate; decision version 1 was withdrawn without approval and grants no
+authority; this workflow remains inactive until PR #348 merges
 
 **Contract identity:** `ofarm2.proportional-delivery-workflow.v0.2`
 
-**Decision identity:** `PROPORTIONAL-DELIVERY-WORKFLOW-001`, proposed version
+**Decision identity:** `PROPORTIONAL-DELIVERY-WORKFLOW-001`, approved version
 `2`
 
 **Primary trust boundary:** the task user's approval of one repository
@@ -593,22 +594,22 @@ The workflow must stop or reject the proposed course when:
 The workflow remains documentation-governed. No new service, bot, database,
 signer, workflow trigger, or policy engine is introduced.
 
-Phase B will:
+The approved Phase B implementation:
 
-1. update `AGENTS.md` to define tracking epics, delivery issues, complete
+1. updates `AGENTS.md` to define tracking epics, delivery issues, complete
    delivery pull requests, semantic approval, abandoned-pull-request recovery,
    the limited prospective precedence rule, and the corrected order of Phase
    A, approval, implementation, review, baseline, and merge;
-2. update `TASK_PROMPT.md` so task contracts plan a complete vertical slice,
+2. updates `TASK_PROMPT.md` so task contracts plan a complete vertical slice,
    use the risk-shaped Phase A contract, list expected areas rather than an
    exact authority-bearing allowlist, and distinguish semantic expansion from
    ordinary file discovery;
-3. update `CONTRIBUTING.md` to replace the completed three-PR pilot text with
+3. updates `CONTRIBUTING.md` to replace the completed three-PR pilot text with
    the adopted delivery model and outcome-oriented review guidance;
-4. update the pull request template to record delivery issue versus tracking
+4. updates the pull request template to record delivery issue versus tracking
    epic, one-capability and one-boundary containment, completeness of companion
    changes, and any abandoned-pull-request supersession; and
-5. mark this RFC approved for decision version 2 and append compact approval
+5. marks this RFC approved for decision version 2 and appends compact approval
    evidence in the same pull request.
 
 This is the smallest coherent change because the fragmentation is created by
@@ -789,29 +790,63 @@ Current review disposition:
   reusable for the corrected version 2 head. The earlier repository owner
   comment proves that a zero-Blocker disposition was recorded, not reviewer
   independence, and that disposition is superseded by the later Blockers.
-- Review status for proposed version 2: pending. The Phase A corrections in
-  this head must receive a new exact-head review; no zero-Blocker claim is made
-  yet.
-- Follow-ups: independently verifiable human approval before deployment.
+- Corrected version 2 Phase A head
+  `a02216a9414c814d95f414f6febde3a17c7200c5` received an agent-assisted
+  exact-head review with zero Blockers, Follow-ups, or Preferences, followed by
+  fresh immutable admission.
+- Source run `33213748351` passed two clean conformance baselines, clean-run
+  equivalence, and both native architectures. Separate publication run
+  `33215536879` reauthenticated and published the evidence and sealed receipt
+  artifact `9703219890`. These are coordinate-bound technical evidence, not
+  user approval, deployment authority, or reusable final-head evidence.
+- Decision version 2 was approved by the task user after the unique complete
+  corrected card in the same Codex task. The exact entire visible approval
+  message was:
+
+  ```text
+  I approve OFARM2 decision PROPORTIONAL-DELIVERY-WORKFLOW-001 version 2.
+  ```
+
+  Stable Codex references are task
+  `01a04934-594d-7d50-b963-6a629d45be7b`; corrected-card turn
+  `01a04c99-34b5-7ab0-b56e-f25abeecb1e9`, item
+  `msg_03234fc5dcf11e01016a9295e8dd7887d2b7eb182b2f67bdc2`; and approval
+  turn `01a04ca0-4189-70c2-9e13-834230da5da2`, task-user message item
+  `msg_01a04ca0-4249-7052-9b22-408b86c5534f`. It binds only draft PR #348
+  and the five paths in section 13. The original task message remains
+  authority; this committed record is AI-attested navigation evidence only and
+  is non-transferable and non-replayable.
+- At the Phase B start check, PR #348 remained open and draft at the reviewed
+  Phase A head, and no later cancellation was present. This is a point-in-time
+  observation and must be checked again before merge.
+- Follow-ups: none.
+- Retained duty, not a Follow-up: independently human-controlled and
+  independently verifiable approval or signing remains required before
+  deployment.
 - Preferences: none.
 
-## 18. Stop conditions
+## 18. Phase B bounds and final gates
 
-This Phase A stops before:
+Phase B authority permits only the approved implementation in draft PR #348
+and the five paths in section 13. It stops before:
 
-- changing any existing policy file;
-- presenting a version 2 approval card before its exact-head review and current
-  v0.1-governed hosted gates complete;
+- changing any path outside that adoption boundary;
+- adding another independently reviewable capability or primary trust
+  boundary;
+- changing the approved authority map, effect, non-effect, invariant,
+  irreversible behavior, named pull request, or production/deployment posture;
 - treating v0.2 as active;
 - changing workflow or publication custody;
 - changing runtime, database, tenant, key, audit, or deployment behavior; or
-- implementing anything beyond this contract draft.
+- claiming that approval, review, checks, evidence, or merge authorizes
+  deployment or production activity.
 
-The next lawful actions are to rerun the cheap precommit checks, commit and push
-the corrected Phase A contract, verify the pull-request merge coordinates,
-obtain a new exact-head zero-Blocker content review, create a fresh immutable
-admission comment for that head, and complete the current v0.1-governed hosted
-baseline and separate publication-receipt sequence for draft PR #348. Only then
-may one complete plain-English decision version 2 card be presented with the
-stable repository-relative path and limited prospective precedence effect
-stated explicitly. No earlier admission or evidence may be reused.
+After the five surfaces are implemented, freeze the candidate head and rerun
+the cheap checks. That exact head must receive zero-Blocker content review,
+fresh immutable admission, all required hosted baselines, and a separate
+successful authoritative publication receipt. Then perform the base-to-head
+path audit, semantic-boundary audit, live approval and cancellation recheck,
+named-PR and merge-coordinate check, and required-check review. Phase A review,
+admission, baseline, and publication evidence cannot be reused for these final
+gates. Merge PR #348 only when every final gate passes; the standing workflow
+becomes active only through that merge.
