@@ -1,8 +1,8 @@
 # OFARM2 Human Final Quality Acceptance Workflow Amendment v0.1
 
 **Status:** Phase A candidate; inactive until the task user approves decision
-version 1 and the resulting implementation pull request later receives exact-head
-merge authorization and merges
+version 1 and the resulting implementation pull request later receives
+immutable-candidate merge authorization and merges
 
 **Contract identity:** `ofarm2.human-final-quality-acceptance-workflow.v0.1`
 
@@ -14,8 +14,8 @@ merge authorization and merges
 
 **Delivery issue:** #355
 
-**Primary trust boundary:** the task user's final acceptance of one implemented
-pull-request head versus the AI's authority to merge that head
+**Primary trust boundary:** the task user's final acceptance of one immutable
+integrated merge candidate versus the AI's authority to merge that candidate
 
 **Phase A boundary:** this RFC only
 
@@ -69,10 +69,11 @@ excellence an explicit acceptance invariant without restoring micro-PRs or
 repeated artifact-level approvals.
 
 The recommended decision has one outcome: **the task user accepts the quality
-of the exact completed implementation before the AI may merge it.** The user
-receives one compact final packet that includes both technical evidence and a
-concrete simplicity/elegance assessment. The AI then stops. A later exact
-task-user message authorizes only that pull request and head.
+of the exact completed integrated candidate before the AI may merge it.** The
+user receives one compact final packet that includes both technical evidence
+and a concrete simplicity/elegance assessment. The AI then stops. A later
+exact task-user message authorizes only the immutable candidate named in that
+packet.
 
 This is one coherent capability because the quality invariants define what the
 final human acceptance covers; they do not create an independent linting,
@@ -101,7 +102,9 @@ This amendment does not:
 ## 4. Closed amendment to the parent workflow
 
 On activation, this RFC prospectively supersedes only these parent-workflow
-mechanics for new AI-operated Delivery work:
+mechanics for every AI-operated Delivery pull request that is not already
+governed by a valid task-user approval explicitly carrying the parent
+workflow's previous AI merge authority:
 
 - the AI's standing authority to merge after technical gates;
 - the rule that pre-implementation semantic approval also authorizes merge;
@@ -110,17 +113,25 @@ mechanics for new AI-operated Delivery work:
 - the normal target of one user approval stop for high-risk work; and
 - the Blocker definition's omission of demonstrated code-excellence failures.
 
+Creation date, task start date, branch age, or pull-request age does not
+preserve the old rule. An open or planned pull request that lacks such a valid
+approval is governed by this amendment at activation. Valid already-approved
+work retains its accepted authority only in its owning task and only until that
+authority is cancelled, superseded, or expires under the accepted workflow; a
+replacement or reopened pull request does not inherit it.
+
 The normal target becomes two task-user decisions for approval-governed work—
-semantic approval before implementation and exact-head authorization after the
-final packet—and one final authorization for routine AI-operated work. The
-extra decision is the capability this amendment deliberately adds, not process
-drift.
+semantic approval before implementation and immutable-candidate authorization
+after the final packet—and one final authorization for routine AI-operated
+work. The extra decision is the capability this amendment deliberately adds,
+not process drift.
 
 The first named consumer is this amendment's own PR #356: despite the parent
 workflow still being active, the task user's instruction is narrower and this
-PR will stop for the proposed exact-head authorization before merge. The first
-prospective runtime-development consumers are #353 and #160 if their
-implementation PRs are created after this amendment activates.
+PR will stop for the proposed immutable-candidate authorization before merge.
+Any current or future implementation pull request for #353 or #160 is governed
+according to its actual accepted authority at activation, not its creation
+date.
 
 All one-capability, one-boundary, risk-shaped Phase A, approval provenance,
 review, admission, publication, recovery, cancellation, and substantive OFARM
@@ -131,7 +142,8 @@ task, and the AI may not infer permission from such an external possibility.
 ## 5. Authority map
 
 - The task user owns semantic approval, refusal, cancellation, requested
-  changes, final quality acceptance, and exact-head merge authorization.
+  changes, final quality acceptance, and immutable-candidate merge
+  authorization.
 - A pre-implementation decision card owns the approved capability, primary
   boundary, effects, non-effects, and invariants. Its approval authorizes
   implementation and evidence collection only.
@@ -139,7 +151,7 @@ task, and the AI may not infer permission from such an external possibility.
   verification, and code-excellence invariants.
 - The AI owns in-boundary implementation, commits, pushes, review handling,
   checks, admission, publication coordination, and preparation of the final
-  packet. It owns no merge action before exact-head authorization.
+  packet. It owns no merge action before immutable-candidate authorization.
 - Reviewers own demonstrated correctness, safety, and code-excellence Blocker
   findings. They do not own scope expansion or aesthetic vetoes.
 - CI and publication systems own mechanical evidence only.
@@ -163,6 +175,8 @@ task, and the AI may not infer permission from such an external possibility.
 ### Trusted sides
 
 - the same Codex task's ordered task-user messages for final authorization;
+- immutable Git object identities and live pull-request transition history for
+  identifying the candidate, not for supplying human intent;
 - the non-malicious AI for stopping at the final gate;
 - reviewers for evidence-backed findings; and
 - existing CI/publication mechanisms for their current mechanical claims.
@@ -173,6 +187,10 @@ task, and the AI may not infer permission from such an external possibility.
 - an agent-authored statement that the user “would approve”;
 - GitHub reviews, comments, labels, mergeability, or credentials as proof of a
   human decision;
+- a head SHA without its live base, target, method, integrated tree, and open
+  episode as proof that the reviewed candidate is unchanged;
+- current open state without transition history as proof that no close/reopen
+  cycle occurred;
 - green tests or zero-Blocker agent review as proof that the user inspected the
   code;
 - silence, elapsed time, or an unattended task;
@@ -190,18 +208,24 @@ repository-setting change.
 
 ## 7. Primary risk and containment
 
-The primary risk is replacing silent AI merge authority with an unbounded,
-subjective review loop that recreates the delay this workflow removed.
+The primary authority risk is that the user accepts one candidate but the AI
+merges another—for example, the head stays fixed while the base moves, or a PR
+closes and reopens—because the final message is treated as reusable permission.
+Containment binds authorization to the target, base, head, merge method,
+integrated tree, and open episode; preserves the original packet and later
+message in order; and rechecks current state plus transition history immediately
+before merge.
 
-Containment has four parts:
+The secondary delivery risk is replacing silent AI merge authority with an
+unbounded, subjective review loop that recreates the delay this workflow
+removed. Its containment has three parts:
 
-1. the final user gate is exactly one packet and one later exact-head decision;
-2. code-excellence Blockers must identify a concrete duplicate source, path,
+1. code-excellence Blockers must identify a concrete duplicate source, path,
    state, validation, compatibility layer, unnecessary abstraction, or obscured
    invariant and its actual maintenance, audit, testing, or isolation cost;
-3. the reviewer must name the smallest correction, while style and equivalent
+2. the reviewer must name the smallest correction, while style and equivalent
    clean alternatives remain Preferences; and
-4. a requested change outside the approved capability or boundary becomes
+3. a requested change outside the approved capability or boundary becomes
    separate Delivery work or a new decision rather than expanding the PR.
 
 ## 8. Stable invariants
@@ -209,25 +233,33 @@ Containment has four parts:
 ### Human final acceptance
 
 - **HFQ-001 — Final packet before AI merge.** Every Delivery PR in which the AI
-  would perform the merge reaches a complete exact-head final packet first.
+  would perform the merge reaches a complete immutable-candidate final packet
+  first.
 - **HFQ-002 — Mandatory yield.** The AI presents the packet and ends its turn.
   It cannot present the packet and merge in one turn.
 - **HFQ-003 — Exact later authorization.** Only the entire visible text of a
-  later task-user message in the same task, naming the PR and full current head,
-  authorizes AI merge.
+  later task-user message in the same task, naming every field of the immutable
+  candidate and its open episode, authorizes AI merge. The original packet and
+  later authorization must remain directly retrievable with stable references
+  in that order; a summary, paraphrase, or reconstructed item is not authority.
 - **HFQ-004 — No inherited merge authority.** Semantic approval authorizes
   implementation and evidence collection, not merge. Routine classification,
   GitHub activity, reviews, checks, admission, publication, credentials, or
   silence never authorizes merge.
-- **HFQ-005 — Stale means no merge.** A new commit, head change, close/reopen,
-  semantic expansion, later cancellation, or conflicting user message revokes
-  final authorization.
+- **HFQ-005 — Stale means no merge.** A target-branch, base, head, merge-method,
+  candidate-tree, or open-episode change; any close/reopen transition after the
+  packet; semantic expansion; later cancellation; or conflicting user message
+  revokes final authorization. The AI must inspect relevant pull-request
+  transition history as well as current state immediately before merge.
 - **HFQ-006 — User changes remain bounded.** In-boundary requested changes
   return the PR to implementation and fresh exact-head review. Out-of-boundary
   requests stop for reclassification or a new decision.
-- **HFQ-007 — Existing authority is historical.** The amendment applies to new
-  Delivery work after activation. It does not silently cancel or reinterpret
-  authority in another already-approved task.
+- **HFQ-007 — Existing authority is historical.** At activation, the amendment
+  applies to every AI-operated Delivery pull request not governed by a valid
+  task-user approval explicitly carrying the previous AI merge authority.
+  Creation date alone preserves nothing. Valid already-approved work keeps its
+  accepted authority in its owning task until that authority is cancelled,
+  superseded, or expires; this amendment does not silently reinterpret it.
 
 ### Code excellence
 
@@ -255,10 +287,30 @@ Containment has four parts:
 
 ## 9. Final packet and authorization
 
+The object of final authorization is one immutable merge candidate, identified
+by all of these fields:
+
+- pull-request number;
+- target branch;
+- full live base commit SHA;
+- full pull-request head commit SHA;
+- intended merge method (`merge`, `squash`, or `rebase`);
+- full candidate tree SHA: the immutable Git tree object expected on the target
+  after integrating that exact head into that exact base with that method,
+  produced by the trusted synthetic-merge evidence or an equivalent
+  deterministic construction; and
+- open-episode marker: `initial:<PR_CREATED_AT>` when the pull request has never
+  been closed, otherwise `reopened:<REOPEN_EVENT_ID>` naming the immutable event
+  that began the current open episode.
+
+The tree binds integrated content while the method separately binds the history
+semantics the user accepted. The open-episode marker makes a close/reopen cycle
+detectable even when the head is unchanged.
+
 The final packet is compact and contains:
 
 - Delivery issue and PR;
-- full candidate head SHA;
+- the complete immutable candidate identity above;
 - capability and primary trust boundary;
 - final changed paths and material diff summary;
 - permitted effects, non-effects, and unresolved Follow-ups;
@@ -268,17 +320,22 @@ The final packet is compact and contains:
 - EXC-001 through EXC-006 assessment, including deletions, remaining duplicate
   state or paths, abstractions added, and the simpler alternative considered;
 - deviations from Phase A; and
-- the exact authorization sentence with the PR number and full head filled in.
+- stable references to this original packet in the same task; and
+- the exact authorization sentence with every candidate and open-episode field
+  filled in.
 
 The AI then stops. Authorization is only this entire later task-user message:
 
 ```text
-I authorize merge of OFARM2 PR #<NUMBER> at <FULL_COMMIT_SHA>.
+I authorize merge of OFARM2 PR #<NUMBER> into <TARGET_BRANCH> at base <FULL_BASE_SHA> and head <FULL_HEAD_SHA> using <MERGE_METHOD>, producing tree <FULL_TREE_SHA>, in open episode <OPEN_EPISODE_MARKER>.
 ```
 
-The AI must re-read the live PR head and the later message before merging. An
-authorization for another PR, another head, an earlier candidate, or an
-abbreviated SHA has no effect.
+Before merging, the AI must re-read the live target, base, head, available and
+selected merge method, candidate tree, current state, and transition history.
+It must also re-read the original packet and later authorization as directly
+retrievable same-task items in the required order. Any field mismatch, any
+close/reopen after the packet, a missing original item, or an abbreviated SHA
+has no effect and requires a fresh packet, yield, and later authorization.
 
 There is no automatic-merge authorization path in version 1. If evidence later
 shows a need, it requires its own explicit workflow amendment rather than an
@@ -324,13 +381,13 @@ DELIVERY_ISSUE_DEFINED
   -> FINAL_SCOPE_EVIDENCE_AND_EXCELLENCE_RECHECK
   -> READY_FOR_USER_FINAL_REVIEW
   -> AI_YIELDS_WITH_FINAL_PACKET
-  -> USER_AUTHORIZED_EXACT_HEAD_MERGE
-  -> AI_RECHECKS_HEAD_AUTHORIZATION_AND_CANCELLATION
+  -> USER_AUTHORIZED_IMMUTABLE_CANDIDATE_MERGE
+  -> AI_RECHECKS_CANDIDATE_HISTORY_AUTHORIZATION_AND_CANCELLATION
   -> MERGE_AND_CLOSE_DELIVERY_ISSUE
 ```
 
 Routine AI-operated work omits the semantic decision-card states but never
-omits the final packet, yield, and exact-head authorization states.
+omits the final packet, yield, and immutable-candidate authorization states.
 
 If the user requests an in-boundary correction:
 
@@ -358,7 +415,7 @@ closed semantic edit across the four active surfaces:
 3. `CONTRIBUTING.md` explains the human merge hold and concrete design-quality
    review standard.
 4. `.github/PULL_REQUEST_TEMPLATE.md` captures the excellence assessment and
-   exact-head final packet fields.
+   immutable-candidate final packet fields.
 
 This RFC is the durable amendment and evidence. It does not become a competing
 active instruction surface.
@@ -369,19 +426,28 @@ the correction changes who may perform the final transition.
 
 ## 13. Failure cases and negative evidence
 
-| Case | Required result |
-| --- | --- |
-| AI posts the packet and merges before a later user message | Refuse; HFQ-002 violation |
-| User approved Phase A but never saw the implementation | PR remains open; HFQ-004 |
-| User writes “looks good” without PR and full SHA | No merge authority; HFQ-003 |
-| User authorizes head A and a documentation commit creates head B | Authorization stale; new packet and message required |
-| GitHub shows an approval or green merge button | Evidence only; no task-user authority |
-| Routine typo PR passes tests | Still stops for final packet and authorization |
-| Reviewer prefers another name or module layout | Preference unless an EXC invariant is concretely violated |
-| Change adds a second validator with overlapping authority and no deletion plan | Code-excellence Blocker under EXC-001/EXC-002 |
-| New helper isolates a real boundary and removes repeated logic | Allowed even with one public caller when the boundary justification is concrete |
-| Final user request adds another capability | Stop for a separate Delivery issue or new semantic decision |
-| Another task previously authorized an open PR to auto-merge | Not silently revoked; user must stop or supersede it in that owning task |
+For this pre-deployment governance boundary, every case below is reachable
+through the normal task → Delivery PR → default branch → later deployment path.
+No case depends on a fabricated internal state. Every invariant has a reverse
+trace from its reachable counterexample to the Phase B policy surface and
+verification.
+
+| Invariant | Reachable counterexample | Required refusal or correction | Phase B owning surface | Verification |
+| --- | --- | --- | --- | --- |
+| HFQ-001 | A real Delivery PR reaches green checks but its packet omits the base, tree, or another candidate field, and the AI attempts merge | Refuse merge and produce a complete fresh packet | `AGENTS.md`, `TASK_PROMPT.md`, PR template | Packet-field audit on the final candidate |
+| HFQ-002 | The AI posts a complete packet and invokes merge in the same turn | End the turn without merge; require a later task-user message | `AGENTS.md`, `TASK_PROMPT.md` | Ordering walkthrough proves a mandatory yield state |
+| HFQ-003 | The user writes “looks good,” abbreviates a SHA, changes a candidate field, or the original packet is no longer directly retrievable | Treat it as no authority and redisplay a fresh packet | `AGENTS.md`, `TASK_PROMPT.md` | Exact-sentence and same-task retrieval hostile cases |
+| HFQ-004 | Phase A approval, a GitHub approval, green checks, or silence is treated as permission to merge | Refuse; only the later immutable-candidate sentence authorizes merge | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md` | Search active surfaces for inherited or inferred merge authority |
+| HFQ-005 | Base `B1` and head `H` are authorized, `main` advances to `B2` while `H` stays fixed; or the PR closes and reopens at `H` | Invalidate authorization; recompute the candidate and open episode, then issue a new packet and obtain a later message | `AGENTS.md`, `TASK_PROMPT.md`, PR template | Moving-base and same-head close/reopen history walkthroughs |
+| HFQ-006 | During final review the user requests an independent deployment-authority or second-capability change in the same PR | Stop; split the work or require a new semantic decision before editing | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md` | Scope-expansion walkthrough against the one-boundary rule |
+| HFQ-007 | A PR existed before activation but had no valid approval, and the AI claims its age preserves standing merge authority | Apply this amendment; grandfather only a directly retrievable valid approval explicitly carrying the old authority | `AGENTS.md`, `TASK_PROMPT.md` | Inventory pre-activation open work by accepted authority, not date |
+| EXC-001 | Two validators or dispatch paths can each make the same authoritative decision | Block and consolidate to one authoritative path or clearly separate ownership | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md`, PR template | Final packet names the single path and exact-head review traces it |
+| EXC-002 | A new checker copies a field inventory, validation rule, or derived state already owned elsewhere | Block and derive from the owner or delete the duplicate unless independent repetition is explicit evidence | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md`, PR template | Duplicate-state/path search plus final excellence assessment |
+| EXC-003 | A hidden fallback or undocumented side path lets production behavior bypass the implementation cited for an invariant | Block; remove the bypass or make the complete path explicit and directly tested | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md`, PR template | Invariant → implementation → negative-test trace for every material path |
+| EXC-004 | A superseded shim, feature flag, compatibility branch, or old implementation remains with no current duty or deletion trigger | Block and delete it, or record the time-bounded duty and objective deletion trigger | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md`, PR template | Deleted-path inventory and retained-path justification |
+| EXC-005 | A helper or framework layer is introduced only for hypothetical future reuse and removes no current duplication | Block and inline/remove it unless it isolates the present boundary, removes concrete duplication, or has multiple current consumers | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md`, PR template | Abstraction inventory with present-tense rent for each item |
+| EXC-006 | A change adds material concepts, indirection, state, or bespoke conformance machinery without addressing a simpler credible design | Block until the simpler alternative is adopted or the preventing invariant is demonstrated | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md`, PR template | Final packet records the alternative, tradeoff, and evidence |
+| EXC-007 | A reviewer blocks an implementation solely for a preferred name, formatting choice, or equivalent clean module layout | Reclassify as Preference; do not delay merge on taste | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md` | Review-disposition audit requires a concrete EXC-001–EXC-006 violation for every excellence Blocker |
 
 ## 14. Verification
 
@@ -389,7 +455,12 @@ Phase A verification:
 
 - wording audit against v0.2 authority, state, review, and merge clauses;
 - confirm the proposed rule distinguishes agent review from task-user review;
-- confirm every negative case maps to HFQ or EXC invariants;
+- confirm every HFQ and EXC invariant has a reachable negative row and every row
+  maps back to its invariant;
+- confirm the immutable candidate binds target, base, head, method, tree, and
+  open episode, and that final recheck covers transition history;
+- confirm the original packet and later authorization must remain directly
+  retrievable in the same task and in order;
 - confirm the five-path PR boundary contains one workflow capability; and
 - `git diff --check`.
 
@@ -399,15 +470,15 @@ Phase B verification:
   one-stop target language, and merge-without-yield instructions;
 - search for competing final-authorization sentences;
 - verify every active surface contains the same default no-merge posture;
-- verify the PR template records exact head and excellence evidence but does not
-  claim to create task-user authority;
+- verify the PR template records the complete immutable candidate and
+  excellence evidence but does not claim to create task-user authority;
 - `python3 conformance/ofarm_pkg_contract_check.py`;
 - mandatory cheap workflow checks;
 - exact-head content and excellence review with zero Blockers;
 - existing hosted admission, baseline, and publication evidence required for a
   workflow-governance change; and
-- the new final packet and exact-head task-user merge authorization for this PR
-  itself.
+- the new final packet and immutable-candidate task-user merge authorization for
+  this PR itself.
 
 ## 15. Provisional posture and review point
 
@@ -423,7 +494,8 @@ capability and is not silently added here.
 
 Review this amendment after the next three merged Delivery PRs under it. Record:
 
-- whether any AI merge occurred without exact task-user authorization;
+- whether any AI merge occurred without immutable-candidate task-user
+  authorization;
 - whether any authorization became stale and was handled correctly;
 - whether code-excellence Blockers cited concrete EXC invariants or became taste;
 - whether final review found material issues missed by agent review;
@@ -438,8 +510,8 @@ human gate.
 
 Version 1 recommends:
 
-- mandatory exact-head final user authorization before every AI merge of a
-  Delivery PR;
+- mandatory immutable-candidate final user authorization before every AI merge
+  of a Delivery PR;
 - no automatic-merge exception;
 - concrete EXC invariants as merge-blocking acceptance conditions; and
 - the five-path prospective implementation boundary.
@@ -447,7 +519,8 @@ Version 1 recommends:
 A new decision version is required if Phase B proposes:
 
 - optional or inferred auto-merge;
-- authorization without the full head SHA;
+- authorization without the complete candidate identity or open-episode
+  marker;
 - GitHub activity as human authority;
 - a different primary trust boundary or additional active policy surface;
 - an automated subjective quality score or new CI gate;
@@ -464,5 +537,5 @@ Phase A head. Phase B must not begin until the visible version-1 decision card
 has zero Blockers and the task user supplies the exact approval sentence named
 by that card.
 
-What is next: review this RFC as the Phase A contract, open the one draft PR,
-and present the complete version-1 decision card only after zero Blockers.
+What is next: resolve this Phase A review in existing draft PR #356 and present
+the complete version-1 decision card only after zero Blockers.
