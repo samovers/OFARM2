@@ -1466,7 +1466,8 @@ validator remain unchanged.
   direct target-class statement is `AnnAssign(Name(...), simple=1)`.
 - `CDR4-003`: a parenthesized annotation without a value creates no field and
   no namespace-name event; with a value it creates an ordinary assignment
-  event but still no field.
+  event but still no field. Paired display/hash and `__eq__` names preserve
+  their distinct existing verdicts.
 - `CDR4-004`: attribute and subscript target components, values, and eager
   annotations are inspected in the table's execution order without treating
   attribute names as class bindings or traversing future-deferred annotations.
@@ -1486,7 +1487,7 @@ validator remain unchanged.
 | --- | --- |
 | `CDR4-001` | A proposed correction also edits `RuntimeConfig` or either security-audit runner carrier; path audit rejects that expansion. |
 | `CDR4-002` | Fictional detached source replaces `first: str` with `(first): str`; the parser reports `simple == 0`, and `first` is absent from the field projection. |
-| `CDR4-003` | `(__repr__): object` produces no false forbidden-member event, while `(__repr__): object = factory()` produces the ordinary binding event and is refused. |
+| `CDR4-003` | `(__repr__): object` and `(__eq__): object` produce no false extra event, while the corresponding value-bearing forms produce ordinary binding events and are refused by the existing display/hash or exact-equality verdict. |
 | `CDR4-004` | A direct dynamic-namespace call in a subscript index or eager annotation is refused; the same spelling in a future-deferred annotation is not treated as executed. |
 | `CDR4-005` | The fictional mutated carrier retains the old equality tuple text but loses the actual field; the exact-field check rejects it before a passing architecture verdict. |
 | `CDR4-006` | A proposed fix rereads source, imports a carrier, replaces ordered events, or changes equality-body acceptance; focused boundary tests reject it. |
@@ -1503,7 +1504,7 @@ edit.
 | --- | --- | --- | --- |
 | `CDR4-001` | Base-to-head path exclusion | Exact carrier path diff | Diff audit plus standalone architecture check |
 | `CDR4-002` | `_top_level_class_fields()` simple predicate | Simple versus parenthesized field projection | Focused checker unit tests |
-| `CDR4-003` | Collector `AnnAssign` dispatch | Parenthesized name with and without value, including forbidden names | Event and verdict tests |
+| `CDR4-003` | Collector `AnnAssign` dispatch | Parenthesized name with and without value for display/hash and `__eq__` | Event and both existing verdict tests |
 | `CDR4-004` | Existing expression/target helpers under the new dispatch | Attribute/subscript, eager/future annotation, value-order pairs | Paired scope tests under CPython 3.12.13 |
 | `CDR4-005` | Exact field verdict | Hostile replacement of each representative declared field | Mutation matrix |
 | `CDR4-006` | Unchanged snapshot interface and verdict consumers | Missing AST, alternate source, version-3 regression subset | Focused and complete rewrite-architecture module |
@@ -1549,6 +1550,14 @@ dataclass model, carrier edits, runtime execution, credential custody, SQL,
 database authority, provider evidence, deployment, or another issue-state
 change, stop before editing and define separate Delivery work or a new decision
 version as required.
+
+The existing separate boundaries remain unchanged:
+
+1. protected export-output custody and delivery;
+2. production clock, timer, route, provider, and secret-custody evidence under
+   parked Tracking Epic #351;
+3. complete execution-root and source-capability governance; and
+4. read-only tracker closure assessment after bounded corrections.
 
 ### 16.10 Failure, rollback, and provisional posture
 
