@@ -3,8 +3,9 @@
 **Status:** decision versions 2 and 3 were implemented and merged through pull
 requests #349 and #354. Post-merge review #5058662084 demonstrates one narrower
 parenthesized-annotation conformance defect. Decision version 4 is proposed in
-Delivery issue #357; Phase B is unauthorized pending exact-head Phase A review
-and later task-user approval.
+Delivery issue #357 and amended after Phase A review #5059132827 identified an
+in-boundary declaration-shape blocker. Phase B is unauthorized pending amended
+exact-head Phase A re-review and later task-user approval.
 
 **Decision:**
 `ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001`
@@ -24,7 +25,10 @@ preserved the accepted five-carrier runtime posture and changed only structural
 conformance enforcement. Version 4 is a new decision because post-merge review
 of merged version 3 demonstrated that the checker conflates a parenthesized
 annotated name with a real dataclass field declaration and must bind a new
-Delivery issue and pull request.
+Delivery issue and pull request. Its initial Phase A contract was amended before
+approval because review #5059132827 demonstrated that `simple == 1` proves an
+annotation key but does not alone prove the approved dataclass declaration
+shape.
 
 **Issue context:** Tracking Epic
 [#192](https://github.com/samovers/OFARM2/issues/192), original Delivery outcome
@@ -1318,6 +1322,16 @@ recoverable. Delivery issue #357 owns the new correction. Tracking Epic #192
 and Delivery issue #350 remain open and receive no state authority from this
 decision.
 
+Initial version-4 exact-head review #5058954640 accepted the parenthesized-target
+transition but did not test dataclass pseudo-fields or defaults. Later exact-head
+[review #5059132827](https://github.com/samovers/OFARM2/pull/358#pullrequestreview-5059132827)
+supersedes that disposition and demonstrates one in-boundary design Blocker:
+`simple == 1` establishes a class `__annotations__` key, while `ClassVar`,
+`InitVar`, `KW_ONLY`, a default, or `field()` options can retain that key and
+change fields, slots, constructor, equality inputs, or generated hashing. This
+amended contract pins the complete approved direct declaration shape without
+executing annotations or resolving arbitrary types.
+
 ### 16.2 Decision, capability, and primary trust boundary
 
 The proposed decision is
@@ -1325,12 +1339,12 @@ The proposed decision is
 It binds Delivery issue #357 and draft pull request #358, created from branch
 `agent/357-parenthesized-annotated-field-phase-a`.
 
-The one independently reviewable capability is an exact CPython 3.12
-`AnnAssign.simple` distinction inside the existing five-carrier structural
-guard. A direct simple annotated name remains a governed field declaration. A
-parenthesized or other non-simple annotated target is never counted as a
-dataclass field and follows its actual assignment and expression-evaluation
-semantics.
+The one independently reviewable capability is a closed direct-declaration
+shape inside the existing five-carrier structural guard. A governed field must
+be one direct `AnnAssign` with the expected name, `simple == 1`, the exact
+approved annotation AST, no value, and no other class-namespace binding for that
+name. A parenthesized or other non-simple annotated target is never counted as a
+field and follows its actual assignment and expression-evaluation semantics.
 
 The primary trust boundary is credential-bearing diagnostic-representation
 structural conformance for the exact direct annotated-field inventory and
@@ -1344,35 +1358,48 @@ class-namespace events of:
 
 The primary risk is a false-success architecture verdict for source whose
 spelling appears to preserve the declared fields while CPython and dataclasses
-construct a different class. The containment rule is closed: only a direct
-`AnnAssign` with `target` equal to `ast.Name` and `simple == 1` is a governed
-field declaration. Every `simple == 0` form is excluded from field inventory
-and modeled according to value presence, target shape, evaluation order, and
-future-annotation posture.
+construct a different class. Parentheses can suppress the `__annotations__`
+entry. `ClassVar`, `InitVar`, and `KW_ONLY` can preserve a simple annotation key
+while changing field identity. A plain default, `field()` option, or separate
+class-body binding can alter constructor or hash posture while preserving the
+same annotated name. The containment rule therefore combines the exact
+approved declaration map with the closed `simple == 0` execution transition and
+the existing ordered namespace events.
 
 Protected assets are password-bearing DSNs and other admitted secret values
 reachable through the five carriers, plus the integrity of the structural
 verdict that guards their representation, equality, and hash posture.
 
 Trusted components are CPython 3.12.13 parser/compiler semantics, the existing
-authenticated `PythonSourceSnapshotV1`, the detached AST map, the exact
-`_CREDENTIAL_DIAGNOSTIC_CARRIERS` descriptors, and the accepted version-3
-namespace-event and equality-body authorities.
+authenticated `PythonSourceSnapshotV1`, the detached AST map, the exact ordered
+declaration shapes in `_CREDENTIAL_DIAGNOSTIC_CARRIERS`, and the accepted
+version-3 namespace-event and equality-body authorities.
 
 Untrusted input is any future edit to a governed target-class suite, including
-parenthesized annotated names and dynamic expressions in annotated assignment
-values, targets, or annotations. Excluded attacker capabilities remain a
-compromised interpreter or dependency, post-snapshot source substitution,
-arbitrary code already executing in process, debugger/operator compromise, and
-post-construction runtime class mutation.
+parenthesized names, pseudo-field annotations, values/defaults, direct or
+control-flow rebindings, explicit `__annotations__` access, and dynamic
+expressions in annotated assignment values, targets, or annotations. Excluded
+attacker capabilities remain a compromised interpreter or dependency,
+module-level annotation-name or decorator substitution outside the governed
+class suite, post-snapshot source substitution, arbitrary code already
+executing in process, debugger/operator compromise, and post-construction
+runtime class mutation. Module-level name authority remains in the separate
+execution-root/source-capability governance boundary; this decision makes no
+claim that syntax alone resolves arbitrary annotation aliases.
 
 ### 16.3 Permitted effects, non-effects, and authority map
 
 Permitted effects are:
 
-- require `simple == 1` in the existing direct field-inventory helper;
-- refine only the `AnnAssign` branch of the accepted namespace collector;
-- add focused hostile and paired non-overreach tests for the closed transition;
+- extend each existing carrier descriptor with the exact ordered field name and
+  annotation-AST shape authority;
+- replace the name-only field projection with an exact direct-declaration
+  projection that includes `simple`, annotation shape, and value absence;
+- refine the `AnnAssign` branch of the accepted namespace collector, require
+  exactly one approved declaration event for each governed field, and refuse
+  explicit `__annotations__` access in evaluated target-class scope;
+- add focused hostile and paired non-overreach tests for the closed transition,
+  pseudo-fields, defaults/options, rebindings, and annotation-map mutation;
 - regenerate the canonical review-baseline test inventory only for new
   collected node IDs; and
 - append the durable merge, defect, correction, and final-disposition record to
@@ -1385,8 +1412,8 @@ Non-effects and non-goals are:
   creation, access, derivation, ownership, custody, handoff, or destruction
   change;
 - no target import or execution, runtime reflection, direct filesystem reread,
-  broad symbol table, general dataclass framework, or annotation-type
-  resolution;
+  broad symbol table, general dataclass framework, module-level name resolver,
+  or annotation-type resolution;
 - no SQL, migration, role, grant, provider, IAM, production composition,
   deployment, release, certification, current-compliance, or security-waiver
   effect; and
@@ -1394,12 +1421,58 @@ Non-effects and non-goals are:
 
 | Decision | Sole authority | Rejected alternate |
 | --- | --- | --- |
-| Governed carriers and expected field-name tuples | Existing exact `_CREDENTIAL_DIAGNOSTIC_CARRIERS` descriptors | Name heuristic, inferred runtime fields, tests alone |
+| Governed carriers and approved declaration tuples | Exact ordered `(field name, annotation AST shape)` entries in `_CREDENTIAL_DIAGNOSTIC_CARRIERS`; every entry also requires `simple == 1` and no value | Name-only tuple, inferred runtime fields, tests alone |
 | Source and syntax tree | Existing authenticated snapshot and detached AST map | Filesystem reread, target import, runtime class reflection |
-| Direct field classification | CPython AST: direct `AnnAssign`, `ast.Name` target, `simple == 1` | `ast.Name` alone, parentheses-insensitive text, dataclass execution |
+| Annotation-key classification | CPython AST: direct `AnnAssign`, `ast.Name` target, `simple == 1` | `ast.Name` alone, parentheses-insensitive text |
+| Approved field declaration | Exact ordered descriptor entry, direct simple-name `AnnAssign`, exact annotation AST, absent value, exactly one matching field event, and no explicit annotation-map access | Annotation-key membership alone, annotation resolution, dataclass execution |
 | Non-simple execution semantics | `simple == 0`, value presence, target shape, and future-annotation posture under the closed table below | Generic `ast.walk()`, treating every target as a bind, ignoring evaluated expressions |
 | Special-member and equality verdicts | Accepted version-3 ordered events and exact equality-body validator | New duplicate member scan or final-name set |
 | Human approval | Exact later task-user approval of the unique version-4 card naming the new draft PR | Version-3 approval, review, GitHub activity, CI, or AI text |
+
+The descriptor must encode the following complete ordered declaration map. The
+readable annotation spellings below identify exact Python 3.12 AST expressions;
+the implementation compares the location-free `ast.dump(...,
+include_attributes=False)` shape committed in the descriptor, not source text.
+Every entry requires `simple == 1` and `value is None`.
+
+- `RuntimeConfig`, in order:
+  1. `mode: RuntimeMode`;
+  2. `deployment_image_digest: str`;
+  3. `oidc_issuer: str`;
+  4. `oidc_audience: str`;
+  5. `oidc_jwks_url: str`;
+  6. `pg_dsn: str`;
+  7. `tenant_readiness_pg_dsn: str`;
+  8. `security_audit_readiness_pg_dsn: str`;
+  9. `security_audit_authentication_pg_dsn: str`;
+  10. `security_audit_request_router_pg_dsn: str`;
+  11. `security_audit_control_pg_dsn: str`;
+  12. `correlation_hmac_kms_key_resource: str`;
+  13. `tenant_capability_kid: str`;
+  14. `signing_evidence_receipt_path: Path`; and
+  15. `signing_evidence_observer_public_key: bytes`.
+- `ProcessCrashReconciliationSecrets`, in order:
+  1. `control_conninfo: str`.
+- `StoreLossRecoverySecrets`, in order:
+  1. `admin_dsn: str`;
+  2. `migrator_dsn: str`;
+  3. `control_dsn: str`; and
+  4. `login_passwords: tuple[tuple[str, str], ...]`.
+- `_Routes`, in order:
+  1. `admin_long: str`;
+  2. `admin_short: str`;
+  3. `admin_target_short: str`;
+  4. `migrator_long: str`; and
+  5. `control_short: str`.
+- `_ValidatedInvocation`, in order:
+  1. `request: StoreLossRecoveryRequest`;
+  2. `routes: _Routes`; and
+  3. `login_passwords: tuple[tuple[str, str], ...]`.
+
+Field names used by protected-field checks, exact equality tuples, and generated
+hash posture are derived from this one ordered declaration authority. A second
+name-only descriptor is forbidden. The annotation AST is compared structurally
+but never evaluated, imported, reflected on, or included in a diagnostic.
 
 ### 16.4 Mandatory CPython 3.12 `AnnAssign` transition
 
@@ -1408,10 +1481,10 @@ expression is inspected only when `from __future__ import annotations` is not
 active. Future-deferred annotation text is not traversed as target-class
 execution.
 
-| Parsed shape | Field inventory | Evaluated target-class surface and order | Namespace event |
+| Parsed shape | Annotation-key candidate | Evaluated target-class surface and order | Namespace event |
 | --- | --- | --- | --- |
-| `simple == 1`, no value | Include the direct `ast.Name` | Eager annotation only | One governed annotated-name `bind` event |
-| `simple == 1`, value present | Include the direct `ast.Name` | Value, name assignment, eager annotation | One governed annotated-name `bind` event |
+| `simple == 1`, no value | Include; approved only when name and annotation match the descriptor | Eager annotation only | One governed annotated-name `bind` event |
+| `simple == 1`, value present | Include as an annotation key but reject as an approved declaration | Value, name assignment, eager annotation | One governed annotated-name `bind` event |
 | `simple == 0`, parenthesized `ast.Name`, no value | Exclude | Eager annotation only; the store-context name is not evaluated | No name event |
 | `simple == 0`, parenthesized `ast.Name`, value present | Exclude | Value, ordinary name assignment, eager annotation | One ordinary assignment `bind` event |
 | `simple == 0`, attribute target, no value | Exclude | Target base, then eager annotation | No class-name event |
@@ -1434,12 +1507,25 @@ Direct dynamic-namespace calls remain refused only when they occur in an
 expression the table marks as target-class execution. No source value or
 annotation value may enter a diagnostic.
 
+The table describes CPython syntax and execution, not sufficient dataclass-field
+identity. The exact declaration verdict separately requires the approved
+annotation shape, absent value, one matching declaration event, no other bind or
+delete event for the governed field name, and no explicit `__annotations__`
+reference in evaluated target-class scope. This rejects both an inline default
+and a separate assignment that leaves a class attribute for dataclass processing.
+
 ### 16.5 Proposed checker architecture
 
-`_top_level_class_fields()` remains the one direct field-name projection used
-by the carrier verdict. Its comprehension gains the exact `node.simple == 1`
-predicate. It continues to preserve source order and returns `None` for a
-missing or duplicated top-level class.
+The name-only `_top_level_class_fields()` projection is replaced by one direct
+declaration projection. One pass over the target class's direct statements
+retains every `AnnAssign` with an `ast.Name` target and `simple == 1` in source
+order and records its name, location-free annotation AST shape, value-absence
+posture, and node identity. The result is compared with the descriptor's
+complete ordered map. It returns `None` for a missing or duplicated top-level
+class. It does not filter a value-bearing or duplicate simple declaration before
+comparison, because that could hide an invalid default behind a later
+declaration. A `simple == 0` name is excluded from this projection and handled
+by the namespace-event transition.
 
 The existing `_CredentialNamespaceCollector` remains the only namespace-event
 authority. Its `AnnAssign` handling becomes one explicit dispatch:
@@ -1452,18 +1538,37 @@ authority. Its `AnnAssign` handling becomes one explicit dispatch:
 5. inspect the annotation last only in eager-annotation posture; and
 6. emit no target-name event for a value-less non-simple annotation.
 
+For every descriptor entry, the carrier verdict requires exactly one `bind`
+event whose node is the matching approved direct `AnnAssign`, and no other
+`bind` or `delete` event for that field name. A separate assignment, import,
+definition, control-flow binding, value-bearing parenthesized assignment, or
+later deletion therefore cannot supply or alter a dataclass default while the
+approved annotation remains visible.
+
+`__annotations__` is a reserved class-namespace authority. Any explicit bind or
+delete event for that name is rejected. The existing bounded expression helper
+also emits a generic refusal event when an evaluated target-class expression or
+target component reads `ast.Name("__annotations__")`; this covers subscript,
+attribute-call, and alias-mediated mutation without traversing lazy or
+future-deferred annotation scope. Implicit CPython annotation-map updates from
+the approved declarations contain no explicit such AST name and remain allowed.
+
 The implementation must reuse the collector's existing bounded expression,
-target-expression, and target-name helpers. It must not add a second AST walk,
-execute the fictional class, import a governed module, or infer runtime
-dataclass fields. The existing special-member verdict and exact `__eq__` body
+target-expression, target-name, and event helpers. It must not add a second AST
+walk, execute the fictional class, import a governed module, parse annotations
+as trusted runtime values, or infer runtime dataclass fields. Expected
+annotation shapes are committed constants, and observed shapes are compared
+only in memory. The existing special-member verdict and exact `__eq__` body
 validator remain unchanged.
 
 ### 16.6 Falsifiable invariants
 
 - `CDR4-001`: the exact five carrier implementation modules have no base-to-
   head diff and continue to pass.
-- `CDR4-002`: the direct field inventory includes a name if and only if its
-  direct target-class statement is `AnnAssign(Name(...), simple=1)`.
+- `CDR4-002`: the direct declaration projection equals the descriptor's complete
+  ordered `(field name, annotation AST shape)` map, and every matching statement
+  is `AnnAssign(Name(...), simple=1)` with no value. Protected fields and exact
+  equality names are derived from that same map.
 - `CDR4-003`: a parenthesized annotation without a value creates no field and
   no namespace-name event; with a value it creates an ordinary assignment
   event but still no field. Paired display/hash and `__eq__` names preserve
@@ -1471,27 +1576,29 @@ validator remain unchanged.
 - `CDR4-004`: attribute and subscript target components, values, and eager
   annotations are inspected in the table's execution order without treating
   attribute names as class bindings or traversing future-deferred annotations.
-- `CDR4-005`: replacing any one expected simple carrier field with a
-  parenthesized annotation makes the exact-field verdict fail before equality
-  or hash posture can be accepted.
+- `CDR4-005`: replacing an approved declaration with a parenthesized name,
+  `ClassVar`, `InitVar`, `KW_ONLY`, a plain default, or a `field()` option fails
+  before equality or hash posture can be accepted. Each governed name has
+  exactly one approved declaration event, no other bind/delete event, and no
+  explicit target-class `__annotations__` access.
 - `CDR4-006`: version-3 import/control-flow special-member coverage,
   authenticated detached-AST inputs, exact equality identity/body validation,
   and bounded diagnostics remain unchanged.
-- `CDR4-007`: the durable RFC records the #354 completion and #5058662084
-  finding without rewriting historical Phase A or claiming production
-  readiness.
+- `CDR4-007`: the durable RFC records the #354 completion, #5058662084 finding,
+  and #5059132827 Phase A amendment without rewriting historical Phase A or
+  claiming production readiness.
 
 ### 16.7 Production-reachable negative cases
 
 | Invariant | Counterexample and required result |
 | --- | --- |
 | `CDR4-001` | A proposed correction also edits `RuntimeConfig` or either security-audit runner carrier; path audit rejects that expansion. |
-| `CDR4-002` | Fictional detached source replaces `first: str` with `(first): str`; the parser reports `simple == 0`, and `first` is absent from the field projection. |
+| `CDR4-002` | Fictional detached source replaces `first: str` with `(first): str`, `first: bytes`, or `first: str = value`; the exact ordered declaration projection differs by simple posture, annotation shape, or value absence and is rejected. |
 | `CDR4-003` | `(__repr__): object` and `(__eq__): object` produce no false extra event, while the corresponding value-bearing forms produce ordinary binding events and are refused by the existing display/hash or exact-equality verdict. |
 | `CDR4-004` | A direct dynamic-namespace call in a subscript index or eager annotation is refused; the same spelling in a future-deferred annotation is not treated as executed. |
-| `CDR4-005` | The fictional mutated carrier retains the old equality tuple text but loses the actual field; the exact-field check rejects it before a passing architecture verdict. |
+| `CDR4-005` | The fictional carrier retains the old equality tuple but uses `ClassVar[str]`, `InitVar[str]`, `KW_ONLY`, a plain default, `field(init=False)`, `field(hash=False)`, or `field(kw_only=True)`; declaration comparison rejects every form. An otherwise exact declaration plus `first = value`, `(first): str = value`, `del first`, or explicit `__annotations__` mutation is rejected by event uniqueness or the reserved-namespace rule. |
 | `CDR4-006` | A proposed fix rereads source, imports a carrier, replaces ordered events, or changes equality-body acceptance; focused boundary tests reject it. |
-| `CDR4-007` | The RFC still labels #354 as the current draft without an appended completion record; documentation review rejects the incomplete disposition. |
+| `CDR4-007` | The RFC omits either the #354 completion or the superseding #5059132827 Phase A blocker/amendment; documentation review rejects the incomplete disposition. |
 
 The negative cases use fictional format-true syntax and the already-supported
 production reachability of the five carriers. They require no production
@@ -1503,12 +1610,12 @@ edit.
 | Invariant | Owning change | Focused evidence | Smallest verification |
 | --- | --- | --- | --- |
 | `CDR4-001` | Base-to-head path exclusion | Exact carrier path diff | Diff audit plus standalone architecture check |
-| `CDR4-002` | `_top_level_class_fields()` simple predicate | Simple versus parenthesized field projection | Focused checker unit tests |
+| `CDR4-002` | Ordered declaration descriptors and one direct projection | Exact names/annotation ASTs/no-value posture versus parenthesized, alternate annotation, value, extra, and duplicate forms | Descriptor assertion plus focused projection tests |
 | `CDR4-003` | Collector `AnnAssign` dispatch | Parenthesized name with and without value for display/hash and `__eq__` | Event and both existing verdict tests |
 | `CDR4-004` | Existing expression/target helpers under the new dispatch | Attribute/subscript, eager/future annotation, value-order pairs | Paired scope tests under CPython 3.12.13 |
-| `CDR4-005` | Exact field verdict | Hostile replacement of each representative declared field | Mutation matrix |
+| `CDR4-005` | Exact declaration and per-field event-uniqueness verdicts plus reserved `__annotations__` handling | Pseudo-fields, defaults/options, separate rebindings/deletes, and annotation-map mutation | Hostile mutation matrix under eager and future annotations |
 | `CDR4-006` | Unchanged snapshot interface and verdict consumers | Missing AST, alternate source, version-3 regression subset | Focused and complete rewrite-architecture module |
-| `CDR4-007` | RFC section 16 and current front matter | Exact merge/review/evidence references and claim audit | Documentation diff review |
+| `CDR4-007` | RFC section 16 and current front matter | Exact merge, review, amendment, and evidence references plus claim audit | Documentation diff review |
 
 Phase A changes only this RFC and the draft pull-request description. No
 expensive hosted baseline is permitted for a design-only head.
@@ -1516,7 +1623,8 @@ expensive hosted baseline is permitted for a design-only head.
 After valid approval, Phase B cheap verification is:
 
 1. mandatory package contract under pinned CPython 3.12.13 before commit;
-2. the focused `AnnAssign.simple` matrix;
+2. the focused `AnnAssign.simple`, exact declaration-shape, field-event, and
+   reserved-annotation-map matrix;
 3. the complete `kernel/tests/test_rewrite_architecture_check.py` module;
 4. the standalone rewrite architecture checker;
 5. repository-pinned Ruff for changed Python paths;
@@ -1573,7 +1681,9 @@ commit would restore the known false-success defect and is not an accepted
 security rollback.
 
 The technical design is not provisional. Evidence requiring redesign is a
-CPython 3.12 execution result contradicting the mandatory table, a need to
+CPython 3.12 execution result contradicting the mandatory table or approved
+declaration map, inability to close field-name rebinding without a broader
+namespace model, a need to resolve module-level annotation aliases, a need to
 execute or reflect on target classes, or a required change to a carrier,
 credential custody, runtime, deployment, or production posture.
 
@@ -1584,19 +1694,24 @@ waiver. Production composition remains unauthorized and non-deployable.
 
 ### 16.11 Phase A disposition and approval stop
 
-Current design disposition before exact-head Phase A review:
+Current amended design disposition after review #5059132827 and before the new
+exact-head bounded re-review:
 
-- **Phase A content Blockers:** pending review;
-- **New Follow-ups introduced:** none proposed;
+- **Phase A content Blockers:** the one demonstrated blocker is addressed by
+  the exact declaration map, field-event uniqueness, and reserved annotation-map
+  rules; closure is pending re-review;
+- **New Follow-ups introduced:** zero;
 - **Existing separate Follow-ups:** unchanged;
-- **Preferences:** pending review;
+- **Preferences:** pending re-review;
 - **Current credential disclosures demonstrated:** zero;
 - **Governed runtime or database regressions demonstrated:** zero; and
 - **Phase B:** unauthorized.
 
 The only acceptable approval is the entire visible text of a later task-user
-message in the same Codex task, after a unique complete version-4 decision card
-names the created draft pull request:
+message in the same Codex task, after the amended exact-head review demonstrates
+zero Blockers and a new unique complete version-4 decision card names the
+created draft pull request. The earlier version-4 card is withdrawn and must not
+be used:
 
 ```text
 I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001 version 4.
