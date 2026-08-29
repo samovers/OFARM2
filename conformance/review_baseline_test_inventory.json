@@ -9251,6 +9251,11 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[class-base]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[class-name]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -9262,6 +9267,16 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[eq-false]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[equality-deletion]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[equality-rebinding]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -9317,6 +9332,11 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[right-field-omitted]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[tuple-display-binding]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -18221,8 +18241,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "da8969b5cb33a844531119bd27221fa68cb5c5057e37601296cd9f5feef0bb51",
-  "entryCount": 3644,
+  "entriesSha256": "00562276906c61f11b79e5d8b6f653b5fc496561166c1e4b46fc930b1e8140f4",
+  "entryCount": 3648,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

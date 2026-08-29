@@ -3370,6 +3370,20 @@ def _credential_field_tuple(
     return tuple(fields)
 
 
+def _credential_bound_names(target: ast.AST) -> tuple[str, ...]:
+    if isinstance(target, ast.Name):
+        return (target.id,)
+    if isinstance(target, ast.Starred):
+        return _credential_bound_names(target.value)
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return tuple(
+            name
+            for element in target.elts
+            for name in _credential_bound_names(element)
+        )
+    return ()
+
+
 def _credential_eq_violations(
     method: ast.FunctionDef,
     declared_fields: tuple[str, ...],
@@ -3442,6 +3456,8 @@ def _credential_diagnostic_carrier_violations(
         violations.append("protected-field authority is invalid")
     if _top_level_class_fields(tree, class_name) != declared_fields:
         violations.append("declared fields differ from the exact inventory")
+    if target.bases or target.keywords:
+        violations.append("class must inherit directly from object")
     accepted_options = (
         {"frozen": True, "slots": True, "repr": False},
         {"frozen": True, "slots": True, "repr": False, "eq": True},
@@ -3453,15 +3469,13 @@ def _credential_diagnostic_carrier_violations(
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             members.append(node.name)
         elif isinstance(node, ast.Assign):
-            members.extend(
-                assigned.id
-                for assigned in node.targets
-                if isinstance(assigned, ast.Name)
-            )
-        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)) and isinstance(
-            node.target, ast.Name
-        ):
-            members.append(node.target.id)
+            for assigned in node.targets:
+                members.extend(_credential_bound_names(assigned))
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+            members.extend(_credential_bound_names(node.target))
+        elif isinstance(node, ast.Delete):
+            for deleted in node.targets:
+                members.extend(_credential_bound_names(deleted))
     prohibited = sorted(
         {"__hash__", "__repr__", "__str__", "__format__"}.intersection(
             members
@@ -3475,8 +3489,10 @@ def _credential_diagnostic_carrier_violations(
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         and node.name == "__eq__"
     ]
-    if len(equality_methods) != 1 or not isinstance(
-        equality_methods[0], ast.FunctionDef
+    if (
+        members.count("__eq__") != 1
+        or len(equality_methods) != 1
+        or not isinstance(equality_methods[0], ast.FunctionDef)
     ):
         violations.append("class must define exactly one synchronous __eq__")
     else:

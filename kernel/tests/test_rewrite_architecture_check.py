@@ -2544,6 +2544,7 @@ def test_credential_diagnostic_rule_accepts_exact_shape(explicit_eq):
     ("old", "new"),
     (
         ("class SecretCarrier:", "class DifferentCarrier:"),
+        ("class SecretCarrier:", "class SecretCarrier(BaseCarrier):"),
         ("second: str", "different: str"),
         (", repr=False", ""),
         ("repr=False", "repr=True"),
@@ -2580,9 +2581,25 @@ def test_credential_diagnostic_rule_accepts_exact_shape(explicit_eq):
             "    @staticmethod\n"
             "    def __eq__(self, other: object) -> bool:",
         ),
+        (
+            "    def __eq__(self, other: object) -> bool:",
+            "    __repr__, harmless = caller, object()\n\n"
+            "    def __eq__(self, other: object) -> bool:",
+        ),
+        (
+            "    def __eq__(self, other: object) -> bool:",
+            "    __eq__ = caller\n\n"
+            "    def __eq__(self, other: object) -> bool:",
+        ),
+        (
+            "            other_carrier.second,\n        )\n",
+            "            other_carrier.second,\n        )\n"
+            "    del __eq__\n",
+        ),
     ),
     ids=(
         "class-name",
+        "class-base",
         "field-inventory",
         "generated-repr",
         "repr-true",
@@ -2599,6 +2616,9 @@ def test_credential_diagnostic_rule_accepts_exact_shape(explicit_eq):
         "non-equality-comparison",
         "helper-selected-fields",
         "decorated-equality",
+        "tuple-display-binding",
+        "equality-rebinding",
+        "equality-deletion",
     ),
 )
 def test_credential_diagnostic_rule_rejects_hostile_shapes(old, new):
