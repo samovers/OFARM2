@@ -6,7 +6,12 @@ required hosted gates are pending; Phase B is unauthorized
 **Decision:**
 `ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001`
 
-**Decision version:** 1
+**Decision version:** 2
+
+**Version history:** version 1 was an unapproved, pre-pull-request task draft.
+Version 2 supersedes it because the bounded Phase A review required two
+additional derived carriers and a narrower captured-locals invariant. No
+version-1 approval was recognized.
 
 **Issue context:** [#192](https://github.com/samovers/OFARM2/issues/192)
 
@@ -663,6 +668,8 @@ evidence and will not be monitored, diagnosed, or retried.
 - The checker uses exact authenticated source mapping, not name heuristics or
   filesystem rereads.
 - The technical allowlist is at most eight paths.
+- Version 2 supersedes the unapproved version-1 task draft; only a later
+  complete version-2 card can become live.
 
 ### 14.2 Current disposition
 
