@@ -52,6 +52,8 @@ Observed evidence on 2026-08-29:
 - root procedure expressly assigns in-boundary merge to the AI after gates;
 - the normal metric targets one approval stop for high-risk work, before
   implementation;
+- the repository's live default branch is `main`, and draft PR #356 targets it
+  while GitHub separately reports the PR as open;
 - GitHub reports no branch protection and no repository ruleset on `main`;
 - the agent-authenticated GitHub identity and the human account are both
   `samovers`, so GitHub cannot distinguish their actions; and
@@ -69,12 +71,14 @@ excellence an explicit acceptance invariant without restoring micro-PRs or
 repeated artifact-level approvals.
 
 The recommended decision has one outcome: **the task user accepts the quality
-of one exact merge-commit candidate before the AI may write it to the target
-branch.** The user receives one compact final packet that includes both
-technical evidence and a concrete simplicity/elegance assessment. The AI then
-stops. A later exact task-user message authorizes only the immutable commit
-named in that packet, and the Git server accepts the write only while the target
-still equals the authorized base.
+of one exact merge-commit candidate before the AI may write it to the
+repository's live default branch.** The user receives one compact final packet
+that includes both technical evidence and a concrete simplicity/elegance
+assessment. The AI then stops. A later exact task-user message authorizes only
+the immutable commit named in that packet, and the Git server accepts the write
+only while the target still equals the authorized base. Version 1 permits that
+writer only while the pull request is open, continuously ready for review, and
+free of any active target policy, regardless of administrator privilege.
 
 This is one coherent capability because the quality invariants define what the
 final human acceptance covers; they do not create an independent linting,
@@ -94,6 +98,10 @@ This amendment does not:
 - change executable admission, CI, baseline, publication, or receipt custody;
 - change GitHub accounts, credentials, permissions, branch protection, or
   rulesets;
+- support AI-operated writes to a non-default target branch or through active
+  branch protection, rulesets, merge queues, or other target policy;
+- add a general GitHub-policy interpreter or an administrator-bypass proof
+  system;
 - support AI-operated squash or rebase merging in version 1;
 - preserve the ordinary PR-title merge message for AI-operated merges; version
   1 writes the already-created authoritative candidate object unchanged;
@@ -161,13 +169,18 @@ task, and the AI may not infer permission from such an external possibility.
 - The AI owns in-boundary implementation, commits, pushes, review handling,
   checks, admission, publication coordination, and preparation of the final
   packet. After exact merge-commit authorization it owns only the exact
-  base-leased merge-commit write defined in section 9; it owns no ordinary
-  pull-request merge call or alternative write path.
+  base-leased merge-commit write defined in section 9 for an eligible live
+  default-branch pull request; it owns no ordinary pull-request merge call or
+  alternative write path.
 - Reviewers own demonstrated correctness, safety, and code-excellence Blocker
   findings. They do not own scope expansion or aesthetic vetoes.
+- GitHub's repository state owns the live default-branch identity, pull-request
+  draft state, and target-policy inventory used as procedural eligibility
+  inputs. These inputs do not provide human intent.
 - GitHub's read-only `refs/pull/<NUMBER>/merge` ref is the sole mechanical
-  candidate producer. The Git receive-pack transaction owns the exact-base ref
-  comparison and target write. Neither provides human intent.
+  candidate producer after eligibility is established. The Git receive-pack
+  transaction owns the exact-base ref comparison and target write. Neither
+  provides human intent.
 - CI and publication systems own mechanical evidence only and, when required,
   must bind the same candidate produced by that ref.
 - GitHub activity cannot provide task-user intent because the current human and
@@ -184,7 +197,8 @@ task, and the AI may not infer permission from such an external possibility.
 - the task user's real opportunity to inspect the completed change;
 - the exact implementation the user accepts;
 - clear, direct, maintainable code within the approved capability;
-- one source of truth and one authoritative path per decision; and
+- one source of truth and one authoritative path per decision;
+- GitHub-native merge eligibility for the one supported target; and
 - the existing substantive safety and evidence gates.
 
 ### Trusted sides
@@ -193,6 +207,8 @@ task, and the AI may not infer permission from such an external possibility.
 - GitHub's read-only pull-request merge ref as the sole candidate producer;
 - immutable Git commit, parent, and tree identities for candidate content;
 - the Git server's explicit expected-base lease for the atomic target write;
+- the repository's live default-branch identity, open/non-draft state, and
+  complete target-policy inventory as procedural eligibility inputs;
 - live pull-request transition history for procedural lifecycle checks, not for
   atomic candidate identity or human intent;
 - the non-malicious AI for stopping at the final gate;
@@ -216,6 +232,11 @@ task, and the AI may not infer permission from such an external possibility.
   substitute for reading the live target ref;
 - current open state without transition history as proof that no close/reopen
   cycle occurred;
+- `state=OPEN` without a separate `draft=false` check as proof that the pull
+  request is ready for review;
+- administrator permission, lack of an explicit bypass action, or a successful
+  direct push as proof that branch policy was satisfied rather than bypassed;
+- a stale repository default-branch value or an incomplete policy inventory;
 - green tests or zero-Blocker agent review as proof that the user inspected the
   code;
 - silence, elapsed time, or an unattended task;
@@ -248,14 +269,27 @@ the current target ref with the authorized base and performs the write as one
 server-side ref transaction; if the base changed after every preceding read,
 the target remains unchanged.
 
-Pull-request head/ref state, open/close history, and same-task cancellation
-cannot participate in that target-ref transaction. Version 1 therefore
-guarantees atomic candidate content, while non-target PR state and cancellation
-remain procedural checks immediately before and after the write. A head/ref,
-close/reopen, or cancellation transition racing inside the single push may not
-prevent the already-authorized exact candidate from landing. That narrow
-residual is provisional debt and must be reported, not misrepresented as
-absolute stale-state enforcement.
+The same merge-authority boundary has a native-eligibility risk: a direct
+administrator push can write a draft pull request, bypass policy without an
+explicit bypass operation, or mutate a non-default target that GitHub does not
+recognize as an indirect merge. Version 1 contains that risk with a deliberately
+narrow eligibility envelope. Before candidate preparation and again before the
+write, the pull request must target the repository's live default branch, be
+open and non-draft in one continuous ready-for-review episode, and have no
+active branch protection, ruleset, merge queue, or other target policy. Any
+policy, incomplete inventory, or ambiguity refuses the direct writer; version 1
+does not attempt to prove policy compatibility. Known ineligibility therefore
+stops before any target write even when the connected identity is an
+administrator.
+
+Pull-request head/ref state, open/close history, ready/draft state, repository
+default-branch identity, target-policy state, and same-task cancellation cannot
+participate in that target-ref transaction. Version 1 therefore guarantees
+atomic candidate content, while those non-target states remain procedural
+checks immediately before and after the write. A non-target transition racing
+inside the single push may not prevent the already-authorized exact candidate
+from landing. That narrow residual is provisional debt and must be reported,
+not misrepresented as absolute stale-state enforcement.
 
 The secondary delivery risk is replacing silent AI merge authority with an
 unbounded, subjective review loop that recreates the delay this workflow
@@ -291,10 +325,11 @@ removed. Its containment has three parts:
 - **HFQ-005 — Atomic candidate integrity; procedural non-target refusal.** The
   authorized merge commit and tree are immutable, and an exact-base lease must
   reject target drift without writing. An observed live-head, candidate-ref,
-  target-identity, close/reopen, semantic, cancellation, or task-message change
-  before the write revokes authority. Such a non-target transition racing
-  inside the one server operation is detected and reported afterward; it cannot
-  change the exact Git candidate that lands.
+  live-default-branch, target-identity, open/close, ready/draft, target-policy,
+  semantic, cancellation, or task-message change before the write revokes
+  authority. Such a non-target transition racing inside the one server
+  operation is detected and reported afterward; it cannot change the exact Git
+  candidate that lands.
 - **HFQ-006 — User changes remain bounded.** In-boundary requested changes
   return the PR to implementation and fresh exact-head review. Out-of-boundary
   requests stop for reclassification or a new decision.
@@ -306,10 +341,11 @@ removed. Its containment has three parts:
   superseded, or expires; this amendment does not silently reinterpret it.
 - **HFQ-008 — One producer and one writer.** Only GitHub's live read-only
   pull-request merge ref may produce the merge-commit candidate, and only the
-  explicit exact-base leased single-ref push may write it. Missing merge refs,
-  squash, rebase, ordinary PR merge APIs, local candidate construction,
-  implicit leases, bare `--force`, `+` refspecs, and fallback writers fail
-  closed in version 1.
+  explicit exact-base leased single-ref push may write it after the closed
+  version-1 eligibility rule in section 9 passes. Ineligible pull requests,
+  missing merge refs, squash, rebase, ordinary PR merge APIs, local candidate
+  construction, implicit leases, bare `--force`, `+` refspecs, and fallback
+  writers fail closed in version 1.
 
 ### Code excellence
 
@@ -337,6 +373,26 @@ removed. Its containment has three parts:
 
 ## 9. Final packet and authorization
 
+### Closed version-1 eligibility
+
+The version-1 direct writer is eligible only when all of these statements are
+true in the same live evaluation:
+
+1. the pull request is open, its separate draft field is false, and its target
+   equals the repository's live default branch;
+2. immutable markers identify its current continuous open and ready-for-review
+   episodes; and
+3. a complete live inventory shows no active branch protection, applicable
+   repository or organization ruleset, merge queue, or other target policy.
+
+An unavailable or ambiguous input makes the rule false. Administrator
+permission and the possibility that a push would succeed do not relax it. The
+AI evaluates this closed rule before resolving the candidate ref and again
+immediately before displaying or executing the literal writer. A non-default
+target, draft or closed state, changed episode, active policy, or incomplete
+inventory therefore refuses candidate preparation or the write as applicable.
+Version 1 has no policy interpretation or bypass-proof exception.
+
 ### One authoritative candidate
 
 Version 1 supports only the merge-commit path. GitHub's live read-only
@@ -355,7 +411,9 @@ The immutable candidate identity is:
 
 - repository identity `samovers/OFARM2`;
 - pull-request number;
-- full target ref `refs/heads/<TARGET_BRANCH>`;
+- live repository default-branch name `<DEFAULT_BRANCH>`;
+- full target ref `refs/heads/<DEFAULT_BRANCH>`, which must also be the pull
+  request's target ref;
 - full live base commit SHA `B`, read from that target ref rather than the
   pull-request object's `base.sha` snapshot;
 - full pull-request head commit SHA `H`;
@@ -370,11 +428,19 @@ commit subject. Version 1 accepts GitHub's test-merge message format. Rewording
 it would create a different commit and require an additional candidate builder,
 so that option is deliberately deferred.
 
-The authorization context separately includes the open-episode marker:
-`initial:<PR_CREATED_AT>` when the pull request has never been closed, otherwise
-`reopened:<REOPEN_EVENT_ID>` naming the immutable event that began the current
-open episode. It supports procedural cancellation checks but is not falsely
-claimed to be part of the atomic Git ref transaction.
+The authorization context separately includes two procedural markers:
+
+- open episode `initial:<PR_CREATED_AT>` when the pull request has never been
+  closed, otherwise `reopened:<REOPEN_EVENT_ID>` naming the immutable event that
+  began the current open episode; and
+- ready episode `initial-ready:<PR_CREATED_AT>` when the pull request has never
+  been a draft, otherwise `ready:<READY_FOR_REVIEW_EVENT_ID>` naming the
+  immutable event that began the current continuous non-draft episode.
+
+They support lifecycle and cancellation checks but are not falsely claimed to
+be part of the atomic Git ref transaction. Any later conversion to draft ends
+the ready episode and invalidates the packet and authorization, even if the
+pull request is subsequently marked ready again.
 
 When hosted evidence is required, its admitted base and execution-merge SHA
 must equal `B` and `M`. Evidence for another base, head, merge commit, or tree is
@@ -384,7 +450,9 @@ The final packet is compact and contains:
 
 - Delivery issue and PR;
 - the complete immutable candidate identity above;
-- the procedural open-episode marker and the disclosed lifecycle-race residual;
+- the live open/non-draft eligibility result and complete zero-policy evidence;
+- the procedural open-episode and ready-episode markers and the disclosed
+  lifecycle-and-policy race residual;
 - capability and primary trust boundary;
 - final changed paths and material diff summary;
 - permitted effects, non-effects, and unresolved Follow-ups;
@@ -397,23 +465,28 @@ The final packet is compact and contains:
 - same-task provenance sufficient to retrieve the original packet after it is
   posted;
 - the one exact, fully substituted target-write command; and
-- the exact authorization sentence with every candidate and open-episode field
-  filled in.
+- the exact authorization sentence with every candidate and procedural-episode
+  field filled in.
 
 The AI then stops. Authorization is only this entire later task-user message:
 
 ```text
-I authorize merge of samovers/OFARM2 PR #<NUMBER> into <FULL_TARGET_REF> by writing merge commit <FULL_MERGE_COMMIT_SHA> with base <FULL_BASE_SHA>, head <FULL_HEAD_SHA>, tree <FULL_TREE_SHA>, and open episode <OPEN_EPISODE_MARKER>.
+I authorize merge of samovers/OFARM2 PR #<NUMBER> into live default branch <DEFAULT_BRANCH> at <FULL_TARGET_REF> by writing merge commit <FULL_MERGE_COMMIT_SHA> with base <FULL_BASE_SHA>, head <FULL_HEAD_SHA>, tree <FULL_TREE_SHA>, open episode <OPEN_EPISODE_MARKER>, and ready episode <READY_EPISODE_MARKER>.
 ```
 
 ### One authoritative target writer
 
-Before writing, the AI must re-read the live target, base, head, candidate ref,
-candidate commit, parents, tree, current pull-request state, transition history,
-same-task messages, original packet, and later authorization. Every SHA and ref
+Before writing, the AI must re-read the repository's live default branch, full
+target, base, head, candidate ref, candidate commit, parents, tree, separate
+open and draft fields, open and ready transition history, complete target-policy
+inventory, same-task messages, original packet, and later authorization. The PR
+must still be open, non-draft, in the same open and ready episodes, and targeted
+at the same live default branch, with no active target policy. Every SHA and ref
 in the packet, authorization, and command must be a literal full value. Any
-pre-write mismatch, observed close/reopen, cancellation, missing original item,
-or abbreviated value requires a fresh packet, yield, and later authorization.
+pre-write mismatch, observed close/reopen or conversion to draft, policy,
+incomplete inventory, cancellation, missing original item, or abbreviated value
+requires a fresh packet, yield, and later authorization or, where version 1 is
+ineligible, a new decision.
 
 The only AI-operated version-1 merge primitive is one Git smart-protocol push
 with one refspec and the explicit expected-value lease:
@@ -429,10 +502,10 @@ tracking expectation, multiple refspecs, `gh pr merge`, and REST or GraphQL
 merge mutations are forbidden.
 
 Before displaying or executing the literal command, the AI must verify that
-`origin` resolves to `samovers/OFARM2`, the full target ref is the PR's target
-in that repository, and no branch rule, merge queue, or server policy requires
-a different transition or an explicit bypass. The AI never changes or bypasses
-such policy. Rejection or incompatibility stops for a new decision.
+`origin` resolves to `samovers/OFARM2` and re-evaluate every input to the closed
+version-1 eligibility rule. A false result refuses the writer. The AI never
+changes or bypasses policy; rejection or incompatibility stops for a new
+decision.
 
 The explicit lease makes the server compare the current target ref with `B` in
 the same ref transaction that writes `M`. Because `M` has first parent `B`, the
@@ -449,7 +522,8 @@ write succeeded and must not be repeated. Any other target means no success may
 be claimed and requires fresh state. Server policy rejection is final for that
 attempt; the AI must not bypass it.
 
-Pushing the exact merge commit makes `H` reachable from the target. GitHub's
+Pushing the exact merge commit makes `H` reachable from the live default
+branch. GitHub's
 [documented indirect-merge behavior](https://docs.github.com/en/pull-requests/reference/pull-request-merges#indirect-merges)
 should mark the pull request merged. The AI must verify target `M`, pull-request
 disposition, and issue closure afterward. If GitHub does not mark the PR merged,
@@ -457,12 +531,13 @@ the AI reports the mismatch and performs no second target write or manual close
 disguised as merge.
 
 The final pre-write and post-write checks preserve procedural head/ref,
-close/reopen, and cancellation handling. They cannot be atomic with the target
-Git ref write. If such a non-target transition races within the one push, the
-exact authorized content may land; the AI must report the provisional state
-breach. Version 1 makes no stronger claim. Eliminating that residual would
-require a future trusted executor that owns PR/task state and target-ref custody
-in one transition.
+close/reopen, ready/draft, default-branch, target-policy, and cancellation
+handling. They cannot be atomic with the target Git ref write. If such a
+non-target transition races within the one push, the exact authorized content
+may land; the AI must report the provisional state breach. Version 1 makes no
+stronger claim. Eliminating that residual would require a future trusted
+executor that owns repository/PR/task state and target-ref custody in one
+transition.
 
 There is no automatic-merge authorization path in version 1. If evidence later
 shows a need, it requires its own explicit workflow amendment rather than an
@@ -503,6 +578,7 @@ DELIVERY_ISSUE_DEFINED
   -> USER_APPROVED_IMPLEMENTATION
   -> IMPLEMENT_COMPLETE_VERTICAL_SLICE
   -> CHEAP_LOCAL_CHECKS
+  -> PR_READY_FOR_REVIEW
   -> EXACT_HEAD_CONTENT_AND_EXCELLENCE_REVIEW_ZERO_BLOCKERS
   -> REQUIRED_ADMISSION_BASELINES_AND_PUBLICATION
   -> FINAL_SCOPE_EVIDENCE_AND_EXCELLENCE_RECHECK
@@ -510,7 +586,7 @@ DELIVERY_ISSUE_DEFINED
   -> READY_FOR_USER_FINAL_REVIEW
   -> AI_YIELDS_WITH_FINAL_PACKET
   -> USER_AUTHORIZED_IMMUTABLE_CANDIDATE_MERGE
-  -> AI_RECHECKS_CANDIDATE_HISTORY_AUTHORIZATION_AND_CANCELLATION
+  -> AI_RECHECKS_ELIGIBILITY_CANDIDATE_HISTORY_AUTHORIZATION_AND_CANCELLATION
   -> EXACT_BASE_LEASED_SINGLE_REF_WRITE
   -> VERIFY_TARGET_EQUALS_AUTHORIZED_MERGE_COMMIT
   -> RECHECK_AND_REPORT_LIFECYCLE_STATE
@@ -519,6 +595,10 @@ DELIVERY_ISSUE_DEFINED
 
 Routine AI-operated work omits the semantic decision-card states but never
 omits the final packet, yield, and immutable-candidate authorization states.
+`PR_READY_FOR_REVIEW` means the pull request is open, its separate draft field
+is false, and its current continuous ready episode has been recorded. Returning
+the pull request to draft invalidates every later packet and authorization from
+that episode.
 
 If the user requests an in-boundary correction:
 
@@ -533,11 +613,14 @@ READY_FOR_USER_FINAL_REVIEW
 No response leaves the PR open and unmerged. Waiting is not approval, failure,
 or authority to create a replacement PR.
 
-A lease rejection or a pre-write candidate mismatch changes no target ref and
-returns the work to fresh integration evidence and a new final packet. Content
-review may remain valid for the same head, but any base-sensitive review,
-admission, baseline, publication, or candidate claim must be refreshed. The old
-authorization is never replayed.
+A lease rejection or a pre-write candidate or eligibility mismatch changes no
+target ref. Candidate drift returns the work to fresh integration evidence and
+a new final packet. A new draft episode returns to `PR_READY_FOR_REVIEW` and
+fresh downstream review and evidence. A non-default target or any active or
+unknown target policy makes the version-1 writer ineligible and stops for a new
+decision. Content review may remain valid for the same head, but any
+base-sensitive review, admission, baseline, publication, or candidate claim
+must be refreshed. The old authorization is never replayed.
 
 ## 12. Proposed architecture and smallest coherent change
 
@@ -546,9 +629,11 @@ closed semantic edit across the four active surfaces:
 
 1. `AGENTS.md` changes AI merge authority, the state machine, final scope step,
    and Blocker definition; it adds the sole candidate producer, exact-base
-   leased writer, final packet, authorization rule, and excellence invariants.
+   leased writer, default-branch/open/non-draft/zero-policy eligibility envelope,
+   final packet, authorization rule, and excellence invariants.
 2. `TASK_PROMPT.md` makes Phase A and Phase C collect the same invariants and
-   stop at the final packet; it carries the same candidate and write refusal.
+   stop at the final packet; it carries the same candidate, eligibility, and
+   write refusal.
 3. `CONTRIBUTING.md` explains the human merge hold and concrete design-quality
    review standard.
 4. `.github/PULL_REQUEST_TEMPLATE.md` captures the excellence assessment and
@@ -564,6 +649,13 @@ permission, setting, quality score, or compatibility shim. GitHub already
 produces the read-only candidate; the Git server already supplies the exact
 expected-ref transaction; and existing admission code already consumes the same
 candidate ref when hosted evidence is required.
+
+Version 1 does not interpret policy or infer that administrator access is safe.
+It uses a smaller rule: the direct writer exists only for an open, non-draft PR
+targeting the live default branch while a complete inventory reports no active
+target policy. Anything else fails closed before the writer. Supporting a
+policy-governed or non-default target would require a later design with its own
+complete transition semantics.
 
 This is the simplest credible version-1 design:
 
@@ -597,10 +689,13 @@ verification.
 | HFQ-003 | The user writes “looks good,” abbreviates a SHA, changes a commit/parent/tree field, or the original packet is no longer directly retrievable | Treat it as no authority and redisplay a fresh packet | `AGENTS.md`, `TASK_PROMPT.md` | Exact-sentence and same-task retrieval hostile cases |
 | HFQ-004 | Phase A approval, a GitHub approval, green checks, or silence is treated as permission to merge | Refuse; only the later exact merge-commit sentence authorizes the write | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md` | Search active surfaces for inherited or inferred merge authority |
 | HFQ-005 | Base `B1`, head `H`, and merge commit `M1` pass the final reread; another PR advances the target to `B2` before the write | The exact `B1` lease rejects without changing `B2`; no retry or replay, and a new candidate and packet are required | `AGENTS.md`, `TASK_PROMPT.md`, PR template | Bare-repository hostile transition proves an after-check base move cannot write `M1` |
-| HFQ-005 non-target residual | The live head or candidate ref moves, the PR closes/reopens, or a cancellation arrives after the final procedural read but during the one leased push | The exact authorized Git candidate may land; post-write recheck detects and reports the provisional state breach, with no additional write | `AGENTS.md`, `TASK_PROMPT.md`, PR template | Review confirms the contract claims atomic target content, not atomic PR/task state |
+| HFQ-005 ready state | The PR is draft when candidate preparation begins, or it returns to draft after a packet and authorization | Refuse before candidate preparation or the write; invalidate that ready episode, packet, and authorization; leave the target unchanged | `AGENTS.md`, `TASK_PROMPT.md`, PR template | Hostile draft snapshots and a ready → draft transition prove the literal writer is never eligible |
+| HFQ-005 non-target residual | The live head or candidate ref moves, the PR closes/reopens or returns to draft, the live default branch or policy changes, or a cancellation arrives after the final procedural read but during the one leased push | The exact authorized Git candidate may land; post-write recheck detects and reports the provisional state breach, with no additional write | `AGENTS.md`, `TASK_PROMPT.md`, PR template | Review confirms the contract claims atomic target content, not atomic repository/PR/task state |
 | HFQ-006 | During final review the user requests an independent deployment-authority or second-capability change in the same PR | Stop; split the work or require a new semantic decision before editing | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md` | Scope-expansion walkthrough against the one-boundary rule |
 | HFQ-007 | A PR existed before activation but had no valid approval, and the AI claims its age preserves standing merge authority | Apply this amendment; grandfather only a directly retrievable valid approval explicitly carrying the old authority | `AGENTS.md`, `TASK_PROMPT.md` | Inventory pre-activation open work by accepted authority, not date |
 | HFQ-008 | The merge ref is missing, or the AI proposes a local merge, squash/rebase, `gh pr merge`, REST/GraphQL merge, bare push, implicit lease, or fallback writer | Refuse; only the live merge-ref commit and exact-base leased single-ref push are eligible | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md`, PR template | Search active surfaces for alternate producers/writers and audit the literal final command |
+| HFQ-008 default target | A Delivery PR targets a branch other than the repository's live default branch | Refuse before candidate preparation; do not display or execute a writer; leave that target unchanged | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md`, PR template | Hostile non-default-target snapshot proves version 1 has no candidate or writer transition |
+| HFQ-008 target policy | Active branch protection, an applicable ruleset, merge queue, or another target policy exists, while the connected administrator identity could still push | Refuse before candidate preparation or the write; administrator ability and push success are not compatibility evidence; leave the target unchanged | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md`, PR template | Hostile active-policy snapshot with administrator bypass available proves the literal writer is ineligible |
 | EXC-001 | Two candidate constructors, validators, or dispatch paths can each make the same authoritative decision | Block and consolidate to one authoritative path or clearly separate ownership | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md`, PR template | Final packet names the one GitHub merge-ref producer and one leased writer; exact-head review traces both |
 | EXC-002 | A new checker copies a field inventory, validation rule, or derived state already owned elsewhere | Block and derive from the owner or delete the duplicate unless independent repetition is explicit evidence | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md`, PR template | Duplicate-state/path search plus final excellence assessment |
 | EXC-003 | A hidden fallback or undocumented side path lets production behavior bypass the implementation cited for an invariant | Block; remove the bypass or make the complete path explicit and directly tested | `AGENTS.md`, `TASK_PROMPT.md`, `CONTRIBUTING.md`, PR template | Invariant → implementation → negative-test trace for every material path |
@@ -617,6 +712,13 @@ Phase A verification:
 - confirm the proposed rule distinguishes agent review from task-user review;
 - confirm every HFQ and EXC invariant has a reachable negative row and every row
   maps back to its invariant;
+- confirm candidate preparation and the final authorization bind the live
+  repository default-branch name and its full target ref;
+- confirm open state and the separate non-draft field are checked before the
+  packet and write, and that the ready-episode marker changes after any return
+  to draft;
+- confirm any active target policy or incomplete inventory refuses the direct
+  writer without trying to interpret administrator exemptions;
 - confirm the sole merge-ref candidate binds target, base, head, exact merge
   commit, ordered parents, and tree;
 - confirm `B` comes from the live target ref and not the pull-request object's
@@ -645,10 +747,16 @@ Phase B verification:
   one-stop target language, and merge-without-yield instructions;
 - search for competing authorization sentences, candidate producers, and merge
   writers;
-- verify every active surface contains the same default no-merge posture;
+- verify every active surface contains the same default no-merge posture and
+  the same live-default-branch/open/non-draft/zero-policy eligibility envelope;
 - verify the PR template records the exact merge commit, ordered parents, tree,
-  explicit lease, lifecycle residual, and excellence evidence but does not
-  claim to create task-user authority;
+  explicit lease, live default branch, open and ready episodes, zero-policy
+  evidence, lifecycle residual, and excellence evidence but does not claim to
+  create task-user authority;
+- exercise hostile eligibility snapshots for a draft PR, a non-default target,
+  and an active target policy with administrator bypass available; prove each
+  refuses candidate preparation or the literal command and leaves the target
+  ref unchanged;
 - run a temporary bare-repository hostile transition: accept `M1` only when the
   target equals `B1`; then advance the target to `B2` after the final read and
   prove the same `B1` lease rejects while the target remains `B2`;
@@ -675,8 +783,16 @@ separation would require a distinct least-privilege agent identity and a branch
 rule requiring the human identity. That is a separate custody/permissions
 capability and is not silently added here.
 
+The direct writer is correspondingly narrow: it is eligible only for the live
+default branch while the pull request is open and non-draft and no active target
+policy applies. The absence of policy is a precondition, not permission to
+weaken policy. If protection, a ruleset, a merge queue, or another target policy
+is introduced, version 1 stops rather than relying on the shared account's
+administrator privilege.
+
 Candidate content has a narrower mechanical guarantee: the explicit target-ref
 lease atomically refuses base drift. Pull-request head/ref/lifecycle and
+ready/draft state, repository default-branch and target-policy state, and
 task-message state remain outside the Git transaction. A transition racing
 within the one push is accepted provisional debt only because it cannot alter
 the exact authorized commit; it must still be detected and reported after the
@@ -691,6 +807,8 @@ Review this amendment after the next three merged Delivery PRs under it. Record:
   the target;
 - whether any head/ref, close/reopen, or task-message transition raced inside
   the push and how the residual was reported;
+- whether any draft, default-branch, or target-policy state refused the writer
+  or raced inside the push and how it was reported;
 - whether code-excellence Blockers cited concrete EXC invariants or became taste;
 - whether final review found material issues missed by agent review;
 - the waiting time introduced by the final hold; and
@@ -707,7 +825,8 @@ Version 1 recommends:
 - mandatory exact merge-commit final user authorization before every AI merge
   of a Delivery PR;
 - one merge-commit-only candidate producer and one exact-base leased target
-  writer for AI-operated version-1 merges;
+  writer for AI-operated version-1 merges, limited to an open, continuously
+  non-draft PR targeting the live default branch with no active target policy;
 - unchanged retention of the authoritative candidate's GitHub test-merge
   metadata and message in target history;
 - no automatic-merge exception;
@@ -722,6 +841,9 @@ A new decision version is required if Phase B proposes:
 - squash, rebase, a local or alternate candidate producer, an ordinary PR merge
   API, an implicit lease, a fallback writer, or removal of the exact-base
   server comparison;
+- AI-operated support for a non-default target or for a target with active
+  branch protection, rulesets, a merge queue, or another policy;
+- a general target-policy compatibility or administrator-bypass proof path;
 - a claim of atomic PR head/ref/lifecycle or task-message cancellation without a
   trusted executor that owns those states and the target write together;
 - GitHub activity as human authority;
