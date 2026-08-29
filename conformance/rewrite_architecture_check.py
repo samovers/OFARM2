@@ -3384,6 +3384,370 @@ def _credential_bound_names(target: ast.AST) -> tuple[str, ...]:
     return ()
 
 
+_CREDENTIAL_DISPLAY_OR_HASH_MEMBERS = frozenset(
+    {"__hash__", "__repr__", "__str__", "__format__"}
+)
+_CREDENTIAL_GOVERNED_SPECIAL_MEMBERS = (
+    _CREDENTIAL_DISPLAY_OR_HASH_MEMBERS | {"__eq__"}
+)
+_CREDENTIAL_DYNAMIC_NAMESPACE_CALLS = frozenset(
+    {"exec", "eval", "locals", "vars"}
+)
+_CREDENTIAL_COMPREHENSIONS = (
+    ast.ListComp,
+    ast.SetComp,
+    ast.DictComp,
+    ast.GeneratorExp,
+)
+
+
+class _CredentialNamespaceEvent(typing.NamedTuple):
+    kind: str
+    name: str | None
+    origin: str
+    node: ast.AST
+    direct: bool
+
+
+class _CredentialNamespaceCollector:
+    def __init__(self, *, future_annotations: bool) -> None:
+        self._future_annotations = future_annotations
+        self._events: list[_CredentialNamespaceEvent] = []
+
+    def collect(
+        self,
+        target: ast.ClassDef,
+    ) -> tuple[_CredentialNamespaceEvent, ...]:
+        for statement in target.body:
+            self._statement(statement, direct=True)
+        return tuple(self._events)
+
+    def _emit(
+        self,
+        kind: str,
+        name: str | None,
+        node: ast.AST,
+        *,
+        direct: bool = False,
+    ) -> None:
+        self._events.append(
+            _CredentialNamespaceEvent(
+                kind=kind,
+                name=name,
+                origin=type(node).__name__,
+                node=node,
+                direct=direct,
+            )
+        )
+
+    def _expressions(
+        self,
+        expressions: collections.abc.Iterable[ast.expr],
+    ) -> None:
+        for expression in expressions:
+            self._expression(expression)
+
+    def _expression_children(self, node: ast.AST) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.expr):
+                self._expression(child)
+            elif not isinstance(child, ast.stmt):
+                self._expression_children(child)
+
+    def _expression(self, node: ast.expr) -> None:
+        if isinstance(node, ast.Lambda):
+            self._expressions(node.args.defaults)
+            self._expressions(
+                default
+                for default in node.args.kw_defaults
+                if default is not None
+            )
+            return
+        if isinstance(node, _CREDENTIAL_COMPREHENSIONS):
+            if any(
+                isinstance(child, ast.NamedExpr) for child in ast.walk(node)
+            ):
+                self._emit("unbounded", None, node)
+            if node.generators:
+                self._expression(node.generators[0].iter)
+            else:
+                self._emit("unbounded", None, node)
+            return
+        if isinstance(node, ast.NamedExpr):
+            self._expression(node.value)
+            self._target_names(node.target, "bind", node)
+            return
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in _CREDENTIAL_DYNAMIC_NAMESPACE_CALLS
+        ):
+            self._emit("unbounded", None, node)
+        self._expression_children(node)
+
+    def _target_expressions(self, target: ast.AST) -> None:
+        if isinstance(target, ast.Name):
+            return
+        if isinstance(target, ast.Starred):
+            self._target_expressions(target.value)
+            return
+        if isinstance(target, (ast.Tuple, ast.List)):
+            for element in target.elts:
+                self._target_expressions(element)
+            return
+        if isinstance(target, ast.Attribute):
+            self._expression(target.value)
+            return
+        if isinstance(target, ast.Subscript):
+            self._expression(target.value)
+            if isinstance(target.slice, ast.expr):
+                self._expression(target.slice)
+            else:
+                self._expression_children(target.slice)
+            return
+        self._emit("unbounded", None, target)
+
+    def _target_names(
+        self,
+        target: ast.AST,
+        kind: str,
+        origin: ast.AST,
+    ) -> None:
+        for name in _credential_bound_names(target):
+            self._emit(kind, name, origin)
+
+    def _target(
+        self,
+        target: ast.AST,
+        kind: str,
+        origin: ast.AST,
+    ) -> None:
+        self._target_expressions(target)
+        self._target_names(target, kind, origin)
+
+    @staticmethod
+    def _argument_annotations(arguments: ast.arguments) -> tuple[ast.expr, ...]:
+        annotations = [
+            argument.annotation
+            for argument in (
+                *arguments.posonlyargs,
+                *arguments.args,
+                *arguments.kwonlyargs,
+            )
+            if argument.annotation is not None
+        ]
+        if (
+            arguments.vararg is not None
+            and arguments.vararg.annotation is not None
+        ):
+            annotations.append(arguments.vararg.annotation)
+        if (
+            arguments.kwarg is not None
+            and arguments.kwarg.annotation is not None
+        ):
+            annotations.append(arguments.kwarg.annotation)
+        return tuple(annotations)
+
+    def _definition(self, statement: ast.stmt, *, direct: bool) -> bool:
+        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            self._expressions(statement.decorator_list)
+            self._expressions(statement.args.defaults)
+            self._expressions(
+                default
+                for default in statement.args.kw_defaults
+                if default is not None
+            )
+            if not self._future_annotations:
+                self._expressions(self._argument_annotations(statement.args))
+                if statement.returns is not None:
+                    self._expression(statement.returns)
+            if statement.type_params:
+                self._emit("unbounded", None, statement)
+            self._emit("bind", statement.name, statement, direct=direct)
+            return True
+        if isinstance(statement, ast.ClassDef):
+            self._expressions(statement.decorator_list)
+            self._expressions(statement.bases)
+            self._expressions(keyword.value for keyword in statement.keywords)
+            if statement.type_params:
+                self._emit("unbounded", None, statement)
+            self._emit("bind", statement.name, statement, direct=direct)
+            return True
+        if isinstance(statement, ast.TypeAlias):
+            names = _credential_bound_names(statement.name)
+            if not names:
+                self._emit("unbounded", None, statement)
+            for name in names:
+                self._emit("bind", name, statement)
+            return True
+        return False
+
+    def _imports(self, statement: ast.Import | ast.ImportFrom) -> None:
+        for alias in statement.names:
+            if isinstance(statement, ast.ImportFrom) and alias.name == "*":
+                self._emit("unbounded", None, statement)
+                continue
+            bound = alias.asname or alias.name.split(".", 1)[0]
+            self._emit("bind", bound, statement)
+
+    def _assignment(self, statement: ast.stmt) -> bool:
+        if isinstance(statement, (ast.Import, ast.ImportFrom)):
+            self._imports(statement)
+            return True
+        if isinstance(statement, ast.Assign):
+            self._expression(statement.value)
+            for target in statement.targets:
+                self._target(target, "bind", statement)
+            return True
+        if isinstance(statement, ast.AnnAssign):
+            if statement.value is not None:
+                self._expression(statement.value)
+            self._target(statement.target, "bind", statement)
+            if not self._future_annotations:
+                self._expression(statement.annotation)
+            return True
+        if isinstance(statement, ast.AugAssign):
+            self._target_expressions(statement.target)
+            self._expression(statement.value)
+            self._target_names(statement.target, "bind", statement)
+            return True
+        if isinstance(statement, ast.Delete):
+            for target in statement.targets:
+                self._target(target, "delete", statement)
+            return True
+        if isinstance(statement, (ast.Global, ast.Nonlocal)):
+            for name in statement.names:
+                if name in _CREDENTIAL_GOVERNED_SPECIAL_MEMBERS:
+                    self._emit("unbounded", name, statement)
+            return True
+        return False
+
+    def _pattern(self, pattern: ast.pattern) -> None:
+        if isinstance(pattern, ast.MatchValue):
+            self._expression(pattern.value)
+        elif isinstance(pattern, ast.MatchSingleton):
+            return
+        elif isinstance(pattern, ast.MatchSequence):
+            for child in pattern.patterns:
+                self._pattern(child)
+        elif isinstance(pattern, ast.MatchMapping):
+            self._expressions(pattern.keys)
+            for child in pattern.patterns:
+                self._pattern(child)
+            if pattern.rest is not None:
+                self._emit("bind", pattern.rest, pattern)
+        elif isinstance(pattern, ast.MatchClass):
+            self._expression(pattern.cls)
+            for child in (*pattern.patterns, *pattern.kwd_patterns):
+                self._pattern(child)
+        elif isinstance(pattern, ast.MatchStar):
+            if pattern.name is not None:
+                self._emit("bind", pattern.name, pattern)
+        elif isinstance(pattern, ast.MatchAs):
+            if pattern.pattern is not None:
+                self._pattern(pattern.pattern)
+            if pattern.name is not None:
+                self._emit("bind", pattern.name, pattern)
+        elif isinstance(pattern, ast.MatchOr):
+            for child in pattern.patterns:
+                self._pattern(child)
+        else:
+            self._emit("unbounded", None, pattern)
+
+    def _suite(self, statements: collections.abc.Iterable[ast.stmt]) -> None:
+        for statement in statements:
+            self._statement(statement, direct=False)
+
+    def _try(self, statement: ast.Try | ast.TryStar) -> None:
+        self._suite(statement.body)
+        for handler in statement.handlers:
+            if handler.type is not None:
+                self._expression(handler.type)
+            if handler.name is not None:
+                self._emit("bind", handler.name, handler)
+            self._suite(handler.body)
+        self._suite(statement.orelse)
+        self._suite(statement.finalbody)
+
+    def _match(self, statement: ast.Match) -> None:
+        self._expression(statement.subject)
+        for case in statement.cases:
+            self._pattern(case.pattern)
+            if case.guard is not None:
+                self._expression(case.guard)
+            self._suite(case.body)
+
+    def _control_flow(self, statement: ast.stmt) -> bool:
+        if isinstance(statement, (ast.If, ast.While)):
+            self._expression(statement.test)
+            self._suite(statement.body)
+            self._suite(statement.orelse)
+            return True
+        if isinstance(statement, (ast.For, ast.AsyncFor)):
+            self._expression(statement.iter)
+            self._target(statement.target, "bind", statement)
+            self._suite(statement.body)
+            self._suite(statement.orelse)
+            return True
+        if isinstance(statement, (ast.With, ast.AsyncWith)):
+            for item in statement.items:
+                self._expression(item.context_expr)
+                if item.optional_vars is not None:
+                    self._target(item.optional_vars, "bind", statement)
+            self._suite(statement.body)
+            return True
+        if isinstance(statement, (ast.Try, ast.TryStar)):
+            self._try(statement)
+            return True
+        if isinstance(statement, ast.Match):
+            self._match(statement)
+            return True
+        return False
+
+    def _statement(self, statement: ast.stmt, *, direct: bool) -> None:
+        if self._definition(statement, direct=direct):
+            return
+        if self._assignment(statement):
+            return
+        if self._control_flow(statement):
+            return
+        if isinstance(statement, ast.Expr):
+            self._expression(statement.value)
+            return
+        if isinstance(statement, ast.Assert):
+            self._expression(statement.test)
+            if statement.msg is not None:
+                self._expression(statement.msg)
+            return
+        if isinstance(statement, ast.Raise):
+            if statement.exc is not None:
+                self._expression(statement.exc)
+            if statement.cause is not None:
+                self._expression(statement.cause)
+            return
+        if not isinstance(statement, (ast.Pass, ast.Break, ast.Continue)):
+            self._emit("unbounded", None, statement)
+
+
+def _credential_future_annotations(tree: ast.Module) -> bool:
+    return any(
+        isinstance(statement, ast.ImportFrom)
+        and statement.module == "__future__"
+        and any(alias.name == "annotations" for alias in statement.names)
+        for statement in tree.body
+    )
+
+
+def _credential_class_namespace_events(
+    tree: ast.Module,
+    target: ast.ClassDef,
+) -> tuple[_CredentialNamespaceEvent, ...]:
+    collector = _CredentialNamespaceCollector(
+        future_annotations=_credential_future_annotations(tree)
+    )
+    return collector.collect(target)
+
+
 def _credential_eq_violations(
     method: ast.FunctionDef,
     declared_fields: tuple[str, ...],
@@ -3464,40 +3828,26 @@ def _credential_diagnostic_carrier_violations(
     )
     if _credential_dataclass_options(target) not in accepted_options:
         violations.append("dataclass options differ from the opaque posture")
-    members = []
-    for node in target.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            members.append(node.name)
-        elif isinstance(node, ast.Assign):
-            for assigned in node.targets:
-                members.extend(_credential_bound_names(assigned))
-        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
-            members.extend(_credential_bound_names(node.target))
-        elif isinstance(node, ast.Delete):
-            for deleted in node.targets:
-                members.extend(_credential_bound_names(deleted))
-    prohibited = sorted(
-        {"__hash__", "__repr__", "__str__", "__format__"}.intersection(
-            members
-        )
-    )
-    if prohibited:
+    events = _credential_class_namespace_events(tree, target)
+    if any(event.kind == "unbounded" for event in events):
+        violations.append("class namespace binding analysis is unbounded")
+    if any(
+        event.kind in {"bind", "delete"}
+        and event.name in _CREDENTIAL_DISPLAY_OR_HASH_MEMBERS
+        for event in events
+    ):
         violations.append("class defines forbidden display or hash members")
-    equality_methods = [
-        node
-        for node in target.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name == "__eq__"
-    ]
+    equality_events = [event for event in events if event.name == "__eq__"]
     if (
-        members.count("__eq__") != 1
-        or len(equality_methods) != 1
-        or not isinstance(equality_methods[0], ast.FunctionDef)
+        len(equality_events) != 1
+        or equality_events[0].kind != "bind"
+        or not equality_events[0].direct
+        or not isinstance(equality_events[0].node, ast.FunctionDef)
     ):
         violations.append("class must define exactly one synchronous __eq__")
     else:
         violations.extend(
-            _credential_eq_violations(equality_methods[0], declared_fields)
+            _credential_eq_violations(equality_events[0].node, declared_fields)
         )
     return [prefix + violation for violation in sorted(set(violations))]
 

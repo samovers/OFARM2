@@ -1,24 +1,25 @@
 # OFARM Security Audit Credential Diagnostic Representation RFC v0.1
 
 **Status:** decision version 2 was implemented and merged through pull request
-#349; decision version 3 is a proposed post-merge conformance correction for
-Delivery issue #352 and has no Phase B approval
+#349; decision version 3 is approved for bounded Phase B implementation in
+draft pull request #354, with exact-head review and admission still pending
 
 **Decision:**
 `ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001`
 
-**Decision version:** 3 proposed; version 2 remains the historical approved and
-merged decision
+**Decision version:** 3 approved for bounded Phase B; version 2 remains the
+historical approved and merged decision
 
 **Version history:** version 1 was an unapproved, pre-pull-request task draft.
 Version 2 superseded it because the bounded Phase A review required two
 additional derived carriers and a narrower captured-locals invariant. The task
 user approved version 2, and pull request #349 merged its implementation.
-Version 3 is a new prospective decision because post-merge review demonstrated
-that the `CDR-006` checker implementation did not recognize every
-class-namespace binding form, and the correction requires a new named pull
-request. Version 3 preserves the accepted five-carrier runtime posture and
-changes only structural conformance enforcement.
+Version 3 is a new decision because post-merge review demonstrated that the
+`CDR-006` checker implementation did not recognize every class-namespace
+binding form, and the correction requires a new named pull request. The task
+user approved version 3 after its bounded scope-transition review. Version 3
+preserves the accepted five-carrier runtime posture and changes only structural
+conformance enforcement.
 
 **Issue context:** Tracking Epic
 [#192](https://github.com/samovers/OFARM2/issues/192), original Delivery outcome
@@ -39,8 +40,11 @@ version 2.` on 2026-08-29. The
 [pull-request navigation copy](https://github.com/samovers/OFARM2/pull/349#issuecomment-5461601281)
 is non-authoritative; the task record remains the approval authority.
 
-No version-3 approval exists. Version-2 approval cannot transfer to a new pull
-request or authorize the post-merge correction.
+**Version-3 approval evidence:** after the zero-Blocker bounded reviews of the
+RFC-only head, the task user approved the exact sentence `I approve OFARM2
+decision ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001
+version 3.` on 2026-08-29. The task record remains the approval authority.
+Version-2 approval did not transfer to the post-merge correction.
 
 **Primary trust boundary:** credential-bearing diagnostic-representation
 structural conformance for the five exact dataclass carriers already reached by
@@ -1067,7 +1071,7 @@ syntax trees are sufficient.
 
 ### 15.7 Proposed architecture and smallest complete vertical slice
 
-The checker will replace the current shallow `members` list construction with
+The checker replaces the current shallow `members` list construction with
 one private syntax-directed collector that returns ordered class-namespace
 events. An event needs only kind (`bind`, `delete`, or `unbounded`), name when
 known, origin node category, and whether it is the exact direct function node.
@@ -1085,7 +1089,7 @@ combines those existing authorities with the event verdict:
    deletion or alternate binding; and
 5. run the existing exact equality-body validation on that same function node.
 
-Hostile tests will use detached source strings and the existing helper. At
+Hostile tests use detached source strings and the existing helper. At
 minimum they cover the review's nested-`if` and import reproductions, each
 event category in `CDR3-002`, duplicate and deletion preservation, wildcard
 and direct dynamic-namespace refusal, and continued acceptance of the exact
@@ -1181,7 +1185,7 @@ CPython 3.12 baseline environment. The RFC-only head receives one exact-head
 Phase A review. No expensive hosted baseline is requested, monitored,
 diagnosed, or reused for the design-only head.
 
-After a valid version-3 approval, Phase B verification is:
+Approved Phase B verification is:
 
 1. reproduce this traceability and confirm the named draft pull request and
    absence of cancellation;
@@ -1224,24 +1228,30 @@ Current disposition:
 
 - **Post-merge version-2 conformance Blockers:** one, `CDR-006`, demonstrated
   by review #5057956079;
-- **Version-3 Phase A content Blockers:** one scope-transition ambiguity was
-  demonstrated at the prior head by
+- **Version-3 Phase A content Blockers:** zero. One scope-transition ambiguity
+  was demonstrated at the prior head by
   [review #5058057125](https://github.com/samovers/OFARM2/pull/354#pullrequestreview-5058057125);
-  this amendment makes the transition table mandatory, and closure is pending
-  bounded re-review of `CDR3-002`, `CDR3-005`, affected negative cases, and
-  traceability;
+  the mandatory transition table and paired evidence closed it in bounded
+  [review #5058093561](https://github.com/samovers/OFARM2/pull/354#pullrequestreview-5058093561)
+  and confirming
+  [review #5058142022](https://github.com/samovers/OFARM2/pull/354#pullrequestreview-5058142022);
+- **Version-3 approval:** the exact same-task decision sentence was recognized
+  on 2026-08-29;
+- **Version-3 implementation review:** pending at the committed implementation
+  head;
 - **New Follow-ups introduced by version 3:** none;
 - **Existing separate Follow-ups:** four in section 15.9;
 - **Preferences:** none recorded;
 - **Current credential disclosure demonstrated in the merged carriers:** zero;
 - **Governed runtime or database regressions demonstrated:** zero; and
-- **Version-3 Phase B:** unauthorized.
+- **Version-3 Phase B:** authorized only inside the approved checker, focused
+  test, mechanically required inventory, and durable-RFC boundary. Admission,
+  hosted baselines, merge, and issue-state changes remain separately gated.
 
 This RFC and the Phase A description bind draft pull request #354. The earlier
-version-3 decision card is withdrawn, and no version-3 approval is recognized.
-This amended exact head must receive a bounded review of only `CDR3-002`,
-`CDR3-005`, their affected negative cases, and traceability. A replacement live
-card may be shown only if that review demonstrates zero remaining Blockers.
+version-3 decision card was withdrawn. A replacement complete card was shown
+only after the bounded reviews demonstrated zero remaining Blockers, and the
+exact later task-user approval is now recognized.
 
 Only the unique complete version-3 decision card in the same Codex task may
 request this exact later user message:
@@ -1250,6 +1260,7 @@ request this exact later user message:
 I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001 version 3.
 ```
 
-Version-2 approval does not satisfy that sentence. Phase A stops for the new
-approval. No implementation, admission, expensive hosted baseline, merge, or
-issue-state change is authorized before it.
+Version-2 approval does not satisfy that sentence. The version-3 approval stop
+is satisfied for bounded implementation only. No admission, expensive hosted
+baseline, merge, issue-state change, deployment, or production-composition
+authority follows from that approval.

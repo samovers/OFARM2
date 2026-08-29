@@ -9216,6 +9216,171 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_does_not_treat_attributes_as_class_names[attribute-assignment]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_does_not_treat_attributes_as_class_names[attribute-deletion]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_excludes_comprehension_scope[filter]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_excludes_comprehension_scope[later-iterable]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_excludes_comprehension_scope[result]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_excludes_comprehension_scope[target]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_excludes_nested_or_lazy_scope[async-function-body]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_excludes_nested_or_lazy_scope[function-body]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_excludes_nested_or_lazy_scope[future-annotation]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_excludes_nested_or_lazy_scope[lambda-body]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_excludes_nested_or_lazy_scope[lazy-type-alias]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_excludes_nested_or_lazy_scope[nested-class-body]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_definition_time_scope[async-function-default]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_definition_time_scope[eager-annotation]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_definition_time_scope[function-decorator]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_definition_time_scope[function-default]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_definition_time_scope[lambda-default]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_definition_time_scope[nested-class-base]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_definition_time_scope[nested-class-decorator]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_definition_time_scope[nested-class-keyword]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_leftmost_iterable[dict]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_leftmost_iterable[generator]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_leftmost_iterable[list]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_leftmost_iterable[set]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_ordinary_evaluated_expressions[attribute-assignment-base]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_ordinary_evaluated_expressions[attribute-delete-base]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_ordinary_evaluated_expressions[augmented-target-index]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_ordinary_evaluated_expressions[context-target-index]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_ordinary_evaluated_expressions[loop-target-base]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_ordinary_evaluated_expressions[right-hand-side]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_ordinary_evaluated_expressions[subscript-assignment-base]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_ordinary_evaluated_expressions[subscript-assignment-index]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_inspects_ordinary_evaluated_expressions[subscript-delete-index]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_display_and_hash_members[__format__]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -9237,6 +9402,126 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_duplicate_target_class",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[annotated-assign]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[assign]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[assignment-expression]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[async-for-target]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[async-with-target]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[augmented-assign]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[conditional-function-name]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[delete]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[exception-group-name]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[exception-name]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[for-target]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[from-import]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[if-suite]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[import]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[nested-class-name]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[type-alias]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[unpack]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[while-suite]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_binding_form[with-target]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_match_capture[capture]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_match_capture[class-as]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_match_capture[mapping-rest]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_match_capture[or-pattern]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_every_match_capture[star]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -9357,6 +9642,46 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_invalid_protected_authority[outside-declared-inventory]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_unbounded_forms[comprehension-assignment-expression]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_unbounded_forms[generic-async-function]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_unbounded_forms[generic-class]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_unbounded_forms[generic-function]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_unbounded_forms[global]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_unbounded_forms[nonlocal]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_unbounded_forms[wildcard-import]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_namespace_events_preserve_order_origin_and_identity",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -18241,8 +18566,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "00562276906c61f11b79e5d8b6f653b5fc496561166c1e4b46fc930b1e8140f4",
-  "entryCount": 3648,
+  "entriesSha256": "c7123be17b9148d2da59fcaacbb7266cccba7aa024a99ce9d475acc549dfc45b",
+  "entryCount": 3713,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
