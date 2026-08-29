@@ -64,9 +64,9 @@ Observed evidence on 2026-08-29:
 
 ## 2. Goal and recommended decision
 
-Return final merge authority to the task user and make code excellence an
-explicit acceptance invariant without restoring micro-PRs or repeated
-artifact-level approvals.
+Return final control over AI merge actions to the task user and make code
+excellence an explicit acceptance invariant without restoring micro-PRs or
+repeated artifact-level approvals.
 
 The recommended decision has one outcome: **the task user accepts the quality
 of the exact completed implementation before the AI may merge it.** The user
@@ -98,7 +98,31 @@ This amendment does not:
   pull request; or
 - introduce an automatic-merge opt-out or exception in version 1.
 
-## 4. Authority map
+## 4. Closed amendment to the parent workflow
+
+On activation, this RFC prospectively supersedes only these parent-workflow
+mechanics for new AI-operated Delivery work:
+
+- the AI's standing authority to merge after technical gates;
+- the rule that pre-implementation semantic approval also authorizes merge;
+- the direct transition from final scope recheck to merge;
+- the routine-work rule permitting AI merge without a task-user stop;
+- the normal target of one user approval stop for high-risk work; and
+- the Blocker definition's omission of demonstrated code-excellence failures.
+
+The normal target becomes two task-user decisions for approval-governed work—
+semantic approval before implementation and exact-head authorization after the
+final packet—and one final authorization for routine AI-operated work. The
+extra decision is the capability this amendment deliberately adds, not process
+drift.
+
+All one-capability, one-boundary, risk-shaped Phase A, approval provenance,
+review, admission, publication, recovery, cancellation, and substantive OFARM
+requirements remain. The final task-user gate controls AI merge actions. It
+does not prevent the repository owner from manually merging outside the AI
+task, and the AI may not infer permission from such an external possibility.
+
+## 5. Authority map
 
 - The task user owns semantic approval, refusal, cancellation, requested
   changes, final quality acceptance, and exact-head merge authorization.
@@ -120,7 +144,7 @@ This amendment does not:
 - Existing OFARM, runtime, database, tenant, key, audit, deployment, and
   publication authorities retain their current owners.
 
-## 5. Trust model
+## 6. Trust model
 
 ### Protected assets
 
@@ -158,7 +182,7 @@ pre-deployment threat model. Mechanical separation requires a future distinct
 agent identity and protected branch; this amendment makes no such credential or
 repository-setting change.
 
-## 6. Primary risk and containment
+## 7. Primary risk and containment
 
 The primary risk is replacing silent AI merge authority with an unbounded,
 subjective review loop that recreates the delay this workflow removed.
@@ -174,12 +198,12 @@ Containment has four parts:
 4. a requested change outside the approved capability or boundary becomes
    separate Delivery work or a new decision rather than expanding the PR.
 
-## 7. Stable invariants
+## 8. Stable invariants
 
 ### Human final acceptance
 
-- **HFQ-001 — Final packet before merge.** Every new Delivery PR reaches a
-  complete exact-head final packet before any AI merge action.
+- **HFQ-001 — Final packet before AI merge.** Every Delivery PR in which the AI
+  would perform the merge reaches a complete exact-head final packet first.
 - **HFQ-002 — Mandatory yield.** The AI presents the packet and ends its turn.
   It cannot present the packet and merge in one turn.
 - **HFQ-003 — Exact later authorization.** Only the entire visible text of a
@@ -223,7 +247,7 @@ Containment has four parts:
 - **EXC-007 — Taste is not a Blocker.** Naming, formatting, and preference among
   designs satisfying EXC-001 through EXC-006 remain non-blocking.
 
-## 8. Final packet and authorization
+## 9. Final packet and authorization
 
 The final packet is compact and contains:
 
@@ -254,7 +278,7 @@ There is no automatic-merge authorization path in version 1. If evidence later
 shows a need, it requires its own explicit workflow amendment rather than an
 informal exception.
 
-## 9. Review classification
+## 10. Review classification
 
 The existing Blocker/Follow-up/Preference model remains, with one addition.
 
@@ -277,7 +301,7 @@ The task user is not limited to reviewer classifications at the final gate.
 The user may decline authorization or request in-boundary changes for any
 reason. The AI still must enforce scope and reapproval boundaries.
 
-## 10. State and ordering
+## 11. State and ordering
 
 For approval-governed work:
 
@@ -299,8 +323,8 @@ DELIVERY_ISSUE_DEFINED
   -> MERGE_AND_CLOSE_DELIVERY_ISSUE
 ```
 
-Routine work omits the semantic decision-card states but never omits the final
-packet, yield, and exact-head authorization states.
+Routine AI-operated work omits the semantic decision-card states but never
+omits the final packet, yield, and exact-head authorization states.
 
 If the user requests an in-boundary correction:
 
@@ -315,7 +339,7 @@ READY_FOR_USER_FINAL_REVIEW
 No response leaves the PR open and unmerged. Waiting is not approval, failure,
 or authority to create a replacement PR.
 
-## 11. Proposed architecture and smallest coherent change
+## 12. Proposed architecture and smallest coherent change
 
 Root `AGENTS.md` remains the one source of standing procedure. Phase B makes a
 closed semantic edit across the four active surfaces:
@@ -337,7 +361,7 @@ No automation, new status store, GitHub check, comment protocol, quality score,
 or compatibility shim is needed. The state already exists in the task and PR;
 the correction changes who may perform the final transition.
 
-## 12. Failure cases and negative evidence
+## 13. Failure cases and negative evidence
 
 | Case | Required result |
 | --- | --- |
@@ -353,7 +377,7 @@ the correction changes who may perform the final transition.
 | Final user request adds another capability | Stop for a separate Delivery issue or new semantic decision |
 | Another task previously authorized an open PR to auto-merge | Not silently revoked; user must stop or supersede it in that owning task |
 
-## 13. Verification
+## 14. Verification
 
 Phase A verification:
 
@@ -379,7 +403,7 @@ Phase B verification:
 - the new final packet and exact-head task-user merge authorization for this PR
   itself.
 
-## 14. Provisional posture and review point
+## 15. Provisional posture and review point
 
 This is acceptable only for pre-deployment repository development. It changes
 repository merge authority and code-quality review, not production authority or
@@ -404,11 +428,12 @@ The rule remains active after the review point unless an explicit amendment
 changes it. The review creates evidence; it does not automatically relax the
 human gate.
 
-## 15. Decision and reapproval triggers
+## 16. Decision and reapproval triggers
 
 Version 1 recommends:
 
-- mandatory exact-head final user authorization for every new Delivery PR;
+- mandatory exact-head final user authorization before every AI merge of a
+  Delivery PR;
 - no automatic-merge exception;
 - concrete EXC invariants as merge-blocking acceptance conditions; and
 - the five-path prospective implementation boundary.
@@ -426,7 +451,7 @@ A new decision version is required if Phase B proposes:
 - any runtime, production, deployment, law, contract, or publication-control
   effect.
 
-## 16. Phase A review disposition
+## 17. Phase A review disposition
 
 Blockers, Follow-ups, and Preferences are recorded after review of this exact
 Phase A head. Phase B must not begin until the visible version-1 decision card
