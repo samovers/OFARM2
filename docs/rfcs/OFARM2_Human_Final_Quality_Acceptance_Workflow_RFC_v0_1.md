@@ -116,6 +116,12 @@ final packet—and one final authorization for routine AI-operated work. The
 extra decision is the capability this amendment deliberately adds, not process
 drift.
 
+The first named consumer is this amendment's own PR #356: despite the parent
+workflow still being active, the task user's instruction is narrower and this
+PR will stop for the proposed exact-head authorization before merge. The first
+prospective runtime-development consumers are #353 and #160 if their
+implementation PRs are created after this amendment activates.
+
 All one-capability, one-boundary, risk-shaped Phase A, approval provenance,
 review, admission, publication, recovery, cancellation, and substantive OFARM
 requirements remain. The final task-user gate controls AI merge actions. It
