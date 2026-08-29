@@ -974,18 +974,39 @@ events for the following syntax:
 | `Global` or `Nonlocal` naming a governed special member | Reject as ambiguous authority redirection rather than treating it as a safe class binding |
 
 The collector recurses through `if`, `while`, loop, context-manager, exception,
-and match suites executed as part of the target class body. It inspects
-definition-time expressions evaluated in the surrounding class namespace,
-including decorators, bases, keywords, annotations, defaults, return
-annotations, guards, tests, iterators, context expressions, and assignment
-expression values.
+and match suites executed as part of the target class body. It derives whether
+`from __future__ import annotations` is active from the same authenticated
+module tree. It then applies this mandatory scope-transition table; there is no
+optional or generic descent across a scope-forming expression:
 
-It does not descend into nested function, async-function, lambda,
-comprehension, or nested-class bodies because those bodies do not execute in
-the target class namespace. It may inspect their definition-time expressions
-without treating parameters, comprehension targets, or body locals as target-
-class bindings. Direct calls to `exec`, `eval`, `locals`, or `vars` in that
-outer execution surface, and wildcard imports there, fail as unbounded.
+| AST form | Expressions inspected as target-class execution | Explicitly excluded nested or deferred execution |
+| --- | --- | --- |
+| Ordinary class-suite statement | Every value, test, guard, iterator, context expression, and other expression directly evaluated by that statement; child suites recurse under this same table | Any child node assigned a narrower scope below |
+| `FunctionDef` or `AsyncFunctionDef` | Decorator expressions, positional defaults, and non-`None` keyword defaults; parameter and return annotations only when future annotations are inactive; then bind the function name | Function body and parameter bindings; annotations when future annotations are active |
+| `Lambda` | Positional defaults and non-`None` keyword defaults | Lambda body and parameter bindings |
+| `ListComp`, `SetComp`, `DictComp`, or `GeneratorExp` | Only the iterable expression of the leftmost generator | Element, key, value, comprehension targets, filters, and every later generator clause, including its iterable expression |
+| Nested `ClassDef` | Decorator, base, and keyword-value expressions evaluated in the enclosing target-class scope; then bind the nested-class name after construction and decoration | Nested class body and its annotation scope |
+| `TypeAlias` | Bind the alias target immediately | Lazily evaluated alias value and type-parameter annotation scope |
+| `AnnAssign` | Value expression when present; annotation expression only when future annotations are inactive; record the simple-name target under the existing structural field rule | Annotation expression when future annotations are active |
+
+Non-empty PEP 695 `type_params` on a function, async function, or nested class
+fail as unsupported/unbounded rather than relying on an unstated annotation-
+scope traversal. `TypeAlias` is the one explicitly supported PEP 695 form: its
+name is bound immediately, while its value and type parameters are lazy and
+are never walked as target-class execution.
+
+Any `NamedExpr` inside a comprehension or generator expression fails as
+unsupported/unbounded. Python 3.12 prohibits assignment expressions that
+would bind from a comprehension into an enclosing class scope; the checker
+does not reinterpret or partially accept such syntax.
+
+Direct calls to `exec`, `eval`, `locals`, or `vars` fail as unbounded only when
+they occur in an expression that the table marks as target-class execution.
+The same call in a function or lambda body, a comprehension result/filter/later
+clause, a nested-class body, a future-deferred annotation, or a lazy type-alias
+value is outside the target-class event surface and cannot cause a target-
+class violation by itself. Wildcard imports in a governed class suite remain
+unbounded.
 
 Every event is retained. A set of final names is insufficient because a valid
 direct `__eq__` followed by a hidden rebinding or deletion must not collapse to
@@ -1009,10 +1030,14 @@ nonlocal declaration, or deletion of `__eq__` fails.
 #### `CDR3-005` — nested scopes neither bypass nor overreach
 
 A special-name binding in a class-scope control-flow suite is a target-class
-event and fails. The same spelling used only as a local inside a nested
-function, lambda, comprehension, or nested-class body is not a target-class
-event and does not fail by itself. Definition-time expressions remain governed
-as specified in `CDR3-002`.
+event and fails. Function and lambda defaults, function decorators, eager
+annotations, and nested-class decorators, bases, and keyword values are target-
+class execution and remain governed. Only the leftmost comprehension iterable
+is target-class execution; its targets, result expressions, filters, and later
+clauses are in the implicit comprehension scope. Function and lambda bodies,
+nested-class bodies, future-deferred annotations, and lazy type-alias values
+are also excluded. The same special-name spelling used only in one of those
+excluded scopes does not create a target-class event or fail by itself.
 
 #### `CDR3-006` — authenticated inputs and bounded diagnostics are preserved
 
@@ -1030,10 +1055,10 @@ not permission to accept the source.
 | Invariant | Supported entry, preconditions, and counterexample | Material consequence and required result |
 | --- | --- | --- |
 | `CDR3-001` | A production operator invokes `kernel.api.create_app()` with accepted production configuration, which constructs `RuntimeConfig`; a contributor's proposed checker fix also edits that already-passing carrier | Runtime configuration behavior could change outside the correction; base-to-head path audit and review reject the carrier edit |
-| `CDR3-002` | With an accepted password-bearing production DSN, a contributor places `if True: __repr__ = lambda self: self.pg_dsn` in `RuntimeConfig` before `kernel.api.create_app()` constructs it | Routine representation can disclose the DSN while the current shallow checker passes; event collection sees the nested assignment and the strengthened checker fails |
+| `CDR3-002` | With an accepted password-bearing production DSN, a contributor puts `exec("__repr__ = lambda self: self.pg_dsn")` in the leftmost iterable of a `RuntimeConfig` class-body comprehension, or in a method default, before `kernel.api.create_app()` constructs it | Those expressions execute in the class namespace and can install a leaking method while whole-comprehension or whole-function skipping passes; the exact transition table visits them, classifies direct `exec` as unbounded, and fails |
 | `CDR3-003` | Before `SecurityAuditProcessCrashReconciliationRunner.run()` receives an accepted `ProcessCrashReconciliationSecrets`, a contributor adds `from helper import leaking_repr as __repr__`, or binds `__hash__` through another governed event form | Conninfo can become display-reachable or dataclass hash posture can change while shallow scanning passes; every binding and deletion variant fails before source acceptance |
 | `CDR3-004` | Before `SecurityAuditStoreLossRecoveryRunner.run()` receives accepted secrets, a contributor leaves the direct `StoreLossRecoverySecrets.__eq__` definition and adds a class-scope branch that executes `del __eq__` | Dataclass decoration can restore generated field-drilling equality and pinned pytest can display a differing password; the deletion remains a second event and fails |
-| `CDR3-005` | The supported store-loss runner derives `_Routes`; a contributor uses `__repr__` only as a local inside an ordinary method and, in the hostile pair, binds outer `_Routes.__repr__` inside a class-scope branch | The nested local cannot affect `_Routes` and must not create a false failure; the outer class-suite binding can expose routes and must fail |
+| `CDR3-005` | The supported store-loss runner derives `_Routes`; paired sources put direct `exec` in the leftmost iterable versus the result expression of a non-empty comprehension, use `__repr__` as the comprehension target, put it inside a nested-class body, and place it in a lazy `TypeAlias` value | Only the leftmost iterable is target-class execution and must fail; the result, target, nested body, and lazy alias value cannot bind `_Routes.__repr__` and must not create a target-class event |
 | `CDR3-006` | The supported store-loss validation path derives `_ValidatedInvocation`, and the governed architecture entry receives its authenticated detached AST; a contributor's proposed checker fix rereads the file or imports the target module | Source substitution or target execution could split authority and expose values; authenticated-input hostile tests reject the alternate path before acceptance |
 
 No negative case requires private-field mutation, a fabricated runtime state,
@@ -1063,8 +1088,22 @@ combines those existing authorities with the event verdict:
 Hostile tests will use detached source strings and the existing helper. At
 minimum they cover the review's nested-`if` and import reproductions, each
 event category in `CDR3-002`, duplicate and deletion preservation, wildcard
-and direct dynamic-namespace refusal, a nested-scope non-overreach case, and
-continued acceptance of the exact five authenticated carrier trees.
+and direct dynamic-namespace refusal, and continued acceptance of the exact
+five authenticated carrier trees. Scope-transition pairs must additionally
+prove:
+
+- direct `exec` in a leftmost comprehension iterable fails, while direct
+  `exec` in the result expression of an actually iterated comprehension does
+  not create a target-class event;
+- a comprehension target named `__repr__` remains local to the comprehension;
+- direct `exec` in a function or lambda default fails, while the same call in
+  its body does not create a target-class event;
+- direct `exec` in a nested-class base or decorator expression fails, while
+  the same call in the nested-class body does not create an outer event;
+- an eager annotation is inspected, while a future-deferred annotation is not;
+  and
+- a `TypeAlias` name is bound immediately, while its lazy value is not walked
+  as target-class execution.
 
 This is the smallest coherent vertical slice because the defect is in one
 structural guard. Editing any carrier, adding runtime redaction, reflecting on
@@ -1130,10 +1169,10 @@ The separate follow-ups remain:
 | Invariant | Owning implementation | Hostile or negative test | Acceptance evidence | Smallest verification |
 | --- | --- | --- | --- | --- |
 | `CDR3-001` | No carrier implementation path; base-to-head exclusion | Detect any diff in the three carrier modules | Exact current five carriers pass strengthened rule unchanged | Path diff plus focused checker suite |
-| `CDR3-002` | New private class-namespace event collector | Parametrized definitions, imports, assignments, loops, contexts, exceptions, match, walrus, type alias, global/nonlocal, wildcard, and direct dynamic cases | Every supported event is observed or refused | Focused `test_rewrite_architecture_check.py` cases |
+| `CDR3-002` | New private class-namespace event collector and mandatory scope-transition dispatch | Parametrized binding taxonomy plus leftmost-comprehension-iterable, function/lambda default, nested-class header, eager-annotation, and unsupported-generic cases | Every supported event and outer execution expression is observed or refused at its exact Python 3.12 scope | Focused `test_rewrite_architecture_check.py` cases |
 | `CDR3-003` | Event verdict in `_credential_diagnostic_carrier_violations()` | Bind and delete each display/hash name through direct and nested forms | Every mutation produces bounded violation | Focused hostile checker matrix |
 | `CDR3-004` | Event verdict plus existing `_credential_eq_violations()` | Nested, async, imported, assigned, duplicated, and deleted `__eq__` | One direct exact method passes; every alternate event fails | Focused equality-binding cases |
-| `CDR3-005` | Collector scope boundaries | Special names inside nested bodies versus outer definition-time expressions | Nested locals do not fail; outer events do fail | Paired non-overreach/bypass cases |
+| `CDR3-005` | Collector scope-transition dispatch | Paired leftmost versus result/later comprehension expressions, function/lambda default versus body, nested-class header versus body, eager versus deferred annotation, and alias name versus lazy value | Outer class execution fails when hostile; nested, implicit, or lazy scopes create no target-class event | Paired non-overreach/bypass cases |
 | `CDR3-006` | Existing `_check_credential_diagnostic_carriers()` snapshot interface | Missing snapshot/AST and filesystem/import substitution attempts | Detached authenticated trees alone determine verdict | Existing and extended authenticated-input tests |
 
 Phase A permits only mandatory cheap checks. Before each Phase A commit,
@@ -1185,7 +1224,12 @@ Current disposition:
 
 - **Post-merge version-2 conformance Blockers:** one, `CDR-006`, demonstrated
   by review #5057956079;
-- **Version-3 Phase A content Blockers:** pending exact-head review;
+- **Version-3 Phase A content Blockers:** one scope-transition ambiguity was
+  demonstrated at the prior head by
+  [review #5058057125](https://github.com/samovers/OFARM2/pull/354#pullrequestreview-5058057125);
+  this amendment makes the transition table mandatory, and closure is pending
+  bounded re-review of `CDR3-002`, `CDR3-005`, affected negative cases, and
+  traceability;
 - **New Follow-ups introduced by version 3:** none;
 - **Existing separate Follow-ups:** four in section 15.9;
 - **Preferences:** none recorded;
@@ -1193,10 +1237,11 @@ Current disposition:
 - **Governed runtime or database regressions demonstrated:** zero; and
 - **Version-3 Phase B:** unauthorized.
 
-This RFC and the Phase A description bind draft pull request #354. The exact
-Phase A head must receive one full design review. Every demonstrated design
-Blocker must be resolved at a new head and the affected contract re-reviewed
-before a live card is shown.
+This RFC and the Phase A description bind draft pull request #354. The earlier
+version-3 decision card is withdrawn, and no version-3 approval is recognized.
+This amended exact head must receive a bounded review of only `CDR3-002`,
+`CDR3-005`, their affected negative cases, and traceability. A replacement live
+card may be shown only if that review demonstrates zero remaining Blockers.
 
 Only the unique complete version-3 decision card in the same Codex task may
 request this exact later user message:
