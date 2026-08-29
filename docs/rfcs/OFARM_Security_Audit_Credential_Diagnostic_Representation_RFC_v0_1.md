@@ -42,8 +42,8 @@ correction Delivery issue [#357](https://github.com/samovers/OFARM2/issues/357)
 **Merged version-3 pull request:**
 [#354](https://github.com/samovers/OFARM2/pull/354)
 
-**Draft version-4 pull request:** pending initial Phase A publication from
-`agent/357-parenthesized-annotated-field-phase-a`
+**Draft version-4 pull request:**
+[#358](https://github.com/samovers/OFARM2/pull/358)
 
 **Version-2 approval evidence:** the task user approved the exact sentence `I approve
 OFARM2 decision ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001
@@ -1322,9 +1322,8 @@ decision.
 
 The proposed decision is
 `ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001`, version 4.
-It will bind Delivery issue #357 and the one draft pull request created from
-branch `agent/357-parenthesized-annotated-field-phase-a`; the pull-request
-number is pending initial Phase A publication.
+It binds Delivery issue #357 and draft pull request #358, created from branch
+`agent/357-parenthesized-annotated-field-phase-a`.
 
 The one independently reviewable capability is an exact CPython 3.12
 `AnnAssign.simple` distinction inside the existing five-carrier structural
