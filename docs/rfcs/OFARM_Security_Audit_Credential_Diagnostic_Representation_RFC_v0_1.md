@@ -1,14 +1,16 @@
 # OFARM Security Audit Credential Diagnostic Representation RFC v0.1
 
-**Status:** decision version 2 was implemented and merged through pull request
-#349; decision version 3 is approved for bounded Phase B implementation in
-draft pull request #354, with exact-head review and admission still pending
+**Status:** decision versions 2 and 3 were implemented and merged through pull
+requests #349 and #354. Post-merge review #5058662084 demonstrates one narrower
+parenthesized-annotation conformance defect. Decision version 4 is proposed in
+Delivery issue #357; Phase B is unauthorized pending exact-head Phase A review
+and later task-user approval.
 
 **Decision:**
 `ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001`
 
-**Decision version:** 3 approved for bounded Phase B; version 2 remains the
-historical approved and merged decision
+**Decision version:** 4 proposed; versions 2 and 3 remain historical approved
+and merged decisions
 
 **Version history:** version 1 was an unapproved, pre-pull-request task draft.
 Version 2 superseded it because the bounded Phase A review required two
@@ -16,23 +18,32 @@ additional derived carriers and a narrower captured-locals invariant. The task
 user approved version 2, and pull request #349 merged its implementation.
 Version 3 is a new decision because post-merge review demonstrated that the
 `CDR-006` checker implementation did not recognize every class-namespace
-binding form, and the correction requires a new named pull request. The task
+binding form, and the correction required a new named pull request. The task
 user approved version 3 after its bounded scope-transition review. Version 3
-preserves the accepted five-carrier runtime posture and changes only structural
-conformance enforcement.
+preserved the accepted five-carrier runtime posture and changed only structural
+conformance enforcement. Version 4 is a new decision because post-merge review
+of merged version 3 demonstrated that the checker conflates a parenthesized
+annotated name with a real dataclass field declaration and must bind a new
+Delivery issue and pull request.
 
 **Issue context:** Tracking Epic
 [#192](https://github.com/samovers/OFARM2/issues/192), original Delivery outcome
-[#350](https://github.com/samovers/OFARM2/issues/350), and correction Delivery
-issue [#352](https://github.com/samovers/OFARM2/issues/352)
+[#350](https://github.com/samovers/OFARM2/issues/350), completed correction
+Delivery issue [#352](https://github.com/samovers/OFARM2/issues/352), and current
+correction Delivery issue [#357](https://github.com/samovers/OFARM2/issues/357)
 
 **Version-3 base:** `a1e2d343b59a5715e07fcb550a459b61dc6541da`
+
+**Version-4 base:** `774823336f25e4f9cef79fd7b6f51d1dda3d6745`
 
 **Merged version-2 pull request:**
 [#349](https://github.com/samovers/OFARM2/pull/349)
 
-**Draft version-3 pull request:**
+**Merged version-3 pull request:**
 [#354](https://github.com/samovers/OFARM2/pull/354)
+
+**Draft version-4 pull request:** pending initial Phase A publication from
+`agent/357-parenthesized-annotated-field-phase-a`
 
 **Version-2 approval evidence:** the task user approved the exact sentence `I approve
 OFARM2 decision ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001
@@ -1264,3 +1275,325 @@ Version-2 approval does not satisfy that sentence. The version-3 approval stop
 is satisfied for bounded implementation only. No admission, expensive hosted
 baseline, merge, issue-state change, deployment, or production-composition
 authority follows from that approval.
+
+## 16. Version 4: parenthesized annotated-field conformance
+
+### 16.1 Post-merge disposition and demonstrated defect
+
+Version 3 merged through pull request #354 as commit
+`774823336f25e4f9cef79fd7b6f51d1dda3d6745`. Its reviewed implementation head
+`8d4d12043f36c80e752ee723b08a132d8d30b3eb` is the merge commit's second
+parent, and the reviewed tree was preserved. Source run `33255202798` passed
+both 3,713-test baselines, clean-run equivalence, both native verifier lanes,
+and the platform lane. Trusted publication run `33256249350` completed and
+sealed receipt artifact `9715904610`.
+
+The version-3 ordered namespace-event collector closes the demonstrated import
+and class-suite-control-flow special-member bypass. Its event ordering,
+definition-time scope transitions, direct synchronous `__eq__` identity, and
+authenticated detached-AST boundary remain accepted.
+
+Post-merge
+[review #5058662084](https://github.com/samovers/OFARM2/pull/354#pullrequestreview-5058662084)
+demonstrates one narrower false-success verdict. The field inventory and the
+collector both treat every direct `AnnAssign` with an `ast.Name` target as a
+real annotated field/name event without reading `AnnAssign.simple`. CPython
+3.12 sets `simple == 0` for a parenthesized name. That name is not placed in
+the class `__annotations__` mapping and is not a dataclass field declaration.
+
+Replacing one governed declaration such as `first: str` with `(first): str`
+therefore leaves the checker's apparent name tuple unchanged while the actual
+dataclass constructor, slots, generated hash inventory, and explicit equality
+inputs no longer agree. This is one structural-conformance Blocker, not a
+demonstrated credential disclosure in the five current carriers and not a
+governed runtime or database regression.
+
+The same review records one repository-currentness Follow-up: the historical
+version-3 section still describes its then-live draft, review, admission, and
+merge gates. This section appends the completed disposition rather than
+rewriting that historical Phase A and pre-merge record.
+
+Pull request #354 and Delivery issue #352 remain completed and are not
+recoverable. Delivery issue #357 owns the new correction. Tracking Epic #192
+and Delivery issue #350 remain open and receive no state authority from this
+decision.
+
+### 16.2 Decision, capability, and primary trust boundary
+
+The proposed decision is
+`ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001`, version 4.
+It will bind Delivery issue #357 and the one draft pull request created from
+branch `agent/357-parenthesized-annotated-field-phase-a`; the pull-request
+number is pending initial Phase A publication.
+
+The one independently reviewable capability is an exact CPython 3.12
+`AnnAssign.simple` distinction inside the existing five-carrier structural
+guard. A direct simple annotated name remains a governed field declaration. A
+parenthesized or other non-simple annotated target is never counted as a
+dataclass field and follows its actual assignment and expression-evaluation
+semantics.
+
+The primary trust boundary is credential-bearing diagnostic-representation
+structural conformance for the exact direct annotated-field inventory and
+class-namespace events of:
+
+1. `RuntimeConfig`;
+2. `ProcessCrashReconciliationSecrets`;
+3. `StoreLossRecoverySecrets`;
+4. `_Routes`; and
+5. `_ValidatedInvocation`.
+
+The primary risk is a false-success architecture verdict for source whose
+spelling appears to preserve the declared fields while CPython and dataclasses
+construct a different class. The containment rule is closed: only a direct
+`AnnAssign` with `target` equal to `ast.Name` and `simple == 1` is a governed
+field declaration. Every `simple == 0` form is excluded from field inventory
+and modeled according to value presence, target shape, evaluation order, and
+future-annotation posture.
+
+Protected assets are password-bearing DSNs and other admitted secret values
+reachable through the five carriers, plus the integrity of the structural
+verdict that guards their representation, equality, and hash posture.
+
+Trusted components are CPython 3.12.13 parser/compiler semantics, the existing
+authenticated `PythonSourceSnapshotV1`, the detached AST map, the exact
+`_CREDENTIAL_DIAGNOSTIC_CARRIERS` descriptors, and the accepted version-3
+namespace-event and equality-body authorities.
+
+Untrusted input is any future edit to a governed target-class suite, including
+parenthesized annotated names and dynamic expressions in annotated assignment
+values, targets, or annotations. Excluded attacker capabilities remain a
+compromised interpreter or dependency, post-snapshot source substitution,
+arbitrary code already executing in process, debugger/operator compromise, and
+post-construction runtime class mutation.
+
+### 16.3 Permitted effects, non-effects, and authority map
+
+Permitted effects are:
+
+- require `simple == 1` in the existing direct field-inventory helper;
+- refine only the `AnnAssign` branch of the accepted namespace collector;
+- add focused hostile and paired non-overreach tests for the closed transition;
+- regenerate the canonical review-baseline test inventory only for new
+  collected node IDs; and
+- append the durable merge, defect, correction, and final-disposition record to
+  this RFC.
+
+Non-effects and non-goals are:
+
+- no edit to any of the five carrier implementation modules;
+- no representation, equality, hash, constructor, validation, credential
+  creation, access, derivation, ownership, custody, handoff, or destruction
+  change;
+- no target import or execution, runtime reflection, direct filesystem reread,
+  broad symbol table, general dataclass framework, or annotation-type
+  resolution;
+- no SQL, migration, role, grant, provider, IAM, production composition,
+  deployment, release, certification, current-compliance, or security-waiver
+  effect; and
+- no close, reopen, relabel, or other state change for #192 or #350.
+
+| Decision | Sole authority | Rejected alternate |
+| --- | --- | --- |
+| Governed carriers and expected field-name tuples | Existing exact `_CREDENTIAL_DIAGNOSTIC_CARRIERS` descriptors | Name heuristic, inferred runtime fields, tests alone |
+| Source and syntax tree | Existing authenticated snapshot and detached AST map | Filesystem reread, target import, runtime class reflection |
+| Direct field classification | CPython AST: direct `AnnAssign`, `ast.Name` target, `simple == 1` | `ast.Name` alone, parentheses-insensitive text, dataclass execution |
+| Non-simple execution semantics | `simple == 0`, value presence, target shape, and future-annotation posture under the closed table below | Generic `ast.walk()`, treating every target as a bind, ignoring evaluated expressions |
+| Special-member and equality verdicts | Accepted version-3 ordered events and exact equality-body validator | New duplicate member scan or final-name set |
+| Human approval | Exact later task-user approval of the unique version-4 card naming the new draft PR | Version-3 approval, review, GitHub activity, CI, or AI text |
+
+### 16.4 Mandatory CPython 3.12 `AnnAssign` transition
+
+The collector must follow this table. “Eager annotation” means the annotation
+expression is inspected only when `from __future__ import annotations` is not
+active. Future-deferred annotation text is not traversed as target-class
+execution.
+
+| Parsed shape | Field inventory | Evaluated target-class surface and order | Namespace event |
+| --- | --- | --- | --- |
+| `simple == 1`, no value | Include the direct `ast.Name` | Eager annotation only | One governed annotated-name `bind` event |
+| `simple == 1`, value present | Include the direct `ast.Name` | Value, name assignment, eager annotation | One governed annotated-name `bind` event |
+| `simple == 0`, parenthesized `ast.Name`, no value | Exclude | Eager annotation only; the store-context name is not evaluated | No name event |
+| `simple == 0`, parenthesized `ast.Name`, value present | Exclude | Value, ordinary name assignment, eager annotation | One ordinary assignment `bind` event |
+| `simple == 0`, attribute target, no value | Exclude | Target base, then eager annotation | No class-name event |
+| `simple == 0`, attribute target, value present | Exclude | Value, target base and assignment, eager annotation | No class-name event; attribute name is not a class binding |
+| `simple == 0`, subscript target, no value | Exclude | Target base and index/slice, then eager annotation | No class-name event |
+| `simple == 0`, subscript target, value present | Exclude | Value, target base and index/slice and assignment, eager annotation | No class-name event |
+
+For `simple == 1`, CPython's parser supplies an `ast.Name` target. Any detached
+AST combination outside `simple in {0, 1}`, or `simple == 1` with a non-name
+target, is unsupported and produces one bounded `unbounded` event rather than
+silent acceptance.
+
+The event abstraction intentionally records a simple field declaration as a
+governed name event even when it has no right-hand side and therefore creates
+no ordinary class attribute before dataclass transformation. That event means
+“declared in the class annotation namespace,” not “ordinary `STORE_NAME` was
+executed.” The two meanings must not be conflated for `simple == 0`.
+
+Direct dynamic-namespace calls remain refused only when they occur in an
+expression the table marks as target-class execution. No source value or
+annotation value may enter a diagnostic.
+
+### 16.5 Proposed checker architecture
+
+`_top_level_class_fields()` remains the one direct field-name projection used
+by the carrier verdict. Its comprehension gains the exact `node.simple == 1`
+predicate. It continues to preserve source order and returns `None` for a
+missing or duplicated top-level class.
+
+The existing `_CredentialNamespaceCollector` remains the only namespace-event
+authority. Its `AnnAssign` handling becomes one explicit dispatch:
+
+1. validate the parser shape and `simple` value;
+2. when a value exists, inspect it first;
+3. inspect evaluated target components;
+4. emit target-name assignment events only for a simple declaration or a
+   non-simple target with an actual value;
+5. inspect the annotation last only in eager-annotation posture; and
+6. emit no target-name event for a value-less non-simple annotation.
+
+The implementation must reuse the collector's existing bounded expression,
+target-expression, and target-name helpers. It must not add a second AST walk,
+execute the fictional class, import a governed module, or infer runtime
+dataclass fields. The existing special-member verdict and exact `__eq__` body
+validator remain unchanged.
+
+### 16.6 Falsifiable invariants
+
+- `CDR4-001`: the exact five carrier implementation modules have no base-to-
+  head diff and continue to pass.
+- `CDR4-002`: the direct field inventory includes a name if and only if its
+  direct target-class statement is `AnnAssign(Name(...), simple=1)`.
+- `CDR4-003`: a parenthesized annotation without a value creates no field and
+  no namespace-name event; with a value it creates an ordinary assignment
+  event but still no field.
+- `CDR4-004`: attribute and subscript target components, values, and eager
+  annotations are inspected in the table's execution order without treating
+  attribute names as class bindings or traversing future-deferred annotations.
+- `CDR4-005`: replacing any one expected simple carrier field with a
+  parenthesized annotation makes the exact-field verdict fail before equality
+  or hash posture can be accepted.
+- `CDR4-006`: version-3 import/control-flow special-member coverage,
+  authenticated detached-AST inputs, exact equality identity/body validation,
+  and bounded diagnostics remain unchanged.
+- `CDR4-007`: the durable RFC records the #354 completion and #5058662084
+  finding without rewriting historical Phase A or claiming production
+  readiness.
+
+### 16.7 Production-reachable negative cases
+
+| Invariant | Counterexample and required result |
+| --- | --- |
+| `CDR4-001` | A proposed correction also edits `RuntimeConfig` or either security-audit runner carrier; path audit rejects that expansion. |
+| `CDR4-002` | Fictional detached source replaces `first: str` with `(first): str`; the parser reports `simple == 0`, and `first` is absent from the field projection. |
+| `CDR4-003` | `(__repr__): object` produces no false forbidden-member event, while `(__repr__): object = factory()` produces the ordinary binding event and is refused. |
+| `CDR4-004` | A direct dynamic-namespace call in a subscript index or eager annotation is refused; the same spelling in a future-deferred annotation is not treated as executed. |
+| `CDR4-005` | The fictional mutated carrier retains the old equality tuple text but loses the actual field; the exact-field check rejects it before a passing architecture verdict. |
+| `CDR4-006` | A proposed fix rereads source, imports a carrier, replaces ordered events, or changes equality-body acceptance; focused boundary tests reject it. |
+| `CDR4-007` | The RFC still labels #354 as the current draft without an appended completion record; documentation review rejects the incomplete disposition. |
+
+The negative cases use fictional format-true syntax and the already-supported
+production reachability of the five carriers. They require no production
+credential, private-field mutation, fabricated runtime state, or carrier-code
+edit.
+
+### 16.8 Traceability and verification
+
+| Invariant | Owning change | Focused evidence | Smallest verification |
+| --- | --- | --- | --- |
+| `CDR4-001` | Base-to-head path exclusion | Exact carrier path diff | Diff audit plus standalone architecture check |
+| `CDR4-002` | `_top_level_class_fields()` simple predicate | Simple versus parenthesized field projection | Focused checker unit tests |
+| `CDR4-003` | Collector `AnnAssign` dispatch | Parenthesized name with and without value, including forbidden names | Event and verdict tests |
+| `CDR4-004` | Existing expression/target helpers under the new dispatch | Attribute/subscript, eager/future annotation, value-order pairs | Paired scope tests under CPython 3.12.13 |
+| `CDR4-005` | Exact field verdict | Hostile replacement of each representative declared field | Mutation matrix |
+| `CDR4-006` | Unchanged snapshot interface and verdict consumers | Missing AST, alternate source, version-3 regression subset | Focused and complete rewrite-architecture module |
+| `CDR4-007` | RFC section 16 and current front matter | Exact merge/review/evidence references and claim audit | Documentation diff review |
+
+Phase A changes only this RFC and the draft pull-request description. No
+expensive hosted baseline is permitted for a design-only head.
+
+After valid approval, Phase B cheap verification is:
+
+1. mandatory package contract under pinned CPython 3.12.13 before commit;
+2. the focused `AnnAssign.simple` matrix;
+3. the complete `kernel/tests/test_rewrite_architecture_check.py` module;
+4. the standalone rewrite architecture checker;
+5. repository-pinned Ruff for changed Python paths;
+6. canonical inventory regeneration only for new collected node IDs;
+7. diff hygiene and zero diff for the three governed carrier source paths; and
+8. one exact-head implementation review with zero demonstrated Blockers.
+
+Only after that review may a fresh exact-head admission trigger the required
+hosted baselines, native lanes, separate trusted publication, and final
+receipt. No version-3 check, admission, baseline, publication, or receipt is
+reused.
+
+### 16.9 Expected complete-slice paths and separation
+
+Expected paths are scope predictions, not approval authority:
+
+1. `docs/rfcs/OFARM_Security_Audit_Credential_Diagnostic_Representation_RFC_v0_1.md`;
+2. `conformance/rewrite_architecture_check.py`;
+3. `kernel/tests/test_rewrite_architecture_check.py`; and
+4. `conformance/review_baseline_test_inventory.json`, only when mechanically
+   required.
+
+The RFC is the Phase A and durable post-merge companion. The checker change,
+focused tests, and mechanically necessary inventory form the smallest complete
+Phase B slice. No migration, schema, fixture bridge, compatibility layer,
+runtime module, carrier change, or process-only companion pull request is
+needed.
+
+If implementation or review requires annotation-type resolution, a general
+dataclass model, carrier edits, runtime execution, credential custody, SQL,
+database authority, provider evidence, deployment, or another issue-state
+change, stop before editing and define separate Delivery work or a new decision
+version as required.
+
+### 16.10 Failure, rollback, and provisional posture
+
+The checker fails closed for unsupported `AnnAssign` parser shapes. All
+diagnostics remain generic and bounded: class identity and invariant category
+only, never source text, target values, annotations, credentials, or exception
+contents.
+
+There is no durability migration or irreversible effect. Before merge, rollback
+is branch abandonment. After merge, a demonstrated regression requires new
+Delivery work; it does not make #354 recoverable. Reverting the future checker
+commit would restore the known false-success defect and is not an accepted
+security rollback.
+
+The technical design is not provisional. Evidence requiring redesign is a
+CPython 3.12 execution result contradicting the mandatory table, a need to
+execute or reflect on target classes, or a required change to a carrier,
+credential custody, runtime, deployment, or production posture.
+
+Repository approval remains a provisional development procedure. Neither the
+decision nor any later merge authorizes deployment, release, current/default
+promotion, production access, certification, current compliance, or a security
+waiver. Production composition remains unauthorized and non-deployable.
+
+### 16.11 Phase A disposition and approval stop
+
+Current design disposition before exact-head Phase A review:
+
+- **Phase A content Blockers:** pending review;
+- **New Follow-ups introduced:** none proposed;
+- **Existing separate Follow-ups:** unchanged;
+- **Preferences:** pending review;
+- **Current credential disclosures demonstrated:** zero;
+- **Governed runtime or database regressions demonstrated:** zero; and
+- **Phase B:** unauthorized.
+
+The only acceptable approval is the entire visible text of a later task-user
+message in the same Codex task, after a unique complete version-4 decision card
+names the created draft pull request:
+
+```text
+I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001 version 4.
+```
+
+Version-3 approval and every review or evidence item from #354 are historical
+context only and provide no authority for version 4. Phase A review, GitHub
+activity, CI, credentials, tools, or AI-authored text cannot supply approval.
