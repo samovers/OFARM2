@@ -1,7 +1,7 @@
 # OFARM Security Audit Credential Diagnostic Representation RFC v0.1
 
-**Status:** Phase A draft; RFC-only draft-pull-request bootstrap in progress;
-Phase B is unauthorized
+**Status:** Phase A RFC-only draft in pull request #349; exact-head review and
+required hosted gates are pending; Phase B is unauthorized
 
 **Decision:**
 `ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001`
@@ -12,8 +12,7 @@ Phase B is unauthorized
 
 **Reviewed base:** `1f538f5b34ea2372ce84c82511fc5b5092f1ef88`
 
-**Draft pull request:** pending creation from this RFC-only bootstrap head; this
-field must name the stable pull request before exact-head Phase A review
+**Draft pull request:** [#349](https://github.com/samovers/OFARM2/pull/349)
 
 **Primary trust boundary:** credential-bearing diagnostic representation
 non-disclosure for five exact dataclass carriers already reached by the
@@ -537,11 +536,10 @@ claim.
 
 ### 11.1 Primary boundary and intended pull request
 
-One draft pull request owns only credential-bearing diagnostic representation
-non-disclosure. Its stable number will replace the bootstrap placeholder in
-this RFC before exact-head Phase A review. The current Phase A head changes
-only this RFC; Phase B may begin only after a later complete live decision card
-and exact task-user approval.
+Draft pull request #349 owns only credential-bearing diagnostic representation
+non-disclosure. The current Phase A head changes only this RFC; Phase B may
+begin only after a later complete live decision card and exact task-user
+approval.
 
 ### 11.2 Exact technical allowlist
 
@@ -670,8 +668,7 @@ evidence and will not be monitored, diagnosed, or retried.
 
 - **Content Blockers addressed in this draft:** complete derived-carrier
   inventory; honest bounded traceback claim.
-- **Workflow Blockers:** stable draft pull-request reference not yet recorded on
-  this bootstrap head; exact-head Phase A review and required same-head hosted
+- **Workflow Blockers:** exact-head Phase A review and required same-head hosted
   gates pending.
 - **Implementation Blockers:** Phase B lacks a complete live decision card and
   exact later task-user approval.
@@ -679,12 +676,11 @@ evidence and will not be monitored, diagnosed, or retried.
 - **Preferences:** none outstanding.
 - **Production-runtime defects demonstrated by this Phase A review:** none.
 
-There is no remaining material design ambiguity known at this bootstrap head.
-The stable draft pull request is a workflow fact, not a design choice. If the
-exact-head review identifies a demonstrated in-boundary Blocker, amend only the
-RFC and re-review the affected contract. A change to trust boundary, authority,
-invariant, maximum path envelope, or named pull request requires a new decision
-version.
+There is no remaining material design ambiguity known at this RFC-only head.
+If the exact-head review identifies a demonstrated in-boundary Blocker, amend
+only the RFC and re-review the affected contract. A change to trust boundary,
+authority, invariant, maximum path envelope, or named pull request requires a
+new decision version.
 
 ### 14.3 Merge stop rule
 
