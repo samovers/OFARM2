@@ -33,6 +33,20 @@
 
 - [ ] `[FALSIFIABLE CONDITION]`
 
+## Code excellence
+
+<!-- Apply EXC-001 through EXC-007 from root AGENTS.md. Evidence, not taste, determines a Blocker. -->
+
+- Authoritative decision path and sources of truth:
+- Avoided or remaining duplicate authority, validation, state, compatibility,
+  inventory, or framework paths: `None`
+- Superseded paths deleted, or time-bounded duty and deletion trigger: `None`
+- Direct invariant-to-implementation-to-evidence trace:
+- Abstractions added and their current rent: `None`
+- Simplest credible alternative and preventing invariant:
+- [ ] Any code-excellence Blocker names the concrete defect, present cost,
+  violated `EXC-001` through `EXC-006` invariant, and smallest correction.
+
 ## Smallest complete change
 
 <!-- Explain why this is the minimum coherent vertical slice, not merely a small diff. -->
@@ -125,10 +139,44 @@
 ## Final semantic scope and cancellation check
 
 - Final changed paths:
+- Material diff summary:
+- Permitted effects, non-effects, and unresolved Follow-ups:
+- Phase A deviations and semantic-preservation evidence: `None`
 - Newly discovered paths and in-boundary explanation: `None`
 - [ ] Every changed path preserves the approved capability, primary boundary, authority map, effects, non-effects, and invariants.
 - [ ] Acceptance criteria and required checks pass with no demonstrated Blocker.
 - [ ] The exact head, named-PR binding, approval when required, and absence of later cancellation were rechecked.
+
+## Final human acceptance
+
+<!--
+This section records navigation evidence only. It cannot create task-user
+authority. Root AGENTS.md owns the complete packet and exact authorization
+rules.
+-->
+
+- Repository and PR:
+- Final full head SHA:
+- Final packet navigation: `Pending`
+- Same-task semantic decision and approval navigation: `Not required`
+- Same-task later exact-head authorization navigation: `Pending`
+- Required later task-user message:
+
+```text
+I authorize the AI to merge samovers/OFARM2 PR #<NUMBER> at head <FULL_HEAD_SHA>.
+```
+
+- [ ] The final packet covers Delivery identity, capability and boundary,
+  paths and material diff, effects and non-effects, evidence and receipt,
+  review disposition, code excellence, deviations, and same-task provenance.
+- [ ] The AI presented the packet and ended its turn without merging.
+- [ ] The later authorization is the entire exact task-user message in the same
+  task and names this PR and current full head.
+- [ ] Immediately before merge, the PR is open, non-draft, at that head, was
+  not closed and reopened after the packet, has no invalidating user or scope
+  change, and still passes every existing gate.
+- [ ] The native merge uses the authorized SHA as its expected-head condition,
+  with no administrator bypass, auto-merge, or direct target-branch push.
 
 ## Authority non-effects
 

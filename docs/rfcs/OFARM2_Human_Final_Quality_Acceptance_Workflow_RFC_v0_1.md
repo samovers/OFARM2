@@ -1,8 +1,8 @@
 # OFARM2 Human Final Quality Acceptance Workflow Amendment v0.1
 
-**Status:** Phase A candidate; inactive until the task user approves decision
-version 1 and the completed implementation later passes its own final human
-merge gate
+**Status:** decision version 1 approved for Phase B in the owning task;
+inactive as standing repository procedure until PR #356 passes its separate
+final exact-head human merge gate and merges
 
 **Contract identity:** `ofarm2.human-final-quality-acceptance-workflow.v0.1`
 
@@ -416,9 +416,9 @@ runtime, production, deployment, law, contract, or publication-control effect.
 
 ## 13. Phase A review disposition
 
-Blockers, Follow-ups, and Preferences are recorded after review of this exact
-Phase A head. Phase B must not begin until a fresh complete review reports zero
-Blockers, the complete decision card is displayed, and the task user supplies
-the card's exact version-1 approval sentence.
-
-What is next: review this narrowed Phase A amendment in existing draft PR #356.
+The exact Phase A head received a fresh complete review with zero Blockers,
+Follow-ups, or Preferences. The complete decision card was then displayed and
+the task user supplied its exact version-1 approval sentence in the owning
+task. That approval authorizes the bounded Phase B implementation and evidence
+collection only. PR #356 still requires its own final packet, mandatory yield,
+and later exact-head merge authorization.

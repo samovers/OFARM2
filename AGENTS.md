@@ -37,7 +37,9 @@ repository-development procedure only. It is not OFARM law and cannot
 supersede an accepted technical, security, authority, custody,
 evidence-sufficiency, currentness, runtime, deployment, or domain invariant.
 The durable design and evidence for this procedure are in
-`docs/rfcs/OFARM2_Proportional_Delivery_Workflow_RFC_v0_2.md`.
+`docs/rfcs/OFARM2_Proportional_Delivery_Workflow_RFC_v0_2.md` and its closed
+final-acceptance amendment,
+`docs/rfcs/OFARM2_Human_Final_Quality_Acceptance_Workflow_RFC_v0_1.md`.
 `TASK_PROMPT.md` is its working form, `CONTRIBUTING.md` is contributor guidance,
 and `.github/PULL_REQUEST_TEMPLATE.md` is the capture surface for one pull
 request; none is a competing source of repository-development rules.
@@ -65,8 +67,10 @@ named consumer, and an expiry or review point. If classification is ambiguous,
 the older requirement remains binding until an explicit versioned amendment
 resolves it.
 
-Completed decisions and historical evidence are not rewritten. Already-approved
-unmerged work keeps its approval unless it stops and seeks a new decision.
+Completed decisions and historical evidence are not rewritten. An
+already-approved unmerged pull request keeps AI merge authority only when its
+directly retrievable governing approval explicitly granted that authority.
+Pull-request age, branch age, and GitHub activity create no authority.
 
 ## Proportional delivery workflow
 
@@ -139,11 +143,12 @@ Before editing, state:
 - the focused verification for the boundary.
 
 Routine work that does not change, rely on, or exercise authority does not
-require a user approval stop. A high-risk or otherwise approval-governed change
-uses the risk-shaped Phase A and decision workflow below. Prefer deletion,
-direct code paths, explicit boundary contracts, immutable values, and small
-modules over speculative abstractions, compatibility shims, and duplicate
-validation.
+require an early semantic-approval stop. Every AI-operated Delivery merge still
+requires the final exact-head task-user stop below. A high-risk or otherwise
+approval-governed change uses the risk-shaped Phase A and decision workflow.
+Prefer deletion, direct code paths, explicit boundary contracts, immutable
+values, and small modules over speculative abstractions, compatibility shims,
+and duplicate validation.
 
 ## Risk-shaped Phase A
 
@@ -187,8 +192,9 @@ the approved design, stop and request a new decision version.
 
 Authority ownership is closed:
 
-- the task user owns approval, refusal, cancellation, and supersession through
-  a new decision version;
+- the task user owns semantic approval, final quality acceptance, refusal,
+  requested changes, cancellation, supersession through a new decision
+  version, and exact-head merge authorization;
 - the live card owns the problem, approved capability, primary boundary,
   authority map, effects, non-effects, decision-level invariants, and named
   pull request;
@@ -197,8 +203,12 @@ Authority ownership is closed:
 - reviewers own demonstrated Blocker findings, not scope expansion;
 - CI and the existing publication system own mechanical verification and
   evidence custody only, not human approval;
-- the AI owns in-boundary implementation, review handling, and merge only after
-  every gate passes; and
+- the AI owns in-boundary implementation, review handling, checks, existing
+  admission and publication coordination, and final-packet preparation. It may
+  invoke the existing GitHub-native pull-request merge only after the later
+  exact-head authorization and every existing gate are valid;
+- GitHub owns native pull-request state, merge eligibility, and the merge
+  transition; and
 - existing OFARM, runtime, database, tenant, key, audit, deployment, and
   publication authorities retain their current owners.
 
@@ -240,12 +250,12 @@ invariant, irreversible behavior, named pull request, or production/deployment
 posture changes. A path change triggers reapproval only when it proves one of
 those semantic changes or makes preservation genuinely ambiguous.
 
-A valid approval authorizes only the named pull request. Within its approved
-boundary the AI may implement, test, document, regenerate mechanical evidence,
-commit, push, address in-boundary Blockers, rerun checks, and merge after every
-gate below passes. Any later stop-like task-user message pauses immediately.
-Closing the named pull request unmerged expires authority and invokes the
-recovery rule above.
+A valid semantic approval authorizes only the named pull request. Within its
+approved boundary the AI may implement, test, document, regenerate mechanical
+evidence, commit, push, address in-boundary Blockers, rerun checks, and prepare
+the final packet. It does not authorize merge. Any later stop-like task-user
+message pauses immediately. Closing the named pull request unmerged expires
+authority and invokes the recovery rule above.
 
 This authority is provisional repository development only. It never authorizes
 deployment, release, current/default promotion, production access, or a
@@ -268,8 +278,13 @@ DELIVERY_ISSUE_DEFINED
   -> EXACT_HEAD_CONTENT_REVIEW_ZERO_BLOCKERS
   -> BASELINE_ADMISSION
   -> REQUIRED_HOSTED_BASELINES_AND_PUBLICATION
-  -> FINAL_SCOPE_AND_APPROVAL_RECHECK
-  -> MERGE_AND_CLOSE_DELIVERY_ISSUE
+  -> FINAL_SCOPE_EVIDENCE_AND_EXCELLENCE_RECHECK
+  -> READY_FOR_USER_FINAL_REVIEW
+  -> AI_YIELDS_WITH_EXACT_HEAD_PACKET
+  -> USER_AUTHORIZED_EXACT_HEAD_MERGE
+  -> AI_RECHECKS_HEAD_STATE_GATES_AND_CANCELLATION
+  -> GITHUB_NATIVE_PR_MERGE_WITH_EXPECTED_HEAD
+  -> VERIFY_MERGED_AND_CLOSE_DELIVERY_ISSUE
 ```
 
 Treat the full hosted conformance and native-verifier workflows as expensive
@@ -362,24 +377,102 @@ does not supply that trigger. Admission does not imply branch protection.
 Verify repository settings before describing hosted baselines as a
 GitHub-enforced merge requirement.
 
-Before merge, post one compact scope report. For approval-governed work, name
-the decision, card, approval, and pull request references; for routine work,
-name the Delivery task contract and pull request. Always list final changed
-paths, verification and review results, and whether every path preserves the
-declared capability, primary boundary, authority map when applicable,
-permitted effects, non-effects, and invariants. Recheck the exact head,
-required checks, any required publication receipt, and absence of a
-demonstrated Blocker. For approval-governed work also recheck live task
-evidence, named-pull-request binding, and absence of later cancellation. If
-preservation is ambiguous, stop for a new decision version.
+### Final human acceptance and native merge
+
+After every applicable technical and evidence gate passes, prepare one final
+packet for any Delivery pull request the AI would merge. It must contain:
+
+- the Delivery issue, repository, pull request, and full current head SHA;
+- the capability, primary trust boundary, final changed paths, and material
+  diff summary;
+- permitted effects, non-effects, unresolved Follow-ups, and any Phase A
+  deviations with proof that semantic scope stayed intact;
+- cheap checks, exact-head review, hosted evidence, publication, and receipt
+  results as applicable;
+- Blockers, Follow-ups, and Preferences;
+- the `EXC-001` through `EXC-006` assessment, including deletions, duplicate
+  paths or state, abstractions added, and the simplest credible alternative;
+- for approval-governed work, the decision, live card, semantic approval, and
+  named-pull-request references;
+- same-task provenance sufficient to retrieve the packet later; and
+- this exact authorization sentence with the pull request number and full head
+  SHA filled in:
+
+```text
+I authorize the AI to merge samovers/OFARM2 PR #<NUMBER> at head <FULL_HEAD_SHA>.
+```
+
+Present the complete packet and end the turn without merging. Only the entire
+visible text of that exact sentence in a later task-user message in the same
+Codex task authorizes merge. The packet and authorization must remain directly
+retrievable in that order. Earlier semantic approval, routine classification,
+GitHub activity, reviews, checks, admission, publication, credentials, AI or
+tool messages, delegation, silence, elapsed time, paraphrases, and summaries do
+not authorize merge.
+
+Immediately before merge, retrieve the packet and later authorization and
+recheck that the pull request is open, non-draft, at the authorized full head,
+has not been closed and reopened since the packet, has no demonstrated
+Blocker, still preserves semantic scope, and satisfies every existing check,
+admission, publication, and receipt gate. A new commit or head change, semantic
+expansion, later stop or cancellation, conflicting later task-user message, or
+close/reopen transition invalidates the authorization. Requested in-boundary
+changes return the pull request to implementation, fresh review and applicable
+evidence, a new packet, yield, and later authorization. No response leaves the
+pull request open and unmerged.
+
+Use GitHub's normal pull-request merge operation with its expected-head
+condition set to the authorized SHA, such as `--match-head-commit` or the API
+`sha` field. Never pass `--admin` or `--auto`, bypass a native requirement, or
+push the target branch directly. A native rejection is a stop, not permission
+to use another writer. This final authorization binds the pull-request head,
+not an exact base, integrated tree, merge commit, merge message, or target
+write. Existing base-sensitive controls decide whether evidence must be
+refreshed.
+
+The task user may decline final authorization or request in-boundary changes
+for any reason. The review classifications below constrain reviewers, not the
+user's final decision.
+
+## Code excellence
+
+Every Delivery task contract, Phase A, pull request, review, and final packet
+applies these invariants at the depth appropriate to its capability:
+
+- **EXC-001 — One authoritative path.** The capability has one authoritative
+  decision path and one source of truth for each owned fact.
+- **EXC-002 — No avoidable duplication.** Do not add duplicate authority,
+  validation, durable or derived state, compatibility paths, field inventories,
+  or framework layers.
+- **EXC-003 — Direct invariant trace.** Each material invariant traces through
+  its owning implementation to focused evidence without a hidden fallback.
+- **EXC-004 — Delete superseded paths.** Remove obsolete owned code, shims,
+  flags, and fallbacks unless a current time-bounded compatibility duty and
+  deletion trigger are explicit.
+- **EXC-005 — Abstractions pay rent now.** A new abstraction must isolate the
+  current boundary, remove concrete duplication, or serve multiple current
+  consumers. Hypothetical reuse is insufficient.
+- **EXC-006 — Consider the simpler path.** Any material increase in concepts,
+  indirection, state, or bespoke machinery names the simplest credible
+  alternative and the invariant that prevents using it.
+- **EXC-007 — Taste is not a Blocker.** Naming, formatting, and preference
+  among designs satisfying `EXC-001` through `EXC-006` remain non-blocking.
+
+A code-excellence Blocker must name the concrete duplicate source, path, state,
+validation, compatibility layer, unnecessary abstraction, or obscured
+invariant; its present maintenance, audit, testing, or isolation cost; the
+violated `EXC-001` through `EXC-006` invariant; and the smallest acceptable
+correction. Line counts or automated complexity scores may support that
+finding, but never replace it.
 
 ## Review classifications
 
 Classify every finding as exactly one of:
 
 - **Blocker:** a demonstrated in-scope correctness, security, data-integrity,
-  contractual, or production-safety failure. Name the violated invariant and
-  smallest acceptable fix. For high-risk work also name the supported
+  contractual, production-safety, or code-excellence failure under the rules
+  above. Name the violated invariant and smallest acceptable fix. For high-risk
+  work also name the supported
   production entry point, in-scope actor, exact execution or state-transition
   path, required preconditions, material consequence, and minimal reproduction
   or counterexample.
@@ -388,10 +481,11 @@ Classify every finding as exactly one of:
 - **Preference:** optional style or alternative-design advice. It never delays
   merging.
 
-Only demonstrated Blockers delay merge. Once acceptance criteria pass, every
-required gate is green, and no Blocker remains, merge the pull request. New
-ideas, Preferences, and non-blocking hardening become Follow-ups and do not
-reopen review.
+Only demonstrated Blockers delay technical readiness. Once acceptance criteria
+pass, every required gate is green, and no Blocker remains, prepare the final
+packet and yield; do not merge without the later exact-head task-user
+authorization. New ideas, Preferences, and non-blocking hardening become
+Follow-ups and do not reopen review.
 
 ## Review guard - Core neutrality
 
