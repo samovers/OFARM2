@@ -2461,6 +2461,17 @@ def _credential_violations(
     )
 
 
+def _credential_source_with(statement, *, future_annotations=False):
+    source = _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE.replace(
+        "    def __eq__",
+        statement.rstrip() + "\n\n    def __eq__",
+        1,
+    )
+    if future_annotations:
+        source = "from __future__ import annotations\n" + source
+    return source
+
+
 def test_credential_diagnostic_authority_map_is_exact():
     assert rewrite_architecture_check._CREDENTIAL_DIAGNOSTIC_CARRIERS == (
         (
@@ -2641,6 +2652,368 @@ def test_credential_diagnostic_rule_rejects_display_and_hash_members(member):
     )
 
     assert _credential_violations(mutated)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "    import helper as __repr__",
+        "    from helper import value as __repr__",
+        "    __repr__ = object()",
+        "    __repr__, harmless = object(), object()",
+        "    __repr__: object",
+        "    __repr__ += object()",
+        "    del __repr__",
+        "    if False:\n        __repr__ = object()",
+        "    while False:\n        __repr__ = object()",
+        "    for __repr__ in ():\n        pass",
+        "    async for __repr__ in source():\n        pass",
+        "    with manager() as __repr__:\n        pass",
+        "    async with manager() as __repr__:\n        pass",
+        (
+            "    try:\n"
+            "        pass\n"
+            "    except Exception as __repr__:\n"
+            "        pass"
+        ),
+        (
+            "    try:\n"
+            "        pass\n"
+            "    except* Exception as __repr__:\n"
+            "        pass"
+        ),
+        "    helper = (__repr__ := object())",
+        "    type __repr__ = object",
+        "    class __repr__:\n        pass",
+        "    if False:\n        def __repr__(self):\n            return ''",
+    ),
+    ids=(
+        "import",
+        "from-import",
+        "assign",
+        "unpack",
+        "annotated-assign",
+        "augmented-assign",
+        "delete",
+        "if-suite",
+        "while-suite",
+        "for-target",
+        "async-for-target",
+        "with-target",
+        "async-with-target",
+        "exception-name",
+        "exception-group-name",
+        "assignment-expression",
+        "type-alias",
+        "nested-class-name",
+        "conditional-function-name",
+    ),
+)
+def test_credential_diagnostic_rule_rejects_every_binding_form(statement):
+    violations = _credential_violations(_credential_source_with(statement))
+
+    assert (
+        "SecretCarrier: class defines forbidden display or hash members"
+        in violations
+    )
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "    match object():\n        case __repr__:\n            pass",
+        "    match []:\n        case [*__repr__]:\n            pass",
+        (
+            "    match {}:\n"
+            "        case {'value': _, **__repr__}:\n"
+            "            pass"
+        ),
+        (
+            "    match object():\n"
+            "        case object() as __repr__:\n"
+            "            pass"
+        ),
+        (
+            "    match 0:\n"
+            "        case (0 as __repr__) | (1 as __repr__):\n"
+            "            pass"
+        ),
+    ),
+    ids=("capture", "star", "mapping-rest", "class-as", "or-pattern"),
+)
+def test_credential_diagnostic_rule_rejects_every_match_capture(statement):
+    violations = _credential_violations(_credential_source_with(statement))
+
+    assert (
+        "SecretCarrier: class defines forbidden display or hash members"
+        in violations
+    )
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "    from helper import *",
+        "    global __repr__",
+        "    nonlocal __repr__",
+        "    def helper[T](self):\n        pass",
+        "    async def helper[T](self):\n        pass",
+        "    class Nested[T]:\n        pass",
+        "    helper = [(captured := item) for item in (0,)]",
+    ),
+    ids=(
+        "wildcard-import",
+        "global",
+        "nonlocal",
+        "generic-function",
+        "generic-async-function",
+        "generic-class",
+        "comprehension-assignment-expression",
+    ),
+)
+def test_credential_diagnostic_rule_rejects_unbounded_forms(statement):
+    violations = _credential_violations(_credential_source_with(statement))
+
+    assert (
+        "SecretCarrier: class namespace binding analysis is unbounded"
+        in violations
+    )
+
+
+@pytest.mark.parametrize(
+    "expression",
+    (
+        "[item for item in (exec('__repr__ = object()') or ())]",
+        "{item for item in (exec('__repr__ = object()') or ())}",
+        "{item: item for item in (exec('__repr__ = object()') or ())}",
+        "(item for item in (exec('__repr__ = object()') or ()))",
+    ),
+    ids=("list", "set", "dict", "generator"),
+)
+def test_credential_diagnostic_rule_inspects_leftmost_iterable(expression):
+    source = _credential_source_with(f"    helper = {expression}")
+
+    assert (
+        "SecretCarrier: class namespace binding analysis is unbounded"
+        in _credential_violations(source)
+    )
+
+
+@pytest.mark.parametrize(
+    "expression",
+    (
+        "[exec('__repr__ = object()') for item in (0,)]",
+        "[item for item in (0,) if exec('__repr__ = object()')]",
+        (
+            "[nested for item in (0,) "
+            "for nested in (exec('__repr__ = object()') or ())]"
+        ),
+        "[__repr__ for __repr__ in (0,)]",
+    ),
+    ids=("result", "filter", "later-iterable", "target"),
+)
+def test_credential_diagnostic_rule_excludes_comprehension_scope(expression):
+    source = _credential_source_with(f"    helper = {expression}")
+
+    assert _credential_violations(source) == []
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        (
+            "    def helper(\n"
+            "        self, value=(exec('__repr__ = object()') or None)\n"
+            "    ):\n"
+            "        pass"
+        ),
+        (
+            "    async def helper(\n"
+            "        self, value=(exec('__repr__ = object()') or None)\n"
+            "    ):\n"
+            "        pass"
+        ),
+        (
+            "    @(exec('__repr__ = object()') or decorator)\n"
+            "    def helper(self):\n"
+            "        pass"
+        ),
+        (
+            "    def helper(\n"
+            "        self, value: (exec('__repr__ = object()') or object)\n"
+            "    ):\n"
+            "        pass"
+        ),
+        (
+            "    helper = lambda value=(\n"
+            "        exec('__repr__ = object()') or None\n"
+            "    ): value"
+        ),
+        (
+            "    class Nested(exec('__repr__ = object()') or object):\n"
+            "        pass"
+        ),
+        (
+            "    @(exec('__repr__ = object()') or decorator)\n"
+            "    class Nested:\n"
+            "        pass"
+        ),
+        (
+            "    class Nested(\n"
+            "        metaclass=exec('__repr__ = object()') or type\n"
+            "    ):\n"
+            "        pass"
+        ),
+    ),
+    ids=(
+        "function-default",
+        "async-function-default",
+        "function-decorator",
+        "eager-annotation",
+        "lambda-default",
+        "nested-class-base",
+        "nested-class-decorator",
+        "nested-class-keyword",
+    ),
+)
+def test_credential_diagnostic_rule_inspects_definition_time_scope(statement):
+    violations = _credential_violations(_credential_source_with(statement))
+
+    assert (
+        "SecretCarrier: class namespace binding analysis is unbounded"
+        in violations
+    )
+
+
+@pytest.mark.parametrize(
+    ("statement", "future_annotations"),
+    (
+        (
+            "    def helper(self):\n"
+            "        exec('__repr__ = object()')",
+            False,
+        ),
+        (
+            "    async def helper(self):\n"
+            "        exec('__repr__ = object()')",
+            False,
+        ),
+        ("    helper = lambda: exec('__repr__ = object()')", False),
+        (
+            "    class Nested:\n"
+            "        exec('__repr__ = object()')",
+            False,
+        ),
+        (
+            "    def helper(\n"
+            "        self, value: (exec('__repr__ = object()') or object)\n"
+            "    ):\n"
+            "        pass",
+            True,
+        ),
+        ("    type Alias = exec('__repr__ = object()') or object", False),
+    ),
+    ids=(
+        "function-body",
+        "async-function-body",
+        "lambda-body",
+        "nested-class-body",
+        "future-annotation",
+        "lazy-type-alias",
+    ),
+)
+def test_credential_diagnostic_rule_excludes_nested_or_lazy_scope(
+    statement,
+    future_annotations,
+):
+    source = _credential_source_with(
+        statement,
+        future_annotations=future_annotations,
+    )
+
+    assert _credential_violations(source) == []
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "    helper = exec('__repr__ = object()')",
+        "    locals().helper = object()",
+        "    locals()['helper'] = object()",
+        "    target[exec('__repr__ = object()') or 0] = object()",
+        "    del locals().helper",
+        "    del target[exec('__repr__ = object()') or 0]",
+        "    target[exec('__repr__ = object()') or 0] += 1",
+        "    for locals().helper in ():\n        pass",
+        (
+            "    with manager() as target[\n"
+            "        exec('__repr__ = object()') or 0\n"
+            "    ]:\n"
+            "        pass"
+        ),
+    ),
+    ids=(
+        "right-hand-side",
+        "attribute-assignment-base",
+        "subscript-assignment-base",
+        "subscript-assignment-index",
+        "attribute-delete-base",
+        "subscript-delete-index",
+        "augmented-target-index",
+        "loop-target-base",
+        "context-target-index",
+    ),
+)
+def test_credential_diagnostic_rule_inspects_ordinary_evaluated_expressions(
+    statement,
+):
+    violations = _credential_violations(_credential_source_with(statement))
+
+    assert (
+        "SecretCarrier: class namespace binding analysis is unbounded"
+        in violations
+    )
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "    holder.__repr__ = object()",
+        "    del holder.__repr__",
+    ),
+    ids=("attribute-assignment", "attribute-deletion"),
+)
+def test_credential_diagnostic_rule_does_not_treat_attributes_as_class_names(
+    statement,
+):
+    assert _credential_violations(_credential_source_with(statement)) == []
+
+
+def test_credential_namespace_events_preserve_order_origin_and_identity():
+    source = _credential_source_with(
+        "    __eq__ = object()\n    del __eq__"
+    )
+    tree = ast.parse(source)
+    target = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "SecretCarrier"
+    )
+
+    events = rewrite_architecture_check._credential_class_namespace_events(
+        tree,
+        target,
+    )
+    equality_events = [event for event in events if event.name == "__eq__"]
+
+    assert [
+        (event.kind, event.origin, event.direct)
+        for event in equality_events
+    ] == [
+        ("bind", "Assign", False),
+        ("delete", "Delete", False),
+        ("bind", "FunctionDef", True),
+    ]
 
 
 @pytest.mark.parametrize(
