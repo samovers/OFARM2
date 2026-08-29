@@ -1,67 +1,112 @@
 # OFARM2 Task Prompt
 
-Use this prompt before starting an OFARM2 task.
-
-You are working on `[ISSUE/TASK]` in `[REPOSITORY]` at base commit
-`[SHA]`.
+Use this prompt before starting OFARM2 Delivery work. Root `AGENTS.md` is the
+canonical source for repository-development procedure; this file is its working
+form.
 
 Inputs:
 
-- Issue or acceptance criteria: `[LINK OR TEXT]`
-- Base commit: `[SHA]`
-- Related or stacked pull requests: `[LIST OR NONE]`
+- Work unit: `Delivery issue` / `Tracking Epic`
+- Delivery issue: `[LINK OR TEXT]`
+- Tracking Epic: `[LINK OR NONE]`
+- One independently reviewable capability: `[CAPABILITY]`
+- Primary trust boundary: `[ONE BOUNDARY]`
+- Repository and base commit: `[REPOSITORY]` at `[SHA]`
+- Existing live or draft pull request: `[LINK OR NONE]`
+- Dependent Delivery issues: `[LIST OR NONE]`
+- Abandoned-PR recovery status: `None` / `Replacing` / `Reopening`
 - Known constraints: `[LIST]`
-- Existing architectural decisions: `[LIST OR NONE]`
+- Accepted exact-action requirements: `[LIST OR NONE]`
+
+If the work unit contains more than one independently reviewable capability or
+more than one primary trust boundary, classify it as a Tracking Epic, create or
+identify one Delivery child issue for each capability, and stop until one child
+is selected. A Tracking Epic does not receive an implementation pull request.
 
 ## Choose the contract
 
-Use the complete Phase A design contract when the task materially changes an
-area in the canonical high-risk trigger list in `AGENTS.md`. If classification
-is unclear, treat the task as high-risk until the boundary is explicitly
-narrowed.
+Use the routine contract for low-risk work that does not change, rely on, or
+exercise authority. If inspection shows otherwise, stop and use a risk-shaped
+Phase A.
 
-Use the routine contract for documentation, generated files, and mechanical
-work that does not change authority or a trust boundary. If inspection shows
-that a routine task does change one, stop and use the complete Phase A contract.
+Use a risk-shaped Phase A when a task materially changes authentication,
+credential verification, principal resolution, authorization, signing, key
+custody or authority, tenant isolation, database roles, transactions,
+migrations or durability semantics, runtime integration or readiness,
+security-audit behavior, or irreversible data behavior. If classification is
+unclear, treat the task as high-risk until the boundary is explicitly narrowed.
+
+Every Phase A has a small required core. Add state, custody, durability,
+recovery, migration, or durable-architecture sections only when the stated risk
+needs them.
 
 ## Rules for every task
 
-Solve one defined problem and keep the change inside one primary trust
-boundary. Tests, documentation, and mechanical integration needed to verify
-that boundary may travel with the change. Independent authority or custody
-changes may not.
+One Delivery issue owns one user- or system-visible outcome, one independently
+reviewable capability, and one primary trust boundary. It has one live
+implementation pull request at a time and at most one merged implementation
+pull request.
+
+Implementation, owned migrations, tests, fixtures, compatibility bridges,
+documentation, generated inventories, and mechanical evidence needed to
+deliver or prove that capability travel in the same pull request. Do not split
+out a contract, approval record, path-list change, fixture, inventory, or
+evidence artifact whose only outcome is enabling another planned pull request.
+A complete prerequisite in another boundary is valid only as its own Delivery
+issue with an independently usable and testable outcome.
+
+Same authority ownership does not justify bundling independent capabilities.
+Cross-boundary bundling has no waiver. If another capability or authority-level
+boundary is required, stop before editing it and create separate Delivery work.
+
+Expected paths and repository areas are scope predictions, not human approval
+authority. A newly discovered implementation, test, fixture, documentation, or
+generated-evidence file does not require reapproval when it clearly preserves
+the approved capability, authority, effects, invariants, and boundary. Explain
+it in the final scope report. Genuine ambiguity stops for a new decision.
+
+A stronger accepted procedure expressly governing an exact action remains
+controlling. If it is ambiguous whether an older clause is a superseded
+packaging mechanic or a substantive exact-action requirement, keep the older
+requirement until an explicit amendment resolves it.
 
 Prefer deletion, direct code paths, explicit boundary contracts, immutable
 values, and small modules over framework layers, speculative abstractions,
 compatibility shims, and duplicate validation.
 
-Every task contract must state:
+Every task contract states:
 
-- **Problem:** the one problem being solved.
-- **Acceptance criteria or invariants:** falsifiable conditions proving it is
-  solved.
-- **Out of scope:** adjacent systems and future concerns excluded from the
-  change.
-- **Smallest change:** why the proposed implementation is the minimum coherent
-  solution.
-- **Learning value:** the capability delivered, demonstrated risk reduced, or
-  architectural decision validated. Do not start work that provides none of
-  these.
-- **Provisional design record:** if temporary, why it is acceptable before
-  deployment, what evidence would require redesign, and the likely upgrade
-  path. Otherwise state `Not provisional`.
-- **Follow-ups:** linked issues created instead of expanding the change, or
+- **Problem and capability:** the problem and one independently reviewable
+  outcome that solves it.
+- **Primary trust boundary:** the one authority-level boundary being changed or
+  preserved.
+- **Permitted effects and non-effects:** what may and may not change.
+- **Acceptance criteria or invariants:** falsifiable conditions proving the
+  capability is complete.
+- **Non-goals:** adjacent systems and future concerns excluded from the change.
+- **Expected areas and companions:** likely files plus the implementation,
+  tests, fixtures, documentation, and evidence that must travel together.
+- **Smallest complete change:** why this is the minimum coherent vertical
+  slice.
+- **Provisional posture:** `Not provisional`, or why a temporary design is
+  acceptable before deployment, evidence requiring redesign, and the likely
+  upgrade path.
+- **Follow-ups:** separate Delivery issues instead of scope expansion, or
   `None`.
-- **Verification:** the smallest tests or checks needed for the stated
-  boundary.
+- **Verification:** the smallest checks needed for the stated boundary.
 - **Review disposition:** remaining Blockers, Follow-ups, and Preferences.
-- **Merge stop rule:** once acceptance criteria pass and no demonstrated
-  Blocker remains, merge. New ideas, Preferences, and non-blocking hardening
-  become Follow-ups and do not reopen review.
 
 ## Routine contract
 
-Complete this contract before editing:
+Complete this before editing low-risk work:
+
+### Delivery identity
+
+- Delivery issue: `[LINK]`
+- Tracking Epic: `[LINK OR NONE]`
+- Independently reviewable capability: `[ONE CAPABILITY]`
+- Live implementation pull request: `[LINK OR NONE]`
+- Recovery status: `None` / `[CLOSED-UNMERGED PR AND APPROVED RECOVERY]`
 
 ### Problem
 
@@ -69,25 +114,33 @@ Complete this contract before editing:
 
 ### Primary trust boundary
 
-`[ONE BOUNDARY; STATE THAT THE CHANGE DOES NOT ALTER AUTHORITY]`
+`[ONE BOUNDARY; EXPLAIN WHY AUTHORITY DOES NOT CHANGE]`
+
+### Permitted effects
+
+- `[PERMITTED EFFECT]`
+
+### Non-effects and non-goals
+
+- `[EXCLUDED EFFECT, SYSTEM, OR CONCERN]`
 
 ### Acceptance criteria or invariants
 
 - `[FALSIFIABLE CONDITION]`
 
-### Out of scope
+### Expected repository areas and companions
 
-- `[EXCLUDED SYSTEM OR CONCERN]`
+- Expected areas: `[LIST]`
+- Implementation or deletion: `[INCLUDED OR NOT NEEDED]`
+- Tests and fixtures: `[INCLUDED OR NOT NEEDED]`
+- Documentation: `[INCLUDED OR NOT NEEDED]`
+- Generated inventories or evidence: `[INCLUDED OR NOT NEEDED]`
 
-### Smallest change
+### Smallest complete change
 
-`[WHY THIS IS THE MINIMUM COHERENT CHANGE]`
+`[WHY THIS IS THE MINIMUM COHERENT VERTICAL SLICE]`
 
-### Learning value
-
-`[CAPABILITY, DEMONSTRATED RISK REDUCTION, OR ARCHITECTURAL DECISION]`
-
-### Provisional design record
+### Provisional posture
 
 `Not provisional`, or:
 
@@ -97,7 +150,7 @@ Complete this contract before editing:
 
 ### Follow-ups
 
-- `[LINKED ISSUE OR NONE]`
+- `[DELIVERY ISSUE OR NONE]`
 
 ### Verification
 
@@ -106,209 +159,237 @@ Complete this contract before editing:
 ### Review disposition
 
 - Blockers: `[LIST OR NONE]`
-- Follow-ups: `[LINKED ISSUES OR NONE]`
+- Follow-ups: `[DELIVERY ISSUES OR NONE]`
 - Preferences: `[LIST OR NONE]`
 
 ### Merge stop rule
 
-Once the acceptance criteria pass and no demonstrated Blocker remains, merge
-the pull request. New ideas, Preferences, and non-blocking hardening become
+Once acceptance criteria and required checks pass and no demonstrated Blocker
+remains, merge. New ideas, Preferences, and non-blocking hardening become
 Follow-ups and do not reopen review.
 
-## Phase A: complete design contract
+## Phase A: risk-shaped design contract
 
-Inspect the relevant code and produce the design contract below. Do not edit
-files, create commits, or propose line-level patches during Phase A.
+Inspect the relevant code before writing Phase A. Put the contract in the
+already-created draft pull request description by default. Add an RFC or ADR in
+that same pull request only when the architectural decision must remain useful
+after the pull request closes. Do not edit implementation during Phase A.
 
-### 1. Problem and goal
+### Required core
 
-- State the one problem being solved.
-- State precisely what the task establishes.
+#### 1. Problem and capability
 
-### 2. Learning value
+- State the one problem.
+- State the one independently reviewable capability and its user- or
+  system-visible outcome.
+- Identify the Delivery issue and any Tracking Epic.
 
-- Name the capability delivered, demonstrated risk reduced, or architectural
-  decision validated.
+#### 2. Primary boundary and effects
 
-### 3. Non-goals
+- Name one primary trust boundary.
+- State permitted effects and non-effects.
+- Name adjacent boundaries that must not change.
+- Add an authority map whenever the work changes, relies on, or exercises
+  authority.
 
-- State what is explicitly deferred.
-- Name adjacent systems and trust boundaries that must not change.
+#### 3. Invariants, acceptance criteria, and non-goals
 
-### 4. Trust model
-
-- Name protected assets, trusted components, untrusted actors, and untrusted
-  inputs.
-- Name explicitly excluded attacker capabilities.
-- State whether arbitrary in-process mutation, local source substitution,
-  compromised dependencies, filesystem mutation, and operator compromise are
-  in or out of scope.
-
-### 5. Authority map
-
-- Identify exactly one authoritative source for every decision.
-- Identify legacy fallbacks, duplicate state, aliases, and alternate write
-  paths to remove.
-- Do not let a receipt name one authority while execution uses another.
-
-### 6. State machine and ordering
-
-- Define valid states, transitions, and forbidden transitions.
-- Identify validation that must happen before side effects.
-- Define transaction and time-of-check/time-of-use boundaries.
-
-### 7. Invariants and acceptance criteria
-
-- Assign stable IDs such as `INV-001`.
-- Make every invariant falsifiable and implementation-independent.
+- Give stable IDs such as `INV-001` to falsifiable invariants.
 - Include fail-closed behavior.
+- State explicit non-goals.
 
-### 8. Negative cases
+#### 4. Expected areas and complete-slice companions
 
-- Give at least one concrete counterexample for each invariant.
-- Start each counterexample from a supported production entry point.
-- Do not use private-field mutation or monkeypatching unless runtime-state
-  corruption is explicitly in scope.
+- Name expected repository areas as scope prediction, not approval authority.
+- Identify implementation and deletions, owned migrations, tests, fixtures,
+  compatibility bridges, documentation, inventories, and mechanical evidence
+  needed for the same capability.
+- Name complete prerequisite Delivery issues, or `None`.
 
-### 9. Proposed architecture and smallest change
+#### 5. Proposed architecture and smallest coherent change
 
-- Describe types, ownership, data flow, and composition boundaries.
-- Prefer one bound object over multiple correlated fields.
-- Prefer deletion over compatibility shims.
-- Avoid `Any`-typed authority objects, optional capability bags, identity
-  comparisons used as security boundaries, self-attestation, and mutable global
-  registries.
-- Explain why this is the minimum coherent design.
+- Describe ownership, data flow, and composition boundaries at the depth the
+  risk requires.
+- Prefer one bound object over correlated fields and deletion over duplicate
+  authority or compatibility paths.
+- Explain why this is the smallest complete vertical slice.
 
-### 10. Elegance audit
+#### 6. Verification
 
-- Count sources of truth and authoritative transition points.
-- Identify duplicated fields, compatibility surfaces, and abstractions
-  introduced for only one implementation.
-- State what can be deleted.
-- State whether a clean rewrite is better than modifying the current patch.
+- Map each invariant to the smallest useful test or inspection.
+- State required cheap checks and final hosted evidence.
 
-### 11. Pull request boundary
+#### 7. Provisional posture
 
-- Name the primary trust boundary and files expected to change.
-- List dependencies on stacked pull requests and what later work may assume.
-- State what reviewers must not require from this pull request.
-- List linked Follow-up issues instead of expanding this boundary.
+State `Not provisional`, or explain why the design is acceptable before
+deployment, what evidence would require redesign, and the likely upgrade path.
 
-### 12. Provisional design record
-
-State `Not provisional`, or explain:
-
-- Why the temporary design is acceptable before deployment.
-- What evidence would require redesign.
-- The likely upgrade path.
-
-### 13. Traceability and verification
-
-Provide a table mapping each invariant to its owning code, negative test,
-acceptance evidence, and smallest verification.
-
-### 14. Open decisions and review disposition
+#### 8. Open decisions and review disposition
 
 - List ambiguity that could materially change the design.
-- Record current Blockers, Follow-ups, and Preferences.
+- Record Blockers, Follow-ups, and Preferences.
 
-Stop after Phase A and wait for explicit approval.
+### Required high-risk trust floor
 
-### Pre-deployment decision card
+For high-risk work, also state:
 
-For a prospective pre-deployment decision governed by the AI-assisted workflow
-in `AGENTS.md`, first create or reuse the one draft pull request containing the
-reviewed Phase A contract. Show one complete plain-English card containing all
-decision fields required by that workflow, including the draft PR's stable
-reference and the exact approval sentence. Then wait.
+- protected assets;
+- trusted sides or components;
+- untrusted actors, sides, and inputs;
+- explicitly excluded attacker capabilities;
+- the primary risk and its containment rule;
+- at least one production-reachable negative case for every invariant; and
+- invariant-to-implementation-to-test traceability.
 
-Recognize approval only from that exact later task-user message in the same
-Codex task. Before implementation, verify that the original card and approval
-items remain directly retrievable with stable references and in the required
-order. The task user does not verify hashes, bytes, inventories, or repository
-mechanics. If the original items, role, task, order, or named PR cannot be
-verified, stop without recognizing approval.
+A high-risk Blocker must name the violated invariant, supported production
+entry point, in-scope actor, exact execution or state-transition path, required
+preconditions, material consequence, and minimal reproduction or
+counterexample. Do not manufacture impossible internal states or introduce a
+new attacker model to block the pull request.
 
-## Phase B: implementation
+### Conditional modules
 
-Only begin after the complete design contract is approved.
+Add only the modules the risk requires:
 
-### Standing authority for an approved pre-deployment card
+- **State and ordering:** for stateful or transactional work, define states,
+  transitions, forbidden transitions, validation-before-side-effect ordering,
+  and time-of-check/time-of-use boundaries.
+- **Custody:** for credentials, keys, or protected outputs, define custody,
+  access, derivation, and handoff.
+- **Durability and recovery:** for durable changes, define migration,
+  transaction, rollback, failure recovery, and irreversible effects.
+- **Durable architecture and elegance:** when the decision must outlive the
+  pull request, record sources of truth, authoritative transitions, duplicated
+  state, deletion opportunities, and why an RFC or ADR is needed.
 
-An approved card authorizes work only in its already-named draft pull request.
-Record compact AI-attested evidence containing the decision identity and
-version, task/card/approval stable references, exact approval sentence,
-observed role and order, named PR, and the provisional-evidence limitation.
-The task message remains authority; the record is evidence only.
+Review Phase A to zero Blockers, then stop and present the decision card. Do not
+implement or request an expensive hosted baseline for a design-only head.
 
-Without another confirmation, the AI may perform only the in-envelope
-implementation, tests, documentation, mechanical evidence, commits, pushes,
-review handling, and merge authorized by the card and approved technical
-contract. The technical contract's exact path allowlist must be a subset of the
-card envelope, and every changed path must be inside that exact allowlist.
+## Pre-deployment decision card
 
-Before merge, post the compact scope report required by `AGENTS.md`, show any
-bootstrap diff required by the approved contract, and recheck exact-head
-review, all required checks, no demonstrated Blocker, the live original task
-items, the named-PR binding, and absence of later cancellation. Material
-expansion, another trust boundary or PR, lost evidence, ambiguity, or conflict
-with the card stops for a new decision version. A stronger accepted procedure
-continues to control its exact action. This authority is pre-deployment only
-and never authorizes deployment or another production authority action.
+For an approval-governed change, use the one existing draft pull request and
+the reviewed Phase A. Show one complete plain-English card containing:
 
-Before editing, reproduce the approved invariant traceability table. Implement
-the approved architecture, not a historical patch.
+- decision identity and version;
+- problem and one independently reviewable capability;
+- recommended decision;
+- primary trust boundary and authority map;
+- primary risk and containment rule;
+- permitted effects, non-effects, and decision-level invariants;
+- the named draft pull request;
+- verification gates and semantic reapproval triggers;
+- provisional pre-deployment posture; and
+- this exact approval sentence:
 
-- If implementation reveals that the approved design is wrong or incomplete,
-  stop and request a contract amendment.
-- If a change is needed in another trust boundary, stop before editing it and
-  propose a prerequisite, Follow-up, or stacked pull request.
-- Keep production changes as small as the invariants permit.
-- Remove obsolete authority and fallback paths instead of leaving old and new
+```text
+I approve OFARM2 decision <DECISION_ID> version <VERSION>.
+```
+
+Approval is only the entire visible text of a later task-user message in the
+same Codex task. Before recognizing it, verify that the unique live card and
+approval remain directly retrievable with stable references in the required
+order and that the named pull request is still open at the expected Phase A
+head. Generic approval, GitHub activity, credentials, AI or tool output,
+delegation, another task, or a summary of lost items never supplies approval.
+
+Human approval binds the capability, effects, authority, invariants, and named
+pull request rather than an exhaustive path list. It cannot be transferred to
+another pull request or replayed for another decision. A new decision version
+is required for a changed capability, primary boundary, authority map,
+permitted effect, non-effect, invariant, irreversible behavior, named pull
+request, or production/deployment posture, or when preservation is genuinely
+ambiguous.
+
+Closing the named pull request unmerged expires authority. Replacement or
+reopening requires the recovery procedure in root `AGENTS.md`: a new decision
+version and approval, fresh evidence, and no inheritance of earlier approval,
+review, admission, checks, baselines, or publication.
+
+## Phase B: complete implementation
+
+Begin only after valid approval when approval is required.
+
+- Reconfirm the declared capability, primary boundary, authority map when
+  applicable, effects, non-effects, and invariants. When approval is required,
+  also reconfirm the named pull request and absence of cancellation.
+- Reproduce the applicable Phase A traceability when the risk requires it.
+- Implement the complete vertical slice and its same-boundary companions.
+- When approval is required, record compact pull-request navigation with stable
+  references to the decision and approval. The task message remains authority;
+  no committed approval appendix or separate approval-record pull request is
+  required. For routine work, link the Delivery task contract and pull request.
+- Treat final changed paths as scope evidence. Explain newly discovered files
+  and prove that they add no capability, authority, effect, invariant, or
+  boundary.
+- Preserve every stronger accepted exact-action procedure.
+- Stop before editing another capability or authority/custody boundary.
+- For approval-governed work, stop for a new decision version on semantic
+  expansion, genuine ambiguity, named-pull-request change, or approval
+  conflict. For routine work, stop and amend or reclassify the task contract;
+  use Phase A and a new decision if approval becomes required.
+- Remove obsolete authority and fallback paths instead of leaving duplicate
   mechanisms active.
-- Map every negative test to an approved invariant.
-- Do not manufacture impossible production states and call them Blockers.
 - Regenerate inventories and snapshots only when required by the completed
-  runtime design.
+  capability.
 
-At completion, report the invariant-to-implementation-to-test mapping, deleted
-authority or fallback paths, deviations from the approved design, exact
-validation, and review disposition.
+If implementation invalidates the declared contract, stop. Approval-governed
+work requires a new decision version; routine work must amend or reclassify its
+contract before editing continues. At completion, report
+invariant-to-implementation-to-test mapping, deleted authority or fallback
+paths, deviations, exact validation, and review disposition.
 
-## Phase C: bounded review
+## Phase C: bounded review and merge
 
-Review the exact head against the approved contract and use exactly these
-classifications:
+For an approval-governed change, or when a stronger accepted exact-action
+procedure requires hosted evidence, freeze the implemented candidate head and
+use this order:
+
+1. Run mandatory cheap local checks.
+2. Obtain exact-head content review with zero Blockers.
+3. After any Blocker fix, review only the fix and affected invariants unless new
+   evidence demonstrates that the original scope is unsafe.
+4. Create fresh baseline admission for that exact head.
+5. Complete required hosted baselines and separate authoritative publication.
+6. Confirm the final receipt and semantic scope. When approval is required,
+   also confirm approval preservation, named-PR binding, and absence of
+   cancellation.
+7. Merge and close the Delivery issue when every gate passes.
+
+Routine work follows the routine merge-stop rule and any stronger accepted
+exact-action requirement. Do not create admission or publication ceremony when
+neither root `AGENTS.md` nor an accepted exact-action procedure requires it.
+
+Classify every finding as exactly one of:
 
 - **Blocker:** a demonstrated in-scope correctness, security, data-integrity,
   contractual, or production-safety failure. Name the violated invariant and
-  the smallest acceptable fix.
-- **Follow-up:** valid work outside the pull request boundary. Record it as a
-  linked issue or small future pull request; do not expand the current change.
+  smallest acceptable fix.
+- **Follow-up:** valid work outside the pull request boundary. Record separate
+  Delivery work; do not expand this pull request.
 - **Preference:** optional style or alternative-design advice. It never delays
   merging.
 
-Only Blockers delay a merge. Do not turn Preferences, hypothetical risks, or
-unrelated hardening into required changes.
+Only demonstrated Blockers delay merge. Perform at most one unconstrained full
+review at an exact head. Preferences, hypothetical risks, and unrelated
+hardening do not reopen review.
 
-A Blocker is valid only when it states the violated invariant, supported
-production entry point, in-scope actor, exact execution or state-transition
-path, required preconditions, material consequence, and minimal reproduction or
-counterexample.
+## Outcome measures
 
-Perform at most one unconstrained full review at an exact head. After a Blocker
-is fixed, review only the fix and affected invariant unless new evidence
-demonstrates that the original scope is unsafe.
+Measure delivery end to end:
 
-For a pilot pull request, record the number of full reviews, Blocker-fix
-reviews, Follow-ups, Preference-only suggestions, post-review commits, and the
-time from zero Blockers to merge in [the governance tracking issue](https://github.com/samovers/OFARM2/issues/218).
+- Delivery-issue open-to-close time;
+- live and abandoned implementation pull requests per delivered capability;
+- approval stops per capability;
+- process-only pull requests;
+- final implemented-head baseline cycles; and
+- time from zero Blockers to merge as secondary operational data.
 
-## Success measure
+The normal target is one live and one merged implementation pull request, one
+approval stop for high-risk work, zero process-only companion pull requests,
+and one successful implemented-head baseline cycle. Recovery from an abandoned
+unmerged pull request is recorded as recovery, not a second capability.
 
 Success means OFARM2 becomes more capable, reliable, and understandable without
-unnecessary complexity. Each merged change must deliver a clear capability,
-reduce a demonstrated risk, or validate an architectural decision. Before
-deployment, a later redesign is acceptable when it is supported by evidence
-and improves the platform.
+unnecessary complexity. Repository approval, checks, evidence, or merge never
+authorizes deployment, release, current/default promotion, production access,
+or a security waiver.

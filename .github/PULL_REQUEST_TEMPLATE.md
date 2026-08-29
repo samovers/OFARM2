@@ -1,88 +1,137 @@
-## Problem
+## Delivery identity
 
-<!-- State the one problem this pull request solves. -->
+<!-- A Tracking Epic does not receive an implementation PR. Link its selected Delivery child issue. -->
+
+- Delivery issue:
+- Tracking Epic: `None`
+- Problem:
+- Independently reviewable capability:
+- PR posture: `Normal` / `Replaces closed-unmerged PR` / `Reopens closed-unmerged PR`
+- [ ] This issue has one live implementation PR and no merged implementation PR.
 
 ## Primary trust boundary
 
-<!-- Name one boundary. State whether the scope stayed inside it. -->
+<!-- Name one authority-level boundary. Same ownership is not enough to combine independent capabilities. -->
+
+- Boundary:
+- Containment:
+- [ ] This PR contains one capability in one primary boundary with no cross-boundary waiver.
+
+## Permitted effects, non-effects, and non-goals
+
+### Permitted effects
+
+- `[PERMITTED EFFECT]`
+
+### Non-effects and non-goals
+
+- `[EXCLUDED EFFECT, SYSTEM, OR CONCERN]`
 
 ## Acceptance criteria or invariants
 
-<!-- Use falsifiable conditions. Use stable invariant IDs for trust-boundary work. -->
+<!-- Use falsifiable conditions. Use stable invariant IDs for high-risk work. -->
 
 - [ ] `[FALSIFIABLE CONDITION]`
 
-## Out of scope
+## Smallest complete change
 
-<!-- Name adjacent systems and future concerns excluded from this change. -->
+<!-- Explain why this is the minimum coherent vertical slice, not merely a small diff. -->
 
-- `[EXCLUDED SYSTEM OR CONCERN]`
+## Expected areas and complete vertical slice
 
-## Smallest change
+<!-- Paths are scope evidence, not human approval authority. -->
 
-<!-- Explain why this is the minimum coherent solution. -->
+- Expected repository areas:
 
-## Learning value
+| Companion | `Included` or `Not needed` | Reason or location |
+| --- | --- | --- |
+| Phase A or durable design navigation |  |  |
+| Implementation and deletion of superseded paths |  |  |
+| Owned schema or migration changes |  |  |
+| Tests |  |  |
+| Fixtures or compatibility bridges |  |  |
+| Documentation |  |  |
+| Generated inventories or mechanical evidence |  |  |
 
-<!-- Name the capability delivered, demonstrated risk reduced, or architectural decision validated. -->
+- [ ] No companion was split into an enabling-only pull request without an independently usable and testable outcome.
 
-## Provisional design record
+## Provisional posture
 
 <!-- State "Not provisional", or complete all three lines. -->
 
+- Status: `Not provisional`
 - Acceptable before deployment because:
 - Evidence requiring redesign:
 - Likely upgrade path:
 
+## Decision and precedence
+
+<!-- These fields record navigation evidence. They do not create approval; only the same-task task-user message can do that. -->
+
+- Risk class: `Routine` / `High-risk` / `Otherwise approval-governed`
+- Phase A location: `PR description` / `[RFC OR ADR]` / `Not required`
+- Decision identity and version: `Not required`
+- Approval navigation: `Not required`
+- Stronger accepted exact-action requirements: `None`
+- Ambiguous process precedence: `No` / `Stopped pending explicit amendment`
+
+## High-risk trust floor
+
+<!-- Complete or link the trust-floor fields for high-risk work. An authority map is also required whenever work changes, relies on, or exercises authority. State "Not applicable" only when the field truly does not apply. -->
+
+- Protected assets: `Not applicable`
+- Trusted sides or components: `Not applicable`
+- Untrusted actors, sides, or inputs: `Not applicable`
+- Excluded attacker capabilities: `Not applicable`
+- Primary risk and containment rule: `Not applicable`
+- Authority map: `Not applicable`
+- Production-reachable negative cases: `Not applicable`
+- Invariant-to-implementation-to-test traceability: `Not applicable`
+
+## Abandoned-PR recovery
+
+<!-- Complete only for replacement or reopening. A merged predecessor is never eligible. -->
+
+- Previous closed-unmerged PR: `Not applicable`
+- Recovery mode: `Replacement` / `Reopening` / `Not applicable`
+- Reciprocal supersession links: `Not applicable`
+- New decision version and approval navigation: `Not applicable`
+- [ ] No approval, review, admission, check, baseline, publication, or receipt evidence was reused.
+- [ ] The predecessor is unmerged.
+
 ## Follow-ups
 
-<!-- Link issues created instead of expanding this pull request, or state "None". -->
+<!-- Link separate Delivery work instead of expanding this PR, or state "None". -->
 
-- `[LINKED ISSUE OR NONE]`
+- `None`
 
-## Verification
+## Verification and review
 
-<!-- List only the smallest tests or checks needed for this boundary, with results. -->
+<!-- Root AGENTS.md owns exact admission and publication controls; record results here without redefining them. -->
 
-- [ ] `command` - result
+- Candidate full SHA:
+- Cheap checks and results:
 
-## Review disposition
-
-<!-- Use exactly these three classifications. Link every Follow-up issue before merge. -->
-
-| Classification | Finding or `None` | Evidence, smallest fix, or linked issue |
+| Classification | Finding or `None` | Evidence, smallest fix, or Delivery issue |
 | --- | --- | --- |
 | Blocker | None | |
 | Follow-up | None | |
 | Preference | None | |
 
-## Merge stop rule
+- Exact-head review reference:
+- Admission and hosted baseline reference: `Not required under root AGENTS.md — basis:`
+- Authoritative publication and receipt reference: `Not required under root AGENTS.md — basis:`
 
-- [ ] Acceptance criteria pass and no demonstrated Blocker remains.
+## Final semantic scope and cancellation check
 
-Once acceptance criteria pass and no demonstrated Blocker remains, merge this
-pull request. New ideas, Preferences, and non-blocking hardening become
-Follow-ups and do not reopen review.
+- Final changed paths:
+- Newly discovered paths and in-boundary explanation: `None`
+- [ ] Every changed path preserves the approved capability, primary boundary, authority map, effects, non-effects, and invariants.
+- [ ] Acceptance criteria and required checks pass with no demonstrated Blocker.
+- [ ] The exact head, named-PR binding, approval when required, and absence of later cancellation were rechecked.
 
-## Phase A design contract
+## Authority non-effects
 
-<!-- Required only for trust-boundary or authority changes. Link the approved contract, or state "Routine contract". -->
-
-## Pilot record
-
-<!-- Process-only and trivial documentation pull requests do not count. -->
-
-- Pilot eligibility: `Substantive platform change` / `Excluded`
-- Pilot number: `1` / `2` / `3` / `Not applicable`
-- Full reviews:
-- Blocker-fix reviews:
-- Follow-up issues:
-- Preference-only suggestions:
-- Post-review commits:
-- Time zero Blockers reached:
-- Time merged:
-- Same-account review evidence, if any:
-- Independent GitHub approval, if any:
-
-Pilot metrics are recorded in
-[governance issue #218](https://github.com/samovers/OFARM2/issues/218).
+Repository approval, checks, admission, baselines, publication, receipts, and
+merge do not authorize deployment, release, current/default promotion,
+production access, or a security waiver.
