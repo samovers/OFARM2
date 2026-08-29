@@ -30,9 +30,8 @@ issue [#352](https://github.com/samovers/OFARM2/issues/352)
 **Merged version-2 pull request:**
 [#349](https://github.com/samovers/OFARM2/pull/349)
 
-**Draft version-3 pull request:** pending creation from the RFC-only Phase A
-bootstrap head; it must be bound here before the version-3 review head and live
-decision card
+**Draft version-3 pull request:**
+[#354](https://github.com/samovers/OFARM2/pull/354)
 
 **Version-2 approval evidence:** the task user approved the exact sentence `I approve
 OFARM2 decision ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001
@@ -794,12 +793,12 @@ expressed class-scope binding or deletion of the forbidden display, hash, and
 equality names is rejected before a candidate source tree can receive a
 passing architecture verdict.
 
-Delivery issue #352 owns this correction. Pull request #349 is merged and is
-not recoverable. Delivery issue #350 already owns that merged implementation
-and cannot own a second merged implementation pull request under the current
-proportional-delivery procedure. Completion of #352 may support a later
-read-only closure assessment for #350 and #192, but this decision grants no
-issue-state authority.
+Delivery issue #352 and draft pull request #354 own this correction. Pull
+request #349 is merged and is not recoverable. Delivery issue #350 already owns
+that merged implementation and cannot own a second merged implementation pull
+request under the current proportional-delivery procedure. Completion of #352
+may support a later read-only closure assessment for #350 and #192, but this
+decision grants no issue-state authority.
 
 ### 15.2 Primary boundary, effects, and authority map
 
@@ -1102,10 +1101,10 @@ units.
 
 ### 15.9 Pull-request boundary and complete-slice companions
 
-The version-3 Phase A bootstrap changes this RFC only. The one later approved
-implementation pull request may change the four expected areas listed in the
-header when needed for the complete slice. Those areas are scope prediction,
-not independent approval authority.
+The version-3 Phase A bootstrap in draft pull request #354 changes this RFC
+only. After valid approval, that same pull request may change the four expected
+areas listed in the header when needed for the complete slice. Those areas are
+scope prediction, not independent approval authority.
 
 The base dependency is merged pull request #349. There is no stacked unmerged
 pull request. Pull request #349 review, approval, admission, baselines, and
@@ -1194,10 +1193,10 @@ Current disposition:
 - **Governed runtime or database regressions demonstrated:** zero; and
 - **Version-3 Phase B:** unauthorized.
 
-After the draft pull request is created, this RFC and its Phase A description
-must bind that exact pull request. The exact Phase A head must then receive one
-full design review. Every demonstrated design Blocker must be resolved at a new
-head and the affected contract re-reviewed before a live card is shown.
+This RFC and the Phase A description bind draft pull request #354. The exact
+Phase A head must receive one full design review. Every demonstrated design
+Blocker must be resolved at a new head and the affected contract re-reviewed
+before a live card is shown.
 
 Only the unique complete version-3 decision card in the same Codex task may
 request this exact later user message:
