@@ -2,19 +2,19 @@
 
 **Status:** decision versions 2 and 3 were implemented and merged through pull
 requests #349 and #354. Post-merge review #5058662084 demonstrates one narrower
-parenthesized-annotation conformance defect. Decision version 4 is proposed in
-Delivery issue #357 and amended after Phase A reviews #5059132827,
+parenthesized-annotation conformance defect. Decision version 4 was approved for
+Phase B in Delivery issue #357 after amendments from Phase A reviews #5059132827,
 #5059215166, #5059916055, #5060240873, #5060325438, and #5060758042 identified
 in-boundary declaration-shape, declaration-completeness, annotation-resolution-
 symbol, nested-class, comprehension, and deferred-body-activation blockers.
-Phase B is unauthorized pending amended exact-head Phase A re-review and later
-task-user approval.
+Exact-head review #5060965587 reported zero Phase A content Blockers, and the
+task user then supplied the exact version-4 approval in the same Codex task.
 
 **Decision:**
 `ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001`
 
-**Decision version:** 4 proposed; versions 2 and 3 remain historical approved
-and merged decisions
+**Decision version:** 4 approved for Phase B in draft pull request #358;
+versions 2 and 3 remain historical approved and merged decisions
 
 **Version history:** version 1 was an unapproved, pre-pull-request task draft.
 Version 2 superseded it because the bounded Phase A review required two
@@ -85,6 +85,15 @@ decision ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001
 version 3.` on 2026-08-29. The task record remains the approval authority.
 Version-2 approval did not transfer to the post-merge correction.
 
+**Version-4 approval evidence:** exact-head
+[review #5060965587](https://github.com/samovers/OFARM2/pull/358#pullrequestreview-5060965587)
+reported zero Phase A content Blockers for
+`d0646d5bb61334a07dff61ba71a15d70bee54bcf`. After the unique complete
+version-4 card, the task user approved the exact required sentence on
+2026-08-30. The task record remains the authority. The
+[pull-request navigation copy](https://github.com/samovers/OFARM2/pull/358#issuecomment-5469057124)
+is non-authoritative.
+
 **Primary trust boundary:** credential-bearing diagnostic-representation
 structural conformance for the five exact dataclass carriers already reached by
 the production runtime, process-crash reconciliation, and store-loss recovery
@@ -101,7 +110,7 @@ compositions
 7. `kernel/tests/test_rewrite_architecture_check.py`
 8. `conformance/review_baseline_test_inventory.json`
 
-**Version-3 expected repository areas, as scope prediction rather than approval
+**Version-4 expected repository areas, as scope prediction rather than approval
 authority:**
 
 1. `docs/rfcs/OFARM_Security_Audit_Credential_Diagnostic_Representation_RFC_v0_1.md`
@@ -2118,27 +2127,21 @@ waiver. Production composition remains unauthorized and non-deployable.
 
 ### 16.11 Phase A disposition and approval stop
 
-Current amended design disposition after reviews #5059132827, #5059215166,
-#5059916055, #5060240873, #5060325438, and #5060758042 and before the new exact-
-head bounded re-review:
+Current design disposition after exact-head review #5060965587:
 
-- **Phase A content Blockers:** the forced lazy-alias, invoked-lambda, and local-
-  function activation blocker from #5060758042, plus the hostile permitted-
-  method default found during bounded assessment, are addressed by the exact
-  direct statement sequence and construction-time method headers; closure is
-  pending re-review;
-- **New Follow-ups introduced:** zero;
+- **Phase A content Blockers:** zero;
+- **New Follow-ups introduced:** the review's sole repository-currentness
+  correction was completed in the PR body without changing the reviewed head;
 - **Existing separate Follow-ups:** unchanged;
-- **Preferences:** zero in #5060758042; the amendment is pending re-review;
+- **Preferences:** zero;
 - **Current credential disclosures demonstrated:** zero;
 - **Governed runtime or database regressions demonstrated:** zero; and
-- **Phase B:** unauthorized.
+- **Phase B:** authorized only for the approved version-4 capability in named
+  draft pull request #358.
 
-The only acceptable approval is the entire visible text of a later task-user
-message in the same Codex task, after the amended exact-head review demonstrates
-zero Blockers and a new unique complete version-4 decision card names the
-created draft pull request. Every earlier version-4 card is withdrawn and must
-not be used:
+The accepted approval was the entire visible text of the task-user message in
+the same Codex task after the zero-Blocker amended exact-head review and unique
+complete version-4 card. Every earlier version-4 card remains withdrawn:
 
 ```text
 I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001 version 4.

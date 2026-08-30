@@ -2446,18 +2446,89 @@ class SecretCarrier:
 """
 
 
+def _credential_test_expression_shape(source):
+    expression = ast.parse(source, mode="eval", feature_version=(3, 12))
+    return ast.dump(expression.body, include_attributes=False)
+
+
+_TEST_CREDENTIAL_DECLARATIONS = (
+    ("first", _credential_test_expression_shape("str")),
+    ("second", _credential_test_expression_shape("str")),
+)
+_TEST_CREDENTIAL_METHODS = (
+    rewrite_architecture_check._CredentialMethodHeader(
+        "__eq__",
+        (),
+        (
+            ("self", None),
+            ("other", _credential_test_expression_shape("object")),
+        ),
+        _credential_test_expression_shape("bool"),
+        "exact-equality",
+    ),
+)
+
+_VALID_RUNTIME_CONFIG_DIAGNOSTIC_SOURCE = """\
+from __future__ import annotations
+from dataclasses import dataclass
+from typing import Self, cast
+
+@dataclass(frozen=True, slots=True, repr=False)
+class RuntimeConfig:
+    first: str
+    second: str
+
+    def __eq__(self, other: object) -> bool:
+        if other.__class__ is not self.__class__:
+            return NotImplemented
+        other_carrier = cast(Self, other)
+        return (
+            self.first,
+            self.second,
+        ) == (
+            other_carrier.first,
+            other_carrier.second,
+        )
+
+    @classmethod
+    def from_env(cls) -> RuntimeConfig:
+        return cls(first="fictional", second="fictional")
+"""
+
+_TEST_RUNTIME_CONFIG_METHODS = (
+    *_TEST_CREDENTIAL_METHODS,
+    rewrite_architecture_check._CredentialMethodHeader(
+        "from_env",
+        (_credential_test_expression_shape("classmethod"),),
+        (("cls", None),),
+        _credential_test_expression_shape("RuntimeConfig"),
+        "opaque-deferred",
+    ),
+)
+
+
 def _credential_violations(
     source,
     protected_fields=("first",),
-    declared_fields=("first", "second"),
+    declarations=_TEST_CREDENTIAL_DECLARATIONS,
+    methods=_TEST_CREDENTIAL_METHODS,
 ):
-    return (
-        rewrite_architecture_check._credential_diagnostic_carrier_violations(
-            ast.parse(source),
-            "SecretCarrier",
-            protected_fields,
-            declared_fields,
-        )
+    return rewrite_architecture_check._credential_diagnostic_carrier_violations(
+        ast.parse(source),
+        "SecretCarrier",
+        protected_fields,
+        declarations,
+        methods,
+    )
+
+
+def _runtime_config_credential_violations(source):
+    return rewrite_architecture_check._credential_diagnostic_carrier_violations(
+        ast.parse(source),
+        "RuntimeConfig",
+        ("first",),
+        _TEST_CREDENTIAL_DECLARATIONS,
+        _TEST_RUNTIME_CONFIG_METHODS,
     )
 
 
@@ -2472,9 +2543,31 @@ def _credential_source_with(statement, *, future_annotations=False):
     return source
 
 
+def _credential_events(source, annotation_resolution_symbols=frozenset()):
+    tree = ast.parse(source)
+    target = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "SecretCarrier"
+    )
+    return rewrite_architecture_check._credential_class_namespace_events(
+        tree,
+        target,
+        annotation_resolution_symbols,
+    )
+
+
 def test_credential_diagnostic_authority_map_is_exact():
+    shape = _credential_test_expression_shape
+    eq_header = rewrite_architecture_check._CredentialMethodHeader(
+        "__eq__",
+        (),
+        (("self", None), ("other", shape("object"))),
+        shape("bool"),
+        "exact-equality",
+    )
     assert rewrite_architecture_check._CREDENTIAL_DIAGNOSTIC_CARRIERS == (
-        (
+        rewrite_architecture_check._CredentialCarrierDescriptor(
             "kernel/runtime_config.py",
             "RuntimeConfig",
             (
@@ -2486,36 +2579,53 @@ def test_credential_diagnostic_authority_map_is_exact():
                 "security_audit_control_pg_dsn",
             ),
             (
-                "mode",
-                "deployment_image_digest",
-                "oidc_issuer",
-                "oidc_audience",
-                "oidc_jwks_url",
-                "pg_dsn",
-                "tenant_readiness_pg_dsn",
-                "security_audit_readiness_pg_dsn",
-                "security_audit_authentication_pg_dsn",
-                "security_audit_request_router_pg_dsn",
-                "security_audit_control_pg_dsn",
-                "correlation_hmac_kms_key_resource",
-                "tenant_capability_kid",
-                "signing_evidence_receipt_path",
-                "signing_evidence_observer_public_key",
+                ("mode", shape("RuntimeMode")),
+                ("deployment_image_digest", shape("str")),
+                ("oidc_issuer", shape("str")),
+                ("oidc_audience", shape("str")),
+                ("oidc_jwks_url", shape("str")),
+                ("pg_dsn", shape("str")),
+                ("tenant_readiness_pg_dsn", shape("str")),
+                ("security_audit_readiness_pg_dsn", shape("str")),
+                ("security_audit_authentication_pg_dsn", shape("str")),
+                ("security_audit_request_router_pg_dsn", shape("str")),
+                ("security_audit_control_pg_dsn", shape("str")),
+                ("correlation_hmac_kms_key_resource", shape("str")),
+                ("tenant_capability_kid", shape("str")),
+                ("signing_evidence_receipt_path", shape("Path")),
+                ("signing_evidence_observer_public_key", shape("bytes")),
+            ),
+            (
+                eq_header,
+                rewrite_architecture_check._CredentialMethodHeader(
+                    "from_env",
+                    (shape("classmethod"),),
+                    (("cls", None),),
+                    shape("RuntimeConfig"),
+                    "opaque-deferred",
+                ),
             ),
         ),
-        (
+        rewrite_architecture_check._CredentialCarrierDescriptor(
             "deployment/postgresql/security_audit_process_crash.py",
             "ProcessCrashReconciliationSecrets",
             ("control_conninfo",),
-            ("control_conninfo",),
+            (("control_conninfo", shape("str")),),
+            (eq_header,),
         ),
-        (
+        rewrite_architecture_check._CredentialCarrierDescriptor(
             "deployment/postgresql/security_audit_store_loss.py",
             "StoreLossRecoverySecrets",
             ("admin_dsn", "migrator_dsn", "control_dsn", "login_passwords"),
-            ("admin_dsn", "migrator_dsn", "control_dsn", "login_passwords"),
+            (
+                ("admin_dsn", shape("str")),
+                ("migrator_dsn", shape("str")),
+                ("control_dsn", shape("str")),
+                ("login_passwords", shape("tuple[tuple[str, str], ...]")),
+            ),
+            (eq_header,),
         ),
-        (
+        rewrite_architecture_check._CredentialCarrierDescriptor(
             "deployment/postgresql/security_audit_store_loss.py",
             "_Routes",
             (
@@ -2526,18 +2636,24 @@ def test_credential_diagnostic_authority_map_is_exact():
                 "control_short",
             ),
             (
-                "admin_long",
-                "admin_short",
-                "admin_target_short",
-                "migrator_long",
-                "control_short",
+                ("admin_long", shape("str")),
+                ("admin_short", shape("str")),
+                ("admin_target_short", shape("str")),
+                ("migrator_long", shape("str")),
+                ("control_short", shape("str")),
             ),
+            (eq_header,),
         ),
-        (
+        rewrite_architecture_check._CredentialCarrierDescriptor(
             "deployment/postgresql/security_audit_store_loss.py",
             "_ValidatedInvocation",
             ("routes", "login_passwords"),
-            ("request", "routes", "login_passwords"),
+            (
+                ("request", shape("StoreLossRecoveryRequest")),
+                ("routes", shape("_Routes")),
+                ("login_passwords", shape("tuple[tuple[str, str], ...]")),
+            ),
+            (eq_header,),
         ),
     )
 
@@ -2549,6 +2665,212 @@ def test_credential_diagnostic_rule_accepts_exact_shape(explicit_eq):
         source = source.replace("repr=False)", "repr=False, eq=True)", 1)
 
     assert _credential_violations(source) == []
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    (
+        "(first): str",
+        "first: bytes",
+        "first: ClassVar[str]",
+        "first: InitVar[str]",
+        "first: KW_ONLY",
+        'first: str = "fictional"',
+        "first: str = field(init=False)",
+        "first: str = field(hash=False)",
+        "first: str = field(kw_only=True)",
+    ),
+    ids=(
+        "parenthesized",
+        "alternate-annotation",
+        "class-var",
+        "init-var",
+        "keyword-only-sentinel",
+        "plain-default",
+        "field-init",
+        "field-hash",
+        "field-keyword-only",
+    ),
+)
+def test_credential_diagnostic_rule_rejects_alternate_declaration_shapes(
+    replacement,
+):
+    source = _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE.replace(
+        "first: str",
+        replacement,
+        1,
+    )
+
+    assert (
+        "SecretCarrier: direct class-body shape differs from the exact contract"
+        in _credential_violations(source)
+    )
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    (
+        ("    first: str\n", ""),
+        (
+            "    first: str\n    second: str",
+            "    second: str\n    first: str",
+        ),
+        (
+            "    first: str",
+            "    first: str\n    first: str",
+        ),
+        (
+            "    first: str",
+            "    if True:\n        first: str",
+        ),
+        (
+            "    first: str",
+            '    first: str\n    "unexpected direct statement"',
+        ),
+    ),
+    ids=("missing", "reordered", "duplicated", "wrapped", "extra"),
+)
+def test_credential_diagnostic_rule_rejects_alternate_direct_sequences(
+    old,
+    new,
+):
+    source = _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE.replace(old, new, 1)
+
+    assert (
+        "SecretCarrier: direct class-body shape differs from the exact contract"
+        in _credential_violations(source)
+    )
+
+
+@pytest.mark.parametrize(
+    "header",
+    (
+        "def __eq__(self, other) -> bool:",
+        "def __eq__(self: object, other: object) -> bool:",
+        "def __eq__(self, other: object) -> object:",
+        "def __eq__(self, other: object = object()) -> bool:",
+        "def __eq__(self, /, other: object) -> bool:",
+        "def __eq__(self, *other: object) -> bool:",
+        "def __eq__(self, *, other: object) -> bool:",
+        "def __eq__[T](self, other: object) -> bool:",
+    ),
+    ids=(
+        "missing-argument-annotation",
+        "self-annotation",
+        "return-annotation",
+        "default",
+        "positional-only",
+        "variadic",
+        "keyword-only",
+        "type-parameter",
+    ),
+)
+def test_credential_diagnostic_rule_rejects_alternate_equality_headers(header):
+    source = _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE.replace(
+        "def __eq__(self, other: object) -> bool:",
+        header,
+        1,
+    )
+
+    assert (
+        "SecretCarrier: direct class-body shape differs from the exact contract"
+        in _credential_violations(source)
+    )
+
+
+@pytest.mark.parametrize(
+    "header",
+    (
+        (
+            "def from_env(\n"
+            "        cls, value=(lambda: globals().__setitem__(\n"
+            '            "str", object\n'
+            "        ))()\n"
+            "    ) -> RuntimeConfig:"
+        ),
+        "def from_env(cls: object) -> RuntimeConfig:",
+        "def from_env(cls) -> object:",
+        "async def from_env(cls) -> RuntimeConfig:",
+        "def from_env[T](cls) -> RuntimeConfig:",
+    ),
+    ids=(
+        "hostile-default",
+        "argument-annotation",
+        "return-annotation",
+        "asynchronous",
+        "type-parameter",
+    ),
+)
+def test_runtime_config_credential_rule_rejects_alternate_from_env_headers(
+    header,
+):
+    source = _VALID_RUNTIME_CONFIG_DIAGNOSTIC_SOURCE.replace(
+        "def from_env(cls) -> RuntimeConfig:",
+        header,
+        1,
+    )
+
+    assert (
+        "RuntimeConfig: direct class-body shape differs from the exact contract"
+        in _runtime_config_credential_violations(source)
+    )
+
+
+@pytest.mark.parametrize(
+    "decorator",
+    ("", "    @staticmethod\n", "    @caller\n    @classmethod\n"),
+    ids=("missing", "alternate", "additional"),
+)
+def test_runtime_config_credential_rule_rejects_alternate_from_env_decorators(
+    decorator,
+):
+    source = _VALID_RUNTIME_CONFIG_DIAGNOSTIC_SOURCE.replace(
+        "    @classmethod\n",
+        decorator,
+        1,
+    )
+
+    assert (
+        "RuntimeConfig: direct class-body shape differs from the exact contract"
+        in _runtime_config_credential_violations(source)
+    )
+
+
+def test_runtime_config_credential_rule_keeps_from_env_body_opaque():
+    source = _VALID_RUNTIME_CONFIG_DIAGNOSTIC_SOURCE.replace(
+        '        return cls(first="fictional", second="fictional")',
+        (
+            "        def deferred_helper():\n"
+            '            globals().__setitem__("str", object)\n'
+            "        values = [item for item in ()]\n"
+            "        return cls(first=str(values), second=str(deferred_helper))"
+        ),
+        1,
+    )
+
+    assert _runtime_config_credential_violations(source) == []
+
+
+def test_credential_method_header_refuses_detached_type_comment():
+    tree = ast.parse(_VALID_CREDENTIAL_DIAGNOSTIC_SOURCE)
+    target = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "SecretCarrier"
+    )
+    method = next(
+        statement for statement in target.body if isinstance(statement, ast.FunctionDef)
+    )
+    method.type_comment = "(object, object) -> bool"
+
+    assert (
+        rewrite_architecture_check._credential_direct_class_projection(
+            target,
+            _TEST_CREDENTIAL_DECLARATIONS,
+            _TEST_CREDENTIAL_METHODS,
+        )
+        is None
+    )
 
 
 @pytest.mark.parametrize(
@@ -2790,12 +3112,33 @@ def test_credential_diagnostic_rule_rejects_unbounded_forms(statement):
     ),
     ids=("list", "set", "dict", "generator"),
 )
-def test_credential_diagnostic_rule_inspects_leftmost_iterable(expression):
-    source = _credential_source_with(f"    helper = {expression}")
+@pytest.mark.parametrize(
+    "future_annotations",
+    (False, True),
+    ids=("eager", "postponed"),
+)
+def test_credential_diagnostic_rule_refuses_every_reached_comprehension(
+    expression,
+    future_annotations,
+):
+    source = _credential_source_with(
+        f"    helper = {expression}",
+        future_annotations=future_annotations,
+    )
 
-    assert (
-        "SecretCarrier: class namespace binding analysis is unbounded"
-        in _credential_violations(source)
+    unbounded = [
+        event for event in _credential_events(source) if event.kind == "unbounded"
+    ]
+
+    assert len(unbounded) == 1
+    assert isinstance(
+        unbounded[0].node,
+        (
+            ast.ListComp,
+            ast.SetComp,
+            ast.DictComp,
+            ast.GeneratorExp,
+        ),
     )
 
 
@@ -2812,10 +3155,285 @@ def test_credential_diagnostic_rule_inspects_leftmost_iterable(expression):
     ),
     ids=("result", "filter", "later-iterable", "target"),
 )
-def test_credential_diagnostic_rule_excludes_comprehension_scope(expression):
+def test_credential_diagnostic_rule_does_not_traverse_comprehension_body(
+    expression,
+):
     source = _credential_source_with(f"    helper = {expression}")
 
-    assert _credential_violations(source) == []
+    unbounded = [
+        event for event in _credential_events(source) if event.kind == "unbounded"
+    ]
+
+    assert len(unbounded) == 1
+    assert isinstance(unbounded[0].node, ast.ListComp)
+
+
+@pytest.mark.parametrize("name", ("__repr__", "__eq__"))
+@pytest.mark.parametrize(
+    "value",
+    (None, '"fictional"'),
+    ids=("without-value", "with-value"),
+)
+def test_credential_parenthesized_annotation_follows_assignment_semantics(
+    name,
+    value,
+):
+    statement = f"    ({name}): object"
+    if value is not None:
+        statement += f" = {value}"
+    events = _credential_events(_credential_source_with(statement))
+    annotated_events = [
+        event
+        for event in events
+        if event.name == name and isinstance(event.node, ast.AnnAssign)
+    ]
+
+    if value is None:
+        assert annotated_events == []
+    else:
+        assert [event.kind for event in annotated_events] == ["bind"]
+
+
+@pytest.mark.parametrize(
+    "target",
+    (
+        "(exec('__repr__ = object()') or holder).value",
+        "holder[exec('__repr__ = object()') or 0]",
+    ),
+    ids=("attribute", "subscript"),
+)
+@pytest.mark.parametrize(
+    "value",
+    (None, "object()"),
+    ids=("without-value", "with-value"),
+)
+def test_credential_non_simple_annotation_inspects_evaluated_target_components(
+    target,
+    value,
+):
+    statement = f"    {target}: object"
+    if value is not None:
+        statement += f" = {value}"
+
+    assert any(
+        event.kind == "unbounded"
+        for event in _credential_events(_credential_source_with(statement))
+    )
+
+
+def test_credential_annotation_dispatch_refuses_unsupported_simple_value():
+    tree = ast.parse(_VALID_CREDENTIAL_DIAGNOSTIC_SOURCE)
+    target = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "SecretCarrier"
+    )
+    declaration = next(
+        statement for statement in target.body if isinstance(statement, ast.AnnAssign)
+    )
+    declaration.simple = 2
+
+    events = rewrite_architecture_check._credential_class_namespace_events(
+        tree,
+        target,
+    )
+
+    assert [event.node for event in events if event.kind == "unbounded"] == [
+        declaration
+    ]
+
+
+def test_credential_direct_declarations_own_resolution_symbols_and_identity():
+    tree = ast.parse(_VALID_CREDENTIAL_DIAGNOSTIC_SOURCE)
+    target = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "SecretCarrier"
+    )
+    projection = rewrite_architecture_check._credential_direct_class_projection(
+        target,
+        _TEST_CREDENTIAL_DECLARATIONS,
+        _TEST_CREDENTIAL_METHODS,
+    )
+
+    assert projection is not None
+    symbols = rewrite_architecture_check._credential_annotation_resolution_symbols(
+        projection.declarations
+    )
+    events = rewrite_architecture_check._credential_class_namespace_events(
+        tree,
+        target,
+        symbols,
+    )
+    collected = (
+        rewrite_architecture_check._credential_collected_simple_declaration_nodes(
+            events
+        )
+    )
+
+    assert symbols == frozenset({"str"})
+    assert len(collected) == len(projection.declarations)
+    assert all(
+        observed is approved
+        for observed, approved in zip(
+            collected,
+            projection.declarations,
+            strict=True,
+        )
+    )
+
+
+def test_credential_collected_declaration_identity_exposes_nested_extra_node():
+    source = _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE.replace(
+        "    def __eq__",
+        "    if True:\n        third: str\n\n    def __eq__",
+        1,
+    )
+    tree = ast.parse(source)
+    target = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "SecretCarrier"
+    )
+    direct = tuple(
+        statement for statement in target.body if isinstance(statement, ast.AnnAssign)
+    )
+    events = rewrite_architecture_check._credential_class_namespace_events(
+        tree,
+        target,
+    )
+    collected = (
+        rewrite_architecture_check._credential_collected_simple_declaration_nodes(
+            events
+        )
+    )
+
+    assert len(direct) == 2
+    assert len(collected) == 3
+    assert all(
+        observed is approved
+        for observed, approved in zip(collected[:2], direct, strict=True)
+    )
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "    namespace = globals",
+        "    namespace = __annotations__",
+        '    globals()["str"] = ClassVar',
+        '    __annotations__["first"] = str',
+    ),
+    ids=(
+        "globals-capture",
+        "annotation-map-capture",
+        "globals-mutation",
+        "annotation-map-mutation",
+    ),
+)
+def test_credential_namespace_collector_refuses_reserved_evaluated_names(
+    statement,
+):
+    events = _credential_events(_credential_source_with(statement))
+
+    assert any(event.kind == "unbounded" for event in events)
+
+
+@pytest.mark.parametrize("scope", ("global", "nonlocal"))
+def test_credential_namespace_collector_refuses_resolution_symbol_redirection(
+    scope,
+):
+    source = _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE.replace(
+        "    first: str",
+        f"    {scope} str\n    first: str",
+        1,
+    )
+    events = _credential_events(source, frozenset({"str"}))
+
+    assert any(event.kind == "unbounded" and event.name == "str" for event in events)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    ("    str = object()", "    del str"),
+    ids=("bind", "delete"),
+)
+def test_credential_namespace_collector_exposes_resolution_symbol_changes(
+    statement,
+):
+    events = _credential_events(
+        _credential_source_with(statement),
+        frozenset({"str"}),
+    )
+
+    assert any(
+        event.kind in {"bind", "delete"} and event.name == "str" for event in events
+    )
+
+
+def test_credential_diagnostic_rule_rejects_annotation_map_binding():
+    source = _credential_source_with("    __annotations__ = {}")
+
+    assert (
+        "SecretCarrier: class defines explicit annotation-map authority"
+        in _credential_violations(source)
+    )
+
+
+@pytest.mark.parametrize(
+    "future_annotations",
+    (False, True),
+    ids=("eager", "postponed"),
+)
+def test_credential_diagnostic_rule_rejects_nested_class_construction(
+    future_annotations,
+):
+    source = _credential_source_with(
+        "    class Nested:\n        global str\n        str = ClassVar",
+        future_annotations=future_annotations,
+    )
+
+    assert (
+        "SecretCarrier: nested class construction is prohibited"
+        in _credential_violations(source)
+    )
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        (
+            '    type Mutation = globals().__setitem__("str", ClassVar)\n'
+            "    Mutation.__value__"
+        ),
+        '    (lambda: globals().__setitem__("str", ClassVar))()',
+        (
+            "    def mutate():\n"
+            '        globals().__setitem__("str", ClassVar)\n\n'
+            "    mutate()"
+        ),
+        ('    [*(globals().__setitem__("str", marker) for marker in (ClassVar,))]'),
+    ),
+    ids=("forced-type-alias", "invoked-lambda", "local-call", "consumed-generator"),
+)
+@pytest.mark.parametrize(
+    "future_annotations",
+    (False, True),
+    ids=("eager", "postponed"),
+)
+def test_credential_diagnostic_rule_rejects_pre_decoration_activation(
+    statement,
+    future_annotations,
+):
+    source = _credential_source_with(
+        statement,
+        future_annotations=future_annotations,
+    )
+
+    assert (
+        "SecretCarrier: direct class-body shape differs from the exact contract"
+        in _credential_violations(source)
+    )
 
 
 @pytest.mark.parametrize(
@@ -2922,7 +3540,7 @@ def test_credential_diagnostic_rule_inspects_definition_time_scope(statement):
         "lazy-type-alias",
     ),
 )
-def test_credential_diagnostic_rule_excludes_nested_or_lazy_scope(
+def test_credential_diagnostic_rule_rejects_unapproved_deferred_statements(
     statement,
     future_annotations,
 ):
@@ -2931,7 +3549,10 @@ def test_credential_diagnostic_rule_excludes_nested_or_lazy_scope(
         future_annotations=future_annotations,
     )
 
-    assert _credential_violations(source) == []
+    assert (
+        "SecretCarrier: direct class-body shape differs from the exact contract"
+        in _credential_violations(source)
+    )
 
 
 @pytest.mark.parametrize(
@@ -2983,10 +3604,12 @@ def test_credential_diagnostic_rule_inspects_ordinary_evaluated_expressions(
     ),
     ids=("attribute-assignment", "attribute-deletion"),
 )
-def test_credential_diagnostic_rule_does_not_treat_attributes_as_class_names(
+def test_credential_namespace_collector_does_not_treat_attributes_as_names(
     statement,
 ):
-    assert _credential_violations(_credential_source_with(statement)) == []
+    events = _credential_events(_credential_source_with(statement))
+
+    assert not any(event.name == "__repr__" for event in events)
 
 
 def test_credential_namespace_events_preserve_order_origin_and_identity():
@@ -3044,7 +3667,8 @@ def test_credential_checker_uses_authenticated_module_and_detached_ast(
         "governed/carrier.py",
         "SecretCarrier",
         ("first",),
-        ("first", "second"),
+        _TEST_CREDENTIAL_DECLARATIONS,
+        _TEST_CREDENTIAL_METHODS,
     )
     monkeypatch.setattr(
         rewrite_architecture_check,
