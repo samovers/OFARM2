@@ -4,10 +4,11 @@
 requests #349 and #354. Post-merge review #5058662084 demonstrates one narrower
 parenthesized-annotation conformance defect. Decision version 4 is proposed in
 Delivery issue #357 and amended after Phase A reviews #5059132827,
-#5059215166, #5059916055, #5060240873, and #5060325438 identified in-boundary
-declaration-shape, declaration-completeness, annotation-resolution-symbol, and
-nested-class- and comprehension-execution blockers. Phase B is unauthorized
-pending amended exact-head Phase A re-review and later task-user approval.
+#5059215166, #5059916055, #5060240873, #5060325438, and #5060758042 identified
+in-boundary declaration-shape, declaration-completeness, annotation-resolution-
+symbol, nested-class, comprehension, and deferred-body-activation blockers.
+Phase B is unauthorized pending amended exact-head Phase A re-review and later
+task-user approval.
 
 **Decision:**
 `ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001`
@@ -46,7 +47,12 @@ set, and dictionary comprehension bodies execute immediately even though their
 bindings occupy an implicit scope. The closed correction also refuses every
 reached generator expression: whether an otherwise lazy body is consumed by
 the enclosing class-suite expression cannot be accepted without a broader
-consumer or capability model.
+consumer or capability model. A sixth amendment follows review #5060758042
+because a lazy type-alias value, lambda body, or local function body can also be
+activated by a later direct class-suite statement before dataclass decoration.
+The correction replaces further activation modeling with one exact direct
+class-body statement sequence and exact construction-time method headers while
+leaving the approved `RuntimeConfig.from_env` body deferred and uninspected.
 
 **Issue context:** Tracking Epic
 [#192](https://github.com/samovers/OFARM2/issues/192), original Delivery outcome
@@ -1433,6 +1439,38 @@ function body remains excluded because that deferred body is never reached by
 the target-class dispatcher. The current five carrier declarations require no
 class-scope comprehension or generator expression.
 
+Exact-head
+[review #5060758042](https://github.com/samovers/OFARM2/pull/358#pullrequestreview-5060758042)
+accepts the four-form refusal but demonstrates that the same activation gap is
+not unique to generators. A direct class suite can define a lazy `TypeAlias`
+and force its `__value__`, immediately invoke a lambda, or define and then call
+a local function. Each excluded body can execute an explicit `globals`
+mutation before the approved fields are processed or before dataclass
+decoration. Under eager and postponed annotations, bounded CPython 3.12.13
+reproductions made `first: str` cease to be an ordinary field while the
+version-3 collector reported no violation.
+
+The same assessment found one necessary precision in the proposed allowlist.
+Merely permitting a method named `from_env` with exact `@classmethod` would
+still allow an immediately invoked lambda in a default expression. In the
+postponed-annotation posture used by `RuntimeConfig`, that default executes
+after the field statements but before dataclass decoration and can cause the
+same false-success result. The direct statement sequence must therefore pair
+each permitted method with an exact construction-time header, including its
+function kind, decorators, parameters, defaults, type parameters, and
+annotation ASTs.
+
+This sixth amendment makes the existing carrier descriptor the sole authority
+for one exact direct class-body projection. The four non-`RuntimeConfig`
+carriers permit only their approved field declarations followed by the exact
+direct `__eq__`. `RuntimeConfig` permits its approved fields, the same exact
+direct `__eq__`, and one synchronous `from_env` with exact `@classmethod` and
+the exact safe header already present in source. Every other direct statement
+fails. The existing namespace-event collector remains secondary enforcement.
+The `from_env` body is not added to the projection and is not inspected: no
+permitted later class-suite statement can activate it before decoration, and
+its runtime behavior remains outside this structural correction.
+
 ### 16.2 Decision, capability, and primary trust boundary
 
 The proposed decision is
@@ -1440,11 +1478,12 @@ The proposed decision is
 It binds Delivery issue #357 and draft pull request #358, created from branch
 `agent/357-parenthesized-annotated-field-phase-a`.
 
-The one independently reviewable capability is a closed direct-declaration
-shape inside the existing five-carrier structural guard. A governed field must
-be one direct `AnnAssign` with the expected name, `simple == 1`, the exact
-approved annotation AST, no value, and no other class-namespace binding for that
-name. Every collected `AnnAssign(Name(...), simple=1)` node in target-class
+The one independently reviewable capability is a closed direct class-body
+construction shape inside the existing five-carrier structural guard. A
+governed field must be one direct `AnnAssign` with the expected name,
+`simple == 1`, the exact approved annotation AST, no value, and no other class-
+namespace binding for that name. Every collected
+`AnnAssign(Name(...), simple=1)` node in target-class
 execution scope must be the identical node of one approved direct declaration,
 with equal multiplicity. A parenthesized or other non-simple annotated target is
 never counted as a field and follows its actual assignment and
@@ -1455,11 +1494,14 @@ delete, or redirect any member of that set, and may not explicitly evaluate the
 `globals` name. No nested `ClassDef` event may be reached in the governed
 target-class execution scope. No `ListComp`, `SetComp`, `DictComp`, or
 `GeneratorExp` may be reached by the governed target-class expression
-dispatcher.
+dispatcher. The ordered direct `ClassDef.body` projection must also equal the
+single descriptor-owned statement sequence for that carrier. Permitted methods
+must match their exact construction-time headers; only the existing
+`RuntimeConfig.from_env` body remains opaque and deferred.
 
 The primary trust boundary is credential-bearing diagnostic-representation
-structural conformance for the exact direct annotated-field inventory and
-class-namespace events of:
+structural conformance for the exact direct class-body construction surface,
+annotated-field inventory, and class-namespace events of:
 
 1. `RuntimeConfig`;
 2. `ProcessCrashReconciliationSecrets`;
@@ -1480,7 +1522,11 @@ an exact annotation. A nested class suite executes immediately and can perform
 that same mutation even though its ordinary bindings do not enter the outer
 class namespace. Materializing comprehension bodies also execute immediately,
 and a generator body can execute immediately when its enclosing expression
-consumes it. The containment rule therefore combines the exact approved
+consumes it. Lazy alias, lambda, and local function bodies can likewise execute
+when a later direct class-suite statement activates them. A permitted method
+default, decorator, or eager annotation is itself construction-time execution.
+The containment rule therefore begins with the exact descriptor-owned direct
+statement sequence and method headers, then retains the exact approved
 declaration map, the derived annotation-resolution-symbol set, identity closure
 over every collected simple declaration node, refusal of every reached nested
 `ClassDef` and comprehension or generator expression, the closed `simple == 0`
@@ -1493,10 +1539,12 @@ verdict that guards their representation, equality, and hash posture.
 Trusted components are CPython 3.12.13 parser/compiler semantics, the existing
 authenticated `PythonSourceSnapshotV1`, the detached AST map, the exact ordered
 declaration shapes in `_CREDENTIAL_DIAGNOSTIC_CARRIERS`, and the accepted
-version-3 namespace-event and equality-body authorities. The closed
-annotation-resolution-symbol set is derived only from load-position
-`ast.Name` nodes in descriptor-matched annotation expressions; it is not a
-second manually maintained authority.
+version-3 namespace-event and equality-body authorities. The same carrier
+descriptor owns the direct statement and construction-time method-header
+projection; no second statement allowlist is permitted. The closed annotation-
+resolution-symbol set is derived only from load-position `ast.Name` nodes in
+descriptor-matched annotation expressions; it is not a second manually
+maintained authority.
 
 Untrusted input is any future edit to a governed target-class suite, including
 parenthesized names, pseudo-field annotations, values/defaults, direct or
@@ -1504,7 +1552,10 @@ control-flow rebindings, direct bind/delete or `global`/`nonlocal` redirection
 of an approved annotation-resolution symbol, explicit `__annotations__` access,
 explicit evaluated `globals` name access, any reached nested `ClassDef`, any
 reached `ListComp`, `SetComp`, `DictComp`, or `GeneratorExp`, and dynamic
-expressions in annotated assignment values, targets, or annotations.
+expressions in annotated assignment values, targets, annotations, method
+decorators, defaults, or construction-time method annotations. Any direct
+statement or permitted-method header that differs from the descriptor is also
+untrusted and refused.
 Excluded attacker capabilities remain a compromised interpreter or dependency,
 module-level annotation-name or decorator substitution outside the governed
 class suite, capability-mediated module mutation through imported objects or
@@ -1514,19 +1565,23 @@ post-construction runtime class mutation. General module-name and indirect
 capability authority remain in the separate execution-root/source-capability
 governance boundary; this decision makes no claim that syntax alone resolves
 arbitrary aliases or proves complete module-namespace integrity. Ordinary
-nested function bodies remain excluded because defining the function does not
-execute its body; nested class bodies receive no equivalent non-overreach claim
-because the enclosing nested `ClassDef` is refused. No reached generator
-expression receives an unconsumed-body exception because proving that posture
-would require consumer tracking; a generator expression inside a deferred
-nested function body remains outside the reached surface.
+method bodies remain deferred, but an additional local function definition is
+not permitted in the exact direct sequence and cannot be followed by a class-
+suite activation statement. The exact `__eq__` body remains governed by its
+existing validator; the `RuntimeConfig.from_env` body remains uninspected.
+Nested class bodies receive no non-overreach claim because the enclosing
+`ClassDef` is refused. No reached generator expression receives an unconsumed-
+body exception because proving that posture would require consumer tracking; a
+generator expression solely inside the deferred `from_env` body remains
+outside the construction surface.
 
 ### 16.3 Permitted effects, non-effects, and authority map
 
 Permitted effects are:
 
 - extend each existing carrier descriptor with the exact ordered field name and
-  annotation-AST shape authority;
+  annotation-AST shape authority, exact direct statement sequence, and exact
+  construction-time headers for permitted methods;
 - replace the name-only field projection with an exact direct-declaration
   projection that includes `simple`, annotation shape, and value absence;
 - refine the `AnnAssign` branch of the accepted namespace collector, require
@@ -1543,12 +1598,18 @@ Permitted effects are:
 - make the existing expression dispatcher refuse every reached `ListComp`,
   `SetComp`, `DictComp`, and `GeneratorExp` without traversing its implicit
   body or modeling whether a generator is consumed;
+- reject every direct class-body statement outside the descriptor-owned field
+  and method sequence; reject any permitted method whose definition kind,
+  name, decorators, parameters, defaults, type parameters, or annotation ASTs
+  differ from its exact construction-time header;
 - add focused hostile and paired non-overreach tests for the closed transition,
   pseudo-fields, defaults/options, rebindings, annotation-map mutation, and
   nested extra or duplicate simple declarations, annotation-symbol mutation,
   evaluated `globals` capture, eager and postponed nested-class mutation, and
   eager and postponed materializing comprehensions, immediately consumed
-  generators, and deferred nested-function bindings and generators;
+  generators, forced lazy aliases, invoked lambdas, locally defined function
+  calls, hostile permitted-method defaults, and deferred approved-method body
+  non-overreach;
 - regenerate the canonical review-baseline test inventory only for new
   collected node IDs; and
 - append the durable merge, defect, correction, and final-disposition record to
@@ -1564,7 +1625,9 @@ Non-effects and non-goals are:
   broad symbol table, general dataclass framework, module-level name resolver,
   annotation-type resolution, imported-object capability analysis, call-result
   provenance, nested-class-body analysis, comprehension-body traversal,
-  generator-consumer tracking, or general module-namespace integrity claim;
+  generator-consumer tracking, local call-graph analysis, inspection or
+  structural pinning of the deferred `RuntimeConfig.from_env` body, or a
+  general module-namespace integrity claim;
 - no SQL, migration, role, grant, provider, IAM, production composition,
   deployment, release, certification, current-compliance, or security-waiver
   effect; and
@@ -1573,6 +1636,7 @@ Non-effects and non-goals are:
 | Decision | Sole authority | Rejected alternate |
 | --- | --- | --- |
 | Governed carriers and approved declaration tuples | Exact ordered `(field name, annotation AST shape)` entries in `_CREDENTIAL_DIAGNOSTIC_CARRIERS`; every entry also requires `simple == 1` and no value | Name-only tuple, inferred runtime fields, tests alone |
+| Direct class-body shape | The same carrier descriptor owns the exact ordered direct statement projection and exact construction-time header for each permitted method | Independent allowlist, body-wide AST equality, call graph, or accepting additional direct statements because their bodies appear deferred |
 | Source and syntax tree | Existing authenticated snapshot and detached AST map | Filesystem reread, target import, runtime class reflection |
 | Annotation-key classification | CPython AST: direct `AnnAssign`, `ast.Name` target, `simple == 1` | `ast.Name` alone, parentheses-insensitive text |
 | Complete approved field declarations | Exact ordered descriptor entries, matching direct simple-name `AnnAssign` nodes with exact annotation AST and absent values, identity/multiplicity equality with every collected simple declaration node, per-name event uniqueness, and no explicit annotation-map access | Direct projection alone, name-set comparison, annotation resolution, dataclass execution |
@@ -1682,9 +1746,11 @@ target-class expression transition:
 comprehension or generator used in a class-suite value, test, guard, iterator,
 context expression, decorator, default, eager annotation, nested-class header,
 or another already-inspected expression is refused. The same AST form solely
-inside an ordinary nested function or lambda body, a future-deferred
-annotation, a lazy type-alias value, or a nested class body is not reached by
-the outer dispatcher. The enclosing nested `ClassDef` is already refused.
+inside an approved deferred method body or future-deferred annotation is not
+reached by the outer dispatcher. An additional function, lambda expression
+statement, lazy `TypeAlias`, control-flow wrapper, or nested class cannot rely
+on that exclusion because its enclosing direct statement already differs from
+the exact class-body projection and fails.
 
 The materializing forms are refused because their bodies execute immediately.
 The generator form is refused because laziness alone does not prove that an
@@ -1692,6 +1758,38 @@ enclosing display, loop, call, or later alias leaves it unconsumed. Refusal is
 the bounded structural alternative to comprehension-body traversal,
 generator-consumer analysis, or arbitrary call-result provenance. The current
 five carrier classes require none of these reached forms.
+
+The same descriptor that owns the approved field declarations also owns this
+complete ordered direct-statement projection:
+
+| Carrier | Exact direct `ClassDef.body` sequence |
+| --- | --- |
+| `RuntimeConfig` | Its 15 approved direct field `AnnAssign` nodes in descriptor order; direct synchronous `__eq__`; direct synchronous `from_env` |
+| `ProcessCrashReconciliationSecrets` | Its approved direct field node; direct synchronous `__eq__` |
+| `StoreLossRecoverySecrets` | Its four approved direct field nodes in descriptor order; direct synchronous `__eq__` |
+| `_Routes` | Its five approved direct field nodes in descriptor order; direct synchronous `__eq__` |
+| `_ValidatedInvocation` | Its three approved direct field nodes in descriptor order; direct synchronous `__eq__` |
+
+Tuple equality preserves order, identity, and multiplicity for the approved
+field nodes. The method entries are projections over their exact construction-
+time headers rather than raw whole-function AST equality. Any other direct
+statement fails, including `Expr`, `TypeAlias`, import, assignment, deletion,
+control flow, nested `ClassDef`, additional function definition, async
+definition, comprehension, generator, or docstring expression.
+
+The permitted method headers are:
+
+| Method | Exact construction-time header | Body authority |
+| --- | --- | --- |
+| Every carrier `__eq__` | Synchronous `FunctionDef`; name `__eq__`; no decorators, type parameters, positional-only parameters, defaults, keyword-only parameters/defaults, variadics, keyword variadic, or type comment; positional arguments are unannotated `self` and `other: object`; return annotation is `bool` | Existing exact three-step equality-body validator |
+| `RuntimeConfig.from_env` | Synchronous `FunctionDef`; name `from_env`; exactly one `@classmethod` decorator represented by `Name("classmethod", Load())`; no type parameters, positional-only parameters, defaults, keyword-only parameters/defaults, variadics, keyword variadic, or type comment; sole positional argument is unannotated `cls`; return annotation is `RuntimeConfig` | Deferred body is opaque to this decision and is not structurally pinned |
+
+Annotation spellings in this table mean exact location-free AST shapes. The
+header projection includes `ast.arg` annotations and the return annotation even
+when future annotations make them deferred, because accepting alternate syntax
+would create a second construction-time surface in eager posture. A default or
+decorator is never accepted merely because the existing expression collector
+does not enter a lambda or callable body activated from it.
 
 For `simple == 1`, CPython's parser supplies an `ast.Name` target. Any detached
 AST combination outside `simple in {0, 1}`, or `simple == 1` with a non-name
@@ -1709,9 +1807,10 @@ in an expression the table marks as target-class execution. `globals` is
 stricter: every explicit evaluated `ast.Name("globals")` reference emits one
 generic bounded refusal event, whether it is called directly, used as a
 subscript base, or captured first by `namespace = globals`. A future-deferred
-annotation or ordinary nested function body is not an evaluated target-class
-reference. A nested class body is not treated as deferred: its enclosing
-`ClassDef` event fails the carrier verdict before any claim is made about that
+annotation or approved method body is not an evaluated target-class reference.
+An additional local function definition cannot use that exclusion because it
+fails the direct statement projection. A nested class body is not treated as
+deferred: its enclosing `ClassDef` fails before any claim is made about that
 body. Refusing only `Call(Name("globals"), ...)` is insufficient because a
 simple alias would preserve the same mutation capability. No source value or
 annotation value may enter a diagnostic.
@@ -1731,15 +1830,27 @@ exact declarations.
 ### 16.5 Proposed checker architecture
 
 The name-only `_top_level_class_fields()` projection is replaced by one direct
-declaration projection. One pass over the target class's direct statements
-retains every `AnnAssign` with an `ast.Name` target and `simple == 1` in source
-order and records its name, location-free annotation AST shape, value-absence
-posture, and node identity. The result is compared with the descriptor's
-complete ordered map. It returns `None` for a missing or duplicated top-level
-class. It does not filter a value-bearing or duplicate simple declaration before
-comparison, because that could hide an invalid default behind a later
-declaration. A `simple == 0` name is excluded from this projection and handled
-by the namespace-event transition.
+class-body projection. One pass over `target.body` compares every direct
+statement, in order and with multiplicity, to the carrier descriptor. A field
+entry records its name, location-free annotation AST shape, value-absence
+posture, and node identity. A permitted method entry records only its exact
+construction-time header, except that the existing `__eq__` validator remains
+the separate authority for that method's exact body. The result returns `None`
+for a missing or duplicated top-level class or for any unmatched, missing,
+extra, reordered, or duplicate direct statement.
+
+The field subprojection does not filter a value-bearing or duplicate simple
+declaration before comparison, because that could hide an invalid default
+behind a later declaration. A `simple == 0` name is excluded from the approved
+field entries and handled by the namespace-event transition, while its direct
+statement still fails the complete class-body projection.
+
+One bounded method-header helper compares function kind, name, decorator tuple,
+type parameters, complete `ast.arguments` shape, argument annotations, return
+annotation, and type comment to the descriptor. It does not walk or compare the
+`RuntimeConfig.from_env` body. The `__eq__` entry additionally invokes the
+existing exact body validator. A second direct-statement allowlist or raw whole-
+method AST constant is forbidden.
 
 The existing `_CredentialNamespaceCollector` remains the only namespace-event
 authority. Its `AnnAssign` handling becomes one explicit dispatch:
@@ -1759,13 +1870,15 @@ equal `approved_direct_declaration_nodes` from the successful descriptor
 projection. Equality is by AST node identity and multiplicity, not by name or
 shape alone. An extra simple annotation inside `if`, `while`, `for`, `with`,
 `try`, `match`, or another accepted target-class control-flow suite therefore
-fails. Function, lambda, and lazy-alias bodies remain excluded under the
-accepted version-3 scope rules. Comprehension and generator bodies are not
-traversed, and version 4 separately refuses their enclosing AST form whenever
-the target-class dispatcher reaches it. The collector also does not descend
-into a nested class body for outer namespace bindings, but version 4 no longer
-treats that as non-execution: the nested `ClassDef` definition event itself is
-refused by the exact carrier verdict.
+fails. Approved method bodies remain excluded under the accepted version-3
+scope rules. An additional function, lambda-bearing expression statement,
+`TypeAlias`, control-flow wrapper, or other direct statement already fails the
+complete class-body projection before its deferred-body posture can be used as
+acceptance evidence. Comprehension and generator bodies are not traversed, and
+version 4 separately refuses their enclosing AST form whenever the target-
+class dispatcher reaches it. The collector also does not descend into a nested
+class body for outer namespace bindings, but both the direct projection and
+the existing `ClassDef` event refusal reject that definition.
 
 Before accepting the carrier, the verdict requires that no collected namespace
 event has an `ast.ClassDef` node. The existing collector emits such an event for
@@ -1781,9 +1894,11 @@ dispatch. If the bounded target-class expression helper reaches a `ListComp`,
 event and returns without walking the node. It does not preserve the version-3
 leftmost-iterable exception, inspect implicit-scope bindings, distinguish an
 unconsumed generator from an immediately consumed one, or infer a caller. The
-same helper is already skipped for ordinary nested function and lambda bodies,
-future-deferred annotations, and lazy alias values, so this refusal adds no
-walk into those deferred surfaces.
+same helper is already skipped for approved method bodies and future-deferred
+annotations, so this refusal adds no walk into those deferred surfaces. A
+lambda-bearing expression statement, lazy alias, or additional function cannot
+convert that collector exclusion into acceptance because its direct statement
+already fails the complete projection.
 
 For every descriptor entry, the carrier verdict requires exactly one `bind`
 event whose node is the matching approved direct `AnnAssign`, and no other
@@ -1816,18 +1931,20 @@ or inspecting mapping contents. It does not inspect imported-object attributes,
 infer call results, trace `sys.modules`, or otherwise absorb complete
 execution-root/source-capability governance.
 
-The implementation must reuse the collector's existing bounded expression,
-target-expression, target-name, and event helpers. Identity closure is one
-filter over the already-collected event tuple, and nested-class refusal is one
-`ast.ClassDef`-node predicate over that same tuple. Comprehension refusal is one
-replacement branch in the existing expression dispatcher. None may add a
-second AST walk, execute the fictional class, enter a nested class or
-comprehension body, infer generator consumption, import a governed module,
-parse annotations as trusted runtime values, or infer runtime dataclass fields.
-Expected annotation shapes are committed constants, and observed shapes are
-compared only in memory. Annotation-resolution symbols are derived only after
-that exact comparison and are never looked up. The existing special-member
-verdict and exact `__eq__` body validator remain unchanged.
+The implementation must reuse the one direct class-body pass and the
+collector's existing bounded expression, target-expression, target-name, and
+event helpers. Identity closure is one filter over the already-collected event
+tuple, nested-class refusal is one `ast.ClassDef`-node predicate over that same
+tuple, and comprehension refusal is one replacement branch in the existing
+expression dispatcher. None may add a second target-class AST walk, execute
+the fictional class, enter a nested class or comprehension body, inspect the
+`from_env` body, build a call graph, infer generator or callable activation,
+import a governed module, parse annotations as trusted runtime values, or infer
+runtime dataclass fields. Expected annotation and header shapes are committed
+constants, and observed shapes are compared only in memory. Annotation-
+resolution symbols are derived only after that exact comparison and are never
+looked up. The existing special-member verdict and exact `__eq__` body
+validator remain unchanged.
 
 ### 16.6 Falsifiable invariants
 
@@ -1841,7 +1958,9 @@ verdict and exact `__eq__` body validator remain unchanged.
   direct node, with the same order and multiplicity. The closed
   annotation-resolution-symbol set is derived from load-position names in the
   same descriptor-matched annotation nodes, never from a second root list or
-  live namespace.
+  live namespace. The same descriptor also owns the complete ordered direct
+  statement sequence and exact construction-time header for each permitted
+  method; no unmatched direct statement or alternate method header is accepted.
 - `CDR4-003`: a parenthesized annotation without a value creates no field and
   no namespace-name event; with a value it creates an ordinary assignment
   event but still no field. Paired display/hash and `__eq__` names preserve
@@ -1853,8 +1972,9 @@ verdict and exact `__eq__` body validator remain unchanged.
   capture before a later alias call. No reached namespace event backed by a
   nested `ClassDef` is accepted. Every reached `ListComp`, `SetComp`,
   `DictComp`, and `GeneratorExp` emits a bounded refusal without body traversal
-  or generator-consumption inference. An ordinary nested function body remains
-  deferred and outside target-class execution.
+  or generator-consumption inference. Only an approved method body remains
+  deferred and outside target-class construction; an additional local function
+  definition already fails the direct statement projection.
 - `CDR4-005`: replacing an approved declaration with a parenthesized name,
   `ClassVar`, `InitVar`, `KW_ONLY`, a plain default, or a `field()` option fails
   before equality or hash posture can be accepted. Each governed name has
@@ -1867,26 +1987,30 @@ verdict and exact `__eq__` body validator remain unchanged.
   suite can be treated as irrelevant to annotation-resolution posture. An
   eager or postponed materializing comprehension, or an immediately consumed
   generator expression, fails before its implicit body can change that
-  posture.
+  posture. A forced lazy alias, immediately invoked lambda, locally defined
+  function plus class-suite call, additional direct statement, or hostile
+  permitted-method default or annotation fails the exact statement or header
+  projection before the structural verdict is accepted.
 - `CDR4-006`: version-3 import/control-flow special-member coverage,
   authenticated detached-AST inputs, exact equality identity/body validation,
-  and bounded diagnostics remain unchanged.
+  bounded diagnostics, and deferred `RuntimeConfig.from_env` body non-overreach
+  remain unchanged.
 - `CDR4-007`: the durable RFC records the #354 completion, #5058662084 finding,
-  and #5059132827, #5059215166, #5059916055, #5060240873, and #5060325438
-  Phase A amendments without rewriting historical Phase A or claiming
-  production readiness.
+  and #5059132827, #5059215166, #5059916055, #5060240873, #5060325438, and
+  #5060758042 Phase A amendments without rewriting historical Phase A or
+  claiming production readiness.
 
 ### 16.7 Production-reachable negative cases
 
 | Invariant | Counterexample and required result |
 | --- | --- |
 | `CDR4-001` | A proposed correction also edits `RuntimeConfig` or either security-audit runner carrier; path audit rejects that expansion. |
-| `CDR4-002` | Fictional detached source replaces `first: str` with `(first): str`, `first: bytes`, or `first: str = value`; the exact ordered declaration projection differs and is rejected. Source retaining the exact direct map but adding `if True: extra: str` produces a collected node outside the approved direct-node tuple and is rejected. The resolution-symbol projection is produced from the successfully matched annotation nodes and has no independently editable root list. |
+| `CDR4-002` | Fictional detached source replaces `first: str` with `(first): str`, `first: bytes`, or `first: str = value`; the exact ordered declaration projection differs and is rejected. Source retaining the exact fields but adding, removing, duplicating, reordering, or wrapping a direct statement differs from the descriptor-owned direct sequence and is rejected. Alternate decorators, parameters, defaults, type parameters, or annotations differ from the exact permitted-method header and are rejected. The resolution-symbol projection is produced from the successfully matched annotation nodes and has no independently editable root list. |
 | `CDR4-003` | `(__repr__): object` and `(__eq__): object` produce no false extra event, while the corresponding value-bearing forms produce ordinary binding events and are refused by the existing display/hash or exact-equality verdict. |
-| `CDR4-004` | A direct dynamic-namespace call in a subscript index or eager annotation is refused; the same spelling in a future-deferred annotation is not treated as executed. `globals()["str"] = ClassVar` and `namespace = globals; namespace()["str"] = ClassVar` are both refused on the evaluated `globals` name, without alias tracing. Any direct or class-suite-control-flow nested `ClassDef` produces an existing definition event and fails. Any reached list, set, or dictionary comprehension or generator expression produces one bounded refusal. The same resolution-symbol binding or generator expression solely inside an ordinary nested function body creates no target-class event. |
-| `CDR4-005` | The fictional carrier retains the old equality tuple but uses `ClassVar[str]`, `InitVar[str]`, `KW_ONLY`, a plain default, `field(init=False)`, `field(hash=False)`, or `field(kw_only=True)`; declaration comparison rejects every form. An otherwise exact declaration plus `first = value`, `(first): str = value`, `del first`, explicit `__annotations__` mutation, `if True: extra: str`, or nested `first: str` is rejected by event uniqueness, the reserved-namespace rule, or collected-node identity closure. Under both eager and postponed annotations, direct `global str; str = ClassVar; first: str` is rejected by the derived-symbol event rule. A nested class whose suite performs that same global mutation is rejected on its outer `ClassDef` event. Parameterized list, set, and dictionary comprehensions whose bodies perform `globals().__setitem__("str", marker)` are refused before their implicit bodies can change dataclass classification. `[*(globals().__setitem__("str", marker) for marker in (ClassVar,))]` is also refused at `GeneratorExp`; an unconsumed generator solely in a deferred nested function body remains outside the reached surface. |
-| `CDR4-006` | A proposed fix rereads source, imports a carrier, replaces ordered events, or changes equality-body acceptance; focused boundary tests reject it. |
-| `CDR4-007` | The RFC omits the #354 completion or any superseding Phase A blocker/amendment from #5059132827, #5059215166, #5059916055, #5060240873, and #5060325438; documentation review rejects the incomplete disposition. |
+| `CDR4-004` | A direct dynamic-namespace call in a subscript index or eager annotation is refused; the same spelling solely in the approved deferred `from_env` body is not treated as class construction. `globals()["str"] = ClassVar` and `namespace = globals; namespace()["str"] = ClassVar` are both refused on the evaluated `globals` name, without alias tracing. Any nested `ClassDef` or reached list, set, or dictionary comprehension or generator expression fails. An additional local function cannot claim deferred-body non-overreach because its direct definition is not in the approved sequence. |
+| `CDR4-005` | The fictional carrier retains the old equality tuple but uses `ClassVar[str]`, `InitVar[str]`, `KW_ONLY`, a plain default, `field(init=False)`, `field(hash=False)`, or `field(kw_only=True)`; declaration comparison rejects every form. An otherwise exact declaration plus `first = value`, `(first): str = value`, `del first`, explicit `__annotations__` mutation, nested extra/duplicate field, direct annotation-resolution-symbol mutation, nested class, or comprehension/generator mutation is rejected by the direct projection and retained event rules. Under eager and postponed annotations, `type Mutation = globals().__setitem__("str", ClassVar); Mutation.__value__`, an immediately invoked lambda, and a locally defined function followed by a class-suite call all add unapproved direct statements and fail. A `RuntimeConfig.from_env` default that immediately invokes the same lambda fails the exact header even though the direct method name and `@classmethod` remain present. |
+| `CDR4-006` | A proposed fix rereads source, imports a carrier, replaces ordered events, pins or enters the deferred `from_env` body, or changes equality-body acceptance; focused boundary tests reject it. Fictional mutation syntax solely inside an otherwise exact `from_env` body creates no class-construction violation because no permitted direct statement activates it before decoration. |
+| `CDR4-007` | The RFC omits the #354 completion or any superseding Phase A blocker/amendment from #5059132827, #5059215166, #5059916055, #5060240873, #5060325438, and #5060758042; documentation review rejects the incomplete disposition. |
 
 The negative cases use fictional format-true syntax and the already-supported
 production reachability of the five carriers. They require no production
@@ -1898,12 +2022,12 @@ edit.
 | Invariant | Owning change | Focused evidence | Smallest verification |
 | --- | --- | --- | --- |
 | `CDR4-001` | Base-to-head path exclusion | Exact carrier path diff | Diff audit plus standalone architecture check |
-| `CDR4-002` | Ordered declaration descriptors, one direct projection, derived annotation-resolution symbols, and identity closure over collected simple declaration nodes | Exact names/annotation ASTs/no-value posture, derived root projection, plus nested extra and nested duplicate forms | Descriptor assertion, focused declaration/root projection tests, and collected-node tuple equality tests |
+| `CDR4-002` | Descriptor-owned direct statement sequence, exact construction-time method headers, ordered declaration descriptors, derived annotation-resolution symbols, and identity closure over collected simple declaration nodes | Exact statement order/kinds, exact method header components, exact names/annotation ASTs/no-value posture, derived root projection, plus missing/extra/reordered/duplicate direct forms | Descriptor assertion, focused direct/header/declaration/root projection tests, and collected-node tuple equality tests |
 | `CDR4-003` | Collector `AnnAssign` dispatch | Parenthesized name with and without value for display/hash and `__eq__` | Event and both existing verdict tests |
-| `CDR4-004` | Existing expression/target helpers, reserved evaluated `globals` name, carrier-verdict refusal of existing nested-`ClassDef` events, and closed comprehension dispatch | Attribute/subscript, eager/future annotation, value-order pairs, direct `globals`, simple alias capture, direct/control-flow nested classes, all four reached comprehension forms, and deferred nested-function pairing | Paired scope, alias, definition-kind, and comprehension-dispatch tests under CPython 3.12.13 |
-| `CDR4-005` | Exact declaration, collected-node identity closure, per-field event uniqueness, derived-symbol event refusal, nested-class and comprehension refusal, and reserved `__annotations__` handling | Pseudo-fields, defaults/options, separate rebindings/deletes, annotation-map mutation, nested extra/duplicate declarations, eager/postponed direct and nested-class resolution-symbol mutation, eager/postponed list/set/dict mutation, immediately consumed generator mutation, and deferred nested-function non-overreach | Hostile mutation and paired non-overreach matrix under CPython 3.12.13 |
-| `CDR4-006` | Unchanged snapshot interface and verdict consumers | Missing AST, alternate source, version-3 regression subset | Focused and complete rewrite-architecture module |
-| `CDR4-007` | RFC section 16 and current front matter | Exact merge, review, all five Phase A amendments, and evidence references plus claim audit | Documentation diff review |
+| `CDR4-004` | Direct statement projection plus existing expression/target helpers, reserved evaluated `globals`, nested-`ClassDef` refusal, and closed comprehension dispatch | Attribute/subscript, eager/future annotation, direct `globals`, simple alias capture, nested classes, all four reached comprehension forms, local function activation, and approved-method body pairing | Paired statement, scope, alias, definition-kind, and comprehension-dispatch tests under CPython 3.12.13 |
+| `CDR4-005` | Exact statement/header/declaration projections, collected-node identity closure, per-field event uniqueness, derived-symbol event refusal, nested-class and comprehension refusal, and reserved `__annotations__` handling | Existing hostile matrix plus eager/postponed forced `TypeAlias`, invoked lambda, local function call, alternate method headers, and hostile `from_env` default | Hostile construction-time mutation matrix under CPython 3.12.13 |
+| `CDR4-006` | Unchanged snapshot interface, event consumers, and opaque deferred `from_env` body | Missing AST, alternate source, body-only mutation non-overreach, version-3 regression subset | Focused and complete rewrite-architecture module |
+| `CDR4-007` | RFC section 16 and current front matter | Exact merge, review, all six Phase A amendments, and evidence references plus claim audit | Documentation diff review |
 
 Phase A changes only this RFC and the draft pull-request description. No
 expensive hosted baseline is permitted for a design-only head.
@@ -1912,9 +2036,11 @@ After valid approval, Phase B cheap verification is:
 
 1. mandatory package contract under pinned CPython 3.12.13 before commit;
 2. the focused `AnnAssign.simple`, exact declaration-shape, collected-node
-   identity, derived annotation-root, field-event, reserved-annotation-map, and
-   evaluated-`globals`, nested-class-refusal, closed-comprehension, consumed-
-   generator, and deferred nested-function non-overreach matrix;
+   identity, exact direct-statement and method-header, derived annotation-root,
+   field-event, reserved-annotation-map, evaluated-`globals`, nested-class-
+   refusal, closed-comprehension, consumed-generator, forced-alias, invoked-
+   lambda, local-function activation, hostile-`from_env`-default, and approved-
+   body non-overreach matrix;
 3. the complete `kernel/tests/test_rewrite_architecture_check.py` module;
 4. the standalone rewrite architecture checker;
 5. repository-pinned Ruff for changed Python paths;
@@ -1947,10 +2073,11 @@ If implementation or review requires annotation-type resolution, a general
 dataclass model, imported-object or call-result capability provenance, general
 module-namespace integrity, nested-class-body analysis instead of bounded
 refusal, comprehension-body traversal or generator-consumer analysis instead
-of bounded refusal, carrier edits, runtime execution, credential custody, SQL,
-database authority, provider evidence, deployment, or another issue-state
-change, stop before editing and define separate Delivery work or a new decision
-version as required.
+of bounded refusal, local call-graph or callable-activation analysis, inspection
+or structural pinning of the deferred `RuntimeConfig.from_env` body, carrier
+edits, runtime execution, credential custody, SQL, database authority, provider
+evidence, deployment, or another issue-state change, stop before editing and
+define separate Delivery work or a new decision version as required.
 
 The existing separate boundaries remain unchanged:
 
@@ -1974,13 +2101,15 @@ commit would restore the known false-success defect and is not an accepted
 security rollback.
 
 The technical design is not provisional. Evidence requiring redesign is a
-CPython 3.12 execution result contradicting the mandatory table or approved
-declaration map, inability to close field-name rebinding without a broader
-namespace model, a need to resolve module-level annotation aliases, a need to
-trace capability-mediated module mutation, a need to execute or reflect on
-target classes, analyze nested class or comprehension bodies, or infer
-generator consumption. A required change to a carrier, credential custody,
-runtime, deployment, or production posture also requires redesign.
+CPython 3.12 execution result contradicting the mandatory tables, approved
+declaration map, direct statement sequence, or method headers; inability to
+close field-name rebinding without a broader namespace model; a need to resolve
+module-level annotation aliases; a need to trace capability-mediated module
+mutation; or a need to execute or reflect on target classes, analyze nested
+class or comprehension bodies, or infer generator or callable activation. A
+need to inspect or pin the deferred `RuntimeConfig.from_env` body, or a required
+change to a carrier, credential custody, runtime, deployment, or production
+posture, also requires redesign.
 
 Repository approval remains a provisional development procedure. Neither the
 decision nor any later merge authorizes deployment, release, current/default
@@ -1990,16 +2119,17 @@ waiver. Production composition remains unauthorized and non-deployable.
 ### 16.11 Phase A disposition and approval stop
 
 Current amended design disposition after reviews #5059132827, #5059215166,
-#5059916055, #5060240873, and #5060325438 and before the new exact-head bounded
-re-review:
+#5059916055, #5060240873, #5060325438, and #5060758042 and before the new exact-
+head bounded re-review:
 
-- **Phase A content Blockers:** the materializing-comprehension blocker from
-  #5060325438 and the immediately consumed generator variant found during the
-  bounded Phase A assessment are addressed by refusing all four reached
-  comprehension forms; closure is pending re-review;
+- **Phase A content Blockers:** the forced lazy-alias, invoked-lambda, and local-
+  function activation blocker from #5060758042, plus the hostile permitted-
+  method default found during bounded assessment, are addressed by the exact
+  direct statement sequence and construction-time method headers; closure is
+  pending re-review;
 - **New Follow-ups introduced:** zero;
 - **Existing separate Follow-ups:** unchanged;
-- **Preferences:** zero in #5060325438; the amendment is pending re-review;
+- **Preferences:** zero in #5060758042; the amendment is pending re-review;
 - **Current credential disclosures demonstrated:** zero;
 - **Governed runtime or database regressions demonstrated:** zero; and
 - **Phase B:** unauthorized.
