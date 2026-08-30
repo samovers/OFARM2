@@ -4090,7 +4090,7 @@ def _credential_diagnostic_carrier_violations(
         or any(field not in declared_fields for field in protected_fields)
     ):
         violations.append("protected-field authority is invalid")
-    if target.bases or target.keywords:
+    if target.bases or target.keywords or target.type_params:
         violations.append("class must inherit directly from object")
     accepted_options = (
         {"frozen": True, "slots": True, "repr": False},

@@ -2873,6 +2873,56 @@ def test_credential_method_header_refuses_detached_type_comment():
     )
 
 
+def test_credential_diagnostic_rule_rejects_generic_carrier_header():
+    source = _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE.replace(
+        "class SecretCarrier:",
+        "class SecretCarrier[T]:",
+        1,
+    )
+
+    assert (
+        "SecretCarrier: class must inherit directly from object"
+        in _credential_violations(source)
+    )
+
+
+def test_credential_diagnostic_rule_rejects_type_parameter_shadowing_cast():
+    source = _VALID_CREDENTIAL_DIAGNOSTIC_SOURCE.replace(
+        "class SecretCarrier:",
+        "class SecretCarrier[cast]:",
+        1,
+    )
+    valid_tree = ast.parse(_VALID_CREDENTIAL_DIAGNOSTIC_SOURCE)
+    mutated_tree = ast.parse(source)
+    valid_target = next(
+        node
+        for node in valid_tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "SecretCarrier"
+    )
+    mutated_target = next(
+        node
+        for node in mutated_tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "SecretCarrier"
+    )
+
+    assert [parameter.name for parameter in mutated_target.type_params] == ["cast"]
+    assert ast.dump(
+        mutated_target.body[-1], include_attributes=False
+    ) == ast.dump(valid_target.body[-1], include_attributes=False)
+    assert (
+        rewrite_architecture_check._credential_direct_class_projection(
+            mutated_target,
+            _TEST_CREDENTIAL_DECLARATIONS,
+            _TEST_CREDENTIAL_METHODS,
+        )
+        is not None
+    )
+    assert (
+        "SecretCarrier: class must inherit directly from object"
+        in _credential_violations(source)
+    )
+
+
 @pytest.mark.parametrize(
     ("old", "new"),
     (

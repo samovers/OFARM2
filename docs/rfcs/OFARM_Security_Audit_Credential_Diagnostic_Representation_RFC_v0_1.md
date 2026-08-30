@@ -9,6 +9,11 @@ in-boundary declaration-shape, declaration-completeness, annotation-resolution-
 symbol, nested-class, comprehension, and deferred-body-activation blockers.
 Exact-head review #5060965587 reported zero Phase A content Blockers, and the
 task user then supplied the exact version-4 approval in the same Codex task.
+Post-approval exact-head implementation review #5061069927 of
+`b9edf5b4dc873944ee4b92867d18d203fa76fe91` demonstrated one in-boundary
+target-carrier type-parameter false success. This branch contains the bounded
+correction and remains `REVIEW_PENDING` until a fresh exact-head review reports
+zero Blockers.
 
 **Decision:**
 `ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESENTATION-001`
@@ -53,6 +58,11 @@ activated by a later direct class-suite statement before dataclass decoration.
 The correction replaces further activation modeling with one exact direct
 class-body statement sequence and exact construction-time method headers while
 leaving the approved `RuntimeConfig.from_env` body deferred and uninspected.
+Post-approval review #5061069927 then demonstrated that a target carrier's own
+PEP 695 type parameters sit outside that body projection while changing its
+inheritance and lexical name resolution. Rejecting those type parameters is an
+implementation correction under the existing exact carrier-construction
+contract, not a new capability, authority, or decision version.
 
 **Issue context:** Tracking Epic
 [#192](https://github.com/samovers/OFARM2/issues/192), original Delivery outcome
@@ -1786,6 +1796,16 @@ statement fails, including `Expr`, `TypeAlias`, import, assignment, deletion,
 control flow, nested `ClassDef`, additional function definition, async
 definition, comprehension, generator, or docstring expression.
 
+The target carrier's `ClassDef` header is also exact: it has no explicit bases,
+class keywords, or PEP 695 type parameters. A generic class implicitly inherits
+from `typing.Generic`, and its type-parameter annotation scope is visible from
+contained methods. A type parameter named `cast` can therefore replace the
+module's imported `typing.cast` binding inside an otherwise exact `__eq__` AST.
+The verdict must reject non-empty `target.type_params` in the same bounded
+class-header predicate that already rejects bases and keywords; the body
+projection and namespace collector are not alternate authorities for that
+header.
+
 The permitted method headers are:
 
 | Method | Exact construction-time header | Body authority |
@@ -1860,6 +1880,11 @@ annotation, and type comment to the descriptor. It does not walk or compare the
 `RuntimeConfig.from_env` body. The `__eq__` entry additionally invokes the
 existing exact body validator. A second direct-statement allowlist or raw whole-
 method AST constant is forbidden.
+
+Before accepting that body projection, the existing target-class header
+verdict requires empty `bases`, `keywords`, and `type_params`. This is one
+closed predicate over the already authenticated detached `ClassDef`; it does
+not execute the carrier, resolve a type parameter, or add a second AST walk.
 
 The existing `_CredentialNamespaceCollector` remains the only namespace-event
 authority. Its `AnnAssign` handling becomes one explicit dispatch:
@@ -1970,6 +1995,9 @@ validator remain unchanged.
   live namespace. The same descriptor also owns the complete ordered direct
   statement sequence and exact construction-time header for each permitted
   method; no unmatched direct statement or alternate method header is accepted.
+  The target carrier header has no bases, class keywords, or type parameters,
+  so it cannot acquire implicit `typing.Generic` inheritance or a carrier-level
+  annotation scope outside that projection.
 - `CDR4-003`: a parenthesized annotation without a value creates no field and
   no namespace-name event; with a value it creates an ordinary assignment
   event but still no field. Paired display/hash and `__eq__` names preserve
@@ -2006,20 +2034,21 @@ validator remain unchanged.
   remain unchanged.
 - `CDR4-007`: the durable RFC records the #354 completion, #5058662084 finding,
   and #5059132827, #5059215166, #5059916055, #5060240873, #5060325438, and
-  #5060758042 Phase A amendments without rewriting historical Phase A or
-  claiming production readiness.
+  #5060758042 Phase A amendments plus implementation review #5061069927 and its
+  bounded correction, without rewriting historical Phase A or claiming
+  production readiness.
 
 ### 16.7 Production-reachable negative cases
 
 | Invariant | Counterexample and required result |
 | --- | --- |
 | `CDR4-001` | A proposed correction also edits `RuntimeConfig` or either security-audit runner carrier; path audit rejects that expansion. |
-| `CDR4-002` | Fictional detached source replaces `first: str` with `(first): str`, `first: bytes`, or `first: str = value`; the exact ordered declaration projection differs and is rejected. Source retaining the exact fields but adding, removing, duplicating, reordering, or wrapping a direct statement differs from the descriptor-owned direct sequence and is rejected. Alternate decorators, parameters, defaults, type parameters, or annotations differ from the exact permitted-method header and are rejected. The resolution-symbol projection is produced from the successfully matched annotation nodes and has no independently editable root list. |
+| `CDR4-002` | Fictional detached source replaces `first: str` with `(first): str`, `first: bytes`, or `first: str = value`; the exact ordered declaration projection differs and is rejected. Source retaining the exact fields but adding, removing, duplicating, reordering, or wrapping a direct statement differs from the descriptor-owned direct sequence and is rejected. `class SecretCarrier[T]` is rejected for implicit generic inheritance. `class SecretCarrier[cast]` is rejected even when its exact `__eq__` AST still matches, so its carrier-level annotation scope cannot redirect `cast`. Alternate decorators, parameters, defaults, type parameters, or annotations differ from the exact permitted-method header and are rejected. The resolution-symbol projection is produced from the successfully matched annotation nodes and has no independently editable root list. |
 | `CDR4-003` | `(__repr__): object` and `(__eq__): object` produce no false extra event, while the corresponding value-bearing forms produce ordinary binding events and are refused by the existing display/hash or exact-equality verdict. |
 | `CDR4-004` | A direct dynamic-namespace call in a subscript index or eager annotation is refused; the same spelling solely in the approved deferred `from_env` body is not treated as class construction. `globals()["str"] = ClassVar` and `namespace = globals; namespace()["str"] = ClassVar` are both refused on the evaluated `globals` name, without alias tracing. Any nested `ClassDef` or reached list, set, or dictionary comprehension or generator expression fails. An additional local function cannot claim deferred-body non-overreach because its direct definition is not in the approved sequence. |
 | `CDR4-005` | The fictional carrier retains the old equality tuple but uses `ClassVar[str]`, `InitVar[str]`, `KW_ONLY`, a plain default, `field(init=False)`, `field(hash=False)`, or `field(kw_only=True)`; declaration comparison rejects every form. An otherwise exact declaration plus `first = value`, `(first): str = value`, `del first`, explicit `__annotations__` mutation, nested extra/duplicate field, direct annotation-resolution-symbol mutation, nested class, or comprehension/generator mutation is rejected by the direct projection and retained event rules. Under eager and postponed annotations, `type Mutation = globals().__setitem__("str", ClassVar); Mutation.__value__`, an immediately invoked lambda, and a locally defined function followed by a class-suite call all add unapproved direct statements and fail. A `RuntimeConfig.from_env` default that immediately invokes the same lambda fails the exact header even though the direct method name and `@classmethod` remain present. |
 | `CDR4-006` | A proposed fix rereads source, imports a carrier, replaces ordered events, pins or enters the deferred `from_env` body, or changes equality-body acceptance; focused boundary tests reject it. Fictional mutation syntax solely inside an otherwise exact `from_env` body creates no class-construction violation because no permitted direct statement activates it before decoration. |
-| `CDR4-007` | The RFC omits the #354 completion or any superseding Phase A blocker/amendment from #5059132827, #5059215166, #5059916055, #5060240873, #5060325438, and #5060758042; documentation review rejects the incomplete disposition. |
+| `CDR4-007` | The RFC omits the #354 completion, any superseding Phase A blocker/amendment from #5059132827, #5059215166, #5059916055, #5060240873, #5060325438, and #5060758042, or the #5061069927 implementation-review correction; documentation review rejects the incomplete disposition. |
 
 The negative cases use fictional format-true syntax and the already-supported
 production reachability of the five carriers. They require no production
@@ -2031,12 +2060,12 @@ edit.
 | Invariant | Owning change | Focused evidence | Smallest verification |
 | --- | --- | --- | --- |
 | `CDR4-001` | Base-to-head path exclusion | Exact carrier path diff | Diff audit plus standalone architecture check |
-| `CDR4-002` | Descriptor-owned direct statement sequence, exact construction-time method headers, ordered declaration descriptors, derived annotation-resolution symbols, and identity closure over collected simple declaration nodes | Exact statement order/kinds, exact method header components, exact names/annotation ASTs/no-value posture, derived root projection, plus missing/extra/reordered/duplicate direct forms | Descriptor assertion, focused direct/header/declaration/root projection tests, and collected-node tuple equality tests |
+| `CDR4-002` | Exact target-class header; descriptor-owned direct statement sequence; exact construction-time method headers; ordered declaration descriptors; derived annotation-resolution symbols; and identity closure over collected simple declaration nodes | Empty carrier bases, keywords, and type parameters; exact statement order/kinds; exact method header components; exact names/annotation ASTs/no-value posture; derived root projection; plus missing/extra/reordered/duplicate direct forms | Generic and `cast`-shadowing carrier-header cases, descriptor assertion, focused direct/header/declaration/root projection tests, and collected-node tuple equality tests |
 | `CDR4-003` | Collector `AnnAssign` dispatch | Parenthesized name with and without value for display/hash and `__eq__` | Event and both existing verdict tests |
 | `CDR4-004` | Direct statement projection plus existing expression/target helpers, reserved evaluated `globals`, nested-`ClassDef` refusal, and closed comprehension dispatch | Attribute/subscript, eager/future annotation, direct `globals`, simple alias capture, nested classes, all four reached comprehension forms, local function activation, and approved-method body pairing | Paired statement, scope, alias, definition-kind, and comprehension-dispatch tests under CPython 3.12.13 |
 | `CDR4-005` | Exact statement/header/declaration projections, collected-node identity closure, per-field event uniqueness, derived-symbol event refusal, nested-class and comprehension refusal, and reserved `__annotations__` handling | Existing hostile matrix plus eager/postponed forced `TypeAlias`, invoked lambda, local function call, alternate method headers, and hostile `from_env` default | Hostile construction-time mutation matrix under CPython 3.12.13 |
 | `CDR4-006` | Unchanged snapshot interface, event consumers, and opaque deferred `from_env` body | Missing AST, alternate source, body-only mutation non-overreach, version-3 regression subset | Focused and complete rewrite-architecture module |
-| `CDR4-007` | RFC section 16 and current front matter | Exact merge, review, all six Phase A amendments, and evidence references plus claim audit | Documentation diff review |
+| `CDR4-007` | RFC section 16 and current front matter | Exact merge, review, all six Phase A amendments, implementation-review correction, and evidence references plus claim audit | Documentation diff review |
 
 Phase A changes only this RFC and the draft pull-request description. No
 expensive hosted baseline is permitted for a design-only head.
@@ -2045,11 +2074,12 @@ After valid approval, Phase B cheap verification is:
 
 1. mandatory package contract under pinned CPython 3.12.13 before commit;
 2. the focused `AnnAssign.simple`, exact declaration-shape, collected-node
-   identity, exact direct-statement and method-header, derived annotation-root,
-   field-event, reserved-annotation-map, evaluated-`globals`, nested-class-
-   refusal, closed-comprehension, consumed-generator, forced-alias, invoked-
-   lambda, local-function activation, hostile-`from_env`-default, and approved-
-   body non-overreach matrix;
+   identity, exact target-class and method-header, generic-carrier and
+   type-parameter-shadowing, direct-statement, derived annotation-root, field-
+   event, reserved-annotation-map, evaluated-`globals`, nested-class-refusal,
+   closed-comprehension, consumed-generator, forced-alias, invoked-lambda,
+   local-function activation, hostile-`from_env`-default, and approved-body
+   non-overreach matrix;
 3. the complete `kernel/tests/test_rewrite_architecture_check.py` module;
 4. the standalone rewrite architecture checker;
 5. repository-pinned Ruff for changed Python paths;
@@ -2150,3 +2180,31 @@ I approve OFARM2 decision ISSUE192-SECURITY-AUDIT-CREDENTIAL-DIAGNOSTIC-REPRESEN
 Version-3 approval and every review or evidence item from #354 are historical
 context only and provide no authority for version 4. Phase A review, GitHub
 activity, CI, credentials, tools, or AI-authored text cannot supply approval.
+
+### 16.12 Phase B implementation-review correction
+
+Exact-head implementation review
+[#5061069927](https://github.com/samovers/OFARM2/pull/358#pullrequestreview-5061069927)
+of `b9edf5b4dc873944ee4b92867d18d203fa76fe91` reported one Blocker and no new
+Follow-ups or Preferences. The checker rejected type parameters on permitted
+methods and on nested definitions reached through the namespace collector, but
+did not reject type parameters on the governed target carrier itself. Because
+`target.type_params` is outside `target.body`, both the exact body projection
+and the collector could accept `class SecretCarrier[cast]` while CPython 3.12
+gave the class implicit `typing.Generic` inheritance and resolved the exact
+`__eq__` method's `cast` load to the carrier type parameter.
+
+The bounded correction extends the existing no-base/no-keyword target-header
+predicate to require empty `target.type_params`. Two focused detached-source
+tests require rejection of `class SecretCarrier[T]` and of the `cast`-shadowing
+form whose direct `__eq__` projection otherwise remains exact. The canonical
+inventory is regenerated mechanically for those new node IDs. No carrier,
+runtime, database, credential-custody, provider, route, deployment, or issue-
+state source changes.
+
+This correction preserves the approved version-4 capability, primary trust
+boundary, authority map, effects, non-effects, invariants, named pull request,
+and production posture. It creates no new decision version or implementation
+authority. The amended candidate head is `REVIEW_PENDING`; admission and
+expensive hosted baselines remain unauthorized until a fresh exact-head review
+reports zero Blockers.

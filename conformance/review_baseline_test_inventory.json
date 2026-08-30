@@ -9631,6 +9631,11 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_generic_carrier_header",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_hostile_shapes[alternate-type-branch]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -9797,6 +9802,11 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_pre_decoration_activation[postponed-local-call]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_credential_diagnostic_rule_rejects_type_parameter_shadowing_cast",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -18896,8 +18906,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "337cfc1e3c2cedd9f3449acefbd3eed4108551c8d3c7e03f838fdd644dc78ab1",
-  "entryCount": 3779,
+  "entriesSha256": "716569e615ad68f54b9bf4dff743f3caa804aaac23a459f28bac50b0304124a6",
+  "entryCount": 3781,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
