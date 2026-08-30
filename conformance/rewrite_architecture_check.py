@@ -216,8 +216,34 @@ GROUP_BUDGETS = {
     ),
 }
 
+
+def _credential_expression_shape(source: str) -> str:
+    expression = ast.parse(
+        source,
+        mode="eval",
+        feature_version=(3, 12),
+    )
+    return ast.dump(expression.body, include_attributes=False)
+
+
+class _CredentialMethodHeader(typing.NamedTuple):
+    name: str
+    decorators: tuple[str, ...]
+    positional_arguments: tuple[tuple[str, str | None], ...]
+    return_annotation: str
+    body_authority: str
+
+
+class _CredentialCarrierDescriptor(typing.NamedTuple):
+    relative_path: str
+    class_name: str
+    protected_fields: tuple[str, ...]
+    declarations: tuple[tuple[str, str], ...]
+    methods: tuple[_CredentialMethodHeader, ...]
+
+
 _CREDENTIAL_DIAGNOSTIC_CARRIERS = (
-    (
+    _CredentialCarrierDescriptor(
         "kernel/runtime_config.py",
         "RuntimeConfig",
         (
@@ -229,36 +255,108 @@ _CREDENTIAL_DIAGNOSTIC_CARRIERS = (
             "security_audit_control_pg_dsn",
         ),
         (
-            "mode",
-            "deployment_image_digest",
-            "oidc_issuer",
-            "oidc_audience",
-            "oidc_jwks_url",
-            "pg_dsn",
-            "tenant_readiness_pg_dsn",
-            "security_audit_readiness_pg_dsn",
-            "security_audit_authentication_pg_dsn",
-            "security_audit_request_router_pg_dsn",
-            "security_audit_control_pg_dsn",
-            "correlation_hmac_kms_key_resource",
-            "tenant_capability_kid",
-            "signing_evidence_receipt_path",
-            "signing_evidence_observer_public_key",
+            ("mode", _credential_expression_shape("RuntimeMode")),
+            ("deployment_image_digest", _credential_expression_shape("str")),
+            ("oidc_issuer", _credential_expression_shape("str")),
+            ("oidc_audience", _credential_expression_shape("str")),
+            ("oidc_jwks_url", _credential_expression_shape("str")),
+            ("pg_dsn", _credential_expression_shape("str")),
+            ("tenant_readiness_pg_dsn", _credential_expression_shape("str")),
+            (
+                "security_audit_readiness_pg_dsn",
+                _credential_expression_shape("str"),
+            ),
+            (
+                "security_audit_authentication_pg_dsn",
+                _credential_expression_shape("str"),
+            ),
+            (
+                "security_audit_request_router_pg_dsn",
+                _credential_expression_shape("str"),
+            ),
+            (
+                "security_audit_control_pg_dsn",
+                _credential_expression_shape("str"),
+            ),
+            (
+                "correlation_hmac_kms_key_resource",
+                _credential_expression_shape("str"),
+            ),
+            ("tenant_capability_kid", _credential_expression_shape("str")),
+            (
+                "signing_evidence_receipt_path",
+                _credential_expression_shape("Path"),
+            ),
+            (
+                "signing_evidence_observer_public_key",
+                _credential_expression_shape("bytes"),
+            ),
+        ),
+        (
+            _CredentialMethodHeader(
+                "__eq__",
+                (),
+                (
+                    ("self", None),
+                    ("other", _credential_expression_shape("object")),
+                ),
+                _credential_expression_shape("bool"),
+                "exact-equality",
+            ),
+            _CredentialMethodHeader(
+                "from_env",
+                (_credential_expression_shape("classmethod"),),
+                (("cls", None),),
+                _credential_expression_shape("RuntimeConfig"),
+                "opaque-deferred",
+            ),
         ),
     ),
-    (
+    _CredentialCarrierDescriptor(
         "deployment/postgresql/security_audit_process_crash.py",
         "ProcessCrashReconciliationSecrets",
         ("control_conninfo",),
-        ("control_conninfo",),
+        (("control_conninfo", _credential_expression_shape("str")),),
+        (
+            _CredentialMethodHeader(
+                "__eq__",
+                (),
+                (
+                    ("self", None),
+                    ("other", _credential_expression_shape("object")),
+                ),
+                _credential_expression_shape("bool"),
+                "exact-equality",
+            ),
+        ),
     ),
-    (
+    _CredentialCarrierDescriptor(
         "deployment/postgresql/security_audit_store_loss.py",
         "StoreLossRecoverySecrets",
         ("admin_dsn", "migrator_dsn", "control_dsn", "login_passwords"),
-        ("admin_dsn", "migrator_dsn", "control_dsn", "login_passwords"),
+        (
+            ("admin_dsn", _credential_expression_shape("str")),
+            ("migrator_dsn", _credential_expression_shape("str")),
+            ("control_dsn", _credential_expression_shape("str")),
+            (
+                "login_passwords",
+                _credential_expression_shape("tuple[tuple[str, str], ...]"),
+            ),
+        ),
+        (
+            _CredentialMethodHeader(
+                "__eq__",
+                (),
+                (
+                    ("self", None),
+                    ("other", _credential_expression_shape("object")),
+                ),
+                _credential_expression_shape("bool"),
+                "exact-equality",
+            ),
+        ),
     ),
-    (
+    _CredentialCarrierDescriptor(
         "deployment/postgresql/security_audit_store_loss.py",
         "_Routes",
         (
@@ -269,18 +367,52 @@ _CREDENTIAL_DIAGNOSTIC_CARRIERS = (
             "control_short",
         ),
         (
-            "admin_long",
-            "admin_short",
-            "admin_target_short",
-            "migrator_long",
-            "control_short",
+            ("admin_long", _credential_expression_shape("str")),
+            ("admin_short", _credential_expression_shape("str")),
+            ("admin_target_short", _credential_expression_shape("str")),
+            ("migrator_long", _credential_expression_shape("str")),
+            ("control_short", _credential_expression_shape("str")),
+        ),
+        (
+            _CredentialMethodHeader(
+                "__eq__",
+                (),
+                (
+                    ("self", None),
+                    ("other", _credential_expression_shape("object")),
+                ),
+                _credential_expression_shape("bool"),
+                "exact-equality",
+            ),
         ),
     ),
-    (
+    _CredentialCarrierDescriptor(
         "deployment/postgresql/security_audit_store_loss.py",
         "_ValidatedInvocation",
         ("routes", "login_passwords"),
-        ("request", "routes", "login_passwords"),
+        (
+            (
+                "request",
+                _credential_expression_shape("StoreLossRecoveryRequest"),
+            ),
+            ("routes", _credential_expression_shape("_Routes")),
+            (
+                "login_passwords",
+                _credential_expression_shape("tuple[tuple[str, str], ...]"),
+            ),
+        ),
+        (
+            _CredentialMethodHeader(
+                "__eq__",
+                (),
+                (
+                    ("self", None),
+                    ("other", _credential_expression_shape("object")),
+                ),
+                _credential_expression_shape("bool"),
+                "exact-equality",
+            ),
+        ),
     ),
 )
 TEST_GLOBS = (
@@ -3410,8 +3542,14 @@ class _CredentialNamespaceEvent(typing.NamedTuple):
 
 
 class _CredentialNamespaceCollector:
-    def __init__(self, *, future_annotations: bool) -> None:
+    def __init__(
+        self,
+        *,
+        future_annotations: bool,
+        annotation_resolution_symbols: frozenset[str],
+    ) -> None:
         self._future_annotations = future_annotations
+        self._annotation_resolution_symbols = annotation_resolution_symbols
         self._events: list[_CredentialNamespaceEvent] = []
 
     def collect(
@@ -3455,6 +3593,13 @@ class _CredentialNamespaceCollector:
                 self._expression_children(child)
 
     def _expression(self, node: ast.expr) -> None:
+        if (
+            isinstance(node, ast.Name)
+            and isinstance(node.ctx, ast.Load)
+            and node.id in {"__annotations__", "globals"}
+        ):
+            self._emit("unbounded", None, node)
+            return
         if isinstance(node, ast.Lambda):
             self._expressions(node.args.defaults)
             self._expressions(
@@ -3464,14 +3609,7 @@ class _CredentialNamespaceCollector:
             )
             return
         if isinstance(node, _CREDENTIAL_COMPREHENSIONS):
-            if any(
-                isinstance(child, ast.NamedExpr) for child in ast.walk(node)
-            ):
-                self._emit("unbounded", None, node)
-            if node.generators:
-                self._expression(node.generators[0].iter)
-            else:
-                self._emit("unbounded", None, node)
+            self._emit("unbounded", None, node)
             return
         if isinstance(node, ast.NamedExpr):
             self._expression(node.value)
@@ -3600,9 +3738,21 @@ class _CredentialNamespaceCollector:
                 self._target(target, "bind", statement)
             return True
         if isinstance(statement, ast.AnnAssign):
+            if (
+                type(statement.simple) is not int
+                or statement.simple not in {0, 1}
+                or (
+                    statement.simple == 1
+                    and not isinstance(statement.target, ast.Name)
+                )
+            ):
+                self._emit("unbounded", None, statement)
+                return True
             if statement.value is not None:
                 self._expression(statement.value)
-            self._target(statement.target, "bind", statement)
+            self._target_expressions(statement.target)
+            if statement.simple == 1 or statement.value is not None:
+                self._target_names(statement.target, "bind", statement)
             if not self._future_annotations:
                 self._expression(statement.annotation)
             return True
@@ -3617,7 +3767,10 @@ class _CredentialNamespaceCollector:
             return True
         if isinstance(statement, (ast.Global, ast.Nonlocal)):
             for name in statement.names:
-                if name in _CREDENTIAL_GOVERNED_SPECIAL_MEMBERS:
+                if name in (
+                    _CREDENTIAL_GOVERNED_SPECIAL_MEMBERS
+                    | self._annotation_resolution_symbols
+                ):
                     self._emit("unbounded", name, statement)
             return True
         return False
@@ -3741,11 +3894,126 @@ def _credential_future_annotations(tree: ast.Module) -> bool:
 def _credential_class_namespace_events(
     tree: ast.Module,
     target: ast.ClassDef,
+    annotation_resolution_symbols: frozenset[str] = frozenset(),
 ) -> tuple[_CredentialNamespaceEvent, ...]:
     collector = _CredentialNamespaceCollector(
-        future_annotations=_credential_future_annotations(tree)
+        future_annotations=_credential_future_annotations(tree),
+        annotation_resolution_symbols=annotation_resolution_symbols,
     )
     return collector.collect(target)
+
+
+class _CredentialDirectProjection(typing.NamedTuple):
+    declarations: tuple[ast.AnnAssign, ...]
+    methods: tuple[tuple[ast.FunctionDef, str], ...]
+
+
+def _credential_method_header_matches(
+    method: ast.FunctionDef,
+    expected: _CredentialMethodHeader,
+) -> bool:
+    arguments = method.args
+    observed_arguments = tuple(
+        (
+            argument.arg,
+            None
+            if argument.annotation is None
+            else ast.dump(argument.annotation, include_attributes=False),
+        )
+        for argument in arguments.args
+    )
+    return (
+        method.name == expected.name
+        and tuple(
+            ast.dump(decorator, include_attributes=False)
+            for decorator in method.decorator_list
+        )
+        == expected.decorators
+        and not method.type_params
+        and method.type_comment is None
+        and not arguments.posonlyargs
+        and observed_arguments == expected.positional_arguments
+        and all(argument.type_comment is None for argument in arguments.args)
+        and arguments.vararg is None
+        and not arguments.kwonlyargs
+        and arguments.kwarg is None
+        and not arguments.defaults
+        and not arguments.kw_defaults
+        and method.returns is not None
+        and ast.dump(method.returns, include_attributes=False)
+        == expected.return_annotation
+        and expected.body_authority
+        in {"exact-equality", "opaque-deferred"}
+    )
+
+
+def _credential_direct_class_projection(
+    target: ast.ClassDef,
+    declarations: tuple[tuple[str, str], ...],
+    methods: tuple[_CredentialMethodHeader, ...],
+) -> _CredentialDirectProjection | None:
+    if (
+        not declarations
+        or len({name for name, _annotation in declarations})
+        != len(declarations)
+        or len({method.name for method in methods}) != len(methods)
+        or len(target.body) != len(declarations) + len(methods)
+    ):
+        return None
+    approved_declarations = []
+    approved_methods = []
+    for index, statement in enumerate(target.body):
+        if index < len(declarations):
+            name, annotation_shape = declarations[index]
+            if not (
+                isinstance(statement, ast.AnnAssign)
+                and type(statement.simple) is int
+                and statement.simple == 1
+                and isinstance(statement.target, ast.Name)
+                and isinstance(statement.target.ctx, ast.Store)
+                and statement.target.id == name
+                and statement.value is None
+                and ast.dump(statement.annotation, include_attributes=False)
+                == annotation_shape
+            ):
+                return None
+            approved_declarations.append(statement)
+            continue
+        expected_method = methods[index - len(declarations)]
+        if not isinstance(statement, ast.FunctionDef) or not (
+            _credential_method_header_matches(statement, expected_method)
+        ):
+            return None
+        approved_methods.append((statement, expected_method.body_authority))
+    return _CredentialDirectProjection(
+        declarations=tuple(approved_declarations),
+        methods=tuple(approved_methods),
+    )
+
+
+def _credential_annotation_resolution_symbols(
+    declarations: tuple[ast.AnnAssign, ...],
+) -> frozenset[str]:
+    return frozenset(
+        node.id
+        for declaration in declarations
+        for node in ast.walk(declaration.annotation)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+    )
+
+
+def _credential_collected_simple_declaration_nodes(
+    events: tuple[_CredentialNamespaceEvent, ...],
+) -> tuple[ast.AnnAssign, ...]:
+    return tuple(
+        event.node
+        for event in events
+        if event.kind == "bind"
+        and isinstance(event.node, ast.AnnAssign)
+        and type(event.node.simple) is int
+        and event.node.simple == 1
+        and isinstance(event.node.target, ast.Name)
+    )
 
 
 def _credential_eq_violations(
@@ -3800,7 +4068,8 @@ def _credential_diagnostic_carrier_violations(
     tree: ast.Module,
     class_name: str,
     protected_fields: tuple[str, ...],
-    declared_fields: tuple[str, ...],
+    declarations: tuple[tuple[str, str], ...],
+    methods: tuple[_CredentialMethodHeader, ...],
 ) -> list[str]:
     prefix = f"{class_name}: "
     classes = [
@@ -3812,15 +4081,16 @@ def _credential_diagnostic_carrier_violations(
         return [prefix + "exact top-level class is missing or duplicated"]
     target = classes[0]
     violations = []
+    declared_fields = tuple(name for name, _annotation in declarations)
+    if not declared_fields or len(set(declared_fields)) != len(declared_fields):
+        violations.append("declaration authority is invalid")
     if (
         not protected_fields
         or len(set(protected_fields)) != len(protected_fields)
         or any(field not in declared_fields for field in protected_fields)
     ):
         violations.append("protected-field authority is invalid")
-    if _top_level_class_fields(tree, class_name) != declared_fields:
-        violations.append("declared fields differ from the exact inventory")
-    if target.bases or target.keywords:
+    if target.bases or target.keywords or target.type_params:
         violations.append("class must inherit directly from object")
     accepted_options = (
         {"frozen": True, "slots": True, "repr": False},
@@ -3828,7 +4098,23 @@ def _credential_diagnostic_carrier_violations(
     )
     if _credential_dataclass_options(target) not in accepted_options:
         violations.append("dataclass options differ from the opaque posture")
-    events = _credential_class_namespace_events(tree, target)
+    projection = _credential_direct_class_projection(
+        target,
+        declarations,
+        methods,
+    )
+    if projection is None:
+        violations.append("direct class-body shape differs from the exact contract")
+        annotation_resolution_symbols = frozenset()
+    else:
+        annotation_resolution_symbols = _credential_annotation_resolution_symbols(
+            projection.declarations
+        )
+    events = _credential_class_namespace_events(
+        tree,
+        target,
+        annotation_resolution_symbols,
+    )
     if any(event.kind == "unbounded" for event in events):
         violations.append("class namespace binding analysis is unbounded")
     if any(
@@ -3837,6 +4123,58 @@ def _credential_diagnostic_carrier_violations(
         for event in events
     ):
         violations.append("class defines forbidden display or hash members")
+    if any(
+        event.kind in {"bind", "delete"} and event.name == "__annotations__"
+        for event in events
+    ):
+        violations.append("class defines explicit annotation-map authority")
+    if any(isinstance(event.node, ast.ClassDef) for event in events):
+        violations.append("nested class construction is prohibited")
+    if projection is not None:
+        collected_declarations = (
+            _credential_collected_simple_declaration_nodes(events)
+        )
+        if len(collected_declarations) != len(projection.declarations) or any(
+            observed is not approved
+            for observed, approved in zip(
+                collected_declarations,
+                projection.declarations,
+                strict=True,
+            )
+        ):
+            violations.append(
+                "collected annotated declarations differ from direct authority"
+            )
+        for field_name, declaration in zip(
+            declared_fields,
+            projection.declarations,
+            strict=True,
+        ):
+            field_events = tuple(
+                event
+                for event in events
+                if event.kind in {"bind", "delete"} and event.name == field_name
+            )
+            if not (
+                len(field_events) == 1
+                and field_events[0].kind == "bind"
+                and field_events[0].node is declaration
+            ):
+                violations.append(
+                    "declared field bindings differ from direct authority"
+                )
+                break
+        if any(
+            event.kind in {"bind", "delete"}
+            and event.name in annotation_resolution_symbols
+            for event in events
+        ):
+            violations.append("annotation-resolution symbols are rebound")
+        for method, body_authority in projection.methods:
+            if body_authority == "exact-equality":
+                violations.extend(
+                    _credential_eq_violations(method, declared_fields)
+                )
     equality_events = [event for event in events if event.name == "__eq__"]
     if (
         len(equality_events) != 1
@@ -3845,10 +4183,6 @@ def _credential_diagnostic_carrier_violations(
         or not isinstance(equality_events[0].node, ast.FunctionDef)
     ):
         violations.append("class must define exactly one synchronous __eq__")
-    else:
-        violations.extend(
-            _credential_eq_violations(equality_events[0].node, declared_fields)
-        )
     return [prefix + violation for violation in sorted(set(violations))]
 
 
@@ -3857,9 +4191,13 @@ def _check_credential_diagnostic_carriers(
     trees: collections.abc.Mapping[str, ast.Module],
 ) -> list[str]:
     failures = []
-    for relative, class_name, protected_fields, declared_fields in (
-        _CREDENTIAL_DIAGNOSTIC_CARRIERS
-    ):
+    for (
+        relative,
+        class_name,
+        protected_fields,
+        declarations,
+        methods,
+    ) in _CREDENTIAL_DIAGNOSTIC_CARRIERS:
         unit = snapshot.modules_by_relative_path.get(relative)
         if unit is None:
             failures.append(
@@ -3878,7 +4216,8 @@ def _check_credential_diagnostic_carriers(
                 tree,
                 class_name,
                 protected_fields,
-                declared_fields,
+                declarations,
+                methods,
             )
         )
     return sorted(set(failures))
