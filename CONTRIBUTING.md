@@ -86,7 +86,8 @@ production/deployment posture, or when preservation is ambiguous.
 
 The same-task task-user message remains authority. A compact pull request
 reference is navigation evidence only; no committed approval appendix or
-separate approval-record pull request is required.
+separate approval-record pull request is required. Semantic approval authorizes
+bounded implementation and evidence collection, not merge.
 
 ## Pull request contract
 
@@ -103,33 +104,98 @@ records:
 - risk class, Phase A location, applicable authority map and high-risk trust
   floor, and decision navigation when required;
 - abandoned-pull-request recovery when applicable;
+- the authoritative path, duplicate-state and deletion assessment, direct
+  invariant trace, abstractions, and simpler alternative;
 - verification and exact-head review disposition; and
-- final changed paths, semantic scope preservation, and cancellation check.
+- final changed paths, semantic scope preservation, cancellation check, and
+  final human-acceptance navigation.
 
 The template records evidence. It does not create approval or redefine the
 admission and publication controls in root `AGENTS.md`.
+
+## Code excellence
+
+Apply the code-excellence invariants in root `AGENTS.md` to every Delivery
+change:
+
+- `EXC-001`: keep one authoritative decision path and one source of truth for
+  each owned fact.
+- `EXC-002`: do not add avoidable duplicate authority, validation, state,
+  compatibility paths, inventories, or framework layers.
+- `EXC-003`: trace every material invariant directly through its owning
+  implementation to focused evidence without a hidden fallback.
+- `EXC-004`: delete obsolete owned code, shims, flags, and fallbacks unless a
+  current time-bounded duty and deletion trigger are explicit.
+- `EXC-005`: add an abstraction only when it isolates the current boundary,
+  removes concrete duplication, or serves multiple current consumers.
+- `EXC-006`: for material added complexity, name the simplest credible
+  alternative and the invariant that rules it out.
+- `EXC-007`: treat naming, formatting, and equivalent clean designs as taste,
+  not Blockers.
+
+A code-excellence Blocker must identify a concrete in-scope defect, its present
+maintenance, audit, testing, or isolation cost, the violated `EXC-001` through
+`EXC-006` invariant, and the smallest correction. Line counts and automated
+scores may support a finding but cannot replace that explanation.
 
 ## Review protocol
 
 Every review finding uses exactly one classification:
 
 - **Blocker:** a demonstrated in-scope correctness, security, data-integrity,
-  contractual, or production-safety failure. It names the violated invariant
-  and smallest acceptable fix.
+  contractual, production-safety, or code-excellence failure under the rules
+  above. It names the violated invariant and smallest acceptable fix.
 - **Follow-up:** valid work outside the pull request boundary. Record separate
   Delivery work; do not expand the current change.
 - **Preference:** optional style or alternative-design advice. It never delays
   merging.
 
-Only Blockers delay merge. After a Blocker fix, review only the fix and affected
-invariants unless new evidence demonstrates that the original scope is unsafe.
-Preferences, hypothetical risks, and unrelated hardening do not reopen review.
+Only Blockers delay technical readiness. After a Blocker fix, review only the
+fix and affected invariants unless new evidence demonstrates that the original
+scope is unsafe. Preferences, hypothetical risks, and unrelated hardening do
+not reopen review.
 
 For an approval-governed Delivery change, freeze the implemented candidate head
 before expensive verification. After cheap checks, obtain exact-head
 zero-Blocker review, create fresh admission, complete required hosted baselines
-and separate authoritative publication, then recheck semantic scope, approval,
-cancellation, and exact head before merge.
+and separate authoritative publication, then recheck semantic scope, semantic
+approval, cancellation, exact head, and code excellence before the final
+packet.
+
+## Final human acceptance
+
+Every Delivery pull request the AI would merge, including routine work, stops
+after all applicable technical and evidence gates at one complete final packet.
+The packet identifies the Delivery issue, repository, pull request, and full
+current head; capability and primary boundary; final paths and material diff;
+effects, non-effects, Follow-ups, and Phase A deviations; checks, exact-head
+review, hosted evidence, publication, and receipt results as applicable;
+Blockers, Follow-ups, and Preferences; the `EXC-001` through `EXC-006`
+assessment; semantic-decision references when applicable; and same-task
+provenance.
+
+The AI presents that packet and ends its turn without merging. Only the entire
+visible text of this exact later task-user message in the same task authorizes
+the merge:
+
+```text
+I authorize the AI to merge samovers/OFARM2 PR #<NUMBER> at head <FULL_HEAD_SHA>.
+```
+
+Earlier semantic approval, green checks, reviews, admission, publication,
+GitHub activity, credentials, silence, paraphrases, and template text do not
+create that authority. A new commit or head change, semantic expansion,
+close/reopen after the packet, later stop or cancellation, or conflicting later
+user message invalidates it. Requested corrections require fresh review,
+applicable evidence, a new packet, yield, and later authorization.
+
+Immediately before merge, recheck the original packet and later authorization,
+open/non-draft state, exact head, close/reopen history, semantic scope, review
+disposition, and all existing gates. Use the normal GitHub pull-request merge
+with the authorized SHA as its expected-head condition. Do not use
+administrator bypass, auto-merge, or a direct target-branch push. A native
+rejection stops the merge. The task user may decline or request in-boundary
+changes for any reason.
 
 ## Abandoned pull requests
 
@@ -158,6 +224,10 @@ A new general standing process gate needs its own workflow-governance Delivery
 issue and pull request, a demonstrated current failure or threat, a named
 consumer, and an expiry or review point.
 
+An already-approved unmerged pull request keeps AI merge authority only when
+its directly retrievable governing approval explicitly granted it. Age or
+unrelated GitHub activity creates no authority.
+
 Repository approval, review, checks, admission, successful baselines,
 publication, receipts, or merge do not authorize deployment, release,
 current/default promotion, production access, or a security waiver. Before
@@ -169,13 +239,14 @@ system.
 
 Evaluate delivery end to end rather than counting small pull requests as
 progress. Useful measures are Delivery-issue open-to-close time, live and
-abandoned implementation pull requests per capability, approval stops,
-process-only pull requests, final-head baseline cycles, and time from zero
-Blockers to merge.
+abandoned implementation pull requests per capability, early semantic-approval
+and final exact-head authorization stops, process-only pull requests,
+final-head baseline cycles, and time from zero Blockers to merge.
 
 The normal target is one live and one merged implementation pull request, one
-approval stop for high-risk work, zero process-only companion pull requests,
-and one successful implemented-head baseline cycle. The completed manual pilot
-and its original evidence remain available in
+final exact-head authorization stop for every AI-operated merge plus one early
+semantic-approval stop when required, zero process-only companion pull
+requests, and one successful implemented-head baseline cycle. The completed
+manual pilot and its original evidence remain available in
 [governance issue #218](https://github.com/samovers/OFARM2/issues/218) as
 historical rationale, not an active reporting requirement.

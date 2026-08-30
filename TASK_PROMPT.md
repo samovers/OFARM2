@@ -88,6 +88,9 @@ Every task contract states:
   tests, fixtures, documentation, and evidence that must travel together.
 - **Smallest complete change:** why this is the minimum coherent vertical
   slice.
+- **Code excellence:** the authoritative path and sources of truth, avoidable
+  duplication, deletions, abstractions added, direct invariant trace, and the
+  simplest credible alternative.
 - **Provisional posture:** `Not provisional`, or why a temporary design is
   acceptable before deployment, evidence requiring redesign, and the likely
   upgrade path.
@@ -140,6 +143,17 @@ Complete this before editing low-risk work:
 
 `[WHY THIS IS THE MINIMUM COHERENT VERTICAL SLICE]`
 
+### Code excellence
+
+- Authoritative decision path and sources of truth: `[PATHS AND OWNERS]`
+- Avoided or remaining duplicate authority, validation, state, compatibility,
+  inventory, or framework paths: `[ASSESSMENT]`
+- Superseded paths deleted or time-bounded duty and deletion trigger:
+  `[DELETIONS OR NOT APPLICABLE]`
+- Direct invariant-to-implementation-to-evidence trace: `[TRACE]`
+- Abstractions added and current rent: `[ASSESSMENT OR NONE]`
+- Simplest credible alternative and preventing invariant: `[ASSESSMENT]`
+
 ### Provisional posture
 
 `Not provisional`, or:
@@ -164,8 +178,11 @@ Complete this before editing low-risk work:
 
 ### Merge stop rule
 
-Once acceptance criteria and required checks pass and no demonstrated Blocker
-remains, merge. New ideas, Preferences, and non-blocking hardening become
+Passing acceptance criteria and required checks with no demonstrated Blocker
+makes the pull request technically ready for the final human-acceptance packet;
+it does not authorize merge. Follow the packet, mandatory yield, later exact
+task-user authorization, and native expected-head merge rules in root
+`AGENTS.md`. New ideas, Preferences, and non-blocking hardening become
 Follow-ups and do not reopen review.
 
 ## Phase A: risk-shaped design contract
@@ -212,6 +229,10 @@ after the pull request closes. Do not edit implementation during Phase A.
   risk requires.
 - Prefer one bound object over correlated fields and deletion over duplicate
   authority or compatibility paths.
+- Apply `EXC-001` through `EXC-006`: identify the authoritative path and owned
+  sources of truth, duplicate paths or state, deletions, direct invariant
+  trace, abstractions added and their current rent, and the simplest credible
+  alternative.
 - Explain why this is the smallest complete vertical slice.
 
 #### 6. Verification
@@ -300,6 +321,10 @@ permitted effect, non-effect, invariant, irreversible behavior, named pull
 request, or production/deployment posture, or when preservation is genuinely
 ambiguous.
 
+This semantic approval authorizes bounded implementation and evidence
+collection, not merge. Every AI-operated Delivery merge still requires the
+separate final exact-head task-user authorization owned by root `AGENTS.md`.
+
 Closing the named pull request unmerged expires authority. Replacement or
 reopening requires the recovery procedure in root `AGENTS.md`: a new decision
 version and approval, fresh evidence, and no inheritance of earlier approval,
@@ -336,7 +361,9 @@ If implementation invalidates the declared contract, stop. Approval-governed
 work requires a new decision version; routine work must amend or reclassify its
 contract before editing continues. At completion, report
 invariant-to-implementation-to-test mapping, deleted authority or fallback
-paths, deviations, exact validation, and review disposition.
+paths, duplicate paths or state, abstractions added and their current rent, the
+simplest credible alternative, deviations, exact validation, and review
+disposition.
 
 ## Phase C: bounded review and merge
 
@@ -350,28 +377,53 @@ use this order:
    evidence demonstrates that the original scope is unsafe.
 4. Create fresh baseline admission for that exact head.
 5. Complete required hosted baselines and separate authoritative publication.
-6. Confirm the final receipt and semantic scope. When approval is required,
-   also confirm approval preservation, named-PR binding, and absence of
-   cancellation.
-7. Merge and close the Delivery issue when every gate passes.
+6. Confirm the final receipt, semantic scope, and `EXC-001` through `EXC-006`
+   assessment. When semantic approval is required, also confirm approval
+   preservation, named-PR binding, and absence of cancellation.
+7. Prepare the complete exact-head final packet required by root `AGENTS.md`,
+   including final paths and diff, effects and non-effects, evidence and review
+   disposition, excellence assessment, deviations, same-task provenance, and
+   the filled exact authorization sentence.
+8. Present the packet and end the turn without merging.
+9. Only after the task user supplies the entire exact sentence in a later
+   message in the same task, retrieve both messages and recheck the authorized
+   head, open/non-draft state, close/reopen history, scope, cancellation,
+   Blockers, and every existing gate.
+10. Use the normal GitHub pull-request merge with the authorized SHA as its
+    expected-head condition. Do not use administrator bypass, auto-merge, or a
+    direct target-branch push. A native rejection stops the merge.
+11. Verify the merge and close the Delivery issue.
 
-Routine work follows the routine merge-stop rule and any stronger accepted
-exact-action requirement. Do not create admission or publication ceremony when
-neither root `AGENTS.md` nor an accepted exact-action procedure requires it.
+The exact later task-user message, owned by root `AGENTS.md`, is:
+
+```text
+I authorize the AI to merge samovers/OFARM2 PR #<NUMBER> at head <FULL_HEAD_SHA>.
+```
+
+Routine work omits the early semantic-decision steps but never omits steps 7
+through 11. It follows any stronger accepted exact-action requirement. Do not
+create admission or publication ceremony when neither root `AGENTS.md` nor an
+accepted exact-action procedure requires it.
 
 Classify every finding as exactly one of:
 
 - **Blocker:** a demonstrated in-scope correctness, security, data-integrity,
-  contractual, or production-safety failure. Name the violated invariant and
-  smallest acceptable fix.
+  contractual, production-safety, or code-excellence failure. Name the
+  violated invariant and smallest acceptable fix. A code-excellence Blocker
+  must identify the concrete defect, its present maintenance, audit, testing,
+  or isolation cost, the violated `EXC-001` through `EXC-006` rule, and the
+  smallest correction.
 - **Follow-up:** valid work outside the pull request boundary. Record separate
   Delivery work; do not expand this pull request.
 - **Preference:** optional style or alternative-design advice. It never delays
   merging.
 
-Only demonstrated Blockers delay merge. Perform at most one unconstrained full
-review at an exact head. Preferences, hypothetical risks, and unrelated
-hardening do not reopen review.
+Only demonstrated Blockers delay technical readiness. Equivalent clean
+alternatives, naming, formatting, and hypothetical future reuse are
+Preferences. Perform at most one unconstrained full review at an exact head.
+Preferences, hypothetical risks, and unrelated hardening do not reopen review.
+The task user may still decline final authorization or request in-boundary
+changes for any reason.
 
 ## Outcome measures
 
@@ -379,15 +431,18 @@ Measure delivery end to end:
 
 - Delivery-issue open-to-close time;
 - live and abandoned implementation pull requests per delivered capability;
-- approval stops per capability;
+- early semantic-approval and final exact-head authorization stops per
+  capability;
 - process-only pull requests;
 - final implemented-head baseline cycles; and
 - time from zero Blockers to merge as secondary operational data.
 
 The normal target is one live and one merged implementation pull request, one
-approval stop for high-risk work, zero process-only companion pull requests,
-and one successful implemented-head baseline cycle. Recovery from an abandoned
-unmerged pull request is recorded as recovery, not a second capability.
+final exact-head authorization stop for every AI-operated merge plus one early
+semantic-approval stop when the work requires it, zero process-only companion
+pull requests, and one successful implemented-head baseline cycle. Recovery
+from an abandoned unmerged pull request is recorded as recovery, not a second
+capability.
 
 Success means OFARM2 becomes more capable, reliable, and understandable without
 unnecessary complexity. Repository approval, checks, evidence, or merge never
