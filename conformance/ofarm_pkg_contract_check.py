@@ -7,7 +7,8 @@ Checks, in order:
 3. authored example instances validate against their schemas using a
    deliberately small JSON Schema subset validator (the subset the OFARM
    machine contracts actually use: type, const, enum, required, properties,
-   additionalProperties:false, pattern, items, minItems, minLength, oneOf).
+   Boolean additionalProperties, pattern, items, item/length bounds, oneOf,
+   local references, date-time format, and numeric bounds).
 4. the non-default temporal-governance coordinate, carrier matrix,
    intervention carrier-selection, governed-command, and RuntimeBundle carrier
    candidates satisfy their semantic and non-activation contracts; and
@@ -21,19 +22,32 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 PKG = Path(__file__).resolve().parent.parent
 
-SUPPORTED = {
-    "$schema", "$id", "title", "$comment", "type", "const", "enum",
-    "required", "properties", "additionalProperties", "pattern", "items",
-    "minItems", "maxItems", "minLength", "oneOf", "format", "description",
-    "minimum", "maximum", "$ref", "$defs",
-}
+ANNOTATION_KEYWORDS = frozenset({
+    "$schema", "$id", "title", "$comment", "description",
+})
+APPLICATOR_KEYWORDS = frozenset({
+    "$ref", "$defs", "properties", "items", "oneOf",
+})
+ASSERTION_KEYWORDS = frozenset({
+    "type", "const", "enum", "required", "additionalProperties", "pattern",
+    "minItems", "maxItems", "minLength", "format", "minimum", "maximum",
+})
+SUPPORTED_KEYWORDS = (
+    ANNOTATION_KEYWORDS | APPLICATOR_KEYWORDS | ASSERTION_KEYWORDS
+)
+SUPPORTED_TYPES = frozenset({
+    "object", "array", "string", "number", "integer", "boolean", "null",
+})
+SUPPORTED_FORMATS = frozenset({"date-time"})
 
 TYPES = {
     "object": dict, "array": list, "string": str,
@@ -45,52 +59,245 @@ class SubsetError(Exception):
     pass
 
 
-def check_keywords(schema, path="#"):
-    if isinstance(schema, dict):
-        for key, val in schema.items():
-            if key not in SUPPORTED:
-                raise SubsetError(f"unsupported schema keyword {key!r} at {path}")
-            if key in ("properties", "$defs"):
-                for name, sub in val.items():
-                    check_keywords(sub, f"{path}/{key}/{name}")
-            elif key in ("items",):
-                check_keywords(val, f"{path}/{key}")
-            elif key == "oneOf":
-                for i, sub in enumerate(val):
-                    check_keywords(sub, f"{path}/oneOf[{i}]")
+class StrictJsonError(ValueError):
+    pass
 
 
-def resolve_ref(ref: str, root):
-    if not ref.startswith("#/"):
-        raise SubsetError(f"only local $refs supported, got {ref!r}")
+def load_json(path: Path):
+    """Load strict JSON, rejecting CPython's non-standard numeric constants."""
+    def reject_constant(value: str):
+        raise StrictJsonError(f"non-JSON numeric constant {value!r} in {path}")
+
+    value = json.loads(
+        path.read_text(encoding="utf-8"),
+        parse_constant=reject_constant,
+    )
+
+    def reject_non_finite(item: object) -> None:
+        if isinstance(item, float) and not math.isfinite(item):
+            raise StrictJsonError(f"non-finite JSON number in {path}")
+        if isinstance(item, list):
+            for child in item:
+                reject_non_finite(child)
+        elif isinstance(item, dict):
+            for child in item.values():
+                reject_non_finite(child)
+
+    reject_non_finite(value)
+    return value
+
+
+def _schema_path(path: str, part: object) -> str:
+    escaped = str(part).replace("~", "~0").replace("/", "~1")
+    return f"{path}/{escaped}"
+
+
+def _json_number(value: object) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    return isinstance(value, float) and math.isfinite(value)
+
+
+def _json_equal(left: object, right: object) -> bool:
+    if isinstance(left, bool) or isinstance(right, bool):
+        return isinstance(left, bool) and isinstance(right, bool) and left == right
+    if _json_number(left) and _json_number(right):
+        return left == right
+    if isinstance(left, list) or isinstance(right, list):
+        return (
+            isinstance(left, list)
+            and isinstance(right, list)
+            and len(left) == len(right)
+            and all(_json_equal(a, b) for a, b in zip(left, right, strict=True))
+        )
+    if isinstance(left, dict) or isinstance(right, dict):
+        return (
+            isinstance(left, dict)
+            and isinstance(right, dict)
+            and left.keys() == right.keys()
+            and all(_json_equal(left[key], right[key]) for key in left)
+        )
+    return type(left) is type(right) and left == right
+
+
+def _non_negative_integer(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _decode_pointer_part(part: str, *, ref: str) -> str:
+    if "%" in part or re.search(r"~(?:[^01]|$)", part):
+        raise SubsetError(f"malformed local $ref {ref!r}")
+    return part.replace("~1", "/").replace("~0", "~")
+
+
+def resolve_ref(ref: str, root, *, path: str = "#"):
+    if not isinstance(ref, str) or (ref != "#" and not ref.startswith("#/")):
+        raise SubsetError(f"only local JSON Pointer $refs supported at {path}, got {ref!r}")
+    if ref == "#":
+        return root
     node = root
     for part in ref[2:].split("/"):
-        node = node[part.replace("~1", "/").replace("~0", "~")]
+        decoded = _decode_pointer_part(part, ref=ref)
+        if not isinstance(node, dict) or decoded not in node:
+            raise SubsetError(f"unresolved local $ref {ref!r} at {path}")
+        node = node[decoded]
     return node
 
 
-def validate(instance, schema, path="$", root=None):
+def _check_schema_subset(schema, *, root, path: str, ref_stack: tuple[str, ...]):
+    if not isinstance(schema, dict):
+        raise SubsetError(f"schema at {path} must be an object")
+
+    for key in schema:
+        if key not in SUPPORTED_KEYWORDS:
+            raise SubsetError(f"unsupported schema keyword {key!r} at {path}")
+
+    if "type" in schema:
+        value = schema["type"]
+        if not isinstance(value, str) or value not in SUPPORTED_TYPES:
+            raise SubsetError(f"unsupported type {value!r} at {path}/type")
+    if "enum" in schema:
+        value = schema["enum"]
+        if not isinstance(value, list) or not value:
+            raise SubsetError(f"enum at {path}/enum must be a non-empty list")
+    if "required" in schema:
+        value = schema["required"]
+        if (not isinstance(value, list)
+                or any(not isinstance(item, str) for item in value)
+                or len(value) != len(set(value))):
+            raise SubsetError(
+                f"required at {path}/required must be a list of unique strings"
+            )
+    for keyword in ("properties", "$defs"):
+        if keyword not in schema:
+            continue
+        value = schema[keyword]
+        if not isinstance(value, dict):
+            raise SubsetError(f"{keyword} at {path}/{keyword} must be an object")
+        for name, subschema in value.items():
+            _check_schema_subset(
+                subschema,
+                root=root,
+                path=_schema_path(f"{path}/{keyword}", name),
+                ref_stack=ref_stack,
+            )
+    if "items" in schema:
+        _check_schema_subset(
+            schema["items"], root=root, path=f"{path}/items", ref_stack=ref_stack
+        )
+    if "oneOf" in schema:
+        value = schema["oneOf"]
+        if not isinstance(value, list) or not value:
+            raise SubsetError(f"oneOf at {path}/oneOf must be a non-empty list")
+        for index, subschema in enumerate(value):
+            _check_schema_subset(
+                subschema,
+                root=root,
+                path=f"{path}/oneOf/{index}",
+                ref_stack=ref_stack,
+            )
+    if "pattern" in schema:
+        value = schema["pattern"]
+        if not isinstance(value, str):
+            raise SubsetError(f"pattern at {path}/pattern must be a string")
+        try:
+            re.compile(value)
+        except re.error as exc:
+            raise SubsetError(f"invalid pattern at {path}/pattern: {exc}") from exc
+    for keyword in ("minItems", "maxItems", "minLength"):
+        if keyword in schema and not _non_negative_integer(schema[keyword]):
+            raise SubsetError(
+                f"{keyword} at {path}/{keyword} must be a non-negative integer"
+            )
+    for keyword in ("minimum", "maximum"):
+        if keyword in schema and not _json_number(schema[keyword]):
+            raise SubsetError(
+                f"{keyword} at {path}/{keyword} must be a JSON number"
+            )
+    if "format" in schema:
+        value = schema["format"]
+        if not isinstance(value, str) or value not in SUPPORTED_FORMATS:
+            raise SubsetError(f"unsupported format {value!r} at {path}/format")
+    if ("additionalProperties" in schema
+            and not isinstance(schema["additionalProperties"], bool)):
+        raise SubsetError(
+            f"additionalProperties at {path}/additionalProperties must be Boolean"
+        )
+    if "$ref" in schema:
+        ref = schema["$ref"]
+        target = resolve_ref(ref, root, path=f"{path}/$ref")
+        if ref in ref_stack:
+            chain = " -> ".join((*ref_stack, ref))
+            raise SubsetError(f"cyclic local $ref at {path}/$ref: {chain}")
+        _check_schema_subset(
+            target,
+            root=root,
+            path=f"{path}/$ref({ref})",
+            ref_stack=(*ref_stack, ref),
+        )
+
+
+def check_keywords(schema, path="#"):
+    """Fail closed unless *schema* uses only supported keyword forms."""
+    _check_schema_subset(schema, root=schema, path=path, ref_stack=())
+
+
+_RFC3339_DATE_TIME = re.compile(
+    r"^([0-9]{4})-([0-9]{2})-([0-9]{2})[Tt]"
+    r"([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.[0-9]+)?"
+    r"(?:[Zz]|([+-])([0-9]{2}):([0-9]{2}))$"
+)
+
+
+def _is_rfc3339_datetime(value: str) -> bool:
+    match = _RFC3339_DATE_TIME.fullmatch(value)
+    if match is None:
+        return False
+    year, month, day, hour, minute, second, _, offset_hour, offset_minute = (
+        match.groups()
+    )
+    try:
+        date(int(year), int(month), int(day))
+    except ValueError:
+        return False
+    if int(hour) > 23 or int(minute) > 59 or int(second) > 59:
+        return False
+    return not offset_hour or (
+        int(offset_hour) <= 23 and int(offset_minute) <= 59
+    )
+
+
+def validate(instance, schema, path="$", root=None, _ref_stack=()):
     root = root if root is not None else schema
-    while "$ref" in schema:
-        schema = resolve_ref(schema["$ref"], root)
     errors = []
+    if "$ref" in schema:
+        ref = schema["$ref"]
+        if ref in _ref_stack:
+            chain = " -> ".join((*_ref_stack, ref))
+            raise SubsetError(f"cyclic local $ref while validating {path}: {chain}")
+        target = resolve_ref(ref, root, path="$ref")
+        errors.extend(validate(
+            instance, target, path, root, (*_ref_stack, ref)
+        ))
     if "oneOf" in schema:
         passes = []
         for i, sub in enumerate(schema["oneOf"]):
-            sub_errors = validate(instance, sub, path, root)
+            sub_errors = validate(instance, sub, path, root, _ref_stack)
             if not sub_errors:
                 passes.append(i)
         if len(passes) != 1:
             errors.append(f"{path}: oneOf matched {len(passes)} branches, expected exactly 1")
-        return errors
-    if "const" in schema and instance != schema["const"]:
+    if "const" in schema and not _json_equal(instance, schema["const"]):
         errors.append(f"{path}: expected const {schema['const']!r}, got {instance!r}")
-    if "enum" in schema and instance not in schema["enum"]:
+    if ("enum" in schema
+            and not any(_json_equal(instance, item) for item in schema["enum"])):
         errors.append(f"{path}: value {instance!r} not in enum")
     if "type" in schema:
         expected = schema["type"]
         if expected == "number":
-            ok = isinstance(instance, (int, float)) and not isinstance(instance, bool)
+            ok = _json_number(instance)
         elif expected == "integer":
             ok = isinstance(instance, int) and not isinstance(instance, bool)
         else:
@@ -98,6 +305,15 @@ def validate(instance, schema, path="$", root=None):
         if not ok:
             errors.append(f"{path}: expected type {expected}, got {type(instance).__name__}")
             return errors
+    if _json_number(instance):
+        if "minimum" in schema and instance < schema["minimum"]:
+            errors.append(
+                f"{path}: value {instance!r} is below minimum {schema['minimum']!r}"
+            )
+        if "maximum" in schema and instance > schema["maximum"]:
+            errors.append(
+                f"{path}: value {instance!r} is above maximum {schema['maximum']!r}"
+            )
     if isinstance(instance, dict):
         for req in schema.get("required", []):
             if req not in instance:
@@ -109,7 +325,9 @@ def validate(instance, schema, path="$", root=None):
                     errors.append(f"{path}: additional property {key!r} not allowed")
         for key, val in instance.items():
             if key in props:
-                errors.extend(validate(val, props[key], f"{path}.{key}", root))
+                errors.extend(validate(
+                    val, props[key], f"{path}.{key}", root, _ref_stack
+                ))
     if isinstance(instance, list):
         if "minItems" in schema and len(instance) < schema["minItems"]:
             errors.append(f"{path}: has {len(instance)} items, minItems {schema['minItems']}")
@@ -117,12 +335,17 @@ def validate(instance, schema, path="$", root=None):
             errors.append(f"{path}: has {len(instance)} items, maxItems {schema['maxItems']}")
         if "items" in schema:
             for i, item in enumerate(instance):
-                errors.extend(validate(item, schema["items"], f"{path}[{i}]", root))
+                errors.extend(validate(
+                    item, schema["items"], f"{path}[{i}]", root, _ref_stack
+                ))
     if isinstance(instance, str):
         if "pattern" in schema and not re.search(schema["pattern"], instance):
             errors.append(f"{path}: {instance!r} does not match pattern {schema['pattern']!r}")
         if "minLength" in schema and len(instance) < schema["minLength"]:
             errors.append(f"{path}: shorter than minLength {schema['minLength']}")
+        if (schema.get("format") == "date-time"
+                and not _is_rfc3339_datetime(instance)):
+            errors.append(f"{path}: {instance!r} is not a valid format date-time")
     return errors
 
 
@@ -170,19 +393,55 @@ INSTANCE_BINDINGS = {
 }
 
 
+def check_instance_bindings() -> int:
+    """Validate authored instance bindings and return their failure count."""
+    failures = 0
+    for inst_rel, schema_rel in INSTANCE_BINDINGS.items():
+        inst_path, schema_path = PKG / inst_rel, PKG / schema_rel
+        if not inst_path.exists():
+            print(f"MISSING INSTANCE {inst_rel}")
+            failures += 1
+            continue
+        try:
+            schema = load_json(schema_path)
+        except StrictJsonError as exc:
+            print(f"SUBSET GAP {schema_rel}: {exc}")
+            failures += 1
+            continue
+        try:
+            check_keywords(schema)
+            instance = load_json(inst_path)
+            errors = validate(instance, schema)
+        except SubsetError as exc:
+            print(f"SUBSET GAP {schema_rel}: {exc}")
+            failures += 1
+            continue
+        except StrictJsonError as exc:
+            print(f"INVALID {inst_rel}: {exc}")
+            failures += 1
+            continue
+        for error in errors:
+            print(f"INVALID {inst_rel}: {error}")
+        failures += len(errors)
+    return failures
+
+
 def main() -> int:
     failures = 0
 
     for jf in sorted(PKG.rglob("*.json")):
         try:
-            json.loads(jf.read_text())
-        except json.JSONDecodeError as exc:
+            load_json(jf)
+        except (json.JSONDecodeError, StrictJsonError) as exc:
             print(f"PARSE FAIL {jf.relative_to(PKG)}: {exc}")
             failures += 1
     print("parse check done")
 
     for manifest_rel in ("contracts/CONTRACTS_MANIFEST.json", "reference/REFERENCE_MANIFEST.json"):
-        manifest = json.loads((PKG / manifest_rel).read_text())
+        try:
+            manifest = load_json(PKG / manifest_rel)
+        except (json.JSONDecodeError, StrictJsonError):
+            continue
         entries = manifest.get("entries", []) + manifest.get("fixtureEntries", [])
         for entry in entries:
             if entry.get("status") == "NEW_CANDIDATE":
@@ -196,23 +455,7 @@ def main() -> int:
                 failures += 1
     print("digest check done")
 
-    for inst_rel, schema_rel in INSTANCE_BINDINGS.items():
-        inst_path, schema_path = PKG / inst_rel, PKG / schema_rel
-        if not inst_path.exists():
-            print(f"MISSING INSTANCE {inst_rel}")
-            failures += 1
-            continue
-        schema = json.loads(schema_path.read_text())
-        try:
-            check_keywords(schema)
-        except SubsetError as exc:
-            print(f"SUBSET GAP {schema_rel}: {exc}")
-            failures += 1
-            continue
-        errs = validate(json.loads(inst_path.read_text()), schema)
-        for err in errs:
-            print(f"INVALID {inst_rel}: {err}")
-        failures += len(errs)
+    failures += check_instance_bindings()
     print("instance validation done")
 
     temporal_candidate = subprocess.run(
