@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import subprocess
 import sys
@@ -58,13 +59,67 @@ class SubsetError(Exception):
     pass
 
 
+class StrictJsonError(ValueError):
+    pass
+
+
+def load_json(path: Path):
+    """Load strict JSON, rejecting CPython's non-standard numeric constants."""
+    def reject_constant(value: str):
+        raise StrictJsonError(f"non-JSON numeric constant {value!r} in {path}")
+
+    value = json.loads(
+        path.read_text(encoding="utf-8"),
+        parse_constant=reject_constant,
+    )
+
+    def reject_non_finite(item: object) -> None:
+        if isinstance(item, float) and not math.isfinite(item):
+            raise StrictJsonError(f"non-finite JSON number in {path}")
+        if isinstance(item, list):
+            for child in item:
+                reject_non_finite(child)
+        elif isinstance(item, dict):
+            for child in item.values():
+                reject_non_finite(child)
+
+    reject_non_finite(value)
+    return value
+
+
 def _schema_path(path: str, part: object) -> str:
     escaped = str(part).replace("~", "~0").replace("/", "~1")
     return f"{path}/{escaped}"
 
 
 def _json_number(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    return isinstance(value, float) and math.isfinite(value)
+
+
+def _json_equal(left: object, right: object) -> bool:
+    if isinstance(left, bool) or isinstance(right, bool):
+        return isinstance(left, bool) and isinstance(right, bool) and left == right
+    if _json_number(left) and _json_number(right):
+        return left == right
+    if isinstance(left, list) or isinstance(right, list):
+        return (
+            isinstance(left, list)
+            and isinstance(right, list)
+            and len(left) == len(right)
+            and all(_json_equal(a, b) for a, b in zip(left, right, strict=True))
+        )
+    if isinstance(left, dict) or isinstance(right, dict):
+        return (
+            isinstance(left, dict)
+            and isinstance(right, dict)
+            and left.keys() == right.keys()
+            and all(_json_equal(left[key], right[key]) for key in left)
+        )
+    return type(left) is type(right) and left == right
 
 
 def _non_negative_integer(value: object) -> bool:
@@ -190,9 +245,9 @@ def check_keywords(schema, path="#"):
 
 
 _RFC3339_DATE_TIME = re.compile(
-    r"^(\d{4})-(\d{2})-(\d{2})[Tt]"
-    r"(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?"
-    r"(?:[Zz]|([+-])(\d{2}):(\d{2}))$"
+    r"^([0-9]{4})-([0-9]{2})-([0-9]{2})[Tt]"
+    r"([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.[0-9]+)?"
+    r"(?:[Zz]|([+-])([0-9]{2}):([0-9]{2}))$"
 )
 
 
@@ -234,14 +289,15 @@ def validate(instance, schema, path="$", root=None, _ref_stack=()):
                 passes.append(i)
         if len(passes) != 1:
             errors.append(f"{path}: oneOf matched {len(passes)} branches, expected exactly 1")
-    if "const" in schema and instance != schema["const"]:
+    if "const" in schema and not _json_equal(instance, schema["const"]):
         errors.append(f"{path}: expected const {schema['const']!r}, got {instance!r}")
-    if "enum" in schema and instance not in schema["enum"]:
+    if ("enum" in schema
+            and not any(_json_equal(instance, item) for item in schema["enum"])):
         errors.append(f"{path}: value {instance!r} not in enum")
     if "type" in schema:
         expected = schema["type"]
         if expected == "number":
-            ok = isinstance(instance, (int, float)) and not isinstance(instance, bool)
+            ok = _json_number(instance)
         elif expected == "integer":
             ok = isinstance(instance, int) and not isinstance(instance, bool)
         else:
@@ -346,12 +402,22 @@ def check_instance_bindings() -> int:
             print(f"MISSING INSTANCE {inst_rel}")
             failures += 1
             continue
-        schema = json.loads(schema_path.read_text())
+        try:
+            schema = load_json(schema_path)
+        except StrictJsonError as exc:
+            print(f"SUBSET GAP {schema_rel}: {exc}")
+            failures += 1
+            continue
         try:
             check_keywords(schema)
-            errors = validate(json.loads(inst_path.read_text()), schema)
+            instance = load_json(inst_path)
+            errors = validate(instance, schema)
         except SubsetError as exc:
             print(f"SUBSET GAP {schema_rel}: {exc}")
+            failures += 1
+            continue
+        except StrictJsonError as exc:
+            print(f"INVALID {inst_rel}: {exc}")
             failures += 1
             continue
         for error in errors:
@@ -365,14 +431,17 @@ def main() -> int:
 
     for jf in sorted(PKG.rglob("*.json")):
         try:
-            json.loads(jf.read_text())
-        except json.JSONDecodeError as exc:
+            load_json(jf)
+        except (json.JSONDecodeError, StrictJsonError) as exc:
             print(f"PARSE FAIL {jf.relative_to(PKG)}: {exc}")
             failures += 1
     print("parse check done")
 
     for manifest_rel in ("contracts/CONTRACTS_MANIFEST.json", "reference/REFERENCE_MANIFEST.json"):
-        manifest = json.loads((PKG / manifest_rel).read_text())
+        try:
+            manifest = load_json(PKG / manifest_rel)
+        except (json.JSONDecodeError, StrictJsonError):
+            continue
         entries = manifest.get("entries", []) + manifest.get("fixtureEntries", [])
         for entry in entries:
             if entry.get("status") == "NEW_CANDIDATE":

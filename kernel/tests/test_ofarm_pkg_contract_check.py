@@ -39,6 +39,9 @@ def _errors(instance: object, schema: dict) -> list[str]:
         ("2026-09-03T10:26:33+24:00", False),
         ("2026-09-03T10:26:33+01:60", False),
         ("2026-09-03T10:26:33+0100", False),
+        ("٢٠٢٦-٠٩-٠٣T١٠:٢٦:٣٣Z", False),
+        ("२०२६-०९-०३T१०:२६:३३Z", False),
+        ("２０２６-０９-０３T１０:２６:３３Z", False),
     ],
 )
 def test_date_time_matches_locked_full_validator(value: str, valid: bool) -> None:
@@ -63,6 +66,42 @@ def test_date_time_matches_locked_full_validator(value: str, valid: bool) -> Non
 )
 def test_numeric_bounds(schema: dict, value: object, valid: bool) -> None:
     assert (not _errors(value, schema)) is valid
+
+
+@pytest.mark.parametrize(
+    "value",
+    [float("nan"), float("inf"), float("-inf")],
+    ids=["nan", "positive-infinity", "negative-infinity"],
+)
+def test_non_finite_float_is_not_a_json_number(value: float) -> None:
+    assert any("expected type number" in error for error in _errors(
+        value, {"type": "number"}
+    ))
+
+
+@pytest.mark.parametrize(
+    ("schema", "value", "valid"),
+    [
+        ({"const": 1}, True, False),
+        ({"enum": [0]}, False, False),
+        ({"const": {"nested": 1}}, {"nested": True}, False),
+        ({"const": [1, {"nested": 0}]}, [True, {"nested": False}], False),
+        ({"const": 1}, 1.0, True),
+        ({"enum": [1.0]}, 1, True),
+    ],
+)
+def test_const_and_enum_use_json_equality(
+    schema: dict,
+    value: object,
+    valid: bool,
+) -> None:
+    assert (not _errors(value, schema)) is valid
+
+
+@pytest.mark.parametrize("value", [True, 1])
+def test_one_of_distinguishes_boolean_and_numeric_constants(value: object) -> None:
+    schema = {"oneOf": [{"const": True}, {"const": 1}]}
+    assert not _errors(value, schema)
 
 
 @pytest.mark.parametrize(
@@ -258,3 +297,52 @@ def test_child_process_reports_invalid_bound_date_time(tmp_path: Path) -> None:
     assert "INVALID instance.json" in process.stdout
     assert "format date-time" in process.stdout
     assert checker.PKG == PACKAGE_ROOT
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_strict_json_loader_rejects_non_json_numbers(
+    tmp_path: Path,
+    constant: str,
+) -> None:
+    path = tmp_path / "non-json-number.json"
+    path.write_text(constant, encoding="utf-8")
+    with pytest.raises(checker.StrictJsonError):
+        checker.load_json(path)
+
+
+def test_child_process_rejects_bound_non_finite_number(tmp_path: Path) -> None:
+    (tmp_path / "schema.json").write_text(
+        json.dumps(
+            {
+                "type": "object",
+                "required": ["value"],
+                "properties": {
+                    "value": {"type": "number", "minimum": 0, "maximum": 10}
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "instance.json").write_text(
+        '{"value": NaN}',
+        encoding="utf-8",
+    )
+    script = "\n".join(
+        [
+            "from pathlib import Path",
+            "from conformance import ofarm_pkg_contract_check as checker",
+            f"checker.PKG = Path({str(tmp_path)!r})",
+            "checker.INSTANCE_BINDINGS = {'instance.json': 'schema.json'}",
+            "raise SystemExit(1 if checker.check_instance_bindings() else 0)",
+        ]
+    )
+    process = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=PACKAGE_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert process.returncode != 0
+    assert "INVALID instance.json" in process.stdout
+    assert "non-JSON numeric constant 'NaN'" in process.stdout

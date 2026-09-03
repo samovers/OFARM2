@@ -2336,7 +2336,57 @@
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_process_rejects_bound_non_finite_number",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_process_reports_invalid_bound_date_time",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_const_and_enum_use_json_equality[schema0-True-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_const_and_enum_use_json_equality[schema1-False-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_const_and_enum_use_json_equality[schema2-value2-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_const_and_enum_use_json_equality[schema3-value3-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_const_and_enum_use_json_equality[schema4-1.0-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_const_and_enum_use_json_equality[schema5-1-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[/u0662/u0660/u0662/u0666-/u0660/u0669-/u0660/u0663T/u0661/u0660:/u0662/u0666:/u0663/u0663Z-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[/u0968/u0966/u0968/u096c-/u0966/u096f-/u0966/u0969T/u0967/u0966:/u0968/u096c:/u0969/u0969Z-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[/uff12/uff10/uff12/uff16-/uff10/uff19-/uff10/uff13T/uff11/uff10:/uff12/uff16:/uff13/uff13Z-False]",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
@@ -2446,6 +2496,21 @@
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_non_finite_float_is_not_a_json_number[nan]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_non_finite_float_is_not_a_json_number[negative-infinity]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_non_finite_float_is_not_a_json_number[positive-infinity]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_numeric_bounds[schema0-0-False]",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
@@ -2496,6 +2561,16 @@
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_one_of_distinguishes_boolean_and_numeric_constants[1]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_one_of_distinguishes_boolean_and_numeric_constants[True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_one_of_does_not_hide_sibling_assertions[schema0-A-expected type object]",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
@@ -2522,6 +2597,21 @@
     },
     {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_one_of_requires_exactly_one_matching_branch",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_strict_json_loader_rejects_non_json_numbers[-Infinity]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_strict_json_loader_rejects_non_json_numbers[Infinity]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_strict_json_loader_rejects_non_json_numbers[NaN]",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
@@ -19201,8 +19291,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "86f70e6e8834c87cff6e5c4b13f060801bc9465ff10b6aede5dd6a0d18b96f82",
-  "entryCount": 3840,
+  "entriesSha256": "2cb8887b8e3d60f1a175efc9048bc429ca8eb03abfe9de957fbb408c04566777",
+  "entryCount": 3858,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
