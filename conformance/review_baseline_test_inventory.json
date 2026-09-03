@@ -2326,6 +2326,301 @@
       "sourcePath": "kernel/tests/test_migration_sets.py"
     },
     {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_boolean_additional_properties_forms_are_explicit",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_bound_pack_activation_set_rejects_invalid_evaluated_at",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_process_reports_invalid_bound_date_time",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[2024-02-29T23:59:59.123+02:30-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[2025-02-29T10:26:33Z-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[2026-09-03T00:00:00-00:00-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[2026-09-03T10:26:33+0100-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[2026-09-03T10:26:33+01:60-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[2026-09-03T10:26:33+24:00-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[2026-09-03T10:26:33-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[2026-09-03T10:26:33Z-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[2026-09-03T10:26:60Z-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[2026-09-03T10:60:00Z-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[2026-09-03T24:00:00Z-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_date_time_matches_locked_full_validator[not-a-date-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_every_bound_instance_still_validates",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_invalid_local_ref_fails_closed[#/$defs/bad~2token]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_invalid_local_ref_fails_closed[#/$defs/missing]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_invalid_local_ref_fails_closed[contracts/schema.json]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_local_ref_and_its_sibling_assertion_are_both_applied",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_local_ref_cycles_fail_closed[schema0]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_local_ref_cycles_fail_closed[schema1]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_local_ref_cycles_fail_closed[schema2]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_local_ref_may_be_reused_on_independent_paths",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_numeric_bounds[schema0-0-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_numeric_bounds[schema1-1-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_numeric_bounds[schema2-1.5-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_numeric_bounds[schema3-4-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_numeric_bounds[schema4-3-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_numeric_bounds[schema5--1-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_numeric_bounds[schema6-1-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_numeric_bounds[schema7-2-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_numeric_bounds[schema8-True-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_numeric_bounds[schema9-False-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_one_of_does_not_hide_sibling_assertions[schema0-A-expected type object]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_one_of_does_not_hide_sibling_assertions[schema1-value1-missing required property 'kind']",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_one_of_does_not_hide_sibling_assertions[schema2-value2-expected const 'A']",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_one_of_does_not_hide_sibling_assertions[schema3-B-expected const 'A']",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_one_of_does_not_hide_sibling_assertions[schema4-B-does not match pattern]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_one_of_requires_exactly_one_matching_branch",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema0]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema10]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema11]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema12]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema13]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema14]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema15]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema16]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema17]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema1]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema2]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema3]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema4]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema5]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema6]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema7]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema8]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_schema_forms_fail_closed[schema9]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_break_glass_login_is_absent_in_normal_structural_state",
       "sourceModule": "kernel.tests.test_postgresql_audit_contract",
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
@@ -18906,8 +19201,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "716569e615ad68f54b9bf4dff743f3caa804aaac23a459f28bac50b0304124a6",
-  "entryCount": 3781,
+  "entriesSha256": "86f70e6e8834c87cff6e5c4b13f060801bc9465ff10b6aede5dd6a0d18b96f82",
+  "entryCount": 3840,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
