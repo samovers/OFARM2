@@ -17,6 +17,23 @@ FULL_DATE_TIME_VALIDATOR = jsonschema.Draft202012Validator(
     DATE_TIME_SCHEMA,
     format_checker=jsonschema.FormatChecker(),
 )
+ASSERTION_VIOLATIONS = {
+    "type": ({"type": "string"}, 1),
+    "const": ({"const": "expected"}, "actual"),
+    "enum": ({"enum": ["expected"]}, "actual"),
+    "required": ({"type": "object", "required": ["value"]}, {}),
+    "additionalProperties": (
+        {"type": "object", "additionalProperties": False},
+        {"extra": True},
+    ),
+    "pattern": ({"type": "string", "pattern": "^[a-z]+$"}, "123"),
+    "minItems": ({"type": "array", "minItems": 1}, []),
+    "maxItems": ({"type": "array", "maxItems": 0}, [1]),
+    "minLength": ({"type": "string", "minLength": 1}, ""),
+    "format": (DATE_TIME_SCHEMA, "not-a-date"),
+    "minimum": ({"type": "number", "minimum": 1}, 0),
+    "maximum": ({"type": "number", "maximum": 0}, 1),
+}
 
 
 def _errors(instance: object, schema: dict) -> list[str]:
@@ -42,11 +59,32 @@ def _errors(instance: object, schema: dict) -> list[str]:
         ("٢٠٢٦-٠٩-٠٣T١٠:٢٦:٣٣Z", False),
         ("२०२६-०९-०३T१०:२६:३३Z", False),
         ("２０２６-０９-０３T１０:２６:３３Z", False),
+        # The locked validator accepts this because its regex uses a `$`
+        # anchor. The package checker deliberately rejects the trailing data.
+        ("2026-09-03T10:26:33Z\n", False),
     ],
 )
-def test_date_time_matches_locked_full_validator(value: str, valid: bool) -> None:
-    assert FULL_DATE_TIME_VALIDATOR.is_valid(value) is valid
-    assert (not _errors(value, DATE_TIME_SCHEMA)) is valid
+def test_date_time_is_at_least_as_strict_as_locked_full_validator(
+    value: str,
+    valid: bool,
+) -> None:
+    subset_valid = not _errors(value, DATE_TIME_SCHEMA)
+    assert subset_valid is valid
+    assert not subset_valid or FULL_DATE_TIME_VALIDATOR.is_valid(value)
+
+
+def test_every_declared_assertion_keyword_is_executable() -> None:
+    assert set(ASSERTION_VIOLATIONS) == checker.ASSERTION_KEYWORDS
+    for keyword, (schema, invalid_instance) in ASSERTION_VIOLATIONS.items():
+        checker.check_keywords(schema)
+        assert checker.validate(invalid_instance, schema), keyword
+
+
+def test_every_declared_annotation_keyword_is_inert() -> None:
+    for keyword in checker.ANNOTATION_KEYWORDS:
+        schema = {keyword: "anything"}
+        checker.check_keywords(schema)
+        assert not checker.validate("instance", schema), keyword
 
 
 @pytest.mark.parametrize(
@@ -261,6 +299,17 @@ def test_bound_pack_activation_set_rejects_invalid_evaluated_at() -> None:
 
 
 def test_child_process_reports_invalid_bound_date_time(tmp_path: Path) -> None:
+    (tmp_path / "contracts").mkdir()
+    (tmp_path / "reference").mkdir()
+    empty_manifest = json.dumps({"entries": [], "fixtureEntries": []})
+    (tmp_path / "contracts/CONTRACTS_MANIFEST.json").write_text(
+        empty_manifest,
+        encoding="utf-8",
+    )
+    (tmp_path / "reference/REFERENCE_MANIFEST.json").write_text(
+        empty_manifest,
+        encoding="utf-8",
+    )
     (tmp_path / "schema.json").write_text(
         json.dumps(
             {
@@ -280,10 +329,13 @@ def test_child_process_reports_invalid_bound_date_time(tmp_path: Path) -> None:
     script = "\n".join(
         [
             "from pathlib import Path",
+            "from types import SimpleNamespace",
             "from conformance import ofarm_pkg_contract_check as checker",
             f"checker.PKG = Path({str(tmp_path)!r})",
             "checker.INSTANCE_BINDINGS = {'instance.json': 'schema.json'}",
-            "raise SystemExit(1 if checker.check_instance_bindings() else 0)",
+            "checker.subprocess.run = lambda *args, **kwargs: "
+            "SimpleNamespace(returncode=0)",
+            "raise SystemExit(checker.main())",
         ]
     )
     process = subprocess.run(
@@ -296,6 +348,7 @@ def test_child_process_reports_invalid_bound_date_time(tmp_path: Path) -> None:
     assert process.returncode != 0
     assert "INVALID instance.json" in process.stdout
     assert "format date-time" in process.stdout
+    assert "RESULT: FAIL (1 failures)" in process.stdout
     assert checker.PKG == PACKAGE_ROOT
 
 
