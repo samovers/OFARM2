@@ -42,6 +42,7 @@ _PYTHON_SOURCE_SNAPSHOT_RFC_SHA256 = (
 MAX_FUNCTION_LINES = 80
 MAX_TEST_LINES = 800
 TEST_MODULE_BUDGETS = {
+    "kernel/tests/test_profile_runtime_services.py": 1_200,
     "kernel/tests/test_security_audit_process_crash.py": 1_250,
     "kernel/tests/test_security_audit_store_loss.py": 1_700,
 }
@@ -59,7 +60,7 @@ SECURITY_AUDIT_OBSERVER_ROOT_MAX_PHYSICAL_LINE_LENGTH = 120
 MODULE_BUDGETS = {
     "kernel/profile_runtime_provider.py": 350,
     "kernel/provider_import_policy.py": 260,
-    "kernel/profile_runtime_services.py": 250,
+    "kernel/profile_runtime_services.py": 295,
     "kernel/profiles/si_ffs/runtime_provider.py": 120,
     "kernel/profiles/si_ffs/manifest_inputs.py": 90,
     "kernel/authentication.py": 100,
@@ -104,7 +105,7 @@ COMMAND_MODULE_BUDGETS = {
 }
 GROUP_BUDGETS = {
     "profile runtime": (
-        900,
+        1_050,
         (
             "kernel/profile_runtime_provider.py",
             "kernel/provider_import_policy.py",

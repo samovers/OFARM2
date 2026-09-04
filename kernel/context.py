@@ -388,6 +388,8 @@ class SIProductRegister:
         self.bindings = bindings or SIReferenceBindings.from_descriptor(
             config.ACTIVE_PROFILE
         )
+        self.runtime_bundle = None
+        self.selected_input_bindings: tuple[tuple[str, str, str], ...] = ()
         self._by_snapshot: dict[str, dict] = {}
         # the shipped real parse (623 products, fictional-free: public register data)
         shipped = self.bindings.regsr_shipped_artifact_path
@@ -429,12 +431,21 @@ class SIProductRegister:
         runtime_bindings = SIReferenceBindings.from_runtime_descriptor(
             store.active_descriptor
         )
+        selected = store.selected_reference_source_data(
+            runtime_bindings.regsr_snapshot_prefix
+        )
         self.bindings = runtime_bindings
         self._by_snapshot.clear()
-        for row in store.selected_reference_source_data(
-            runtime_bindings.regsr_snapshot_prefix
-        ):
+        for row in selected:
             self.register_artifact(row["snapshot_ref"], row["payload"])
+        # Direct SI resolver fixtures may supply selected rows without a
+        # RuntimeBundle. They remain usable for compatibility but cannot pass
+        # executable graph composition, which requires exact bundle identity.
+        self.runtime_bundle = getattr(store, "runtime_bundle", None)
+        self.selected_input_bindings = tuple(
+            (row["snapshot_ref"], row["artifact_ref"], row["source_digest"])
+            for row in selected
+        )
 
     def identities_by_decision(self, snapshot_id: str, decision_number: str) -> list[dict]:
         """The DISTINCT D9 identities for a decision number — one record per

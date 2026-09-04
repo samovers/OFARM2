@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from enum import Enum
+from typing import Protocol, TypedDict, runtime_checkable
 
-from .profile_runtime import ProfileRuntimeDescriptor
+from .profile_runtime import ProfileRuntimeDescriptor, ReferenceFamily
+from .runtime_bundle import RuntimeBundle, RuntimeComponent
 
 
 def _require_ref(value: object, label: str) -> str:
@@ -131,11 +133,51 @@ def _require_filename(value: object, label: str) -> str:
     return value
 
 
+class ProfileApplicabilityResult(TypedDict):
+    contextSnapshotId: str
+
+class ProfileMaterializationUpdate(TypedDict):
+    basisRef: str
+    snapshotRef: str
+
+@dataclass(frozen=True, slots=True)
+class RegistryReverificationRequest:
+    claim_canonical_bytes: bytes
+    resolved_binding_canonical_bytes: tuple[bytes, ...]
+    current_reference_snapshot_ref: str | None
+    event_time: str
+    def __post_init__(self) -> None:
+        if type(self.claim_canonical_bytes) is not bytes or not self.claim_canonical_bytes:
+            raise ValueError("registry claim bytes must be non-empty built-in bytes")
+        if (
+            type(self.resolved_binding_canonical_bytes) is not tuple
+            or any(type(value) is not bytes or not value
+                   for value in self.resolved_binding_canonical_bytes)
+        ):
+            raise ValueError("registry binding bytes must be an exact tuple of bytes")
+        if self.current_reference_snapshot_ref is not None:
+            _require_ref(self.current_reference_snapshot_ref, "registry snapshot ref")
+        _require_ref(self.event_time, "registry event time")
+
+class RegistryReverificationDisposition(Enum):
+    NO_EFFECT = "NO_EFFECT"
+    REVERIFIED = "REVERIFIED"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
+    REFUSED = "REFUSED"
+
+@dataclass(frozen=True, slots=True)
+class RegistryReverificationOutcome:
+    disposition: RegistryReverificationDisposition
+    problem: dict | None = None
+    rationale: str | None = None
+
+
 @runtime_checkable
 class ProfilePolicyService(Protocol):
     descriptor: ProfileRuntimeDescriptor
     policy_ref: str
     recognized_rule_refs: frozenset[str]
+    runtime_component: RuntimeComponent | None
 
     def evidence_policy(self, supported_checks=None) -> dict: ...
 
@@ -144,6 +186,7 @@ class ProfilePolicyService(Protocol):
 
 @runtime_checkable
 class ProfileContextAssembler(Protocol):
+    store: object
     active_profile: ProfileRuntimeDescriptor
 
     def assemble(
@@ -153,20 +196,25 @@ class ProfileContextAssembler(Protocol):
         *,
         target_twin: str = "COMPLIANCE",
         evaluation_time_policy: dict | None = None,
-    ) -> dict: ...
+    ) -> ProfileApplicabilityResult: ...
 
 
 @runtime_checkable
 class ProfileMaterializer(Protocol):
+    store: object
     active_profile: ProfileRuntimeDescriptor
     specification: MaterializationSpecification
+    context: ProfileContextAssembler
 
     def invalidate_for_sources(
         self,
         cur,
         source_refs: list[str],
         *,
-        trigger_family: str = "BASIS_ADVANCED",
+        trigger_family: str,
+        trigger_source_ref: str,
+        farm_scope_ref: str | None = None,
+        reason_code: str = "BASIS_ADVANCED",
     ) -> int: ...
 
     def recompute(
@@ -175,8 +223,9 @@ class ProfileMaterializer(Protocol):
         farm_ref: str,
         *,
         twin: str = "COMPLIANCE",
+        use_class: str = "OPERATIONAL_DASHBOARD",
         time_policy: dict | None = None,
-    ) -> dict: ...
+    ) -> ProfileMaterializationUpdate: ...
 
     def resolve_for_use(
         self,
@@ -194,11 +243,18 @@ class ProfileMaterializer(Protocol):
 
 @runtime_checkable
 class ProfileRegistryReverification(Protocol):
-    def run(self, context): ...
+    active_profile: ProfileRuntimeDescriptor
+    reference_family: ReferenceFamily | None
+    runtime_bundle: RuntimeBundle | None
+    selected_input_bindings: tuple[tuple[str, str, str], ...]
+
+    def run(self, request: RegistryReverificationRequest
+            ) -> RegistryReverificationOutcome: ...
 
 
 @runtime_checkable
 class ProfileOutputAssembler(Protocol):
+    store: object
     active_profile: ProfileRuntimeDescriptor
     specification: OutputSpecification
     materializer: ProfileMaterializer
@@ -232,6 +288,7 @@ class ProfileRuntimeServices:
     materialization_specification: MaterializationSpecification
     materializer: ProfileMaterializer
     registry_reverification: ProfileRegistryReverification
+    registry_reference_family: ReferenceFamily | None
     output_specification: OutputSpecification
     output_assembler: ProfileOutputAssembler
     manifest_evidence_specification: ProfileManifestEvidenceSpecification

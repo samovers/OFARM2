@@ -1,6 +1,19 @@
 """test profile runtime services."""
 # ruff: noqa: F403, F405
 
+import copy
+from inspect import signature
+
+from kernel.contracts import canonical_json
+from kernel.problems import runtime_problem
+from kernel.profile_runtime_services import (
+    ProfileMaterializer,
+    RegistryReverificationDisposition,
+    RegistryReverificationOutcome,
+    RegistryReverificationRequest,
+)
+from kernel.stages import GatePass, GateRefusal
+
 from kernel.tests._profile_runtime_test_support import *
 
 
@@ -251,6 +264,7 @@ def test_product_register_load_from_store_uses_only_selected_source_data(
 
     class FakeStore:
         active_descriptor = descriptor
+        runtime_bundle = object()
         requested_prefixes: list[str] = []
 
         def selected_reference_source_data(self, prefix):
@@ -267,6 +281,12 @@ def test_product_register_load_from_store_uses_only_selected_source_data(
     register.load_from_store(store)
 
     assert store.requested_prefixes == [bindings.regsr_snapshot_prefix]
+    assert register.runtime_bundle is store.runtime_bundle
+    assert register.selected_input_bindings == ((
+        f"{bindings.regsr_snapshot_prefix}.bundle",
+        artifact_ref,
+        "sha256:" + "a" * 64,
+    ),)
     assert register.bindings == context.SIReferenceBindings.from_runtime_descriptor(
         descriptor
     )
@@ -282,67 +302,48 @@ def test_product_register_load_from_store_uses_only_selected_source_data(
     ) is None
 
 
-def test_gate_pipeline_threads_si_reference_bindings(fresh_env):
-    _store, pipeline, _ = fresh_env
-    sub = demo.spray_submission(
-        f"issue127b-binding-context:{_uid()}",
-        erp_id=f"erp:issue127b.binding.{_uid()}",
-        confirm=True,
-    )
-
-    ctx = pipeline._new_context(None, sub, parse_ingress_header(sub))
-
+def test_registry_reverification_requires_exact_si_family(fresh_env):
+    store, pipeline, _ = fresh_env
+    descriptor = store.active_descriptor
+    family = descriptor.reference_family(context.SI_REGSR_FAMILY_ID)
     services = pipeline.runtime_services
-    revalidator = services.registry_reverification
-    assert revalidator.product_lookup.bindings.regsr_snapshot_prefix == \
-        revalidator.snapshot_prefix
-    assert ctx.runtime_services is services
-
-
-def test_registry_reverification_uses_bound_snapshot_prefix(monkeypatch):
-    seen_prefixes = []
-
-    def fake_current_reference_snapshot(_store, prefix):
-        seen_prefixes.append(prefix)
-        return None
-
-    monkeypatch.setattr(
-        validators,
-        "current_reference_snapshot",
-        fake_current_reference_snapshot,
+    validator = services.registry_reverification
+    assert services.registry_reference_family is validator.reference_family is family
+    assert validator.active_profile is descriptor
+    assert validator.runtime_bundle is store.runtime_bundle
+    for wrong_family_id in (
+        context.SI_GERK_FAMILY_ID,
+        context.SI_FFSNAPRAVE_FAMILY_ID,
+    ):
+        with pytest.raises(ProfileRuntimeError, match="exact REGSR family"):
+            validators.RegistryReverificationValidator(
+                active_profile=descriptor,
+                reference_family=descriptor.reference_family(wrong_family_id),
+                product_lookup=validator.product_lookup,
+            )
+    lookup = copy.copy(validator.product_lookup)
+    lookup.lookup_by_decision = lambda *_args: pytest.fail(
+        "cross-family capture reached the product lookup"
     )
-
-    binding_payload = {
-        "bindingRole": "CROP_PROTECTION_PRODUCT",
-        "bindingState": "VERIFIED",
-        "bindingValue": {"registrationRef": "U99999-50/26/context"},
-        "referenceSnapshotRefs": ["referencesnapshot:old"],
-    }
-
-    class FakeStore:
-        def get_record(self, ref):
-            if ref == "binding:regsr":
-                return {
-                    "record_kind": sufficiency.BINDING_KIND,
-                    "payload": binding_payload,
-                }
-            return None
-
-    lookup = SimpleNamespace(lookup_by_decision=lambda *_args: None)
-    ctx = SimpleNamespace(
-        store=FakeStore(),
-        sub={"payload": {"agronomicIdentityBindingRefs": ["binding:regsr"]}},
-        event_time=None,
-        captured_at="2026-01-01T00:00:00Z",
-        review_route_reasons=[],
-    )
-
-    validator = validators.RegistryReverificationValidator(
-        snapshot_prefix="referencesnapshot:si.custom.regsr",
+    captured_family = descriptor.reference_family(context.SI_GERK_FAMILY_ID)
+    outcome = validators.RegistryReverificationValidator(
+        active_profile=descriptor,
+        reference_family=family,
         product_lookup=lookup,
-    )
-    assert validator.run(ctx) is None
-    assert seen_prefixes == ["referencesnapshot:si.custom.regsr"]
+    ).run(RegistryReverificationRequest(
+        claim_canonical_bytes=canonical_json({
+            "capturedAgainstSnapshotRef": f"{captured_family.snapshot_prefix}.v1",
+        }).encode(),
+        resolved_binding_canonical_bytes=(canonical_json({
+            "bindingRole": "CROP_PROTECTION_PRODUCT",
+            "bindingState": "VERIFIED",
+            "bindingValue": {"registrationRef": "decision:cross-family"},
+        }).encode(),),
+        current_reference_snapshot_ref=f"{family.snapshot_prefix}.v2",
+        event_time="2026-01-01T00:00:00Z",
+    ))
+    assert outcome.disposition is RegistryReverificationDisposition.REVIEW_REQUIRED
+    assert outcome.problem["reasonCode"] == "PRODUCT_BINDING_UNRESOLVED"
 
 
 def test_materializer_uses_active_descriptor_for_context_and_policy_freshness(
@@ -420,41 +421,69 @@ def test_materializer_dependency_index_uses_bound_policy_and_invalidates(fresh_e
         assert cur.fetchone()["freshness"] == "STALE"
 
 
-def test_issue_159_default_pipeline_selects_registered_si_provider(fresh_env):
-    store, pipeline, _ = fresh_env
-
-    assert pipeline.runtime_services.descriptor is store.active_descriptor
-    assert pipeline.runtime_services.policy_provider.descriptor is \
-        store.active_descriptor
-
-
-def test_issue_159_si_submission_behavior_remains_assertion_equivalent(
-        fresh_env):
+def test_issue_159_si_submission_behavior_remains_assertion_equivalent(fresh_env):
     store, default_pipeline, _ = fresh_env
-    explicit_pipeline = GatePipeline(
-        store,
-        active_descriptor=config.ACTIVE_PROFILE,
+    injected_services = load_profile_runtime_services(
+        store, store.active_profile_package_name, config.ACTIVE_PROFILE,
     )
+    explicit_pipeline = GatePipeline(
+        store, active_descriptor=config.ACTIVE_PROFILE,
+        runtime_services=injected_services,
+    )
+    assert explicit_pipeline.runtime_services is injected_services
+    assert default_pipeline.runtime_services.descriptor is store.active_descriptor
+    submission = demo.spray_submission(
+        "issue159-equivalent", erp_id="erp:issue159.equivalent", confirm=True,
+    )
+    volatile_times = {
+        "acceptedAt", "assertedAt", "asOf", "decidedAt", "evaluatedAt",
+        "generatedAt", "ingestedAt", "processedAt", "qualifiedAt", "recordTime",
+    }
+    minted_prefixes = {
+        "arg", "assert", "authzreq", "authzres", "authztrace", "bundle", "cires",
+        "cir", "compclaim", "conseq", "derivedstate", "event", "mat", "matbasis",
+        "matres", "matsnap", "passport", "promtrace", "qual", "review", "suffcase",
+    }
 
-    default = default_pipeline.commit(demo.spray_submission(
-        f"issue159-default:{_uid()}",
-        erp_id=f"erp:issue159.default.{_uid()}",
-        confirm=True,
-    ))
-    explicit = explicit_pipeline.commit(demo.spray_submission(
-        f"issue159-explicit:{_uid()}",
-        erp_id=f"erp:issue159.explicit.{_uid()}",
-        confirm=True,
-    ))
+    def stable(value):
+        if type(value) is dict:
+            return {key: stable(item) for key, item in value.items()
+                    if key not in volatile_times}
+        if type(value) is list:
+            return [stable(item) for item in value]
+        if type(value) is str and value.partition(":")[0] in minted_prefixes:
+            return f"{value.partition(':')[0]}:<minted>"
+        return value
 
-    assert default["decisionOutcome"] == explicit["decisionOutcome"] == \
-        "PROMOTE_ACCEPTED"
-    assert default["problems"] == explicit["problems"] == []
-    assert [
-        entry["gate"] for entry in _trace_payload(store, default)["gateSequence"]
-    ] == [
-        entry["gate"] for entry in _trace_payload(store, explicit)["gateSequence"]
-    ]
+    def observables(pipeline):
+        with store.conn.transaction(force_rollback=True):
+            result = pipeline.commit(copy.deepcopy(submission))
+            trace = _trace_payload(store, result)
+            refs = next(entry["relatedArtifactRefs"] for entry in trace["gateSequence"]
+                        if entry["gate"] == "CURRENT_STATE_MATERIALIZATION")
+            artifact_refs = (
+                result["semanticEventRef"], trace["evidenceSufficiencyCaseRef"], *refs,
+                *result.get("emittedAssertionRecordRefs", ()),
+                *result.get("emittedReviewDecisionRefs", ()),
+                *result.get("emittedAcceptedConsequenceRefs", ()),
+            )
+            with store.conn.cursor() as cur:
+                key = cur.execute(
+                    "SELECT materialization_key FROM derived_materialization "
+                    "WHERE snapshot_record_id = %s", (refs[1],),
+                ).fetchone()["materialization_key"]
+            view = pipeline.runtime_services.output_assembler.passport_view(
+                demo.FARM, demo.FARMER, allow_recompute=False,
+            )
+            receipt = view.pop("runtimeReceipt")
+            return (
+                stable(result), stable(trace), key,
+                tuple(stable(store.get_payload(ref)) for ref in artifact_refs),
+                stable(view), receipt["runtimeBundleDigest"],
+                frozenset(receipt["payloadDigests"]),
+            )
+
+    assert observables(default_pipeline) == observables(explicit_pipeline)
 
 
 def test_issue_159_route_uses_composition_root_services(fresh_env):
@@ -681,67 +710,53 @@ def test_issue_159_composition_returns_fresh_service_graphs(fresh_env):
         second.runtime_services.registry_reverification.product_lookup
 
 
-def test_issue_159_composition_rejects_missing_required_service(
-        fresh_env, monkeypatch):
+def test_issue_160_composition_normalizes_factory_failure(fresh_env, monkeypatch):
+    store, _, _ = fresh_env
+
+    def broken_factory(_store, _descriptor):
+        raise TypeError("synthetic factory failure")
+
+    monkeypatch.setattr(profile_runtime_provider, "_load_factory",
+                        lambda _registration, _path, _source: broken_factory)
+    with pytest.raises(ProfileRuntimeError, match="factory failed") as caught:
+        load_profile_runtime_services(
+            store, config.ACTIVE_PROFILE_PACKAGE_NAME, config.ACTIVE_PROFILE)
+    assert type(caught.value.__cause__) is TypeError
+
+
+def test_issue_159_composition_rejects_missing_required_service(fresh_env, monkeypatch):
     store, _, _ = fresh_env
 
     def incomplete_factory(_store, descriptor):
-        complete = (
-            profile_runtime_provider._resolve_si_factory()(
-                _store,
-                descriptor,
-            )
-        )
+        complete = profile_runtime_provider._resolve_si_factory()(
+            _store, descriptor)
         return replace(complete, policy_provider=None)
 
-    monkeypatch.setattr(
-        profile_runtime_provider,
-        "_load_factory",
-        lambda _registration, _path, _source: incomplete_factory,
-    )
+    monkeypatch.setattr(profile_runtime_provider, "_load_factory",
+                        lambda _registration, _path, _source: incomplete_factory)
     with pytest.raises(ProfileRuntimeError, match="incomplete or mismatched"):
         load_profile_runtime_services(
-            store,
-            config.ACTIVE_PROFILE_PACKAGE_NAME,
-            config.ACTIVE_PROFILE,
-        )
+            store, config.ACTIVE_PROFILE_PACKAGE_NAME, config.ACTIVE_PROFILE)
 
 
-def test_composition_rejects_cross_profile_service_binding(
-        fresh_env, monkeypatch):
+def test_composition_rejects_cross_profile_service_binding(fresh_env, monkeypatch):
     store, _, _ = fresh_env
 
     def mismatched_factory(_store, descriptor):
-        services = (
-            profile_runtime_provider._resolve_si_factory()(
-                _store,
-                descriptor,
-            )
-        )
+        services = profile_runtime_provider._resolve_si_factory()(
+            _store, descriptor)
         services.output_assembler.active_profile = replace(
-            descriptor,
-            profile_ref="profile:synthetic.mismatch.v0_1",
-        )
+            descriptor, profile_ref="profile:synthetic.mismatch.v0_1")
         return services
 
-    monkeypatch.setattr(
-        profile_runtime_provider,
-        "_load_factory",
-        lambda _registration, _path, _source: mismatched_factory,
-    )
-    with pytest.raises(
-        ProfileRuntimeError,
-        match="different profile bindings",
-    ):
+    monkeypatch.setattr(profile_runtime_provider, "_load_factory",
+                        lambda _registration, _path, _source: mismatched_factory)
+    with pytest.raises(ProfileRuntimeError, match="different profile bindings"):
         load_profile_runtime_services(
-            store,
-            config.ACTIVE_PROFILE_PACKAGE_NAME,
-            config.ACTIVE_PROFILE,
-        )
+            store, config.ACTIVE_PROFILE_PACKAGE_NAME, config.ACTIVE_PROFILE)
 
 
-def test_composition_requires_trusted_manifest_evidence_inputs(
-        fresh_env, monkeypatch):
+def test_composition_requires_trusted_manifest_evidence_inputs(fresh_env, monkeypatch):
     store, _, _ = fresh_env
 
     def untrusted_factory(_store, descriptor):
@@ -751,19 +766,435 @@ def test_composition_requires_trusted_manifest_evidence_inputs(
         )
         return replace(services, manifest_evidence_specification=object())
 
-    monkeypatch.setattr(
-        profile_runtime_provider,
-        "_load_factory",
-        lambda _registration, _path, _source: untrusted_factory,
-    )
+    monkeypatch.setattr(profile_runtime_provider, "_load_factory",
+                        lambda _registration, _path, _source: untrusted_factory)
     with pytest.raises(ProfileRuntimeError, match="incomplete or mismatched"):
         load_profile_runtime_services(
-            store,
-            config.ACTIVE_PROFILE_PACKAGE_NAME,
-            config.ACTIVE_PROFILE,
-        )
+            store, config.ACTIVE_PROFILE_PACKAGE_NAME, config.ACTIVE_PROFILE)
 
 
 def test_issue_159_service_bundle_has_no_optional_slots():
     with pytest.raises(TypeError):
         ProfileRuntimeServices(descriptor=config.ACTIVE_PROFILE)
+
+
+def _runtime_table_counts(store):
+    tables = (
+        "kernel_record",
+        "kernel_edge",
+        "kernel_gate_log",
+        "kernel_idempotency",
+        "derived_materialization",
+        "derived_dependency_index",
+        "runtime_trace",
+    )
+    with store.conn.cursor() as cur:
+        return {
+            table: cur.execute(f"SELECT count(*) AS n FROM {table}").fetchone()["n"]
+            for table in tables
+        }
+
+
+def _fault_runtime_graph(services, fault, store):
+    descriptor = services.descriptor
+    if fault == "signature":
+        services.materializer.recompute = (
+            lambda _cur, _farm, *, twin="COMPLIANCE", time_policy=None: {}
+        )
+    elif fault == "policy_component":
+        services.policy_provider.runtime_component = replace(
+            services.policy_provider.runtime_component
+        )
+    elif fault == "path_policy":
+        services.policy_provider.runtime_component = None
+    elif fault == "policy_descriptor":
+        services.policy_provider.descriptor = replace(descriptor)
+    elif fault == "policy_ref":
+        services.policy_provider.policy_ref = "policy:foreign"
+    elif fault == "rule_refs":
+        services.policy_provider.recognized_rule_refs = frozenset()
+    elif fault == "rule_refs_type":
+        services.policy_provider.recognized_rule_refs = None
+    elif fault == "context_store":
+        services.context_assembler.store = SimpleNamespace(
+            active_descriptor=descriptor,
+            runtime_bundle=store.runtime_bundle,
+        )
+    elif fault == "context_descriptor":
+        services.context_assembler.active_profile = replace(descriptor)
+    elif fault == "materializer_store":
+        services.materializer.store = object()
+    elif fault == "materializer_descriptor":
+        services.materializer.active_profile = replace(descriptor)
+    elif fault == "materializer_spec":
+        services.materializer.specification = replace(
+            services.materialization_specification
+        )
+    elif fault == "materializer_context":
+        services.materializer.context = copy.copy(services.context_assembler)
+    elif fault == "output_store":
+        services.output_assembler.store = object()
+    elif fault == "output_descriptor":
+        services.output_assembler.active_profile = replace(descriptor)
+    elif fault == "output_spec":
+        services.output_assembler.specification = replace(
+            services.output_specification
+        )
+    elif fault == "output_materializer":
+        services.output_assembler.materializer = copy.copy(services.materializer)
+    elif fault == "registry_descriptor":
+        services.registry_reverification.active_profile = replace(descriptor)
+    elif fault == "registry_family":
+        services.registry_reverification.reference_family = descriptor.reference_family(
+            context.SI_GERK_FAMILY_ID
+        )
+    elif fault == "registry_bundle":
+        services.registry_reverification.runtime_bundle = object()
+    elif fault == "registry_inputs":
+        services.registry_reverification.selected_input_bindings = (
+            ("snapshot:foreign", "artifact:foreign", "sha256:" + "a" * 64),
+        )
+    elif fault == "outer_family_copy":
+        services = replace(
+            services,
+            registry_reference_family=replace(services.registry_reference_family),
+        )
+    return services
+
+
+@pytest.mark.parametrize("fault", (
+    "signature", "policy_component", "path_policy", "policy_descriptor",
+    "policy_ref", "rule_refs", "rule_refs_type", "context_store", "context_descriptor",
+    "materializer_store", "materializer_descriptor", "materializer_spec",
+    "materializer_context", "output_store", "output_descriptor", "output_spec",
+    "output_materializer", "registry_descriptor", "registry_family",
+    "registry_bundle", "registry_inputs", "outer_family_copy",
+))
+def test_issue_160_both_composition_paths_reject_cross_wires(
+    fresh_env,
+    monkeypatch,
+    fault,
+):
+    store, pipeline, _ = fresh_env
+    descriptor = store.active_descriptor
+    factory = profile_runtime_provider._resolve_si_factory()
+    explicit = _fault_runtime_graph(factory(store, descriptor), fault, store)
+    transactions = 0
+    serialized_tx = store.serialized_tx
+
+    def counted_transaction():
+        nonlocal transactions
+        transactions += 1
+        return serialized_tx()
+
+    monkeypatch.setattr(store, "serialized_tx", counted_transaction)
+    with pytest.raises(ProfileRuntimeError):
+        GatePipeline(store, runtime_services=explicit)
+
+    def malformed_factory(provider_store, provider_descriptor):
+        graph = factory(provider_store, provider_descriptor)
+        return _fault_runtime_graph(graph, fault, provider_store)
+
+    monkeypatch.setattr(
+        profile_runtime_provider,
+        "_load_factory",
+        lambda *_args: malformed_factory,
+    )
+    with pytest.raises(ProfileRuntimeError):
+        load_profile_runtime_services(
+            store,
+            config.ACTIVE_PROFILE_PACKAGE_NAME,
+            descriptor,
+        )
+    assert transactions == 0
+    assert pipeline.runtime_services.descriptor is descriptor
+
+
+@pytest.mark.parametrize("candidate", ("lookalike", "copied_descriptor", "bad_spec"))
+def test_issue_160_injected_outer_types_fail_before_pipeline(fresh_env, candidate):
+    store, pipeline, _ = fresh_env
+    services = pipeline.runtime_services
+    if candidate == "lookalike":
+        services = SimpleNamespace(**{
+            field: getattr(services, field)
+            for field in services.__dataclass_fields__
+        })
+    elif candidate == "copied_descriptor":
+        services = replace(services, descriptor=replace(services.descriptor))
+    else:
+        services = replace(services, materialization_specification=object())
+    with pytest.raises(ProfileRuntimeError):
+        GatePipeline(store, runtime_services=services)
+
+
+def test_issue_160_materializer_protocol_declares_complete_calls():
+    value = object()
+    signature(ProfileMaterializer.invalidate_for_sources).bind(
+        value,
+        value,
+        ["source:test"],
+        trigger_family="BASIS_ADVANCED",
+        trigger_source_ref="source:test",
+        farm_scope_ref="farm:test",
+        reason_code="TRUTH_BASIS_ADVANCED",
+    )
+    signature(ProfileMaterializer.recompute).bind(
+        value,
+        value,
+        "farm:test",
+        twin="COMPLIANCE",
+        use_class="OPERATIONAL_DASHBOARD",
+        time_policy={"policyType": "NOW"},
+    )
+
+
+@pytest.mark.parametrize("result", (
+    {},
+    {"contextSnapshotId": ""},
+    {"contextSnapshotId": object()},
+))
+def test_issue_160_malformed_applicability_rolls_back_before_success(
+    fresh_env,
+    result,
+):
+    store, _, _ = fresh_env
+    services = profile_runtime_provider._resolve_si_factory()(
+        store, store.active_descriptor,
+    )
+    services.context_assembler.assemble = lambda *_args, **_kw: result
+    pipeline = GatePipeline(store, runtime_services=services)
+    before = _runtime_table_counts(store)
+    with pytest.raises(ProfileRuntimeError, match="contextSnapshotId"):
+        pipeline.commit(demo.spray_submission(
+            f"issue160-context:{_uid()}",
+            erp_id=f"erp:issue160.context.{_uid()}",
+            confirm=True,
+        ))
+    assert _runtime_table_counts(store) == before
+
+
+@pytest.mark.parametrize("result", (
+    {},
+    {"basisRef": "", "snapshotRef": "snapshot:test"},
+    {"basisRef": object(), "snapshotRef": "snapshot:test"},
+    {"basisRef": "basis:test"},
+    {"basisRef": "basis:test", "snapshotRef": ""},
+    {"basisRef": "basis:test", "snapshotRef": object()},
+))
+def test_issue_160_malformed_materialization_rolls_back_before_success(
+    fresh_env,
+    result,
+):
+    store, _, _ = fresh_env
+    services = profile_runtime_provider._resolve_si_factory()(
+        store, store.active_descriptor,
+    )
+    services.materializer.recompute = lambda *_args, **_kw: result
+    pipeline = GatePipeline(store, runtime_services=services)
+    before = _runtime_table_counts(store)
+    with pytest.raises(ProfileRuntimeError, match="materialization result"):
+        pipeline.commit(demo.spray_submission(
+            f"issue160-materialization:{_uid()}",
+            erp_id=f"erp:issue160.materialization.{_uid()}",
+            confirm=True,
+        ))
+    assert _runtime_table_counts(store) == before
+
+
+def _pipeline_with_registry_run(store, services, run):
+    registry_service = copy.copy(services.registry_reverification)
+    registry_service.run = run
+    return GatePipeline(
+        store,
+        runtime_services=replace(
+            services,
+            registry_reverification=registry_service,
+        ),
+    )
+
+
+def _invalid_registry_run(case):
+    def run(_request):
+        if case == "exception":
+            raise RuntimeError("provider failure")
+        if case == "none":
+            return None
+        if case == "mapping":
+            return {}
+        if case == "falsey":
+            return False
+        if case == "gate_pass":
+            return GatePass()
+        if case == "gate_refusal":
+            return GateRefusal("VALIDATION", "FAIL", "RETAIN_DRAFT", [])
+        if case == "unknown":
+            return RegistryReverificationOutcome("UNKNOWN")
+        if case == "no_effect_payload":
+            return RegistryReverificationOutcome(
+                RegistryReverificationDisposition.NO_EFFECT,
+                rationale="unexpected",
+            )
+        if case == "reverified_empty":
+            return RegistryReverificationOutcome(
+                RegistryReverificationDisposition.REVERIFIED
+            )
+        problem = runtime_problem(
+            "PRODUCT_BINDING_UNRESOLVED",
+            "Registry review",
+            "Synthetic registry review.",
+            severity="WARNING",
+        )
+        if case == "unknown_reason":
+            problem["reasonCode"] = "UNKNOWN_PROVIDER_REASON"
+        disposition = (
+            RegistryReverificationDisposition.REFUSED
+            if case == "refused_warning"
+            else RegistryReverificationDisposition.REVIEW_REQUIRED
+        )
+        return RegistryReverificationOutcome(disposition, problem=problem)
+    return run
+
+
+@pytest.mark.parametrize("case", (
+    "exception", "none", "mapping", "falsey", "gate_pass", "gate_refusal",
+    "unknown", "no_effect_payload", "reverified_empty", "unknown_reason",
+    "refused_warning",
+))
+def test_issue_160_malformed_registry_outcome_rolls_back(fresh_env, case):
+    store, pipeline, _ = fresh_env
+    candidate = _pipeline_with_registry_run(
+        store,
+        pipeline.runtime_services,
+        _invalid_registry_run(case),
+    )
+    before = _runtime_table_counts(store)
+    with pytest.raises(ProfileRuntimeError):
+        candidate.commit(demo.spray_submission(
+            f"issue160-registry-invalid:{_uid()}",
+            erp_id=f"erp:issue160.registry.invalid.{_uid()}",
+            confirm=True,
+        ))
+    assert _runtime_table_counts(store) == before
+
+
+def _legacy_registry_mutation(case):
+    def run(request):
+        if case == "durable_log":
+            request.store.log_gate(request.cur, "request", "VALIDATION", "PASS")
+        elif case == "sequence":
+            request.gate_sequence.append({"outcome": "REGISTRY_REVERIFIED"})
+        elif case == "log_remove":
+            request.log("VALIDATION", "REGISTRY_REVERIFIED")
+            request.gate_sequence.pop()
+        elif case == "review_append":
+            request.review_route_reasons.append("malformed")
+        else:
+            request.review_route_reasons[0]["detail"] = "mutated"
+        return RegistryReverificationOutcome(
+            RegistryReverificationDisposition.NO_EFFECT
+        )
+    return run
+
+
+@pytest.mark.parametrize("case", (
+    "durable_log", "sequence", "log_remove", "review_append", "review_prefix",
+))
+def test_issue_160_registry_request_denies_legacy_mutation(fresh_env, case):
+    store, pipeline, _ = fresh_env
+    candidate = _pipeline_with_registry_run(
+        store,
+        pipeline.runtime_services,
+        _legacy_registry_mutation(case),
+    )
+    before = _runtime_table_counts(store)
+    with pytest.raises(ProfileRuntimeError, match="service failed"):
+        candidate.commit(demo.spray_submission(
+            f"issue160-registry-mutation:{_uid()}",
+            erp_id=f"erp:issue160.registry.mutation.{_uid()}",
+            confirm=True,
+        ))
+    assert _runtime_table_counts(store) == before
+
+
+def test_issue_160_valid_registry_outcomes_are_code_owned(fresh_env):
+    store, pipeline, _ = fresh_env
+    services = pipeline.runtime_services
+    reverified = _pipeline_with_registry_run(
+        store,
+        services,
+        lambda _request: RegistryReverificationOutcome(
+            RegistryReverificationDisposition.REVERIFIED,
+            rationale="synthetic identity reverification",
+        ),
+    ).commit(demo.spray_submission(
+        f"issue160-reverified:{_uid()}",
+        erp_id=f"erp:issue160.reverified.{_uid()}",
+        confirm=True,
+    ))
+    assert reverified["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    assert any(
+        entry["outcome"] == "REGISTRY_REVERIFIED"
+        for entry in _trace_payload(store, reverified)["gateSequence"]
+    )
+
+    review_problem = runtime_problem(
+        "PRODUCT_BINDING_UNRESOLVED",
+        "Certificate review",
+        "The certificate requires profile-owned review.",
+        severity="WARNING",
+    )
+    reviewed = _pipeline_with_registry_run(
+        store,
+        services,
+        lambda _request: RegistryReverificationOutcome(
+            RegistryReverificationDisposition.REVIEW_REQUIRED,
+            problem=review_problem,
+        ),
+    ).commit(demo.spray_submission(
+        f"issue160-reviewed:{_uid()}",
+        erp_id=f"erp:issue160.reviewed.{_uid()}",
+        confirm=True,
+    ))
+    review_problem["detail"] = "provider mutation after return"
+    assert reviewed["decisionOutcome"] == "REQUIRE_REVIEW"
+    assert reviewed["problems"][0]["detail"] == \
+        "The certificate requires profile-owned review."
+
+    refused_problem = runtime_problem(
+        "PRODUCT_BINDING_UNRESOLVED",
+        "Registry refusal",
+        "The registry result cannot support this claim.",
+    )
+    refused = _pipeline_with_registry_run(
+        store,
+        services,
+        lambda _request: RegistryReverificationOutcome(
+            RegistryReverificationDisposition.REFUSED,
+            problem=refused_problem,
+        ),
+    ).commit(demo.spray_submission(
+        f"issue160-refused:{_uid()}",
+        erp_id=f"erp:issue160.refused.{_uid()}",
+        confirm=True,
+    ))
+    assert refused["decisionOutcome"] == "RETAIN_DRAFT"
+    assert _trace_payload(store, refused)["gateSequence"][-1]["outcome"] == \
+        "FAIL_REFERENCE_RESOLUTION"
+
+
+@pytest.mark.parametrize("field,value", (
+    ("claim_canonical_bytes", b""),
+    ("resolved_binding_canonical_bytes", []),
+    ("current_reference_snapshot_ref", ""),
+    ("event_time", ""),
+))
+def test_issue_160_registry_request_requires_exact_immutable_fields(field, value):
+    values = {
+        "claim_canonical_bytes": b"{}",
+        "resolved_binding_canonical_bytes": (),
+        "current_reference_snapshot_ref": None,
+        "event_time": "2026-01-01T00:00:00Z",
+    }
+    values[field] = value
+    with pytest.raises(ValueError):
+        RegistryReverificationRequest(**values)

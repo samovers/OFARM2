@@ -8986,22 +8986,12 @@
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_gate_pipeline_threads_si_reference_bindings",
-      "sourceModule": "kernel.tests.test_profile_runtime_services",
-      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_composition_rejects_missing_required_service",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_composition_returns_fresh_service_graphs",
-      "sourceModule": "kernel.tests.test_profile_runtime_services",
-      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_default_pipeline_selects_registered_si_provider",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
@@ -9061,6 +9051,291 @@
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[context_descriptor]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[context_store]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[materializer_context]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[materializer_descriptor]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[materializer_spec]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[materializer_store]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[outer_family_copy]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[output_descriptor]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[output_materializer]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[output_spec]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[output_store]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[path_policy]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[policy_component]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[policy_descriptor]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[policy_ref]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[registry_bundle]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[registry_descriptor]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[registry_family]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[registry_inputs]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[rule_refs]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[rule_refs_type]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[signature]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_composition_normalizes_factory_failure",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_injected_outer_types_fail_before_pipeline[bad_spec]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_injected_outer_types_fail_before_pipeline[copied_descriptor]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_injected_outer_types_fail_before_pipeline[lookalike]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_applicability_rolls_back_before_success[result0]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_applicability_rolls_back_before_success[result1]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_applicability_rolls_back_before_success[result2]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_materialization_rolls_back_before_success[result0]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_materialization_rolls_back_before_success[result1]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_materialization_rolls_back_before_success[result2]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_materialization_rolls_back_before_success[result3]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_materialization_rolls_back_before_success[result4]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_materialization_rolls_back_before_success[result5]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_registry_outcome_rolls_back[exception]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_registry_outcome_rolls_back[falsey]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_registry_outcome_rolls_back[gate_pass]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_registry_outcome_rolls_back[gate_refusal]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_registry_outcome_rolls_back[mapping]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_registry_outcome_rolls_back[no_effect_payload]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_registry_outcome_rolls_back[none]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_registry_outcome_rolls_back[refused_warning]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_registry_outcome_rolls_back[reverified_empty]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_registry_outcome_rolls_back[unknown]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_malformed_registry_outcome_rolls_back[unknown_reason]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_materializer_protocol_declares_complete_calls",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_registry_request_denies_legacy_mutation[durable_log]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_registry_request_denies_legacy_mutation[log_remove]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_registry_request_denies_legacy_mutation[review_append]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_registry_request_denies_legacy_mutation[review_prefix]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_registry_request_denies_legacy_mutation[sequence]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_registry_request_requires_exact_immutable_fields[claim_canonical_bytes-]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_registry_request_requires_exact_immutable_fields[current_reference_snapshot_ref-]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_registry_request_requires_exact_immutable_fields[event_time-]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_registry_request_requires_exact_immutable_fields[resolved_binding_canonical_bytes-value1]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_valid_registry_outcomes_are_code_owned",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_materializer_dependency_index_uses_bound_policy_and_invalidates",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
@@ -9091,7 +9366,7 @@
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_registry_reverification_uses_bound_snapshot_prefix",
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_registry_reverification_requires_exact_si_family",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
@@ -19306,8 +19581,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "5d15f532d795eb400974f4671aa94e0cd677b411bb84faba6d0159e2b66c5a76",
-  "entryCount": 3861,
+  "entriesSha256": "521aa08537f617c9191a3b1e2fd24e1cf511f76a5caaaa74b09b2e688ecf2eb7",
+  "entryCount": 3916,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
