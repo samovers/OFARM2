@@ -232,12 +232,11 @@ def _validate_registry_binding(
         raise ProfileRuntimeError("runtime registry service inputs do not match Store")
 
 
-def _validate_services(
+def _inspect_services(
     services: object,
     descriptor: ProfileRuntimeDescriptor,
     expected_store: ProfileRuntimeStore,
 ) -> ProfileRuntimeServices:
-    """Admit one complete Store-bound graph for every composition path."""
     if type(services) is not ProfileRuntimeServices:
         raise ProfileRuntimeError("runtime factory returned an invalid service bundle")
     required_types = (
@@ -292,14 +291,26 @@ def _validate_services(
         descriptor.pack_ref,
         descriptor.code_binding_profile_ref,
     })
+    recognized = services.policy_provider.recognized_rule_refs
     if (
-        services.policy_provider.policy_ref != descriptor.evidence_policy_ref
-        or not required_rules.issubset(
-            services.policy_provider.recognized_rule_refs
-        )
+        type(recognized) is not frozenset
+        or any(type(ref) is not str or not ref for ref in recognized)
+        or services.policy_provider.policy_ref != descriptor.evidence_policy_ref
+        or not required_rules.issubset(recognized)
     ):
         raise ProfileRuntimeError("runtime policy does not match the descriptor")
     return services
+
+
+def _validate_services(services: object, descriptor: ProfileRuntimeDescriptor,
+                       expected_store: ProfileRuntimeStore) -> ProfileRuntimeServices:
+    """Admit one complete Store-bound graph for every composition path."""
+    try:
+        return _inspect_services(services, descriptor, expected_store)
+    except ProfileRuntimeError:
+        raise
+    except Exception as exc:
+        raise ProfileRuntimeError("runtime service graph inspection failed") from exc
 
 
 def load_profile_runtime_services(

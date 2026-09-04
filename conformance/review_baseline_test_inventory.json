@@ -8986,22 +8986,12 @@
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_gate_pipeline_threads_si_reference_bindings",
-      "sourceModule": "kernel.tests.test_profile_runtime_services",
-      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_composition_rejects_missing_required_service",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_composition_returns_fresh_service_graphs",
-      "sourceModule": "kernel.tests.test_profile_runtime_services",
-      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_default_pipeline_selects_registered_si_provider",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
@@ -9157,6 +9147,11 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[rule_refs]",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_both_composition_paths_reject_cross_wires[rule_refs_type]",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
@@ -19581,8 +19576,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "e8cde6b91d590a46b30d3a8bcd0ad1928a365e1c797251cc33e40be46d6c9d7d",
-  "entryCount": 3916,
+  "entriesSha256": "96cfee4cf814a8f517bef373bb376bbe974d0a4aa692d74577d8305a8fa9b79f",
+  "entryCount": 3915,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

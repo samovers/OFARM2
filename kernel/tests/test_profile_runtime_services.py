@@ -4,6 +4,7 @@
 import copy
 from inspect import signature
 
+from kernel.contracts import canonical_json
 from kernel.problems import runtime_problem
 from kernel.profile_runtime_services import (
     ProfileMaterializer,
@@ -301,51 +302,15 @@ def test_product_register_load_from_store_uses_only_selected_source_data(
     ) is None
 
 
-def test_gate_pipeline_threads_si_reference_bindings(fresh_env):
-    _store, pipeline, _ = fresh_env
-    sub = demo.spray_submission(
-        f"issue127b-binding-context:{_uid()}",
-        erp_id=f"erp:issue127b.binding.{_uid()}",
-        confirm=True,
-    )
-
-    ctx = pipeline._new_context(None, sub, parse_ingress_header(sub))
-
-    services = pipeline.runtime_services
-    revalidator = services.registry_reverification
-    regsr_family = config.ACTIVE_PROFILE.reference_family(
-        context.SI_REGSR_FAMILY_ID
-    )
-    assert services.registry_reference_family is regsr_family
-    assert revalidator.reference_family is regsr_family
-    assert revalidator.active_profile is config.ACTIVE_PROFILE
-    assert revalidator.runtime_bundle is _store.runtime_bundle
-    assert revalidator.product_lookup.bindings.regsr_snapshot_prefix == \
-        revalidator.snapshot_prefix
-    assert ctx.runtime_services is services
-
-
-def test_registry_reverification_requires_exact_si_family():
-    descriptor = config.ACTIVE_PROFILE
+def test_registry_reverification_requires_exact_si_family(fresh_env):
+    store, pipeline, _ = fresh_env
+    descriptor = store.active_descriptor
     family = descriptor.reference_family(context.SI_REGSR_FAMILY_ID)
-    runtime_bundle = object()
-    lookup = SimpleNamespace(
-        bindings=context.SIReferenceBindings.from_runtime_descriptor(descriptor),
-        runtime_bundle=runtime_bundle,
-        selected_input_bindings=(("snapshot", "artifact", "digest"),),
-        lookup_by_decision=lambda *_args: None,
-    )
-
-    validator = validators.RegistryReverificationValidator(
-        active_profile=descriptor,
-        reference_family=family,
-        product_lookup=lookup,
-    )
-
+    services = pipeline.runtime_services
+    validator = services.registry_reverification
+    assert services.registry_reference_family is validator.reference_family is family
     assert validator.active_profile is descriptor
-    assert validator.reference_family is family
-    assert validator.runtime_bundle is runtime_bundle
-    assert validator.selected_input_bindings is lookup.selected_input_bindings
+    assert validator.runtime_bundle is store.runtime_bundle
     for wrong_family_id in (
         context.SI_GERK_FAMILY_ID,
         context.SI_FFSNAPRAVE_FAMILY_ID,
@@ -354,8 +319,31 @@ def test_registry_reverification_requires_exact_si_family():
             validators.RegistryReverificationValidator(
                 active_profile=descriptor,
                 reference_family=descriptor.reference_family(wrong_family_id),
-                product_lookup=lookup,
+                product_lookup=validator.product_lookup,
             )
+    lookup = copy.copy(validator.product_lookup)
+    lookup.lookup_by_decision = lambda *_args: pytest.fail(
+        "cross-family capture reached the product lookup"
+    )
+    captured_family = descriptor.reference_family(context.SI_GERK_FAMILY_ID)
+    outcome = validators.RegistryReverificationValidator(
+        active_profile=descriptor,
+        reference_family=family,
+        product_lookup=lookup,
+    ).run(RegistryReverificationRequest(
+        claim_canonical_bytes=canonical_json({
+            "capturedAgainstSnapshotRef": f"{captured_family.snapshot_prefix}.v1",
+        }).encode(),
+        resolved_binding_canonical_bytes=(canonical_json({
+            "bindingRole": "CROP_PROTECTION_PRODUCT",
+            "bindingState": "VERIFIED",
+            "bindingValue": {"registrationRef": "decision:cross-family"},
+        }).encode(),),
+        current_reference_snapshot_ref=f"{family.snapshot_prefix}.v2",
+        event_time="2026-01-01T00:00:00Z",
+    ))
+    assert outcome.disposition is RegistryReverificationDisposition.REVIEW_REQUIRED
+    assert outcome.problem["reasonCode"] == "PRODUCT_BINDING_UNRESOLVED"
 
 
 def test_materializer_uses_active_descriptor_for_context_and_policy_freshness(
@@ -433,21 +421,18 @@ def test_materializer_dependency_index_uses_bound_policy_and_invalidates(fresh_e
         assert cur.fetchone()["freshness"] == "STALE"
 
 
-def test_issue_159_default_pipeline_selects_registered_si_provider(fresh_env):
-    store, pipeline, _ = fresh_env
-
-    assert pipeline.runtime_services.descriptor is store.active_descriptor
-    assert pipeline.runtime_services.policy_provider.descriptor is \
-        store.active_descriptor
-
-
 def test_issue_159_si_submission_behavior_remains_assertion_equivalent(
         fresh_env):
     store, default_pipeline, _ = fresh_env
-    explicit_pipeline = GatePipeline(
-        store,
-        active_descriptor=config.ACTIVE_PROFILE,
+    injected_services = load_profile_runtime_services(
+        store, store.active_profile_package_name, config.ACTIVE_PROFILE,
     )
+    explicit_pipeline = GatePipeline(
+        store, active_descriptor=config.ACTIVE_PROFILE,
+        runtime_services=injected_services,
+    )
+    assert explicit_pipeline.runtime_services is injected_services
+    assert default_pipeline.runtime_services.descriptor is store.active_descriptor
 
     default = default_pipeline.commit(demo.spray_submission(
         f"issue159-default:{_uid()}",
@@ -460,14 +445,25 @@ def test_issue_159_si_submission_behavior_remains_assertion_equivalent(
         confirm=True,
     ))
 
-    assert default["decisionOutcome"] == explicit["decisionOutcome"] == \
-        "PROMOTE_ACCEPTED"
-    assert default["problems"] == explicit["problems"] == []
-    assert [
-        entry["gate"] for entry in _trace_payload(store, default)["gateSequence"]
-    ] == [
-        entry["gate"] for entry in _trace_payload(store, explicit)["gateSequence"]
-    ]
+    def observables(pipeline, result):
+        trace = _trace_payload(store, result)
+        refs = next(entry["relatedArtifactRefs"] for entry in trace["gateSequence"]
+                    if entry["gate"] == "CURRENT_STATE_MATERIALIZATION")
+        view = pipeline.runtime_services.output_assembler.passport_view(
+            demo.FARM, demo.FARMER, allow_recompute=False,
+        )
+        return (
+            result["decisionOutcome"], result["problems"],
+            [(entry["gate"], entry["outcome"]) for entry in trace["gateSequence"]],
+            tuple((ref.split(":", 1)[0], store.get_payload(ref)["schemaVersion"])
+                  for ref in refs),
+            view["body"], view["runtimeReceipt"]["runtimeBundleDigest"],
+            frozenset(view["runtimeReceipt"]["payloadDigests"]),
+        )
+
+    assert observables(default_pipeline, default) == observables(
+        explicit_pipeline, explicit,
+    )
 
 
 def test_issue_159_route_uses_composition_root_services(fresh_env):
@@ -817,6 +813,8 @@ def _fault_runtime_graph(services, fault, store):
         services.policy_provider.policy_ref = "policy:foreign"
     elif fault == "rule_refs":
         services.policy_provider.recognized_rule_refs = frozenset()
+    elif fault == "rule_refs_type":
+        services.policy_provider.recognized_rule_refs = None
     elif fault == "context_store":
         services.context_assembler.store = SimpleNamespace(
             active_descriptor=descriptor,
@@ -866,7 +864,7 @@ def _fault_runtime_graph(services, fault, store):
 
 @pytest.mark.parametrize("fault", (
     "signature", "policy_component", "path_policy", "policy_descriptor",
-    "policy_ref", "rule_refs", "context_store", "context_descriptor",
+    "policy_ref", "rule_refs", "rule_refs_type", "context_store", "context_descriptor",
     "materializer_store", "materializer_descriptor", "materializer_spec",
     "materializer_context", "output_store", "output_descriptor", "output_spec",
     "output_materializer", "registry_descriptor", "registry_family",
@@ -959,9 +957,13 @@ def test_issue_160_malformed_applicability_rolls_back_before_success(
     fresh_env,
     result,
 ):
-    store, pipeline, _ = fresh_env
+    store, _, _ = fresh_env
+    services = profile_runtime_provider._resolve_si_factory()(
+        store, store.active_descriptor,
+    )
+    services.context_assembler.assemble = lambda *_args, **_kw: result
+    pipeline = GatePipeline(store, runtime_services=services)
     before = _runtime_table_counts(store)
-    pipeline.runtime_services.context_assembler.assemble = lambda *_args, **_kw: result
     with pytest.raises(ProfileRuntimeError, match="contextSnapshotId"):
         pipeline.commit(demo.spray_submission(
             f"issue160-context:{_uid()}",
@@ -983,9 +985,13 @@ def test_issue_160_malformed_materialization_rolls_back_before_success(
     fresh_env,
     result,
 ):
-    store, pipeline, _ = fresh_env
+    store, _, _ = fresh_env
+    services = profile_runtime_provider._resolve_si_factory()(
+        store, store.active_descriptor,
+    )
+    services.materializer.recompute = lambda *_args, **_kw: result
+    pipeline = GatePipeline(store, runtime_services=services)
     before = _runtime_table_counts(store)
-    pipeline.runtime_services.materializer.recompute = lambda *_args, **_kw: result
     with pytest.raises(ProfileRuntimeError, match="materialization result"):
         pipeline.commit(demo.spray_submission(
             f"issue160-materialization:{_uid()}",

@@ -1256,6 +1256,16 @@ The approved Phase A authority is exact head
 [zero-blocker review 5115061393](https://github.com/samovers/OFARM2/pull/362#pullrequestreview-5115061393),
 followed by the task user's explicit approval on 2026-09-04.
 
+[Exact-head Phase B review 5117221048](https://github.com/samovers/OFARM2/pull/362#pullrequestreview-5117221048)
+at `2d0ccff0fd12fd9577c379b9c03120c61a72c6a7` found two in-boundary
+blockers. The correction validates policy rule-reference metadata before set
+operations and normalizes ordinary candidate-graph inspection failures to
+`ProfileRuntimeError` while preserving `BaseException` control flow. It also
+exercises the actual explicit-injection branch, directly proves the real SI
+cross-family refusal before lookup, and injects malformed applicability and
+materialization implementations before composition. No new abstraction,
+module, authority, or trust boundary was introduced.
+
 Phase B stayed inside the named private runtime integration and readiness
 boundary. In addition to the named files, one line in
 `kernel/tests/test_runtime_bundle.py` mechanically updates the expected closed-
@@ -1265,11 +1275,13 @@ runtime authority.
 
 Local supported-environment evidence on Python 3.12.13 is:
 
-- mechanical review inventory: 3,916 pinned tests;
-- focused hostile and neutrality command: 90 passed;
+- mechanical review inventory: 3,915 pinned tests; the one-test reduction
+  consolidates two overlapping SI wiring assertions while adding the malformed
+  rule-reference case;
+- focused hostile and neutrality command: 89 passed;
 - checked-in runtime-bundle receipt assertion: 1 passed;
 - host-supported Kernel regression after excluding only files refused by the
-  exact-Debian PostgreSQL guard: 2,908 passed, 6 skipped, and two third-party
+  exact-Debian PostgreSQL guard: 2,907 passed, 6 skipped, and two third-party
   deprecation warnings;
 - rewrite architecture check: pass;
 - generated manifest verification against the isolated bootstrapped Kernel
@@ -1278,7 +1290,14 @@ Local supported-environment evidence on Python 3.12.13 is:
 - targeted Ruff check over every changed Python file: pass; and
 - `git diff --check`: pass.
 
-The unmodified complete Kernel command was also run. It reported 3,501 passed,
+The corrected implementation remains inside every approved source ceiling:
+`profile_runtime_services.py` is 294 lines,
+`profile_runtime_provider.py` is 340 lines, the SI runtime provider is 91
+lines, the focused service test is 1,200 lines, and the profile-runtime source
+group is 1,020 lines. The mechanically updated checked-in RuntimeBundle digest
+is `sha256:a66f6d1126d3bc23b873185ab8799743e1cf6d7cbc7d371415b116413ca15131`.
+
+The unmodified complete Kernel command was also run. It reported 3,500 passed,
 7 skipped, 7 failed, and 401 setup errors. Every failure and setup error was in
 a live PostgreSQL file and traced to the repository's refusal of the available
 macOS PostgreSQL 17.10 server because it is not the required exact PostgreSQL
