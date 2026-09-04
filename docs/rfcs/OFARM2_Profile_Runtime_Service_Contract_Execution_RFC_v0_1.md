@@ -1,7 +1,9 @@
 # OFARM2 Profile-Runtime Service Contract Execution — Phase A Contract v0.1
 
-**Status:** revised proposed Phase A contract; documentation-only, unapproved,
-without runtime effect, and awaiting a new exact-head review
+**Status:** Not provisional. Exact Phase A head
+`aa6956e4dd2c795c9acc0c980b5d299b2d13f030` received a zero-blocker exact-head
+review and explicit task-user approval. Phase B implementation is complete and
+awaiting exact-head implementation review; this is not merge authority.
 
 **Contract identity:**
 `ofarm2.profile-runtime-service-contract-execution.issue160.v0.1`
@@ -1245,6 +1247,70 @@ changed path, prove forbidden paths are absent, and report any refused,
 unavailable, skipped, or unrun evidence honestly. The final committed head must
 be clean; temporary ignored test artifacts do not count as committed evidence
 and must not conceal a dirty tracked worktree.
+
+### 13.3 Phase B implementation record
+
+The approved Phase A authority is exact head
+`aa6956e4dd2c795c9acc0c980b5d299b2d13f030`, RFC SHA-256
+`1fd3d3397082d4821a6f46806622aa5a6ac901a5e0ad1b8a07f656e72b056988`, and
+[zero-blocker review 5115061393](https://github.com/samovers/OFARM2/pull/362#pullrequestreview-5115061393),
+followed by the task user's explicit approval on 2026-09-04.
+
+Phase B stayed inside the named private runtime integration and readiness
+boundary. In addition to the named files, one line in
+`kernel/tests/test_runtime_bundle.py` mechanically updates the expected closed-
+set RuntimeBundle digest after the selected Python source bytes changed. It
+does not change the bundle builder, selected component set, manifest, or
+runtime authority.
+
+Local supported-environment evidence on Python 3.12.13 is:
+
+- mechanical review inventory: 3,916 pinned tests;
+- focused hostile and neutrality command: 90 passed;
+- checked-in runtime-bundle receipt assertion: 1 passed;
+- host-supported Kernel regression after excluding only files refused by the
+  exact-Debian PostgreSQL guard: 2,908 passed, 6 skipped, and two third-party
+  deprecation warnings;
+- rewrite architecture check: pass;
+- generated manifest verification against the isolated bootstrapped Kernel
+  test database: pass;
+- package contract check: pass;
+- targeted Ruff check over every changed Python file: pass; and
+- `git diff --check`: pass.
+
+The unmodified complete Kernel command was also run. It reported 3,501 passed,
+7 skipped, 7 failed, and 401 setup errors. Every failure and setup error was in
+a live PostgreSQL file and traced to the repository's refusal of the available
+macOS PostgreSQL 17.10 server because it is not the required exact PostgreSQL
+17.10 Debian build `17.10-1.pgdg13+1`; follow-on failures observed the
+intentionally uncreated service databases. This is reported as unavailable
+platform evidence, not as a pass.
+
+The exact host `python3` is 3.14.5. The architecture and package commands
+correctly refused it as `UNSUPPORTED_PYTHON_VERSION`, while the manifest
+command lacked `psycopg`; their supported Python 3.12.13 equivalents passed as
+reported above.
+
+The extraction command remains honestly non-zero. Exact base
+`0c55f5cc6665ffef4c57591dafe014ad9bc44524` reported:
+
+```text
+conformance/review_baseline_test_inventory.json
+kernel/tests/_synthetic_profile_runtime.py
+kernel/tests/test_rewrite_architecture_check.py
+```
+
+The Phase B head reports the strict subset:
+
+```text
+conformance/review_baseline_test_inventory.json
+kernel/tests/test_rewrite_architecture_check.py
+```
+
+No failure path was added and retained diagnostics are unchanged. The sole
+removal is permitted: the required rewrite of the synthetic fixture's module
+description removed its incidental `non-SI` seed term. No extraction record or
+country-term authority changed.
 
 ## 14. Open decisions and review disposition
 
