@@ -22,7 +22,8 @@ profile-runtime service/composition boundary
 **Intended pull-request boundary:** Phase A changes only this RFC. After exact-
 head Phase A review and explicit task-user approval, the same named draft pull
 request may implement only the private service contracts, common composition
-validation, registry-reverification result validation and descriptor binding,
+validation, exact Store/context ownership, registry-reverification result
+normalization and descriptor binding,
 generic stage result validation, synthetic non-SI evidence, focused tests, and
 mechanically required test inventory or architecture checks defined here.
 
@@ -59,6 +60,17 @@ reverification service is profile-owned but has no descriptor binding, which
 allows an otherwise coherent non-SI graph to execute the SI snapshot family
 and product lookup.
 
+A later exact-head review demonstrated two further composition gaps in that
+design. Descriptor identity alone does not prove that context assembly,
+materialization, output assembly, or registry reverification is wired to the
+Store whose descriptor was selected; two Stores can share the same exact
+descriptor object. Nor does it prove that the materializer calls the exact
+context assembler carried by the bundle. In addition, admitting a provider-
+constructed `GateRefusal` would let provider-controlled mutable fields choose
+the gate, outcome, final outcome, problem list, and apparent log correlation.
+That would validate a shape while leaving governance and trace truth outside
+the generic gate.
+
 Inspection at the base commit reproduced the three concrete gaps without
 editing runtime code:
 
@@ -75,12 +87,15 @@ This task establishes one executable private boundary:
    consumers, including each minimal call that relies on declared defaults;
 2. provider-loaded and explicitly injected graphs cross the same complete
    composition validator;
-3. registry reverification is descriptor-bound and its return is interpreted
-   only as `None | GateRefusal`;
-4. generic stages validate the minimal result fields before recording success;
-5. a synthetic non-SI graph executes through the real generic applicability
+3. every Store-owning service is bound to the exact expected Store and the
+   materializer is bound to the bundle's exact context assembler;
+4. registry reverification is descriptor- and Store-bound, and can return only
+   `None` or one narrow private problem payload that `ValidationGate` validates
+   and turns into the existing governed refusal and log;
+5. generic stages validate the minimal result fields before recording success;
+6. a synthetic non-SI graph executes through the real generic applicability
    and materialization stages; and
-6. unchanged SI behavior, receipts, outputs, identities, and gate order remain
+7. unchanged SI behavior, receipts, outputs, identities, and gate order remain
    assertion-equivalent.
 
 ## 2. Learning value
@@ -137,12 +152,14 @@ implemented, reviewed, and merged.
 
 - the exact relationship between the Store-bound profile descriptor and every
   service in the executable graph;
+- the exact Store ownership of every Store-backed service and the exact context
+  assembler used by the materializer;
 - the materialization and output specifications actually used by their bound
   service instances;
 - profile policy identity and the minimum recognized rule set;
 - the integrity and ordering of `APPLICABLE` and `UPDATED` gate entries;
-- the integrity of registry-validation control flow and its `VALIDATION/PASS`
-  entry;
+- the integrity of registry-validation control flow, governed refusal logging,
+  and the `VALIDATION/PASS` entry;
 - transaction rollback when a provider violates its runtime result contract;
 - SI materialization identities, outputs, receipts, and gate order for
   unchanged inputs;
@@ -159,8 +176,9 @@ implemented, reviewed, and merged.
 - the exact `ProfileRuntimeServices`, `MaterializationSpecification`,
   `OutputSpecification`, and `ProfileManifestEvidenceSpecification` types;
 - one private service-graph validator after it has accepted a graph;
-- generic gate ordering and the enclosing `Store.serialized_tx()` transaction;
-  and
+- generic gate ordering, `ValidationGate`'s fixed refusal semantics, the trusted
+  RuntimeProblem registry and code-owned reason-code set, and the enclosing
+  `Store.serialized_tx()` transaction; and
 - reviewed in-process Python source and ordinary Python signature semantics.
 
 ### Untrusted actors and inputs
@@ -170,10 +188,12 @@ implemented, reviewed, and merged.
 - every explicitly injected `runtime_services` object until the same validation
   succeeds;
 - service attributes, descriptor bindings, specification bindings, materializer
-  bindings, policy refs, recognized rule refs, callables, and callable
-  signatures presented by those candidate graphs;
+  bindings, Store bindings, context-assembler bindings, policy refs, recognized
+  rule refs, callables, and callable signatures presented by those candidate
+  graphs;
 - applicability and materialization values returned at runtime;
-- values returned by the provider-owned registry-reverification service; and
+- values returned by the provider-owned registry-reverification service,
+  including problem mappings and any provider-written gate-log side effects;
 - missing, empty, non-string, or otherwise malformed references in those
   runtime results.
 
@@ -218,21 +238,26 @@ proof under the current private composition model, not external attestation.
 | Provider and factory source | existing code-owned registration plus D22/#240 import posture | descriptor paths, dynamic imports, test switches |
 | Explicit-injection source provenance | trusted internal composition caller; production injects only the immediately loader-returned graph | common graph validator, arbitrary test injection, object identity alone |
 | Complete graph admission | one private validator in `kernel/profile_runtime_provider.py` | Protocol annotations alone, provider self-attestation, `GatePipeline`'s current two-field shortcut |
+| Runtime Store ownership | the exact expected `Store` passed to the common validator and retained by context, materializer, registry-reverification, and output services | a shared descriptor, equal Store state, provider claims, implicit closure provenance |
+| Materializer context owner | the exact context assembler carried by the admitted bundle | another compatible assembler, matching descriptor, shared Store alone |
 | Materialization identities | the provider-owned exact `MaterializationSpecification` instance bound to its materializer | duplicate or merely equal specifications |
 | Output identities | the provider-owned exact `OutputSpecification` instance bound to its output assembler | duplicate or merely equal specifications |
 | Output materializer | the exact materializer instance carried by the admitted bundle | another compatible materializer instance |
-| Registry-reverification profile | its exact `active_profile` identity, equal to the Store-bound descriptor | snapshot-prefix similarity, lookup shape, or an executable service from another profile |
+| Registry-reverification owner | its exact `active_profile` and `store` identities, equal respectively to the Store-bound descriptor and expected Store | snapshot-prefix similarity, lookup shape, a shared descriptor, or an executable service from another Store/profile |
 | Profile policy identity | Store-bound descriptor `evidence_policy_ref` plus the descriptor-derived required rule refs | config-backed policy fallbacks, provider aliases |
 | Callable compatibility | Python's inspected bound-call signature against every production-reachable private call form inventoried in this contract | one maximally populated call, `runtime_checkable` presence checks alone, annotations, method-name presence without callability |
-| Registry-reverification result | `ValidationGate` acceptance of exactly `None` or `GateRefusal` before truthiness or branching | provider truthiness, annotations, arbitrary mappings or objects, `GatePass` |
+| Registry-reverification result | `ValidationGate` acceptance of exactly `None` or the exact private frozen `RegistryReverificationRefusal` envelope before truthiness or branching | provider truthiness, annotations, mappings, arbitrary objects, `GatePass`, provider-constructed `GateRefusal` |
+| Registry refusal semantics and log | `ValidationGate`, using fixed existing `VALIDATION`, `FAIL_REFERENCE_RESOLUTION`, and `RETAIN_DRAFT` values after validating one RuntimeProblem against the trusted registry and code-owned reason-code set | provider-selected gate/outcome/final outcome, mutable problem containers, an unlogged or pre-logged `GateRefusal`, provider-written log correlation |
 | Applicability success ref | generic `ProfileApplicabilityGate` validation of returned `contextSnapshotId` | provider return annotation or truthiness of the outer result |
 | Materialization success refs | generic `MaterializationGate` validation of returned `basisRef` and `snapshotRef` | provider return annotation or incidental dictionary indexing |
 | Gate success ordering | generic stages after result validation | provider logging, caller claims, inferred success |
 
 The provider loader's existing `_validate_services(...)` logic becomes the one
-reusable validator rather than a second authority. The partial injected-graph
-condition in `GatePipeline` is deleted. Both paths call the same validator with
-the exact Store-bound descriptor.
+reusable validator rather than a second authority. Its private contract is
+`_validate_services(services, descriptor, expected_store)` (or an assertion-
+equivalent name and argument order). The partial injected-graph condition in
+`GatePipeline` is deleted. Both paths call that same validator with the exact
+Store-bound descriptor and exact Store.
 
 `runtime_checkable` protocols remain useful type documentation and structural
 screening, but they do not inspect signatures and therefore do not own callable
@@ -253,7 +278,7 @@ STORE_READY
        -> EXPLICIT_INJECTION_CANDIDATE
   -> EXACT_OUTER_AND_SPECIFICATION_TYPES
   -> REQUIRED_SERVICE_SHAPES_AND_EVERY_CALL_FORM
-  -> DESCRIPTOR_SPECIFICATION_MATERIALIZER_REGISTRY_POLICY_CROSS_BINDINGS
+  -> DESCRIPTOR_STORE_CONTEXT_SPECIFICATION_MATERIALIZER_REGISTRY_POLICY_CROSS_BINDINGS
   -> COMPOSED
 ```
 
@@ -267,16 +292,21 @@ only candidates.
 
 Validation order is fail-closed:
 
-1. require the exact `ProfileRuntimeServices` outer type and exact Store-bound
-   descriptor identity;
+1. require the exact `ProfileRuntimeServices` outer type, exact Store-bound
+   descriptor identity, and an exact expected Store supplied by the composition
+   root;
 2. require exact trusted specification value types;
 3. require each capability service and every inventoried callable;
 4. prove each callable can independently bind every production-reachable call
    form, both minimal/default-dependent and keyword-rich, without invoking it;
-5. require descriptor, specification, materializer, and registry-
+5. require context assembler, materializer, registry-reverification, and output
+   assembler `.store` identities to be the expected Store; require the
+   materializer's `.context` identity to be the bundle's exact context
+   assembler;
+6. require descriptor, specification, materializer, and registry-
    reverification object cross-bindings;
-6. require the policy ref to equal the descriptor evidence-policy ref; and
-7. require the policy service's recognized refs to include the descriptor's
+7. require the policy ref to equal the descriptor evidence-policy ref; and
+8. require the policy service's recognized refs to include the descriptor's
    evidence policy, profile, pack, and code-binding profile refs.
 
 Missing attributes, non-callables, opaque or incompatible signatures, and
@@ -332,27 +362,70 @@ callable with an uninspectable signature is refused because compatibility is
 not demonstrated. This inventory is private and closed; adding a capability or
 a production call form requires a new reviewed change.
 
-### 6.3 Registry-reverification result
+### 6.3 Registry-reverification result and refusal ownership
 
-For every individual validator result interpreted by `ValidationGate`, and in
-particular the provider-owned registry-reverification result, the only valid
-private result is exactly:
+The provider-owned registry-reverification service is the only untrusted
+individual validator supplied by the runtime-services graph. Code-owned
+validators retain their existing internal `GateRefusal | None` convention;
+this change does not create a second result model for them. At the private
+provider boundary, the only valid exact result is:
 
 ```text
-None | GateRefusal
+None | RegistryReverificationRefusal
 ```
 
-The gate validates that result before any truthiness test or control-flow
-branch. `None` means that validation continues. A `GateRefusal` follows the
-existing governed-refusal path. Every other value, including `{}`, a non-empty
-mapping, an arbitrary falsey or truthy object, and `GatePass`, raises
-`ProfileRuntimeError`. The enclosing serialized transaction rolls back, no
-successful `VALIDATION/PASS` entry commits, promotion does not occur, and no
-durable effects from that attempt survive.
+`RegistryReverificationRefusal` is a private frozen, slotted dataclass whose
+sole field is `problem: dict`. The frozen envelope prevents the provider from
+supplying gate-control fields. Its contained mapping remains untrusted data;
+the type annotation does not validate it.
 
-This is an implementation-contract failure, not a new domain refusal, reason
-code, or durable record. Return annotations document the contract but do not
-replace runtime validation of the provider-controlled result.
+`ValidationGate` snapshots the exact pre-call `gate_sequence`, invokes the
+service in its existing position, and validates the result before truthiness or
+branching:
+
+```text
+REGISTRY_REVERIFICATION_CALLED
+  -> EXACT_NONE
+       -> UNCHANGED_PREFIX_AND_ZERO_OR_ONE_ALLOWED_SUCCESS_LOG
+       -> CONTINUE_VALIDATION
+  or
+     EXACT_PRIVATE_REFUSAL
+       -> NO_PROVIDER_GATE_LOG_CHANGE
+       -> EXACT_DICT_RUNTIME_PROBLEM
+       -> SCHEMA_VERSION_AND_CONTRACT_VALID
+       -> CODE_OWNED_REASON_CODE_REGISTERED
+       -> FRESH_PROBLEM_COPY
+       -> GENERIC_VALIDATION_REFUSAL_LOGGED
+       -> GATE_REFUSAL_RETURNED
+```
+
+For `None`, the only permitted gate-sequence delta is no entry or the current
+single `VALIDATION/REGISTRY_REVERIFIED` success entry; the pre-call prefix must
+be unchanged. This preserves the existing SI success behavior. For the private
+refusal, the provider must not add or alter any gate-sequence entry. The generic
+gate requires the payload to be an exact built-in dictionary, validates it as
+`ofarm.runtimeproblem.v0.1` through `ctx.store.registry`, requires its
+`reasonCode` to belong to `kernel.problems.REGISTERED_REASON_CODES`, and copies
+the validated JSON tree before using it.
+
+Only then does the generic gate use the existing log-and-build path to emit
+exactly one `VALIDATION/FAIL_REFERENCE_RESOLUTION` entry and return a
+`GateRefusal` with fixed `RETAIN_DRAFT` final outcome and the one copied
+problem. The provider cannot choose or mutate the gate, gate outcome, final
+outcome, problem-list cardinality, or refusal-log correlation.
+
+Every other value, including a provider-constructed `GateRefusal`, `GatePass`,
+`{}`, a non-empty mapping, an arbitrary falsey or truthy object, a malformed or
+unregistered RuntimeProblem, or a result inconsistent with provider-written
+gate logging raises `ProfileRuntimeError`. The enclosing serialized transaction
+rolls back those log writes and all other attempted effects; no
+`VALIDATION/PASS`, `APPLICABLE`, `UPDATED`, promotion, or trace from the attempt
+commits.
+
+The private refusal envelope and its validation are implementation mechanics,
+not a new schema, reason code, canonical record, or provider-owned governance
+decision. Return annotations document the contract but never replace runtime
+validation of provider-controlled data.
 
 ### 6.4 Applicability result
 
@@ -419,11 +492,13 @@ same transaction and immediately before the generic success side effect.
 - **PRSC-002 — Exact descriptor and trusted values.** Only the exact
   `ProfileRuntimeServices` type, exact Store-bound descriptor object, and exact
   trusted specification value types can compose.
-- **PRSC-003 — One coherent graph.** Policy, context, materializer, registry-
-  reverification, and output services bind the Store descriptor; the
-  materializer and output assembler bind the bundle's exact specifications;
-  the output assembler binds the bundle's exact materializer; and policy ref
-  plus required recognized rule refs match the descriptor.
+- **PRSC-003 — One coherent Store-owned graph.** Policy, context, materializer,
+  registry-reverification, and output services bind the Store descriptor;
+  context, materializer, registry-reverification, and output services bind the
+  exact expected Store; the materializer binds the bundle's exact context
+  assembler; the materializer and output assembler bind the bundle's exact
+  specifications; the output assembler binds the bundle's exact materializer;
+  and policy ref plus required recognized rule refs match the descriptor.
 - **PRSC-004 — One composition validator.** Provider factory results and
   explicitly injected graphs pass the same complete private validator. An
   injected refusal occurs before a transaction can start.
@@ -433,11 +508,14 @@ same transaction and immediately before the generic success side effect.
 - **PRSC-006 — Truthful materialization success.** `UPDATED` is logged and
   `materialization_triggered` becomes true only after recomputation returns
   non-empty built-in string `basisRef` and `snapshotRef` values.
-- **PRSC-007 — Explicit implementation failures.** Malformed graphs,
-  incompatible signatures, malformed applicability or materialization result
-  shapes, and any registry-reverification result other than `None` or
-  `GateRefusal` raise `ProfileRuntimeError`, not incidental `AttributeError`,
-  `TypeError`, or `KeyError`; no misleading generic gate success is committed.
+- **PRSC-007 — Explicit implementation failures and generic refusal
+  ownership.** Malformed graphs, incompatible signatures, malformed
+  applicability or materialization result shapes, and any registry-
+  reverification result other than exact `None` or an exact valid private
+  refusal payload raise `ProfileRuntimeError`, not incidental `AttributeError`,
+  `TypeError`, or `KeyError`. Only `ValidationGate` assigns and logs the
+  registry-refusal gate, outcome, final outcome, and problem list; no misleading
+  success, provider-authored refusal, or mismatched log is committed.
 - **PRSC-008 — Executable profile neutrality.** A test-only synthetic non-SI
   graph passes real `ProfileApplicabilityGate` and `MaterializationGate`
   execution, receives every invalidation keyword, and produces only synthetic
@@ -447,8 +525,8 @@ same transaction and immediately before the generic success side effect.
   loaded and explicitly injected SI services preserve decision outcomes,
   problems, gate names and order, materialization key/specification identities,
   basis/snapshot reference families, output identities and qualifications, and
-  receipt structure. Existing SI tests remain green; the permitted descriptor-
-  only constructor wiring changes no SI runtime behavior or policy value.
+  receipt structure. Existing SI tests remain green; the permitted descriptor-/
+  Store-only constructor wiring changes no SI runtime behavior or policy value.
 - **PRSC-010 — Closed activation and authority posture.** Active runtime stays
   single-active-SI; Serbia remains descriptorless, unregistered, and
   unexecutable; no public API, discovery, composition, schema, migration,
@@ -466,12 +544,16 @@ field mutation, mutable production registry, or production switch is used.
 | --- | --- | --- |
 | PRSC-001 | either composition path receives a graph whose policy makes `supported_checks` required, whose invalidator omits `reason_code`, whose recomputer omits `use_class`, or whose nominally optional context, recompute, passport, frozen-output, or resolution parameter is made required despite a production caller omitting it | composition raises `ProfileRuntimeError` before returning services or constructing a pipeline; no transaction begins |
 | PRSC-002 | `GatePipeline(store, runtime_services=...)` receives a lookalike bundle, an equal-but-distinct descriptor, or a non-trusted specification value | constructor raises `ProfileRuntimeError`; no pipeline exists |
-| PRSC-003 | `GatePipeline(...)` receives an exact dataclass with a foreign service descriptor (including a registry-reverification service from another profile), a different materialization/output specification instance, a different output materializer, wrong policy ref, or one missing required recognized rule ref | constructor raises `ProfileRuntimeError` before transaction entry; the foreign snapshot family or product lookup cannot execute |
+| PRSC-003 | either path receives an exact dataclass with a foreign service descriptor, a different materialization/output specification instance, a different output materializer, wrong policy ref, or one missing required recognized rule ref | composition raises `ProfileRuntimeError` before transaction entry; the foreign service cannot execute |
+| PRSC-003 | loader and explicit-injection tests each compose Store A with a coherent graph built for Store B while both Stores deliberately share the exact descriptor object | common validation rejects the graph before transaction entry; Store B's context, materialization, output, snapshot, or product-lookup state cannot execute under Store A |
+| PRSC-003 | either path receives a same-Store, same-descriptor bundle whose materializer retains context assembler A while the bundle carries distinct compatible assembler B | common validation rejects the split graph before transaction entry; the unrepresented assembler cannot drive recomputation |
 | PRSC-004 | the same malformed graph is returned by the provider loader and supplied explicitly | both paths refuse through the common validator; an injected-store transaction counter remains zero |
 | PRSC-005 | `GatePipeline.commit(...)` reaches a signature-compatible context assembler returning `{}`, `{"contextSnapshotId": ""}`, or a non-string ref | `ProfileRuntimeError`; transaction rollback; no committed `APPLICABLE` entry or promotion trace from the attempt |
 | PRSC-006 | an accepted commit reaches a signature-compatible materializer returning a missing, empty, or non-string `basisRef` or `snapshotRef` | `ProfileRuntimeError`; no `UPDATED` entry, false success flag, or committed promotion/materialization effects |
 | PRSC-007 | either composition path receives an absent/non-callable service or a callable whose inspected signature cannot prove every call form | composition raises one explicit `ProfileRuntimeError`; no incidental exception type becomes the boundary contract |
-| PRSC-007 | `GatePipeline.commit(...)` for an operation claim reaches an admitted registry-reverification service returning `{}`, a non-empty dictionary, an arbitrary falsey object, an arbitrary truthy object, or `GatePass` | `ProfileRuntimeError` before `VALIDATION/PASS` is logged; no promotion occurs and the transaction leaves no durable effect from the attempt |
+| PRSC-007 | `GatePipeline.commit(...)` for an operation claim reaches an admitted registry-reverification service returning `{}`, a non-empty dictionary, an arbitrary falsey object, an arbitrary truthy object, `GatePass`, or a provider-constructed `GateRefusal` whether otherwise valid, unlogged, wrong-gated, unlawfully final, empty-problemed, or malformed-problemed | `ProfileRuntimeError` before `VALIDATION/PASS`, `APPLICABLE`, or `UPDATED`; no provider-selected refusal or promotion commits and the transaction leaves no durable effect from the attempt |
+| PRSC-007 | registry reverification writes a refusal-like gate entry and returns either a mismatching `GateRefusal` or the private payload | generic validation detects the invalid type or prohibited log delta; the entire transaction, including the provider-written entry, rolls back |
+| PRSC-007 | registry reverification returns the exact private payload with one schema-valid RuntimeProblem carrying a registered reason code and no provider-written gate entry | `ValidationGate` copies the problem, logs exactly one `VALIDATION/FAIL_REFERENCE_RESOLUTION`, and returns exactly one `RETAIN_DRAFT` refusal problem; no success gate follows |
 | PRSC-008 | the synthetic provider is loaded and its real generic stages execute | both stages pass; the observed invalidation arguments are complete; recursive result/log inspection finds no SI or production package identifier; production registrations remain unchanged |
 | PRSC-009 | the same SI scenario is composed through default loading and explicit injection | stable semantic assertions, identities, outputs, receipts, and gate order are equivalent after normalizing only minted IDs/timestamps that were already volatile |
 | PRSC-010 | production loader or route is asked for `profile_rs_organic_crop`, or a test inspects allowed/active registrations | no descriptor, registration, route, or execution exists; only `profile_si_ffs` remains active and registered |
@@ -498,20 +580,37 @@ three currently missing invalidation keywords and the currently omitted
 `recompute(..., use_class=...)` keyword, and it declares defaults sufficient for
 every omission in the production call-form inventory.
 
-`ProfileRegistryReverification` gains an `active_profile` binding and declares
-`run(context) -> GateRefusal | None`. The annotation is private documentation;
-the runtime result check remains mandatory. This does not abstract or transfer
-the existing snapshot-prefix or product-lookup authority.
+The context, materializer, registry-reverification, and output protocols each
+declare their existing or newly retained `store` owner. The materializer also
+declares its existing `context` assembler. `ProfileRegistryReverification`
+gains exact `active_profile` and `store` bindings and declares
+`run(context) -> RegistryReverificationRefusal | None`.
+
+`RegistryReverificationRefusal` is the private frozen/slotted one-problem
+envelope specified in section 6.3. Its annotation is documentation; exact-type,
+problem-contract, reason-code, and log-delta validation remain mandatory at
+runtime. This does not abstract or transfer the existing snapshot-prefix or
+product-lookup authority, add a durable type, or change built-in validator
+results.
 
 ### 9.2 One graph validator
 
 `kernel/profile_runtime_provider.py` refactors the existing validator into one
 reusable private function. It retains every current exact-type, identity,
 cross-binding, policy-ref, and required-rule check, then adds inventoried
-callability and independent binding of every production call form. It also
-requires the registry-reverification service's exact `active_profile` identity
-to be the Store-bound descriptor. It converts inspection/admission failures to
-`ProfileRuntimeError` without invoking provider methods.
+callability and independent binding of every production call form. The loader
+and `GatePipeline` pass the exact expected Store as well as its bound descriptor.
+The validator requires:
+
+- `context_assembler.store is expected_store`;
+- `materializer.store is expected_store`;
+- `registry_reverification.store is expected_store`;
+- `output_assembler.store is expected_store`; and
+- `materializer.context is context_assembler`.
+
+It also requires the registry-reverification service's exact `active_profile`
+identity to be the Store-bound descriptor. It converts inspection/admission
+failures to `ProfileRuntimeError` without invoking provider methods.
 
 The validator preserves the existing private attribute names: the policy
 service binds its profile as `descriptor`, while context, materializer,
@@ -536,20 +635,34 @@ ref, requires a mapping shape and non-empty built-in string field, and raises
 it before their success state/log side effects. Domain refusal handling remains
 unchanged.
 
-`kernel/validators.py` enforces the existing individual-validator result model
-before truthiness or branching. `None` and `GateRefusal` keep their current
-meanings; any other value raises `ProfileRuntimeError` and relies on the
-existing transaction owner for rollback. The registry-reverification service
-is descriptor-bound when constructed. No validation outcome, gate order,
-domain refusal, or logging convention changes for conforming SI results.
+`kernel/validators.py` isolates the provider-owned registry-reverification call
+from the code-owned validator-result convention. It snapshots the gate sequence,
+enforces the exact result and allowed success-log delta from section 6.3 before
+truthiness or branching, validates and copies a private refusal problem, and
+uses the existing `_refusal(...)` helper with fixed
+`FAIL_REFERENCE_RESOLUTION` and `RETAIN_DRAFT` semantics. All malformed
+results, problem payloads, reason codes, or log/result combinations become
+`ProfileRuntimeError` and rely on the existing transaction owner for rollback.
+
+The SI registry-reverification service is descriptor- and Store-bound when
+constructed: the SI factory passes the same exact Store from which it loaded the
+retained product lookup. The common validator checks that retained owner, while
+the already admitted factory source remains responsible for constructing the
+lookup from that Store. A conforming `None` result retains its current optional
+`REGISTRY_REVERIFIED` success log and review-routing effects. Code-owned
+validators keep their existing results, all validator and gate positions remain
+unchanged, and no provider can return a nominal `GateRefusal` that chooses
+generic governance state.
 
 ### 9.4 Synthetic evidence and SI preservation
 
 `kernel/tests/_synthetic_profile_runtime.py` is upgraded to the exact private
 contract. Its assembler and materializer return synthetic refs, and its
 materializer exposes test-only observation of the complete invalidation call.
-Its registry-reverification service binds the synthetic descriptor. It remains
-absent from `_REGISTRATIONS`.
+Its registry-reverification service binds the synthetic descriptor and Store.
+Every Store-backed synthetic service retains that same Store, and its
+materializer retains the exact synthetic context assembler. It remains absent
+from `_REGISTRATIONS`.
 
 Focused tests exercise actual generic stages, both composition paths, hostile
 cross-wires/signatures/results, transaction rollback, SI equivalence, legacy-
@@ -574,11 +687,16 @@ public surface is needed.
 - Provider source/import authorities: one existing D22/#240 path, unchanged.
 - Complete graph validators: one.
 - Composition entry points: two, converging on that validator.
-- Registry-reverification result interpreters: one generic validation gate.
+- Registry-reverification result and log-delta interpreters: one generic
+  validation gate.
+- Registry-reverification refusal authors: one generic validation gate; the
+  provider supplies only a validated problem payload.
 - Applicability success-transition points: one generic gate.
 - Materialization success-transition points: one generic gate.
 - Runtime result-reference validation helpers: one private consumer helper.
 - New mutable production state: none.
+- New private frozen envelopes: one refusal payload with no authority fields;
+  its mapping remains untrusted until validation and copying.
 - New public abstractions: none.
 - Compatibility surfaces: none.
 - Duplicate state: none; `TypedDict` shapes document existing returned fields
@@ -602,18 +720,22 @@ Phase B authorizes only these explicit ceiling changes in
 
 | Guard | Base lines | Current ceiling | Approved Phase B ceiling |
 | --- | ---: | ---: | ---: |
-| `GROUP_BUDGETS["profile runtime"]` | 867 | 900 | 950 |
+| `GROUP_BUDGETS["profile runtime"]` | 867 | 900 | 975 |
 | `MODULE_BUDGETS["kernel/profile_runtime_services.py"]` | 237 | 250 | 265 |
 | `TEST_MODULE_BUDGETS["kernel/tests/test_profile_runtime_services.py"]` | 769 | shared 800 | 1,100 |
 
-The 950-line group ceiling leaves 19 lines beyond the measured 931-line
-production design; the 265-line service ceiling leaves 10 beyond the measured
-255-line protocol design. The service-test override provides 331 lines beyond
-the base for the full parameterized signature, cross-wire, result, transaction,
-and equivalence programme without moving cohesive service-admission evidence
-into unrelated files or compressing it to satisfy a physical-line accident.
-That allowance may contain only evidence mapped to PRSC-001 through PRSC-010
-and supporting test helpers used by that evidence.
+The earlier 950-line group proposal was not jointly usable with its nested
+265-line service-module ceiling: full permitted spending could put the group at
+953 lines. The 975-line ceiling exceeds that combined worst case by 22 lines
+and accommodates the Store/context bindings and private refusal envelope added
+by exact-head review. The 265-line service ceiling retains bounded room for the
+minimum result types, refusal envelope, Store/context declarations, and
+complete materializer signature. The service-test override provides 331 lines
+beyond the base for the full parameterized signature, cross-wire, result,
+transaction, and equivalence programme without moving cohesive service-
+admission evidence into unrelated files or compressing it to satisfy a
+physical-line accident. That allowance may contain only evidence mapped to
+PRSC-001 through PRSC-010 and supporting test helpers used by that evidence.
 
 These are maximum guardrails, not growth targets. All other production,
 module, test, function, import, and architecture constraints remain unchanged.
@@ -640,7 +762,7 @@ draft PR may change only:
 - `kernel/stages.py`;
 - `kernel/validators.py`;
 - `kernel/profiles/si_ffs/runtime_provider.py`, only to pass the already selected
-  descriptor into the existing registry-reverification service;
+  descriptor and exact Store into the existing registry-reverification service;
 - `kernel/tests/_synthetic_profile_runtime.py`;
 - `kernel/tests/test_profile_runtime_services.py`;
 - `kernel/tests/test_profile_runtime_neutrality.py`;
@@ -654,11 +776,11 @@ No architecture-budget change other than the three exact section 10 ceilings
 is authorized by this contract.
 
 The one permitted SI provider construction edit may add only the exact
-descriptor binding; it may not change snapshot prefixes, product lookup,
-policy values, reference behavior, service ordering, active defaults, or any SI
-result. A test-support edit outside the named files requires proof that it is
-purely mechanical and inside this boundary; otherwise implementation stops for
-an amendment.
+descriptor and Store ownership bindings; it may not change snapshot prefixes,
+product-lookup contents or lookup behavior, policy values, reference behavior,
+service ordering, active defaults, or any SI result. A test-support edit outside
+the named files requires proof that it is purely mechanical and inside this
+boundary; otherwise implementation stops for an amendment.
 
 The merged prerequisites #159, #239, #240, and #241 are contained in the base.
 This task does not modify their authority. Blocked PR #359/issue #353 and the
@@ -693,14 +815,14 @@ claim production readiness.
 | --- | --- | --- | --- | --- |
 | PRSC-001 | service protocols; private signature validator | missing keyword, absent/non-callable method, required policy `supported_checks`, or another default-dependent parameter made required for any minimal call | every inventoried call form binds independently; both composition paths reject incompatible signatures | focused two-module pytest |
 | PRSC-002 | common validator; `GatePipeline.__init__` | lookalike outer type, copied descriptor, wrong spec type | `ProfileRuntimeError` before pipeline construction | focused two-module pytest |
-| PRSC-003 | common validator; descriptor-bound registry reverification | each descriptor/spec/materializer/output/registry/policy/rule cross-wire | every graph mismatch, including a foreign registry service, refuses at composition | focused two-module pytest |
+| PRSC-003 | common Store-aware validator; descriptor-/Store-bound registry reverification | each descriptor/Store/context/spec/materializer/output/registry/policy/rule cross-wire, including a Store-B graph sharing Store A's exact descriptor and a split materializer context, on both paths | every ownership or graph mismatch refuses at composition before a transaction | focused two-module pytest |
 | PRSC-004 | loader and explicit-injection branch | same validator reached from both; injected transaction counter stays zero | equivalent `ProfileRuntimeError` admission behavior | focused two-module pytest |
 | PRSC-005 | `ProfileApplicabilityGate`; result-ref helper | missing/empty/non-string context ref | no `APPLICABLE`; full transaction rollback | focused hostile tests plus complete Kernel suite |
 | PRSC-006 | `MaterializationGate`; result-ref helper | missing/empty/non-string basis or snapshot ref | no success flag/`UPDATED`; full transaction rollback | focused hostile tests plus complete Kernel suite |
-| PRSC-007 | common validator; `ValidationGate` result check; result-ref helper | opaque/incompatible callable, malformed runtime mappings, and each falsey/truthy non-`GateRefusal` registry result including `GatePass` | only `ProfileRuntimeError` crosses the implementation boundary; no validation success or durable effect survives | focused hostile tests plus complete Kernel suite |
+| PRSC-007 | common validator; `ValidationGate` exact result/problem/log-delta check and generic refusal construction; result-ref helper | opaque/incompatible callable; malformed runtime mappings; every invalid registry result; unlogged, wrong-gated, unlawfully final, empty/malformed, or log-mismatched provider `GateRefusal`; malformed private problem; and one valid private refusal | invalid cases expose only `ProfileRuntimeError` and roll back; the valid private payload produces exactly one fixed, logged governed refusal; no misleading success survives | focused hostile tests plus complete Kernel suite |
 | PRSC-008 | synthetic fixture; real generic stages | execute applicability and materialization; recursive identifier scan | synthetic refs logged; complete invalidation args observed; no SI leakage or production registration | `test_profile_runtime_neutrality.py` |
-| PRSC-009 | SI provider's descriptor-only registry construction wiring and unchanged generic orchestration | default-loaded versus explicit-injected SI scenario | stable normalized results, materializations, outputs, receipts, validation outcomes, and gate order; full Kernel suite passes | focused equivalence test plus complete Kernel suite |
-| PRSC-010 | existing registration/selection/architecture authorities | Serbia load/route refusal; registration/default assertions; forbidden-file diff; extraction failure-set comparison | single-active-SI, exact three-path extraction baseline, revised architecture ceilings, and all non-effects preserved | architecture, manifest, extraction, package, and diff checks |
+| PRSC-009 | SI provider's descriptor-/Store-only registry construction wiring and unchanged generic orchestration | default-loaded versus explicit-injected SI scenario | stable normalized results, materializations, outputs, receipts, validation outcomes, and gate order; full Kernel suite passes | focused equivalence test plus complete Kernel suite |
+| PRSC-010 | existing registration/selection/architecture authorities | Serbia load/route refusal; registration/default assertions; forbidden-file diff; asymmetric extraction failure-set comparison | single-active-SI, no new extraction failure path, only explained removals caused by permitted edits, revised architecture ceilings, and all non-effects preserved | architecture, manifest, extraction, package, inventory, and diff checks |
 
 ### 13.1 Phase A verification
 
@@ -742,16 +864,20 @@ A later review of exact head
 35 focused base tests. Those results supersede the earlier assumption that the
 cases themselves were failing, but they do not replace pinned-environment
 acceptance evidence: the repository pins Python 3.12.13 and PostgreSQL 17.10,
-and the review was posted by the PR-author account. The local unavailability
-and the review's non-pinned corroboration are both reported rather than merged
-into a false authoritative PASS.
+and the review was posted by the PR-author account. The supporting evidence is
+retained in [PR #362 comment 5539699935](https://github.com/samovers/OFARM2/pull/362#issuecomment-5539699935).
+The local unavailability and the review's non-pinned corroboration are both
+reported rather than merged into a false authoritative PASS.
 
 ### 13.2 Required Phase B verification
 
-Run and report the exact issue commands, using `.venv/bin/python` when
-available or the exact repository-supported interpreter path otherwise:
+Run and report the exact issue commands plus the required mechanical inventory
+command, using `.venv/bin/python` when available or the exact repository-
+supported interpreter path otherwise:
 
 ```sh
+.venv/bin/python conformance/run_review_baseline.py update-inventory
+
 .venv/bin/python -m pytest \
   kernel/tests/test_profile_runtime_services.py \
   kernel/tests/test_profile_runtime_neutrality.py \
@@ -774,9 +900,8 @@ evidence. Generated historical executed-evidence files must not change as a
 test side effect.
 
 The extraction command is already non-zero at the exact base. Its Phase B
-acceptance criterion is baseline equivalence, not a false PASS claim. Running
-the command at both base and head must report exactly these three seed-scan hit
-paths and no others:
+acceptance criterion is an asymmetric base/head comparison, not a false PASS
+claim. The exact base reports these three seed-scan hit paths:
 
 ```text
 conformance/review_baseline_test_inventory.json
@@ -784,10 +909,20 @@ kernel/tests/_synthetic_profile_runtime.py
 kernel/tests/test_rewrite_architecture_check.py
 ```
 
-Any added path, removed path, changed diagnostic category, or inability to
-reproduce the base set is a stop condition. The final report must retain the
-command's non-zero status and show the base/head comparison. This PR does not
-authorize editing
+The head failure-path set must be a subset of that exact base set. Any added
+path, unexplained retained-path diagnostic-category change, or inability to
+reproduce the base set is a stop condition. A removed path is allowed only when
+the final report explains the precise permitted Phase B edit that removed its
+seed hit. In particular, `_synthetic_profile_runtime.py` is currently a failing
+path solely because its module docstring contains the term `non-SI`; the
+required fixture edits may legitimately remove that token without creating
+extraction evidence or authority. Inventory regeneration may likewise remove a
+base hit only if the generated diff is mechanical and traceable to the approved
+test changes.
+
+The final report must show both exact path sets, preserve the extraction
+command's actual exit status, and explain every allowed removal. This PR does
+not authorize editing
 `profile_si_ffs/extraction_inventory/core_country_term_audit_review_records.json`
 to manufacture a green result.
 
@@ -810,14 +945,20 @@ and must not conceal a dirty tracked worktree.
 - Admit both `evidence_policy()` and
   `evidence_policy(supported_checks=value)` so the SI-style
   `validation_policy()` delegation cannot fail late.
-- Bind registry reverification to the exact active descriptor and validate its
-  result as only `None | GateRefusal` before truthiness.
+- Pass the exact expected Store to the one common validator; bind every Store-
+  backed service to it and bind the materializer to the bundle's exact context
+  assembler.
+- Bind registry reverification to the exact active descriptor and Store.
+- Admit only exact `None` or the private one-problem registry-refusal envelope;
+  `ValidationGate` validates and copies the problem and exclusively chooses and
+  logs the existing refusal semantics.
 - Treat explicit injection as a private graph handoff whose production caller
   owns source provenance; the common validator does not attest injected source.
 - Preserve the existing `descriptor` policy binding and `active_profile`
   bindings on the other four services; naming unification is outside this PR.
-- Authorize only the three measured architecture ceilings in section 10 and
-  require exact three-path extraction-baseline equivalence.
+- Authorize only the three jointly usable measured architecture ceilings in
+  section 10 and require an asymmetric extraction baseline: no new failure path
+  and only explained removals caused by permitted edits.
 - Validate returned references at the generic consumer immediately before
   success logging.
 - Raise the existing `ProfileRuntimeError`; add no domain reason or schema.
@@ -828,10 +969,10 @@ and must not conceal a dirty tracked worktree.
 
 ### Open decisions
 
-None. The exact-head review choices about default-dependent call forms,
-registry result semantics, registry descriptor identity, and explicit-
-injection provenance, measured architecture ceilings, and extraction baseline
-handling are closed above.
+None. The exact-head review choices about default-dependent call forms, Store
+and context ownership, registry result/refusal/log semantics, registry
+descriptor identity, explicit-injection provenance, jointly usable architecture
+ceilings, and asymmetric extraction-baseline handling are closed above.
 
 ### Review disposition
 
@@ -842,10 +983,21 @@ handling are closed above.
   contract addressed those findings. Reviews of head
   `c47639972fc26a8bad72a212aafb5c0fb706f710` then identified the omitted
   zero-argument `evidence_policy()` call and an already-determined architecture-
-  budget conflict. This revision addresses both but makes no claim of clearance
-  before a new exact-head review.
-  Both review artifacts were posted by the PR-author account; their findings
-  are incorporated but they do not supply independent Phase A clearance.
+  budget conflict. Head `646d24e7c4c46061b60369fc6771271208301468`
+  then received a [formal review with two Blockers](https://github.com/samovers/OFARM2/pull/362#pullrequestreview-5113097179):
+  the validator did not bind the graph to its exact Store or the materializer to
+  its exact context assembler, and nominal `GateRefusal` acceptance did not
+  prove a lawful logged refusal. This revision addresses both through sections
+  5 through 9 and their hostile tests, but makes no claim of clearance before a
+  new exact-head review.
+- Should-fixes: the [same-head focused review comment](https://github.com/samovers/OFARM2/pull/362#issuecomment-5540642541)
+  found that the 950/265 ceilings were not jointly spendable and that exact
+  extraction-set equality could stop a correct synthetic-fixture edit. Section
+  10 now uses 975/265 coupled ceilings, and section 13.2 now permits only
+  explained removals while refusing every new failure path.
+- Independence: these review artifacts were posted by the PR-author account.
+  Their findings are incorporated, but they do not supply independent Phase A
+  clearance.
 - Follow-ups: #161, only after #160 is implemented, reviewed, and merged.
   Optional unification of `descriptor` and `active_profile` naming is a separate
   future refactor, is not required here, and has no issue or implementation in
@@ -888,8 +1040,9 @@ Stop before editing runtime code and request a new or amended contract if:
 10. a new runtime module or an architecture-budget change beyond the three
     exact section 10 ceilings is required;
 11. a file outside the approved PR boundary needs a non-mechanical change; or
-12. the extraction check's head failure set differs from the exact base set in
-    section 13.2.
+12. the extraction check adds a head failure path, changes a retained-path
+    diagnostic without explanation, removes a path without a permitted-edit
+    explanation, or cannot reproduce the exact base set in section 13.2.
 
 The exact reviewed Phase A head and RFC digest must be recorded in the review
 request. Any material change to the problem, trust model, authority map,
