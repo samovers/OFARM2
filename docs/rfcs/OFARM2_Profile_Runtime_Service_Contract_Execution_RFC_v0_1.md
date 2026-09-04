@@ -1,7 +1,7 @@
 # OFARM2 Profile-Runtime Service Contract Execution — Phase A Contract v0.1
 
 **Status:** revised proposed Phase A contract; documentation-only, unapproved,
-without runtime effect, and awaiting a new exact-head review
+without runtime effect, and awaiting a new independent exact-head review
 
 **Contract identity:**
 `ofarm2.profile-runtime-service-contract-execution.issue160.v0.1`
@@ -48,7 +48,10 @@ review. First, binding only one keyword-rich call does not prove that the
 minimal calls made by gates and HTTP routes are executable: a provider can make
 an omitted optional parameter required, pass the keyword-rich binding, and
 still fail late. The current recomputation protocol also omits the supported
-`use_class` keyword used by `resolve_for_use(...)`. Second,
+`use_class` keyword used by `resolve_for_use(...)`. The production SI policy's
+`validation_policy()` also delegates to zero-argument `evidence_policy()`, so
+that default-dependent form must be admitted separately from
+`evidence_policy(supported_checks=...)`. Second,
 `ProfileRegistryReverification.run(...)` has no executable result contract, so
 the validation gate can mistake an arbitrary falsey value for success or ignore
 an arbitrary truthy value after returning it. Third, the registry-
@@ -302,6 +305,7 @@ parameters.
 | Service method | Existing production consumer or supported private form | Required accepted bound call |
 | --- | --- | --- |
 | policy evidence | `EvidenceSufficiencyGate` | `evidence_policy(supported_checks=value)` |
+| policy evidence | `DescriptorPolicyProvider.validation_policy()` delegation, relying on the `supported_checks` default | `evidence_policy()` |
 | policy validation | `ValidationGate` | `validation_policy()` |
 | context assembly | `ProfileApplicabilityGate`, relying on both defaults | `assemble(cur, farm_ref)` |
 | context assembly | materializer recomputation, identity materialization, and use resolution | `assemble(cur, farm_ref, target_twin=value, evaluation_time_policy=value)` |
@@ -403,9 +407,11 @@ same transaction and immediately before the generic success side effect.
 
 ## 7. Invariants and acceptance criteria
 
-- **PRSC-001 — Executable declared calls.** Every callable in the inventoried
-  inventory is present and callable, and every inventoried production call form
-  binds independently at composition. In particular,
+- **PRSC-001 — Executable declared calls.** Every callable in the call-form
+  inventory is present and callable, and every inventoried production call
+  form binds independently at composition. In particular,
+  `ProfilePolicyService.evidence_policy(...)` accepts both its zero-argument
+  default-dependent form and its `supported_checks` keyword form;
   `ProfileMaterializer.invalidate_for_sources(...)` declares and accepts
   `trigger_family`, `trigger_source_ref`, `farm_scope_ref`, and `reason_code`;
   `ProfileMaterializer.recompute(...)` declares and accepts `use_class`; and
@@ -458,7 +464,7 @@ field mutation, mutable production registry, or production switch is used.
 
 | Invariant | Supported entry point and counterexample | Required result |
 | --- | --- | --- |
-| PRSC-001 | either composition path receives a graph whose invalidator omits `reason_code`, whose recomputer omits `use_class`, or whose nominally optional context, recompute, passport, frozen-output, or resolution parameter is made required despite a production caller omitting it | composition raises `ProfileRuntimeError` before returning services or constructing a pipeline; no transaction begins |
+| PRSC-001 | either composition path receives a graph whose policy makes `supported_checks` required, whose invalidator omits `reason_code`, whose recomputer omits `use_class`, or whose nominally optional context, recompute, passport, frozen-output, or resolution parameter is made required despite a production caller omitting it | composition raises `ProfileRuntimeError` before returning services or constructing a pipeline; no transaction begins |
 | PRSC-002 | `GatePipeline(store, runtime_services=...)` receives a lookalike bundle, an equal-but-distinct descriptor, or a non-trusted specification value | constructor raises `ProfileRuntimeError`; no pipeline exists |
 | PRSC-003 | `GatePipeline(...)` receives an exact dataclass with a foreign service descriptor (including a registry-reverification service from another profile), a different materialization/output specification instance, a different output materializer, wrong policy ref, or one missing required recognized rule ref | constructor raises `ProfileRuntimeError` before transaction entry; the foreign snapshot family or product lookup cannot execute |
 | PRSC-004 | the same malformed graph is returned by the provider loader and supplied explicitly | both paths refuse through the common validator; an injected-store transaction counter remains zero |
@@ -506,6 +512,12 @@ callability and independent binding of every production call form. It also
 requires the registry-reverification service's exact `active_profile` identity
 to be the Store-bound descriptor. It converts inspection/admission failures to
 `ProfileRuntimeError` without invoking provider methods.
+
+The validator preserves the existing private attribute names: the policy
+service binds its profile as `descriptor`, while context, materializer,
+registry-reverification, and output services bind it as `active_profile`. This
+contract adds no alias or rename; naming unification is an out-of-scope future
+refactor and cannot change which exact identities are checked here.
 
 `load_profile_runtime_services(...)` uses it after factory construction.
 `GatePipeline` imports and uses the same function whenever services are
@@ -577,13 +589,37 @@ Deletable duplication is the partial type/descriptor validation branch in
 replaced by explicit extraction. Existing richer SI result fields are neither
 copied nor narrowed.
 
-The profile-runtime architecture group is 867 lines against its existing 900-
-line budget at the base commit. Phase B must refactor compactly within that
-existing group budget; it must not add a framework module or relax the budget
-to hide unnecessary growth. The services module must also remain within its
-existing 250-line budget. If the approved design cannot fit after deleting the
-duplicate validation branch, implementation stops for an amendment rather than
-silently widening architecture policy.
+The base commit leaves too little measured headroom for the approved slice. The
+partial validation branch deleted from `kernel/gates.py` cannot pay for the
+work because that file, like `kernel/stages.py` and `kernel/validators.py`, is
+not in the profile-runtime group. Exact-head review measured the idiomatic
+service-protocol portion at about 255 lines and the complete production group
+at about 931 lines before tests. Requiring the old ceilings would therefore
+approve an implementation that is already expected to stop.
+
+Phase B authorizes only these explicit ceiling changes in
+`conformance/rewrite_architecture_check.py`:
+
+| Guard | Base lines | Current ceiling | Approved Phase B ceiling |
+| --- | ---: | ---: | ---: |
+| `GROUP_BUDGETS["profile runtime"]` | 867 | 900 | 950 |
+| `MODULE_BUDGETS["kernel/profile_runtime_services.py"]` | 237 | 250 | 265 |
+| `TEST_MODULE_BUDGETS["kernel/tests/test_profile_runtime_services.py"]` | 769 | shared 800 | 1,100 |
+
+The 950-line group ceiling leaves 19 lines beyond the measured 931-line
+production design; the 265-line service ceiling leaves 10 beyond the measured
+255-line protocol design. The service-test override provides 331 lines beyond
+the base for the full parameterized signature, cross-wire, result, transaction,
+and equivalence programme without moving cohesive service-admission evidence
+into unrelated files or compressing it to satisfy a physical-line accident.
+That allowance may contain only evidence mapped to PRSC-001 through PRSC-010
+and supporting test helpers used by that evidence.
+
+These are maximum guardrails, not growth targets. All other production,
+module, test, function, import, and architecture constraints remain unchanged.
+Phase B must still delete duplication where coherent, may not pack statements
+or introduce a framework to spend the headroom, and must report final counts.
+Exceeding any revised ceiling is a stop condition requiring a new contract.
 
 A clean rewrite of the provider loader, materializer, output assembler, or
 profile router is not justified. The present graph is the correct unit; its
@@ -608,11 +644,15 @@ draft PR may change only:
 - `kernel/tests/_synthetic_profile_runtime.py`;
 - `kernel/tests/test_profile_runtime_services.py`;
 - `kernel/tests/test_profile_runtime_neutrality.py`;
+- `conformance/rewrite_architecture_check.py`, only for the three exact ceiling
+  changes stated in section 10;
 - this RFC to record approved/reviewed implementation status; and
-- narrowly necessary mechanical test inventory or architecture-check files if
-  the exact test additions require them.
+- `conformance/review_baseline_test_inventory.json` only if the exact test
+  additions require a mechanical inventory update.
 
-No change to architecture budgets is expected or authorized by this contract.
+No architecture-budget change other than the three exact section 10 ceilings
+is authorized by this contract.
+
 The one permitted SI provider construction edit may add only the exact
 descriptor binding; it may not change snapshot prefixes, product lookup,
 policy values, reference behavior, service ordering, active defaults, or any SI
@@ -651,7 +691,7 @@ claim production readiness.
 
 | Invariant | Owning code | Required negative/neutral test | Acceptance evidence | Smallest verification |
 | --- | --- | --- | --- | --- |
-| PRSC-001 | service protocols; private signature validator | missing keyword, absent/non-callable method, or a default-dependent parameter made required for any minimal call | every inventoried call form binds independently; both composition paths reject incompatible signatures | focused two-module pytest |
+| PRSC-001 | service protocols; private signature validator | missing keyword, absent/non-callable method, required policy `supported_checks`, or another default-dependent parameter made required for any minimal call | every inventoried call form binds independently; both composition paths reject incompatible signatures | focused two-module pytest |
 | PRSC-002 | common validator; `GatePipeline.__init__` | lookalike outer type, copied descriptor, wrong spec type | `ProfileRuntimeError` before pipeline construction | focused two-module pytest |
 | PRSC-003 | common validator; descriptor-bound registry reverification | each descriptor/spec/materializer/output/registry/policy/rule cross-wire | every graph mismatch, including a foreign registry service, refuses at composition | focused two-module pytest |
 | PRSC-004 | loader and explicit-injection branch | same validator reached from both; injected transaction counter stays zero | equivalent `ProfileRuntimeError` admission behavior | focused two-module pytest |
@@ -660,7 +700,7 @@ claim production readiness.
 | PRSC-007 | common validator; `ValidationGate` result check; result-ref helper | opaque/incompatible callable, malformed runtime mappings, and each falsey/truthy non-`GateRefusal` registry result including `GatePass` | only `ProfileRuntimeError` crosses the implementation boundary; no validation success or durable effect survives | focused hostile tests plus complete Kernel suite |
 | PRSC-008 | synthetic fixture; real generic stages | execute applicability and materialization; recursive identifier scan | synthetic refs logged; complete invalidation args observed; no SI leakage or production registration | `test_profile_runtime_neutrality.py` |
 | PRSC-009 | SI provider's descriptor-only registry construction wiring and unchanged generic orchestration | default-loaded versus explicit-injected SI scenario | stable normalized results, materializations, outputs, receipts, validation outcomes, and gate order; full Kernel suite passes | focused equivalence test plus complete Kernel suite |
-| PRSC-010 | existing registration/selection/architecture authorities | Serbia load/route refusal; registration/default assertions; forbidden-file diff | single-active-SI and all non-effects preserved | architecture, manifest, extraction, package, and diff checks |
+| PRSC-010 | existing registration/selection/architecture authorities | Serbia load/route refusal; registration/default assertions; forbidden-file diff; extraction failure-set comparison | single-active-SI, exact three-path extraction baseline, revised architecture ceilings, and all non-effects preserved | architecture, manifest, extraction, package, and diff checks |
 
 ### 13.1 Phase A verification
 
@@ -688,13 +728,23 @@ with a fixture claim.
 The repository `.python-version` pins Python 3.12.13. This isolated worktree
 has no `.venv`; the Phase A package-contract and architecture checks used an
 available compatible 3.12.13 environment. An initial untouched-base focused
-observation used a
-separate local Python 3.14.5 environment, which is unsupported and non-
+observation used a separate local Python 3.14.5 environment, which is
+unsupported and non-
 authoritative. That observation reported 13 passed, 3 failed, and 19 errors;
 every failure/error was database setup blocked by the overlong default Unix-
 socket path, and no active `.s.PGSQL.54317` socket was available. No unrelated
 machine-specific virtual-environment path is durable contract evidence, and
 the observation is not test acceptance evidence.
+
+A later review of exact head
+`c47639972fc26a8bad72a212aafb5c0fb706f710` reports that a lock-built Python
+3.12.3 environment with PostgreSQL 16.13 passed manifest verification and all
+35 focused base tests. Those results supersede the earlier assumption that the
+cases themselves were failing, but they do not replace pinned-environment
+acceptance evidence: the repository pins Python 3.12.13 and PostgreSQL 17.10,
+and the review was posted by the PR-author account. The local unavailability
+and the review's non-pinned corroboration are both reported rather than merged
+into a false authoritative PASS.
 
 ### 13.2 Required Phase B verification
 
@@ -720,8 +770,26 @@ The focused command must contain the hostile composition, default-dependent
 signature, registry-result, result-shape, rollback, synthetic neutrality, SI
 equivalence, legacy-policy exclusion, and Serbia cases. The complete Kernel run
 is required for unchanged SI materialization, output, receipt, and gate-order
-evidence. Generated historical
-executed-evidence files must not change as a test side effect.
+evidence. Generated historical executed-evidence files must not change as a
+test side effect.
+
+The extraction command is already non-zero at the exact base. Its Phase B
+acceptance criterion is baseline equivalence, not a false PASS claim. Running
+the command at both base and head must report exactly these three seed-scan hit
+paths and no others:
+
+```text
+conformance/review_baseline_test_inventory.json
+kernel/tests/_synthetic_profile_runtime.py
+kernel/tests/test_rewrite_architecture_check.py
+```
+
+Any added path, removed path, changed diagnostic category, or inability to
+reproduce the base set is a stop condition. The final report must retain the
+command's non-zero status and show the base/head comparison. This PR does not
+authorize editing
+`profile_si_ffs/extraction_inventory/core_country_term_audit_review_records.json`
+to manufacture a green result.
 
 Final scope inspection must compare the exact base to exact head, name every
 changed path, prove forbidden paths are absent, and report any refused,
@@ -739,10 +807,17 @@ and must not conceal a dirty tracked worktree.
 - Prove call compatibility by independently binding every inventoried minimal
   and keyword-rich bound signature without invoking provider methods; one
   maximal bind is insufficient.
+- Admit both `evidence_policy()` and
+  `evidence_policy(supported_checks=value)` so the SI-style
+  `validation_policy()` delegation cannot fail late.
 - Bind registry reverification to the exact active descriptor and validate its
   result as only `None | GateRefusal` before truthiness.
 - Treat explicit injection as a private graph handoff whose production caller
   owns source provenance; the common validator does not attest injected source.
+- Preserve the existing `descriptor` policy binding and `active_profile`
+  bindings on the other four services; naming unification is outside this PR.
+- Authorize only the three measured architecture ceilings in section 10 and
+  require exact three-path extraction-baseline equivalence.
 - Validate returned references at the generic consumer immediately before
   success logging.
 - Raise the existing `ProfileRuntimeError`; add no domain reason or schema.
@@ -755,7 +830,8 @@ and must not conceal a dirty tracked worktree.
 
 None. The exact-head review choices about default-dependent call forms,
 registry result semantics, registry descriptor identity, and explicit-
-injection provenance are closed above.
+injection provenance, measured architecture ceilings, and extraction baseline
+handling are closed above.
 
 ### Review disposition
 
@@ -763,10 +839,19 @@ injection provenance are closed above.
   `4de682c493ae2d39cd29ae6c897f928791a14a57` identified three: incomplete
   default-dependent call admission, an unenforced registry-reverification
   result contract, and an unbound registry-reverification service. This revised
-  contract addresses all three but makes no claim of clearance before a new
-  exact-head review.
+  contract addressed those findings. Reviews of head
+  `c47639972fc26a8bad72a212aafb5c0fb706f710` then identified the omitted
+  zero-argument `evidence_policy()` call and an already-determined architecture-
+  budget conflict. This revision addresses both but makes no claim of clearance
+  before a new exact-head review.
+  Both review artifacts were posted by the PR-author account; their findings
+  are incorporated but they do not supply independent Phase A clearance.
 - Follow-ups: #161, only after #160 is implemented, reviewed, and merged.
-- Preferences: none.
+  Optional unification of `descriptor` and `active_profile` naming is a separate
+  future refactor, is not required here, and has no issue or implementation in
+  this PR.
+- Preferences: the extraction-baseline criterion and descriptor-name
+  clarification requested at the prior head are incorporated.
 
 ### Merge stop rule
 
@@ -800,8 +885,11 @@ Stop before editing runtime code and request a new or amended contract if:
    default must change;
 9. the only solution is a broad rewrite of materialization, output assembly,
    provider routing, or profile selection;
-10. a new runtime module or architecture-budget relaxation is required; or
-11. a file outside the approved PR boundary needs a non-mechanical change.
+10. a new runtime module or an architecture-budget change beyond the three
+    exact section 10 ceilings is required;
+11. a file outside the approved PR boundary needs a non-mechanical change; or
+12. the extraction check's head failure set differs from the exact base set in
+    section 13.2.
 
 The exact reviewed Phase A head and RFC digest must be recorded in the review
 request. Any material change to the problem, trust model, authority map,
