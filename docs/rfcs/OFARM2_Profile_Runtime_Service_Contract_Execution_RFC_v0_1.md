@@ -14,8 +14,7 @@ without runtime effect
 
 **Merged prerequisites:** #159, #239, #240, and #241
 
-**Named draft pull request:** pending assignment; the assigned number must be
-recorded in this contract before exact-head Phase A review
+**Named draft pull request:** #362
 
 **Primary trust boundary:** runtime integration and readiness at the private
 profile-runtime service/composition boundary
