@@ -421,8 +421,7 @@ def test_materializer_dependency_index_uses_bound_policy_and_invalidates(fresh_e
         assert cur.fetchone()["freshness"] == "STALE"
 
 
-def test_issue_159_si_submission_behavior_remains_assertion_equivalent(
-        fresh_env):
+def test_issue_159_si_submission_behavior_remains_assertion_equivalent(fresh_env):
     store, default_pipeline, _ = fresh_env
     injected_services = load_profile_runtime_services(
         store, store.active_profile_package_name, config.ACTIVE_PROFILE,
@@ -433,37 +432,58 @@ def test_issue_159_si_submission_behavior_remains_assertion_equivalent(
     )
     assert explicit_pipeline.runtime_services is injected_services
     assert default_pipeline.runtime_services.descriptor is store.active_descriptor
-
-    default = default_pipeline.commit(demo.spray_submission(
-        f"issue159-default:{_uid()}",
-        erp_id=f"erp:issue159.default.{_uid()}",
-        confirm=True,
-    ))
-    explicit = explicit_pipeline.commit(demo.spray_submission(
-        f"issue159-explicit:{_uid()}",
-        erp_id=f"erp:issue159.explicit.{_uid()}",
-        confirm=True,
-    ))
-
-    def observables(pipeline, result):
-        trace = _trace_payload(store, result)
-        refs = next(entry["relatedArtifactRefs"] for entry in trace["gateSequence"]
-                    if entry["gate"] == "CURRENT_STATE_MATERIALIZATION")
-        view = pipeline.runtime_services.output_assembler.passport_view(
-            demo.FARM, demo.FARMER, allow_recompute=False,
-        )
-        return (
-            result["decisionOutcome"], result["problems"],
-            [(entry["gate"], entry["outcome"]) for entry in trace["gateSequence"]],
-            tuple((ref.split(":", 1)[0], store.get_payload(ref)["schemaVersion"])
-                  for ref in refs),
-            view["body"], view["runtimeReceipt"]["runtimeBundleDigest"],
-            frozenset(view["runtimeReceipt"]["payloadDigests"]),
-        )
-
-    assert observables(default_pipeline, default) == observables(
-        explicit_pipeline, explicit,
+    submission = demo.spray_submission(
+        "issue159-equivalent", erp_id="erp:issue159.equivalent", confirm=True,
     )
+    volatile_times = {
+        "acceptedAt", "assertedAt", "asOf", "decidedAt", "evaluatedAt",
+        "generatedAt", "ingestedAt", "processedAt", "qualifiedAt", "recordTime",
+    }
+    minted_prefixes = {
+        "arg", "assert", "authzreq", "authzres", "authztrace", "bundle", "cires",
+        "cir", "compclaim", "conseq", "derivedstate", "event", "mat", "matbasis",
+        "matres", "matsnap", "passport", "promtrace", "qual", "review", "suffcase",
+    }
+
+    def stable(value):
+        if type(value) is dict:
+            return {key: stable(item) for key, item in value.items()
+                    if key not in volatile_times}
+        if type(value) is list:
+            return [stable(item) for item in value]
+        if type(value) is str and value.partition(":")[0] in minted_prefixes:
+            return f"{value.partition(':')[0]}:<minted>"
+        return value
+
+    def observables(pipeline):
+        with store.conn.transaction(force_rollback=True):
+            result = pipeline.commit(copy.deepcopy(submission))
+            trace = _trace_payload(store, result)
+            refs = next(entry["relatedArtifactRefs"] for entry in trace["gateSequence"]
+                        if entry["gate"] == "CURRENT_STATE_MATERIALIZATION")
+            artifact_refs = (
+                result["semanticEventRef"], trace["evidenceSufficiencyCaseRef"], *refs,
+                *result.get("emittedAssertionRecordRefs", ()),
+                *result.get("emittedReviewDecisionRefs", ()),
+                *result.get("emittedAcceptedConsequenceRefs", ()),
+            )
+            with store.conn.cursor() as cur:
+                key = cur.execute(
+                    "SELECT materialization_key FROM derived_materialization "
+                    "WHERE snapshot_record_id = %s", (refs[1],),
+                ).fetchone()["materialization_key"]
+            view = pipeline.runtime_services.output_assembler.passport_view(
+                demo.FARM, demo.FARMER, allow_recompute=False,
+            )
+            receipt = view.pop("runtimeReceipt")
+            return (
+                stable(result), stable(trace), key,
+                tuple(stable(store.get_payload(ref)) for ref in artifact_refs),
+                stable(view), receipt["runtimeBundleDigest"],
+                frozenset(receipt["payloadDigests"]),
+            )
+
+    assert observables(default_pipeline) == observables(explicit_pipeline)
 
 
 def test_issue_159_route_uses_composition_root_services(fresh_env):
@@ -690,67 +710,53 @@ def test_issue_159_composition_returns_fresh_service_graphs(fresh_env):
         second.runtime_services.registry_reverification.product_lookup
 
 
-def test_issue_159_composition_rejects_missing_required_service(
-        fresh_env, monkeypatch):
+def test_issue_160_composition_normalizes_factory_failure(fresh_env, monkeypatch):
+    store, _, _ = fresh_env
+
+    def broken_factory(_store, _descriptor):
+        raise TypeError("synthetic factory failure")
+
+    monkeypatch.setattr(profile_runtime_provider, "_load_factory",
+                        lambda _registration, _path, _source: broken_factory)
+    with pytest.raises(ProfileRuntimeError, match="factory failed") as caught:
+        load_profile_runtime_services(
+            store, config.ACTIVE_PROFILE_PACKAGE_NAME, config.ACTIVE_PROFILE)
+    assert type(caught.value.__cause__) is TypeError
+
+
+def test_issue_159_composition_rejects_missing_required_service(fresh_env, monkeypatch):
     store, _, _ = fresh_env
 
     def incomplete_factory(_store, descriptor):
-        complete = (
-            profile_runtime_provider._resolve_si_factory()(
-                _store,
-                descriptor,
-            )
-        )
+        complete = profile_runtime_provider._resolve_si_factory()(
+            _store, descriptor)
         return replace(complete, policy_provider=None)
 
-    monkeypatch.setattr(
-        profile_runtime_provider,
-        "_load_factory",
-        lambda _registration, _path, _source: incomplete_factory,
-    )
+    monkeypatch.setattr(profile_runtime_provider, "_load_factory",
+                        lambda _registration, _path, _source: incomplete_factory)
     with pytest.raises(ProfileRuntimeError, match="incomplete or mismatched"):
         load_profile_runtime_services(
-            store,
-            config.ACTIVE_PROFILE_PACKAGE_NAME,
-            config.ACTIVE_PROFILE,
-        )
+            store, config.ACTIVE_PROFILE_PACKAGE_NAME, config.ACTIVE_PROFILE)
 
 
-def test_composition_rejects_cross_profile_service_binding(
-        fresh_env, monkeypatch):
+def test_composition_rejects_cross_profile_service_binding(fresh_env, monkeypatch):
     store, _, _ = fresh_env
 
     def mismatched_factory(_store, descriptor):
-        services = (
-            profile_runtime_provider._resolve_si_factory()(
-                _store,
-                descriptor,
-            )
-        )
+        services = profile_runtime_provider._resolve_si_factory()(
+            _store, descriptor)
         services.output_assembler.active_profile = replace(
-            descriptor,
-            profile_ref="profile:synthetic.mismatch.v0_1",
-        )
+            descriptor, profile_ref="profile:synthetic.mismatch.v0_1")
         return services
 
-    monkeypatch.setattr(
-        profile_runtime_provider,
-        "_load_factory",
-        lambda _registration, _path, _source: mismatched_factory,
-    )
-    with pytest.raises(
-        ProfileRuntimeError,
-        match="different profile bindings",
-    ):
+    monkeypatch.setattr(profile_runtime_provider, "_load_factory",
+                        lambda _registration, _path, _source: mismatched_factory)
+    with pytest.raises(ProfileRuntimeError, match="different profile bindings"):
         load_profile_runtime_services(
-            store,
-            config.ACTIVE_PROFILE_PACKAGE_NAME,
-            config.ACTIVE_PROFILE,
-        )
+            store, config.ACTIVE_PROFILE_PACKAGE_NAME, config.ACTIVE_PROFILE)
 
 
-def test_composition_requires_trusted_manifest_evidence_inputs(
-        fresh_env, monkeypatch):
+def test_composition_requires_trusted_manifest_evidence_inputs(fresh_env, monkeypatch):
     store, _, _ = fresh_env
 
     def untrusted_factory(_store, descriptor):
@@ -760,17 +766,11 @@ def test_composition_requires_trusted_manifest_evidence_inputs(
         )
         return replace(services, manifest_evidence_specification=object())
 
-    monkeypatch.setattr(
-        profile_runtime_provider,
-        "_load_factory",
-        lambda _registration, _path, _source: untrusted_factory,
-    )
+    monkeypatch.setattr(profile_runtime_provider, "_load_factory",
+                        lambda _registration, _path, _source: untrusted_factory)
     with pytest.raises(ProfileRuntimeError, match="incomplete or mismatched"):
         load_profile_runtime_services(
-            store,
-            config.ACTIVE_PROFILE_PACKAGE_NAME,
-            config.ACTIVE_PROFILE,
-        )
+            store, config.ACTIVE_PROFILE_PACKAGE_NAME, config.ACTIVE_PROFILE)
 
 
 def test_issue_159_service_bundle_has_no_optional_slots():

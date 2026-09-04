@@ -45,7 +45,6 @@ class ProfileRuntimeFactory(Protocol):
 @dataclass(frozen=True, slots=True)
 class ProfileRuntimeRegistration:
     """Registry-owned identity of one executable profile implementation."""
-
     package_name: str
     profile_ref: str
     component_role: RuntimeComponentRole
@@ -62,7 +61,6 @@ class ProfileRuntimeRegistration:
 
 def _resolve_si_factory() -> ProfileRuntimeFactory:
     from .profiles.si_ffs.runtime_provider import build_si_runtime_services
-
     return build_si_runtime_services
 
 
@@ -89,18 +87,15 @@ def _registration_for(
         raise ProfileRuntimeError("profile runtime package name must be non-empty")
     if type(descriptor) is not ProfileRuntimeDescriptor:
         raise ProfileRuntimeError("profile runtime descriptor must use trusted type")
-    if any(
-        type(registration) is not ProfileRuntimeRegistration
-        for registration in registrations
-    ):
+    if any(type(registration) is not ProfileRuntimeRegistration
+           for registration in registrations):
         raise ProfileRuntimeError("profile runtime registry contains an invalid registration")
     keys = tuple(registration.key for registration in registrations)
     if len(keys) != len(set(keys)):
         raise ProfileRuntimeError("profile runtime registry contains duplicate identities")
     key = package_name, descriptor.profile_ref
     registration = next(
-        (candidate for candidate in registrations if candidate.key == key),
-        None,
+        (candidate for candidate in registrations if candidate.key == key), None
     )
     if registration is None:
         raise ProfileRuntimeError(
@@ -121,8 +116,7 @@ def _verify_source(
         source_bytes = path.read_bytes()
     except (OSError, RuntimeBundleError, ValueError) as exc:
         raise ProfileRuntimeError(
-            f"registered runtime source {logical_ref!r} is unavailable"
-        ) from exc
+            f"registered runtime source {logical_ref!r} is unavailable") from exc
     if component.canonical_bytes != source_bytes:
         raise ProfileRuntimeError(
             f"registered runtime source {logical_ref!r} differs from the "
@@ -337,4 +331,10 @@ def load_profile_runtime_services(
         registration.source_path,
     )
     factory = _load_factory(registration, source_path, source_bytes)
-    return _validate_services(factory(store, descriptor), descriptor, store)
+    try:
+        services = factory(store, descriptor)
+    except ProfileRuntimeError:
+        raise
+    except Exception as exc:
+        raise ProfileRuntimeError("runtime factory failed to construct services") from exc
+    return _validate_services(services, descriptor, store)

@@ -9161,6 +9161,11 @@
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_composition_normalizes_factory_failure",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_160_injected_outer_types_fail_before_pipeline[bad_spec]",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
@@ -19576,8 +19581,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "96cfee4cf814a8f517bef373bb376bbe974d0a4aa692d74577d8305a8fa9b79f",
-  "entryCount": 3915,
+  "entriesSha256": "521aa08537f617c9191a3b1e2fd24e1cf511f76a5caaaa74b09b2e688ecf2eb7",
+  "entryCount": 3916,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

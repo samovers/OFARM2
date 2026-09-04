@@ -1266,6 +1266,18 @@ cross-family refusal before lookup, and injects malformed applicability and
 materialization implementations before composition. No new abstraction,
 module, authority, or trust boundary was introduced.
 
+[Exact-head reviews 5117870936](https://github.com/samovers/OFARM2/pull/362#pullrequestreview-5117870936)
+and [5117870979](https://github.com/samovers/OFARM2/pull/362#pullrequestreview-5117870979)
+at `9019300e7bf66a13b2961a0c3bad9131a862d3b8` found zero blockers and no
+overdesign or boundary drift. The first requested two in-boundary should-fixes
+before baseline: normalize ordinary provider-factory construction failures and
+make SI equivalence observe each branch's own commit state. The correction
+preserves deliberate `ProfileRuntimeError` and `BaseException` control flow,
+normalizes other factory exceptions at composition, and compares identical SI
+submissions inside independent rollback scopes together with each commit's own
+artifacts, materialization key, view, and receipt. No new abstraction, module,
+authority, or trust boundary was introduced.
+
 Phase B stayed inside the named private runtime integration and readiness
 boundary. In addition to the named files, one line in
 `kernel/tests/test_runtime_bundle.py` mechanically updates the expected closed-
@@ -1275,13 +1287,13 @@ runtime authority.
 
 Local supported-environment evidence on Python 3.12.13 is:
 
-- mechanical review inventory: 3,915 pinned tests; the one-test reduction
-  consolidates two overlapping SI wiring assertions while adding the malformed
-  rule-reference case;
-- focused hostile and neutrality command: 89 passed;
-- checked-in runtime-bundle receipt assertion: 1 passed;
+- mechanical review inventory: 3,916 pinned tests; the earlier consolidation
+  of two overlapping SI wiring assertions is offset by the new hostile
+  provider-factory failure case;
+- focused hostile and neutrality command: 90 passed;
+- checked-in runtime-bundle suite: 199 passed;
 - host-supported Kernel regression after excluding only files refused by the
-  exact-Debian PostgreSQL guard: 2,907 passed, 6 skipped, and two third-party
+  exact-Debian PostgreSQL guard: 2,908 passed, 6 skipped, and two third-party
   deprecation warnings;
 - rewrite architecture check: pass;
 - generated manifest verification against the isolated bootstrapped Kernel
@@ -1295,9 +1307,9 @@ The corrected implementation remains inside every approved source ceiling:
 `profile_runtime_provider.py` is 340 lines, the SI runtime provider is 91
 lines, the focused service test is 1,200 lines, and the profile-runtime source
 group is 1,020 lines. The mechanically updated checked-in RuntimeBundle digest
-is `sha256:a66f6d1126d3bc23b873185ab8799743e1cf6d7cbc7d371415b116413ca15131`.
+is `sha256:8816a0097d230cf7d165aca2ea54faca8f41794131be35a17363630f959f497f`.
 
-The unmodified complete Kernel command was also run. It reported 3,500 passed,
+The unmodified complete Kernel command was also run. It reported 3,501 passed,
 7 skipped, 7 failed, and 401 setup errors. Every failure and setup error was in
 a live PostgreSQL file and traced to the repository's refusal of the available
 macOS PostgreSQL 17.10 server because it is not the required exact PostgreSQL
@@ -1423,8 +1435,9 @@ asymmetric extraction-baseline handling are closed above.
   service to one exact optional outer `ReferenceFamily` plus Store-selected
   input identities; pins the SI provider and service constructor to exact
   REGSR; and adds familyless, certificate-style, GERK, FFSNaprave, and cross-
-  family hostile evidence. It
-  makes no claim of clearance before a new exact-head review.
+  family hostile evidence. Reviews of later head
+  `9019300e7bf66a13b2961a0c3bad9131a862d3b8` found zero blockers; the current
+  revision still requires a new exact-head review before merge.
 - Should-fixes: the [same-head focused review comment](https://github.com/samovers/OFARM2/pull/362#issuecomment-5540642541)
   found that the 950/265 ceilings were not jointly spendable and that exact
   extraction-set equality could stop a correct synthetic-fixture edit. The
@@ -1432,7 +1445,9 @@ asymmetric extraction-baseline handling are closed above.
   type/provenance additions first required bounded 1,060/300 limits. Removal of
   the rejected common lookup now reduces those to the jointly usable 1,050/295
   limits and the 1,200 focused-test cap in section 10. Section 13.2 permits only
-  explained removals while refusing every new failure path.
+  explained removals while refusing every new failure path. Review 5117870936
+  additionally requested factory-exception normalization and branch-local SI
+  equivalence observations; both are implemented and tested in this revision.
 - Account provenance: these review artifacts were posted by the PR-author
   account. Their findings are incorporated as exact-head technical review, but
   they are not represented as independent authorship. The task user's explicit
