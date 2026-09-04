@@ -1,7 +1,7 @@
 # OFARM2 Profile-Runtime Service Contract Execution — Phase A Contract v0.1
 
 **Status:** revised proposed Phase A contract; documentation-only, unapproved,
-without runtime effect, and awaiting a new independent exact-head review
+without runtime effect, and awaiting a new exact-head review
 
 **Contract identity:**
 `ofarm2.profile-runtime-service-contract-execution.issue160.v0.1`
@@ -23,10 +23,10 @@ profile-runtime service/composition boundary
 head Phase A review and explicit task-user approval, the same named draft pull
 request may implement only the private service contracts, common composition
 validation, exact Store/context ownership, exact runtime-selected policy and
-registry-lookup provenance, mutation-free registry-reverification request and
-outcome handling, generic stage result validation, synthetic non-SI evidence,
-focused tests, and mechanically required test inventory or architecture checks
-defined here.
+capability-bound reference-input provenance, a mutation-free profile-neutral
+registry-reverification request and closed outcome handling, generic stage
+result validation, synthetic non-SI evidence, focused tests, and mechanically
+required test inventory or architecture checks defined here.
 
 ## 1. Problem and goal
 
@@ -85,6 +85,20 @@ product lookup loaded from Store B could be paired with Store A when both
 Stores shared a descriptor. A path-backed or foreign-byte policy with the same
 `policyId` likewise passed the proposed checks.
 
+The latest exact-head review then found that the attempted lookup-provenance
+fix had drifted beyond the ticket. It made every common registry service expose
+an SI-shaped `lookup_by_decision(snapshot_id, decision_number)` API and made
+generic `ValidationGate` interpret `CROP_PROTECTION_PRODUCT`,
+`registrationRef`, and product-register snapshot advance. That would prevent a
+legitimate holding- or certificate-oriented provider from executing unless it
+fabricated a product register. The same design accepted any descriptor family;
+an otherwise truthful SI graph could therefore wire GERK or FFSNaprave data to
+product reverification. This revision removes product lookup and product
+applicability from the common contract. The admitted profile provider owns one
+explicit optional capability-family binding, the common validator proves its
+object and selected-input coherence, and the profile service alone decides
+whether a detached neutral request has an effect.
+
 Inspection at the base commit reproduced the three concrete gaps without
 editing runtime code:
 
@@ -103,10 +117,12 @@ This task establishes one executable private boundary:
    composition validator;
 3. every Store-owning service is bound to the exact expected Store, the
    materializer is bound to the bundle's exact context assembler, and policy
-   and product-lookup services prove exact runtime-selected provenance;
+   plus registry-reverification services prove exact runtime-selected
+   provenance without a common lookup API;
 4. registry reverification receives no `GateContext`, transaction cursor,
-   Store, gate sequence, or review-reason container and returns one exact
-   closed private outcome whose generic consumer alone applies effects;
+   Store, gate sequence, or review-reason container; its profile-owned service
+   decides applicability from one detached neutral request and returns one
+   exact closed private outcome whose generic consumer alone applies effects;
 5. generic stages validate the minimal result fields before recording success;
 6. a synthetic non-SI graph executes through the real generic applicability
    and materialization stages; and
@@ -170,8 +186,9 @@ implemented, reviewed, and merged.
 - the exact Store ownership of every Store-backed service and the exact context
   assembler used by the materializer;
 - the exact immutable RuntimeBundle policy component parsed by the policy
-  service and the exact selected reference-source identities loaded by the
-  product lookup;
+  service, the exact profile-owned reference family governing registry
+  reverification when one exists, and the exact selected reference-source
+  identities used by that service;
 - the materialization and output specifications actually used by their bound
   service instances;
 - profile policy identity and the minimum recognized rule set;
@@ -209,9 +226,9 @@ implemented, reviewed, and merged.
 - every explicitly injected `runtime_services` object until the same validation
   succeeds;
 - service attributes, descriptor bindings, specification bindings, materializer
-  bindings, Store bindings, context-assembler bindings, policy refs, recognized
-  rule refs, callables, and callable signatures presented by those candidate
-  graphs;
+  bindings, Store bindings, context-assembler bindings, registry capability-
+  family bindings, selected-input bindings, policy refs, recognized rule refs,
+  callables, and callable signatures presented by those candidate graphs;
 - applicability and materialization values returned at runtime;
 - values returned by the provider-owned registry-reverification service,
   including its disposition, rationale, and problem mapping;
@@ -246,21 +263,23 @@ every call would duplicate authority and would not defend against the excluded
 arbitrary in-process mutation capability.
 
 The registry service is deliberately denied the generic mutable carrier. Its
-frozen request contains only scalar claim and selection data; it contains no
-`GateContext`, cursor, Store, request id, gate sequence, review-reason list, or
-mutable claim mapping. Its ordinary implementation therefore cannot directly
-write either side of a gate log or mutate review-routing state. A provider that
-captures a `GateContext` or Store through undeclared globals, closures, private
-introspection, or monkeypatching has exercised the admitted-source compromise
-capability excluded above. This contract narrows the callable boundary; it is
-not an in-process security sandbox.
+frozen request contains detached canonical bytes for the semantic submission
+and its already resolved generic identity bindings, the current snapshot ref
+for its one profile-owned family if any, and normalized event time. It contains
+no `GateContext`, cursor, Store, gate sequence, review-reason list, mutable
+claim mapping, or mutation callback. Its ordinary implementation therefore
+cannot directly write either side of a gate log or mutate review-routing state.
+A provider that captures a `GateContext` or Store through undeclared globals,
+closures, private introspection, or monkeypatching has exercised the admitted-
+source compromise capability excluded above. This contract narrows the
+callable boundary; it is not an in-process security sandbox.
 
 Object identity checks here bind one in-process composition graph; they are not
 a substitute for source, process, operator, or filesystem trust. Exact identity
 is required so a bundle cannot name one descriptor or specification while the
 executing service retains an equal-but-distinct object. This is graph-coherence
 proof under the current private composition model, not external attestation.
-The immutable provenance retained by policy and lookup services is checked
+The immutable provenance retained by policy and registry services is checked
 against the expected Store's exact RuntimeBundle and selected components; a
 matching logical ref or digest alone is insufficient.
 
@@ -277,13 +296,15 @@ matching logical ref or digest alone is insufficient.
 | Materialization identities | the provider-owned exact `MaterializationSpecification` instance bound to its materializer | duplicate or merely equal specifications |
 | Output identities | the provider-owned exact `OutputSpecification` instance bound to its output assembler | duplicate or merely equal specifications |
 | Output materializer | the exact materializer instance carried by the admitted bundle | another compatible materializer instance |
-| Registry-reverification owner | its exact `active_profile`, snapshot prefix, and product-lookup identity, with that lookup retaining the expected Store RuntimeBundle and exact selected source bindings | a Store attribute on the registry service, snapshot-prefix similarity alone, lookup shape, a shared descriptor, or a detached lookup from another Store/profile |
-| Selected registry data | `expected_store.selected_reference_source_data(snapshot_prefix)`, compared as the exact ordered `(snapshot_ref, artifact_ref, source_digest)` tuple retained when the lookup was loaded | copied payload contents, lookup results, matching family text, provider claims, a foreign RuntimeBundle |
+| Registry capability family | the exact `registry_reference_family` object carried by the outer service bundle and selected by admitted profile-provider source; both the SI factory and SI service constructor require `descriptor.reference_family(SI_REGSR_FAMILY_ID)` | generic product-role inference, any merely equal family, arbitrary descriptor-family membership, snapshot-prefix similarity, or the registry service's uncorroborated choice |
+| Registry-reverification owner | its exact `active_profile` and exact outer-bundle `reference_family` binding (including exact `None`); a bound family additionally requires the expected Store RuntimeBundle and exact selected-input identity tuple | a decorative RuntimeBundle for a familyless service, a Store attribute on the service, lookup shape, a shared descriptor, family text alone, or a detached family-bound service from another Store/profile |
+| Selected registry data | `expected_store.selected_reference_source_data(reference_family.snapshot_prefix)`, compared as the exact ordered `(snapshot_ref, artifact_ref, source_digest)` tuple retained by the registry service from the inputs used by its private implementation; exact empty tuple when no family is bound | copied payload contents, lookup results, provider claims, a foreign RuntimeBundle, or decorative data for a familyless capability |
 | Profile policy identity | the exact frozen `PROFILE_POLICY` RuntimeComponent returned by `expected_store.runtime_bundle.component(...)`, retained and parsed by the policy service, plus descriptor-derived required rule refs | a matching `policyId`, ref or digest alone, path-backed loading, foreign or stale bytes, provider aliases |
 | Callable compatibility | Python's inspected bound-call signature against every production-reachable private call form inventoried in this contract | one maximally populated call, `runtime_checkable` presence checks alone, annotations, method-name presence without callability |
-| Registry-reverification input | `ValidationGate`, which first decides whether reverification is required, then supplies an exact frozen request containing scalar claim/selection data only | the provider receiving a `GateContext`, cursor, Store, request id, gate sequence, review-reason list, or mutable claim mapping |
+| Registry-reverification applicability and classification | the admitted profile-owned service, using detached semantic-submission bytes, resolved-binding bytes, normalized event time, its exact capability family, and the current snapshot ref for that family | generic interpretation of `CROP_PROTECTION_PRODUCT`, `registrationRef`, decision number, certificate or holding semantics, or snapshot advance |
+| Registry-reverification input construction | `ValidationGate`, which supplies the exact frozen neutral request but does not interpret profile-specific fields | the provider receiving a `GateContext`, cursor, Store, gate sequence, review-reason list, mutable claim mapping, or generic product lookup |
 | Registry-reverification result | `ValidationGate` acceptance of one exact private frozen `RegistryReverificationOutcome` with an exact closed disposition and disposition-specific fields | provider truthiness, `None`, annotations, mappings, arbitrary objects, `GatePass`, provider-constructed `GateRefusal` |
-| Registry effects | `ValidationGate`, which alone skips an unnecessary call or turns `REVERIFIED`, `REVIEW_REQUIRED`, or `REFUSED` into one correlated success log, one validated copied review reason, or one fixed governed refusal | provider-selected gate/outcome/final outcome, mutable problem containers after copying, provider-written log or review mutation |
+| Registry effects | `ValidationGate`, which alone turns `NO_EFFECT`, `REVERIFIED`, `REVIEW_REQUIRED`, or `REFUSED` into no effect, one correlated success log, one validated copied review reason, or one fixed governed refusal | provider-selected gate/outcome/final outcome, mutable problem containers after copying, provider-written log or review mutation |
 | Applicability success ref | generic `ProfileApplicabilityGate` validation of returned `contextSnapshotId` | provider return annotation or truthiness of the outer result |
 | Materialization success refs | generic `MaterializationGate` validation of returned `basisRef` and `snapshotRef` | provider return annotation or incidental dictionary indexing |
 | Gate success ordering | generic stages after result validation | provider logging, caller claims, inferred success |
@@ -298,6 +319,17 @@ Store-bound descriptor and exact Store.
 `runtime_checkable` protocols remain useful type documentation and structural
 screening, but they do not inspect signatures and therefore do not own callable
 admission. No legacy fallback or alternate validation path remains.
+
+The outer capability-family binding is profile-owned configuration in reviewed
+provider source, not descriptor-driven discovery. The common validator proves
+that the outer bundle, registry service, exact descriptor family object, and
+selected Store inputs agree; it does not decide what that family means. A
+malicious admitted provider that changes both the outer binding and its service
+coherently is an admitted-source compromise, just as one that coherently changes
+a materialization specification. The focused SI factory test therefore pins
+its profile-owned choice to the exact REGSR family, while both composition-path
+hostile tests prove that substituting GERK or FFSNaprave beneath that binding is
+rejected.
 
 ## 6. State machine and ordering
 
@@ -315,7 +347,7 @@ STORE_READY
   -> EXACT_OUTER_AND_SPECIFICATION_TYPES
   -> REQUIRED_SERVICE_SHAPES_AND_EVERY_CALL_FORM
   -> DESCRIPTOR_STORE_CONTEXT_SPECIFICATION_MATERIALIZER_CROSS_BINDINGS
-  -> EXACT_SELECTED_POLICY_AND_REGISTRY_LOOKUP_PROVENANCE
+  -> EXACT_SELECTED_POLICY_AND_CAPABILITY_REFERENCE_PROVENANCE
   -> COMPOSED
 ```
 
@@ -340,24 +372,27 @@ Validation order is fail-closed:
    identities to be the expected Store; require the materializer's `.context`
    identity to be the bundle's exact context assembler;
 6. require descriptor, specification, materializer, registry-reverification,
-   and product-lookup object cross-bindings;
+   and exact optional capability-family object cross-bindings;
 7. resolve the expected `PROFILE_POLICY` component from the expected Store's
    RuntimeBundle and require the policy service to retain that exact component;
-8. require the registry lookup to retain that exact RuntimeBundle, require its
-   prefix to be the registry service's prefix and one descriptor reference-
-   family prefix, and require its immutable selected-source identity tuple to
-   equal the tuple freshly derived from the expected Store; and
+8. require the registry service's `reference_family` to be the exact outer
+   binding and, when non-`None`, the identical object in the descriptor tuple;
+   a bound family requires the exact expected RuntimeBundle and an immutable
+   selected-input identity tuple equal to the tuple freshly derived from the
+   expected Store, while a `None` family requires exact `None` RuntimeBundle
+   provenance and an exact empty tuple; and
 9. require the policy ref to equal the descriptor evidence-policy ref and the
    policy service's recognized refs to include the descriptor's evidence
    policy, profile, pack, and code-binding profile refs.
 
 Missing attributes, non-callables, opaque or incompatible signatures,
 inspection failures, missing provenance, path-backed policy providers, foreign
-or stale policy components, foreign lookups, wrong snapshot prefixes, and
-selected-source tuple mismatches are normalized to `ProfileRuntimeError`.
-Provider methods are not invoked during composition. The validator's one
-read-only selected-reference-source query asks the trusted Store for its
-already selected inputs; it does not call a provider method or select new data.
+or stale policy components, foreign registry services, wrong family objects,
+and selected-input tuple mismatches are normalized to `ProfileRuntimeError`.
+Provider methods are not invoked during composition. For a bound family, the
+validator's one read-only selected-reference-source query asks the trusted
+Store for its already selected inputs; a familyless service makes no such
+query. Neither branch calls a provider method or selects new data.
 
 `GatePipeline.__init__` completes validation before assigning the graph for
 use and before `commit()` can enter `Store.serialized_tx()`. A refused injected
@@ -391,7 +426,6 @@ parameters.
 | materialization resolution | passport output, relying on `twin` and `time_policy` defaults | `resolve_for_use(cur, farm_ref, use_class=value, required_freshness=value, high_consequence=value, recompute_if_needed=value)` |
 | materialization resolution | frozen output, relying on `twin` and `recompute_if_needed` defaults | `resolve_for_use(cur, farm_ref, use_class=value, time_policy=value, required_freshness=value, high_consequence=value)` |
 | registry reverification | operation validation | `run(request)` |
-| registry product lookup | registry-reverification classification | `lookup_by_decision(snapshot_id, decision_number)` |
 | passport output | HTTP route, relying on `allow_recompute` default | `passport_view(farm_ref, requesting_party_ref)` |
 | passport output | supported explicit render mode | `passport_view(farm_ref, requesting_party_ref, allow_recompute=value)` |
 | frozen output | HTTP route, relying on `as_submission` default | `freeze_document_assembly(farm_ref, requesting_party_ref, window_start, window_end)` |
@@ -417,30 +451,40 @@ validators retain their existing internal `GateRefusal | None` convention;
 this change does not create a second result model for them.
 
 `ValidationGate` keeps the service in its existing position immediately after
-`CodeBindingValidator`. The generic gate resolves the verified product binding
-through the existing code-owned helper, resolves the current selected snapshot
-from `ctx.store` and the admitted registry snapshot prefix, and derives the
-captured-against ref exactly as the current validator does. If there is no
-verified product binding, no current or captured snapshot, or no snapshot
-advance, the generic gate skips the service with no registry effect. Otherwise
-it constructs an exact private frozen/slotted
-`RegistryReverificationRequest`. Its fields are:
+`CodeBindingValidator`. Every operation claim that reaches that position calls
+the service exactly once; the generic gate does not decide whether product,
+certificate, holding, or any other profile-specific reverification applies.
+It constructs an exact private frozen/slotted
+`RegistryReverificationRequest` with these fields:
 
-- `decision_number`, a non-empty built-in string or `None`;
-- `current_snapshot_ref`, a non-empty built-in string;
-- `captured_against_snapshot_ref`, a different non-empty built-in string; and
-- `event_time`, the same non-empty built-in normalized event-time string the
-  current SI validator uses.
+- `claim_canonical_bytes`, the non-empty exact built-in bytes produced by the
+  existing `kernel.contracts.canonical_json(ctx.sub).encode("utf-8")` path;
+- `resolved_binding_canonical_bytes`, an exact built-in tuple containing the
+  non-empty exact built-in canonical bytes of every already resolved
+  `AgronomicIdentityBinding` payload, in the submitted reference order;
+- `current_reference_snapshot_ref`, either a non-empty exact built-in string
+  selected by `current_reference_snapshot(...)` for the exact bound capability
+  family, or exact `None` when the service has no family or no current snapshot;
+  and
+- `event_time`, the same non-empty exact built-in normalized event-time string
+  the current SI validator uses.
 
-The generic gate extracts `registrationRef` from the verified binding; a
-missing or empty value becomes `decision_number = None`, preserving the current
-review-required behavior. No other binding content crosses the service seam.
+The existing deterministic JSON serializer is reused only to detach immutable
+call data. These bytes are not persisted, hashed into a new identity, admitted
+as a RuntimeBundle component, or promoted to a canonicalization authority. The
+resolved-binding tuple uses the existing generic, kind-checked
+`sufficiency.resolved_bindings(...)` result after `ReferenceResolutionValidator`
+and `CodeBindingValidator`; it adds no product role or field interpretation to
+generic code. A provider that does not use agronomic identity bindings may
+ignore the empty or irrelevant tuple and classify from its other neutral
+inputs.
 
 The request deliberately contains no `GateContext`, transaction cursor,
-Store, request id, gate sequence, review-reason list, or generic mutation
-callback, and no mutable claim mapping. Request construction, the not-required
-decision, and current-snapshot selection remain code-owned orchestration and
-preserve their current order and inputs.
+Store, gate sequence, review-reason list, generic mutation callback, mutable
+claim mapping, or common lookup object. Generic request construction and
+current-snapshot selection remain code-owned orchestration; applicability,
+captured-snapshot interpretation, profile field meaning, private lookup, and
+classification remain profile-owned.
 
 The request constructor enforces these exact field shapes; a generic coding
 error cannot silently widen what crosses the boundary.
@@ -451,6 +495,7 @@ At this private boundary every call must return the exact frozen/slotted
 only the two optional payload fields shown here:
 
 ```text
+NO_EFFECT       -> problem=None, rationale=None
 REVERIFIED      -> problem=None, rationale=non-empty built-in string
 REVIEW_REQUIRED -> problem=exact RuntimeProblem dict, rationale=None
 REFUSED         -> problem=exact RuntimeProblem dict, rationale=None
@@ -471,13 +516,17 @@ DETACHED_REQUEST_BUILT
   -> EXACT_OUTCOME_AND_CLOSED_DISPOSITION
   -> DISPOSITION_FIELDS_VALIDATED
   -> ONE_CODE_OWNED_EFFECT
+       NO_EFFECT       -> NO LOG, REVIEW REASON, OR REFUSAL
        REVERIFIED      -> ONE VALIDATION/REGISTRY_REVERIFIED LOG
        REVIEW_REQUIRED -> ONE VALIDATED COPIED REVIEW REASON
        REFUSED         -> ONE FIXED VALIDATION REFUSAL AND LOG
 ```
 
-The preceding not-required branch is `NO CALL -> NO EFFECT`; it is not a
-provider-selected disposition.
+`NO_EFFECT` is a provider-selected applicability result with no generic side
+effect. It is not a generic pre-call skip. This lets a provider with no product
+register execute and lawfully decide that a claim has no registry effect, and
+lets another provider perform certificate- or holding-style classification
+without implementing or naming a decision-number lookup.
 
 For `REVIEW_REQUIRED` and `REFUSED`, the generic gate requires `problem` to be
 an exact built-in dictionary, validates it as
@@ -576,9 +625,12 @@ same transaction and immediately before the generic success side effect.
   and output assembler bind the bundle's exact specifications; the output
   assembler binds the bundle's exact materializer; the policy provider retains
   the expected Store RuntimeBundle's exact selected policy component; the
-  registry's exact product lookup retains that RuntimeBundle, its admitted
-  snapshot prefix, and the exact selected-source identity tuple; and policy ref
-  plus required recognized rule refs match the descriptor.
+  registry service retains the exact outer capability-family object and, for a
+  bound family, that RuntimeBundle plus the exact selected-input identity tuple
+  (or, for no family, exact `None` bundle provenance plus an empty tuple); the
+  SI factory and service constructor choose and require the exact REGSR
+  `ReferenceFamily`; and policy ref plus required recognized rule refs match
+  the descriptor.
 - **PRSC-004 — One composition validator.** Provider factory results and
   explicitly injected graphs pass the same complete private validator. An
   injected refusal occurs before a transaction can start.
@@ -594,14 +646,18 @@ same transaction and immediately before the generic success side effect.
   reverification request or result outside the exact closed request/outcome
   model raise `ProfileRuntimeError`, not incidental `AttributeError`,
   `TypeError`, or `KeyError`. The profile service receives no generic mutable
-  carrier. Only `ValidationGate` mutates review reasons or assigns and logs
-  registry success/refusal gate state; no misleading success, malformed review
-  reason, provider-authored refusal, or mismatched log is committed.
+  carrier and owns the applicability decision. Only `ValidationGate` mutates
+  review reasons or assigns and logs registry success/refusal gate state;
+  `NO_EFFECT` is the only silent result, and no misleading success, malformed
+  review reason, provider-authored refusal, or mismatched log is committed.
 - **PRSC-008 — Executable profile neutrality.** A test-only synthetic non-SI
   graph passes real `ProfileApplicabilityGate` and `MaterializationGate`
   execution, receives every invalidation keyword, and produces only synthetic
   profile-local context, materialization, output, package, policy, view, and
-  result-shape identifiers. It never enters the production registration tuple.
+  result-shape identifiers. Its familyless registry service is called and may
+  return `NO_EFFECT` without a product binding, decision number, lookup, or
+  decorative reference data. It never enters the production registration
+  tuple.
 - **PRSC-009 — SI assertion equivalence.** For unchanged inputs, provider-
   loaded and explicitly injected SI services preserve decision outcomes,
   problems, gate names and order, materialization key/specification identities,
@@ -627,20 +683,24 @@ field mutation, mutable production registry, or production switch is used.
 | PRSC-001 | either composition path receives a graph whose policy makes `supported_checks` required, whose invalidator omits `reason_code`, whose recomputer omits `use_class`, or whose nominally optional context, recompute, passport, frozen-output, or resolution parameter is made required despite a production caller omitting it | composition raises `ProfileRuntimeError` before returning services or constructing a pipeline; no transaction begins |
 | PRSC-002 | `GatePipeline(store, runtime_services=...)` receives a lookalike bundle, an equal-but-distinct descriptor, or a non-trusted specification value | constructor raises `ProfileRuntimeError`; no pipeline exists |
 | PRSC-003 | either path receives an exact dataclass with a foreign service descriptor, a different materialization/output specification instance, a different output materializer, wrong policy ref, or one missing required recognized rule ref | composition raises `ProfileRuntimeError` before transaction entry; the foreign service cannot execute |
-| PRSC-003 | loader and explicit-injection tests each compose Store A with a coherent graph built for Store B while both Stores deliberately share the exact descriptor object | common validation rejects the graph before transaction entry; Store B's context, materialization, output, snapshot, or product-lookup state cannot execute under Store A |
+| PRSC-003 | loader and explicit-injection tests each compose Store A with a coherent graph built for Store B while both Stores deliberately share the exact descriptor object | common validation rejects the graph before transaction entry; Store B's context, materialization, output, policy, or registry selected-input state cannot execute under Store A |
 | PRSC-003 | either path receives a same-Store, same-descriptor bundle whose materializer retains context assembler A while the bundle carries distinct compatible assembler B | common validation rejects the split graph before transaction entry; the unrepresented assembler cannot drive recomputation |
 | PRSC-003 | provider-loaded and explicit-injection tests each receive a descriptor-path policy provider, a provider retaining an equal-but-distinct or foreign/stale `PROFILE_POLICY` component with the same `policyId`, or a policy component from another RuntimeBundle | common validation rejects before any policy method is invoked; only the exact expected Store RuntimeBundle component can execute |
-| PRSC-003 | provider-loaded and explicit-injection tests each compose for Store A with a distinct lookup, lookup data loaded from Store/RuntimeBundle B, an absent or mismatched selected-source identity tuple, or a prefix outside or different from the descriptor/registry family | common validation rejects before transaction entry or lookup invocation; no detached or cross-family registry data can execute |
+| PRSC-003 | provider-loaded and explicit-injection tests each compose for Store A with a registry service retaining RuntimeBundle B, absent/mismatched selected-input identities, an equal-but-distinct family, or selected inputs for a family other than its exact outer binding | common validation rejects before transaction entry or service invocation; no detached or cross-family registry data can execute |
+| PRSC-003 | the otherwise normal SI outer bundle retains its exact REGSR capability-family binding, while a substituted registry service is coherently backed by truthful GERK or FFSNaprave selected inputs and names that wrong family | both provider-loaded and explicit-injection paths reject the exact same-descriptor wrong-family graph before transaction entry; descriptor membership and truthful digests cannot override the profile-owned REGSR binding |
+| PRSC-003 | direct construction of the real SI registry service is attempted with the descriptor's exact GERK or FFSNaprave family, a private lookup whose loaded prefix differs from exact REGSR, or a compatibility lookup with no runtime provenance | the SI-owned constructor raises `ProfileRuntimeError`; a coherent wrong-family or detached SI service cannot be produced by the admitted factory |
 | PRSC-004 | the same malformed graph is returned by the provider loader and supplied explicitly | both paths refuse through the common validator; an injected-store transaction counter remains zero |
 | PRSC-005 | `GatePipeline.commit(...)` reaches a signature-compatible context assembler returning `{}`, `{"contextSnapshotId": ""}`, or a non-string ref | `ProfileRuntimeError`; transaction rollback; no committed `APPLICABLE` entry or promotion trace from the attempt |
 | PRSC-006 | an accepted commit reaches a signature-compatible materializer returning a missing, empty, or non-string `basisRef` or `snapshotRef` | `ProfileRuntimeError`; no `UPDATED` entry, false success flag, or committed promotion/materialization effects |
 | PRSC-007 | either composition path receives an absent/non-callable service or a callable whose inspected signature cannot prove every call form | composition raises one explicit `ProfileRuntimeError`; no incidental exception type becomes the boundary contract |
 | PRSC-007 | `GatePipeline.commit(...)` for an operation claim reaches an admitted registry-reverification service returning `None`, `{}`, a non-empty dictionary, an arbitrary falsey/truthy object, `GatePass`, `GateRefusal`, a disposition lookalike, or an exact envelope with an unknown or field-inconsistent disposition | `ProfileRuntimeError` before `VALIDATION/PASS`, `APPLICABLE`, or `UPDATED`; no provider-selected refusal or promotion commits and the transaction leaves no durable effect from the attempt |
 | PRSC-007 | five hostile legacy-style services separately try to write only a durable log through `request.store/request.cur`, append only to `request.gate_sequence`, log then remove the sequence entry, append a malformed value to `request.review_route_reasons`, or mutate an existing review-reason prefix | the exact request exposes none of those carriers; the attempted access is normalized to `ProfileRuntimeError`, prior generic state and both log carriers remain unchanged, and the transaction commits no trace from the attempt |
-| PRSC-007 | a not-required operation reaches the generic registry decision, or a required call returns `REVERIFIED` with a non-empty rationale, `REVIEW_REQUIRED` with a schema-valid registered `WARNING` RuntimeProblem, or `REFUSED` with a schema-valid registered `ERROR` RuntimeProblem | respectively: the service is not called and no registry effect occurs; exactly one correlated `VALIDATION/REGISTRY_REVERIFIED` entry; exactly one deep-copied review reason with the existing prefix unchanged; or exactly one logged `VALIDATION/FAIL_REFERENCE_RESOLUTION` and one `RETAIN_DRAFT` refusal problem |
+| PRSC-007 | an operation reaches a familyless service returning `NO_EFFECT`, or a service returns `REVERIFIED` with a non-empty rationale, `REVIEW_REQUIRED` with a schema-valid registered `WARNING` RuntimeProblem, or `REFUSED` with a schema-valid registered `ERROR` RuntimeProblem | every service is called once; respectively: no registry effect; exactly one correlated `VALIDATION/REGISTRY_REVERIFIED` entry; exactly one deep-copied review reason with the existing prefix unchanged; or exactly one logged `VALIDATION/FAIL_REFERENCE_RESOLUTION` and one `RETAIN_DRAFT` refusal problem |
 | PRSC-007 | registry reverification raises an ordinary exception, returns malformed rationale/problem data, uses an unregistered reason code or wrong severity, or retains and later mutates its original problem dictionary | exceptions and malformed results become `ProfileRuntimeError` before a registry effect; accepted review/refusal state owns a deep copy and never aliases the provider dictionary |
-| PRSC-008 | the synthetic provider is loaded and its real generic stages execute | both stages pass; the observed invalidation arguments are complete; recursive result/log inspection finds no SI or production package identifier; production registrations remain unchanged |
-| PRSC-009 | the same SI scenario is composed through default loading and explicit injection | stable semantic assertions, identities, outputs, receipts, and gate order are equivalent after normalizing only minted IDs/timestamps that were already volatile |
+| PRSC-007 | the exact SI service receives a claim whose captured-against ref is GERK or FFSNaprave while its current ref is REGSR | the service proves both refs belong to its exact REGSR family before private lookup/classification, returns the existing warning-shaped `PRODUCT_BINDING_UNRESOLVED` review result for the cross-family claim, and cannot report `REVERIFIED` |
+| PRSC-008 | the synthetic provider is loaded and its real generic stages execute; its familyless registry service observes the detached request and returns `NO_EFFECT` | both stages pass; the registry service is called without product roles, a decision number, a lookup, or reference-source decoration; the observed invalidation arguments are complete; recursive request/result/log inspection finds no SI or production package identifier; production registrations remain unchanged |
+| PRSC-008 | a profile-neutral test service with no product lookup reads a neutral claim marker and returns a valid certificate-style `REVIEW_REQUIRED` outcome | generic code calls it and applies exactly one copied review reason; neither composition nor request construction demands `CROP_PROTECTION_PRODUCT`, `registrationRef`, `decision_number`, or `lookup_by_decision` |
+| PRSC-009 | the SI factory is inspected through its real loader, and the same SI scenario is composed through default loading and explicit injection | the factory and service bind the exact descriptor REGSR `ReferenceFamily`; stable semantic assertions, identities, outputs, receipts, and gate order are equivalent after normalizing only minted IDs/timestamps that were already volatile |
 | PRSC-010 | production loader or route is asked for `profile_rs_organic_crop`, or a test inspects allowed/active registrations | no descriptor, registration, route, or execution exists; only `profile_si_ffs` remains active and registered |
 
 The full commit-path cases for PRSC-005 and PRSC-006 must inspect committed
@@ -680,32 +740,59 @@ ref, retains that same object as `runtime_component`, and passes only its
 constructor exposes `runtime_component = None`; it cannot manufacture an
 executable provenance claim from a path or caller-supplied byte string.
 
-A private `ProfileRegistryLookup` protocol declares `runtime_bundle`,
-`snapshot_prefix`, immutable `selected_source_bindings`, and the existing
-`lookup_by_decision(snapshot_id, decision_number)` call. The bindings are an
-ordered tuple of exact `(snapshot_ref, artifact_ref, source_digest)` triples
-captured from the same rows used to populate the lookup. Payloads are not
-duplicated into the provenance marker. `ProfileRegistryReverification` gains
-the exact `active_profile`, `snapshot_prefix`, and `product_lookup` bindings
-and declares `run(request) -> RegistryReverificationOutcome`; it no longer
-declares or receives a Store or generic context.
+`ProfileRuntimeServices` adds one field adjacent to
+`registry_reverification`: `registry_reference_family`, whose exact value is
+either one descriptor-owned `ReferenceFamily` object or `None`. It is a single
+private binding for the existing single registry-reverification capability,
+not a capability bag, registry, descriptor extension, discovery key, or claim
+that every provider needs reference data.
 
-`SIProductRegister.load_from_store(...)` obtains the selected rows once, builds
-the lookup indexes and identity tuple from that same local row sequence, and
-publishes the exact RuntimeBundle, prefix, and tuple only for that completed
-load. It does not issue a second selection query to create a self-attestation,
-retain the Store, or alter payload parsing and lookup semantics.
+`ProfileRegistryReverification` declares only the generic composition bindings
+and call that its consumer needs:
+
+- exact `active_profile`;
+- exact `reference_family`, identical to the outer binding including `None`;
+- exact `runtime_bundle` for a bound family or exact `None` for no family;
+- immutable `selected_input_bindings`, an ordered tuple of exact
+  `(snapshot_ref, artifact_ref, source_digest)` triples, or an exact empty tuple
+  for `None`; and
+- `run(request) -> RegistryReverificationOutcome`.
+
+It does not declare a product lookup, decision number, snapshot prefix, Store,
+or generic context. Payloads are not duplicated into the selected-input marker.
+The selected-input tuple states which already selected immutable inputs back
+the service; it is not a lookup API or a second selection authority.
+
+The SI factory and the existing SI-specific registry service constructor are
+the profile-owned semantic authorities for the current capability. They obtain
+and require `descriptor.reference_family(SI_REGSR_FAMILY_ID)`; construction
+with GERK, FFSNaprave, an equal copy, or any other family raises
+`ProfileRuntimeError`. The factory places that exact REGSR object in both the
+outer bundle and registry service. The SI service keeps its existing
+`SIProductRegister` as a private implementation detail. Narrow changes
+to `SIProductRegister.load_from_store(...)` let it obtain the selected rows
+once, build the unchanged private indexes, and retain the exact RuntimeBundle
+and identity tuple from that same local row sequence. The SI registry service
+constructor derives its generic provenance attributes from that exact private
+lookup rather than accepting parallel caller claims, and refuses a lookup whose
+runtime-loaded REGSR prefix is not its exact family's prefix or whose provenance
+is absent. The common protocol never exposes or signature-checks
+`lookup_by_decision(...)`.
 
 Direct compatibility construction has no runtime-bundle provenance and cannot
-compose until this exact Store-loading path has completed; existing direct
-lookup callers remain otherwise unchanged.
+compose until this exact Store-loading path has completed; existing direct SI
+lookup callers remain otherwise unchanged. A familyless synthetic service
+retains `reference_family = None`, `runtime_bundle = None`, and an empty
+selected-input tuple. It needs no reference snapshot, source component, or
+decorative RuntimeBundle binding.
 
 `RegistryReverificationRequest`, `RegistryReverificationDisposition`, and
 `RegistryReverificationOutcome` are the private frozen/slotted request and
 closed result types specified in section 6.3. Their annotations are
-documentation; exact-type, disposition-field, problem-contract, reason-code,
-severity, and copy validation remain mandatory at runtime. They do not add a
-durable type or change code-owned validator results.
+documentation; exact request field, exact-type outcome, disposition-field,
+problem-contract, reason-code, severity, and copy validation remain mandatory
+at runtime. They do not add a durable type or change code-owned validator
+results.
 
 ### 9.2 One graph validator
 
@@ -722,25 +809,48 @@ The validator requires:
 - `materializer.context is context_assembler`.
 
 It also requires the registry-reverification service's exact `active_profile`
-identity to be the Store-bound descriptor and its exact `product_lookup`
-identity to be the lookup whose provenance is checked. It resolves the
-descriptor-named `PROFILE_POLICY` component from
+identity to be the Store-bound descriptor. It resolves the descriptor-named
+`PROFILE_POLICY` component from
 `expected_store.runtime_bundle`, requires
 `policy_provider.runtime_component is expected_component`, and therefore
 rejects descriptor-path, equal-but-distinct, foreign, or stale policy data even
 when `policyId` matches.
 
-For registry data, it requires
-`product_lookup.runtime_bundle is expected_store.runtime_bundle`, exact
-registry/lookup prefix equality, membership of that prefix in the descriptor's
-reference families, and exact equality between
-`product_lookup.selected_source_bindings` and the ordered identity tuple
-derived from `expected_store.selected_reference_source_data(prefix)`. The
-retained value must be an exact built-in tuple containing only exact three-item
-built-in tuples of non-empty built-in strings; a list, tuple subclass, missing
-field, or provider-shaped lookalike is refused. The lookup callable is
-signature-checked but not invoked. Missing provenance and all
+For registry capability provenance, the validator first requires the outer
+`registry_reference_family` to be exact `None` or exact trusted
+`ReferenceFamily`. A non-`None` value must be the identical object, not merely
+an equal value or matching prefix, of one member of
+`descriptor.reference_families`. It then requires:
+
+- `registry_reverification.reference_family is
+  services.registry_reference_family`;
+- `registry_reverification.runtime_bundle` has the conditional value described
+  below; and
+- an exact built-in `selected_input_bindings` tuple containing only exact
+  three-item built-in tuples of non-empty built-in strings.
+
+For a bound family, `runtime_bundle` must be the exact
+`expected_store.runtime_bundle`, and the tuple must exactly equal the ordered
+identities freshly derived from
+`expected_store.selected_reference_source_data(family.snapshot_prefix)`. For
+`None`, `runtime_bundle` must also be exact `None` and the tuple must be exactly
+empty. A list, tuple subclass, missing field, equal-but-distinct family,
+truthful tuple for another family, foreign or decorative RuntimeBundle, or
+provider-shaped lookalike is refused. No private lookup is in
+the common protocol, signature inventory, or validator, and no service method
+is invoked during composition. Missing provenance and all
 inspection/admission failures become `ProfileRuntimeError`.
+
+This cross-binding deliberately does not infer that a descriptor family's
+meaning is suitable for a capability. The admitted profile factory owns that
+semantic selection, and the SI implementation enforces its own exact REGSR
+choice. The SI factory's focused assertion requires its outer binding to be
+`descriptor.reference_family(SI_REGSR_FAMILY_ID)`; construction tests refuse
+GERK and FFSNaprave, while common hostile tests keep the authoritative outer
+binding fixed and prove that wrong-family service substitution fails on both
+composition paths. Inventing a generic family-role vocabulary or duplicating
+the SI identifier in common Kernel validation would create a second semantic
+authority and is forbidden.
 
 The validator preserves the existing private attribute names: the policy
 service binds its profile as `descriptor`, while context, materializer,
@@ -767,39 +877,55 @@ unchanged.
 
 `kernel/validators.py` isolates the provider-owned registry-reverification call
 from the code-owned validator-result convention. After the existing
-`CodeBindingValidator`, `ValidationGate` builds the detached request, invokes
-the service, validates the exact closed outcome from section 6.3, and alone
-applies the corresponding success log, copied review reason, or fixed refusal;
-when the code-owned preconditions say reverification is unnecessary, it makes
-no provider call and applies no effect. All provider exceptions, malformed
-envelopes, dispositions, rationale, problem payloads, reason codes, or
-severities become `ProfileRuntimeError` and rely on the existing transaction
-owner for rollback.
+`CodeBindingValidator`, a code-owned boundary helper builds the detached
+request, invokes the service exactly once, validates the exact closed outcome
+from section 6.3, and alone applies no effect, the corresponding success log,
+copied review reason, or fixed refusal. It does not inspect product roles,
+decision numbers, certificates, holdings, captured snapshot refs, or snapshot
+advance. All provider exceptions, malformed envelopes, dispositions,
+rationale, problem payloads, reason codes, or severities become
+`ProfileRuntimeError` and rely on the existing transaction owner for rollback.
 
-The SI registry-reverification service is descriptor- and lookup-bound when
-constructed. Its retained lookup was populated from the exact Store-selected
-rows and retains their RuntimeBundle, prefix, and immutable source-identity
-tuple. The registry service receives only the new request and returns
-`REVERIFIED` or `REVIEW_REQUIRED` for the two existing SI paths that require a
-call; the generic gate preserves the existing no-action paths without calling
-the provider. `REFUSED` is a supported private outcome but no unchanged SI
-branch is reclassified to it. Code-owned validators keep their existing
-results, all validator and gate positions remain unchanged, and no provider
-can return a nominal `GateRefusal` or mutate generic gate/review carriers
-through its declared input.
+The SI registry-reverification service is descriptor-, exact-REGSR-family-,
+and selected-input-bound when constructed. Its private product lookup was
+populated from the exact Store-selected rows whose RuntimeBundle and immutable
+source identities the service exposes. Within the SI service, and nowhere in
+generic Kernel code,
+the existing D9 logic decodes the detached claim and binding bytes, selects the
+verified `CROP_PROTECTION_PRODUCT` binding, derives its captured-against ref,
+extracts `registrationRef`, and invokes `lookup_by_decision(...)`.
+
+Before any lookup or product classification, the SI service proves that a
+present current ref and a present captured ref both equal its exact REGSR
+family root or begin with that root plus `.`. A cross-family captured ref
+returns `REVIEW_REQUIRED` with the existing warning-severity
+`PRODUCT_BINDING_UNRESOLVED` problem family and can never produce
+`REVERIFIED`; an impossible wrong-family current ref is a
+`ProfileRuntimeError`. Missing/unverified product binding, missing current or
+captured ref, or no snapshot advance returns `NO_EFFECT`. The existing
+confirmable, expired, and unconfirmable branches respectively become
+`REVERIFIED`, `REVIEW_REQUIRED` with `SUPERSEDED_RECORD_USED`, and
+`REVIEW_REQUIRED` with `PRODUCT_BINDING_UNRESOLVED`, preserving their current
+observable rationale/problem content. `REFUSED` is a supported private outcome
+but no unchanged SI branch is reclassified to it.
+
+Code-owned validators keep their existing results, all validator and gate
+positions remain unchanged, and no provider can return a nominal `GateRefusal`
+or mutate generic gate/review carriers through its declared input.
 
 ### 9.4 Synthetic evidence and SI preservation
 
 `kernel/tests/_synthetic_profile_runtime.py` is upgraded to the exact private
 contract. Its assembler and materializer return synthetic refs, and its
 materializer exposes test-only observation of the complete invalidation call.
-Its fake RuntimeBundle contains an exact synthetic policy component and
-synthetic selected reference-source components. Its policy provider retains
-that exact component; its product lookup retains that exact RuntimeBundle,
-synthetic prefix, and selected-source identity tuple; and its registry service
-binds the synthetic descriptor and exact lookup. Every actually Store-backed
-synthetic service retains that same Store, and its materializer retains the
-exact synthetic context assembler. It remains absent from `_REGISTRATIONS`.
+Its fake RuntimeBundle contains the exact synthetic policy component already
+needed for policy provenance and no decorative reference-source component. Its
+policy provider retains that exact component. Its registry service binds the
+synthetic descriptor, declares no reference family or RuntimeBundle provenance,
+retains an empty selected-input tuple, observes only the detached request, and
+returns `NO_EFFECT`. Every actually Store-backed synthetic service retains that
+same Store, and its materializer retains the exact synthetic context assembler.
+It remains absent from `_REGISTRATIONS`.
 
 Focused tests exercise actual generic stages, both composition paths, hostile
 cross-wires/signatures/results, transaction rollback, SI equivalence, legacy-
@@ -811,14 +937,17 @@ owner:
 
 - declared shape in the private protocol;
 - graph coherence at composition;
-- exact runtime-selected policy and lookup provenance at composition;
+- exact runtime-selected policy and capability-bound reference-input
+  provenance at composition;
 - mutation-free registry request and result truth at the generic validation
   consumer;
 - returned-value truth at the generic consumer; and
 - neutrality through executable test evidence.
 
-No new module, registry, schema, durable type, adapter, service abstraction, or
-public surface is needed.
+No new module, registry, schema, durable type, adapter, lookup service,
+capability bag, or public surface is needed. The existing
+`ProfileRegistryReverification` service gains a precise private call contract;
+no second service abstraction is introduced.
 
 ## 10. Elegance audit
 
@@ -827,7 +956,7 @@ public surface is needed.
 - Complete graph validators: one.
 - Composition entry points: two, converging on that validator.
 - Runtime policy component authorities: the expected Store's one RuntimeBundle.
-- Registry selected-source authorities: one existing Store method; the lookup
+- Registry selected-input authorities: one existing Store method; the service
   retains only immutable provenance for comparison.
 - Registry-reverification request builders and closed-outcome interpreters: one
   generic validation gate.
@@ -841,10 +970,11 @@ public surface is needed.
   closed enum; nested mappings remain untrusted until validation and copying.
 - New public abstractions: none.
 - Compatibility surfaces: none.
-- Duplicate semantic payload state: none. The lookup's source-binding tuple is
+- Duplicate semantic payload state: none. The service's selected-input tuple is
   a narrow immutable identity attestation, not a second payload or selection
-  authority. `TypedDict` shapes document existing returned fields and do not
-  create runtime copies.
+  authority. Detached canonical request bytes exist only for one call and are
+  not retained or persisted. `TypedDict` shapes document existing returned
+  fields and do not create runtime copies.
 
 Deletable duplication is the partial type/descriptor validation branch in
 `GatePipeline`. Incidental dictionary indexing at the two success log sites is
@@ -855,10 +985,12 @@ The base commit leaves too little measured headroom for the proposed slice. The
 partial validation branch deleted from `kernel/gates.py` cannot pay for the
 work because that file, like `kernel/stages.py` and `kernel/validators.py`, is
 not in the profile-runtime group. An earlier design was measured at about 255
-service-protocol lines and about 931 complete production-group lines before the
-latest request/outcome and selected-provenance additions. Requiring the old
-ceilings would therefore approve an implementation that is already expected to
-stop.
+service-protocol lines and about 931 complete production-group lines before
+closed request/outcome and selected-input provenance were added. The now-
+rejected product-lookup protocol expanded those ceilings further. Removing
+that common lookup and its synthetic decoration makes a smaller authorization
+possible; retaining its 300/1,060/1,250 limits would preserve avoidable
+headroom for the drift this revision removes.
 
 If this exact contract is approved, Phase B authorizes only these explicit
 ceiling changes in
@@ -866,28 +998,30 @@ ceiling changes in
 
 | Guard | Base lines | Current ceiling | Contract ceiling after approval |
 | --- | ---: | ---: | ---: |
-| `GROUP_BUDGETS["profile runtime"]` | 867 | 900 | 1,060 |
-| `MODULE_BUDGETS["kernel/profile_runtime_services.py"]` | 237 | 250 | 300 |
-| `TEST_MODULE_BUDGETS["kernel/tests/test_profile_runtime_services.py"]` | 769 | shared 800 | 1,250 |
+| `GROUP_BUDGETS["profile runtime"]` | 867 | 900 | 1,050 |
+| `MODULE_BUDGETS["kernel/profile_runtime_services.py"]` | 237 | 250 | 295 |
+| `TEST_MODULE_BUDGETS["kernel/tests/test_profile_runtime_services.py"]` | 769 | shared 800 | 1,200 |
 
-The earlier 975/265 design no longer fits the closed request/outcome types,
-lookup protocol, and exact selected-component provenance required by the latest
-review. The 300-line service ceiling permits at most 63 added lines for the two
-minimum result shapes, complete signatures and ownership declarations, lookup
-protocol, detached request, closed enum, and outcome. This PR additionally
-caps its final `kernel/profile_runtime_provider.py` count at 340 and
+The earlier 975/265 design no longer fits the closed request/outcome types and
+exact selected-component provenance required by review. The 295-line service
+ceiling permits at most 58 added lines for the two minimum result shapes,
+complete signatures and ownership declarations, optional family binding,
+detached request, closed enum, and outcome; it does not budget a lookup
+protocol. This PR additionally caps its final
+`kernel/profile_runtime_provider.py` count at 340 and
 `kernel/profiles/si_ffs/runtime_provider.py` at 100 even though their existing
 repository ceilings are looser. The two group members outside the Phase B file
 boundary remain fixed at their base counts: 251 lines for
 `provider_import_policy.py` and 44 for `manifest_inputs.py`. The resulting
-maximum authorized group spend is therefore 1,035 lines
-(`300 + 340 + 100 + 251 + 44`); the 1,060-line aggregate guard is jointly
-usable and leaves 25 lines of measurement margin without authorizing either
+maximum authorized group spend is therefore 1,030 lines
+(`295 + 340 + 100 + 251 + 44`); the 1,050-line aggregate guard is jointly
+usable and leaves 20 lines of measurement margin without authorizing either
 in-scope module to consume its unrelated historical headroom.
 
-The service-test override provides 481 lines beyond the base for the complete
-parameterized signature, cross-wire, policy/lookup provenance, legacy-mutation,
-closed-outcome, result, transaction, and equivalence programme without moving
+The service-test override provides 431 lines beyond the base for the complete
+parameterized signature, cross-wire, policy/registry provenance, wrong-family,
+neutral-applicability, legacy-mutation, closed-outcome, result, transaction,
+and equivalence programme without moving
 cohesive service-admission evidence into unrelated files or compressing it to
 satisfy a physical-line accident. That allowance may contain only evidence
 mapped to PRSC-001 through PRSC-010 and supporting test helpers used by that
@@ -924,16 +1058,17 @@ draft PR may change only:
   retain, and parse the exact already selected frozen `RuntimeComponent` while
   leaving descriptor-path compatibility behavior unchanged outside executable
   service composition;
-- `kernel/context.py`, only to retain the exact RuntimeBundle, snapshot prefix,
-  and immutable source-identity tuple already used by
-  `SIProductRegister.load_from_store(...)`, without changing selected rows,
-  payloads, indexes, or lookup behavior;
+- `kernel/context.py`, only to retain the exact RuntimeBundle and immutable
+  source-identity tuple already used by `SIProductRegister.load_from_store(...)`
+  so its enclosing SI service can expose generic provenance, without changing
+  selected rows, payloads, indexes, or lookup behavior;
 - `kernel/gates.py`;
 - `kernel/stages.py`;
 - `kernel/validators.py`;
 - `kernel/profiles/si_ffs/runtime_provider.py`, only to pass the exact selected
-  policy component into the policy provider and bind the existing registry-
-  reverification service to its descriptor and provenance-bearing lookup;
+  policy component into the policy provider, select the exact descriptor-owned
+  REGSR `ReferenceFamily`, and bind the existing registry-reverification
+  service plus outer bundle to that same family and generic provenance;
 - `kernel/tests/_synthetic_profile_runtime.py`;
 - `kernel/tests/test_profile_runtime_services.py`;
 - `kernel/tests/test_profile_runtime_neutrality.py`;
@@ -950,8 +1085,9 @@ The permitted `profile_policy.py` and `context.py` edits expose provenance that
 their existing runtime construction paths already possess. They do not move
 policy parsing, reference selection, Store, or RuntimeBundle authority and do
 not make compatibility loaders executable. The SI provider construction edit
-may only thread those exact retained values and the descriptor/lookup binding;
-it may not change snapshot prefixes, product-lookup contents or lookup
+may only thread those exact retained values and the descriptor/family binding;
+its product lookup remains an undeclared SI-private implementation detail. It
+may not change snapshot prefixes, product-lookup contents or lookup
 behavior, policy values or parsing, reference behavior, service ordering,
 active defaults, or any SI result. A test-support edit outside the named files
 requires proof that it is purely mechanical and inside this boundary;
@@ -990,13 +1126,13 @@ claim production readiness.
 | --- | --- | --- | --- | --- |
 | PRSC-001 | service protocols; private signature validator | missing keyword, absent/non-callable method, required policy `supported_checks`, or another default-dependent parameter made required for any minimal call | every inventoried call form binds independently; both composition paths reject incompatible signatures | focused two-module pytest |
 | PRSC-002 | common validator; `GatePipeline.__init__` | lookalike outer type, copied descriptor, wrong spec type | `ProfileRuntimeError` before pipeline construction | focused two-module pytest |
-| PRSC-003 | common Store-aware validator; exact policy-component retention; lookup RuntimeBundle/prefix/source-tuple retention | each descriptor/Store/context/spec/materializer/output/registry/policy/rule cross-wire, including path/foreign/stale policy, foreign lookup, wrong prefix/source tuple, a Store-B graph sharing Store A's descriptor, and a split materializer context, on both paths | every ownership, provenance, or graph mismatch refuses at composition before a transaction or provider call | focused two-module pytest |
+| PRSC-003 | common Store-aware validator; exact policy-component retention; outer capability-family binding; registry RuntimeBundle/family/selected-input retention; SI constructor invariant | each descriptor/Store/context/spec/materializer/output/registry/policy/rule cross-wire, including path/foreign/stale policy, foreign registry bundle, equal or wrong family, wrong selected-input tuple, a Store-B graph sharing Store A's descriptor, a split materializer context, and direct real-SI GERK/FFSNaprave construction | every ownership, provenance, or graph mismatch refuses before a transaction or provider call; SI factory and service bind exact REGSR | focused two-module pytest |
 | PRSC-004 | loader and explicit-injection branch | same validator reached from both; injected transaction counter stays zero | equivalent `ProfileRuntimeError` admission behavior | focused two-module pytest |
 | PRSC-005 | `ProfileApplicabilityGate`; result-ref helper | missing/empty/non-string context ref | no `APPLICABLE`; full transaction rollback | focused hostile tests plus complete Kernel suite |
 | PRSC-006 | `MaterializationGate`; result-ref helper | missing/empty/non-string basis or snapshot ref | no success flag/`UPDATED`; full transaction rollback | focused hostile tests plus complete Kernel suite |
-| PRSC-007 | private request/enum/outcome types; `ValidationGate` not-required decision, detached request construction, exact outcome/problem validation, and sole effect application; result-ref helper | opaque/incompatible callable; malformed runtime mappings; every invalid registry result; five legacy mutation attempts covering durable-only, sequence-only, log/remove, malformed review append, and review-prefix mutation; provider exception; aliasing; a no-call not-required case; and valid success, review, and refusal outcomes | invalid cases expose only `ProfileRuntimeError` and roll back with generic carriers unchanged; the no-call and valid outcomes produce exactly their code-owned effect and copied problems; no misleading success survives | focused hostile tests plus complete Kernel suite |
-| PRSC-008 | synthetic fixture; real generic stages | execute applicability and materialization; recursive identifier scan | synthetic refs logged; complete invalidation args observed; no SI leakage or production registration | `test_profile_runtime_neutrality.py` |
-| PRSC-009 | SI provider's exact policy/lookup provenance and descriptor/lookup registry wiring; unchanged generic ordering | default-loaded versus explicit-injected SI scenario | stable normalized results, materializations, selected data, outputs, receipts, validation outcomes, and gate order; full Kernel suite passes | focused equivalence test plus complete Kernel suite |
+| PRSC-007 | private request/enum/outcome types; detached neutral request construction; exact outcome/problem validation; provider applicability; sole generic effect application; result-ref helper | opaque/incompatible callable; malformed runtime mappings; every invalid registry result; five legacy mutation attempts covering durable-only, sequence-only, log/remove, malformed review append, and review-prefix mutation; provider exception; aliasing; valid no-effect, success, review, and refusal outcomes; SI cross-family captured ref | invalid cases expose only `ProfileRuntimeError` and roll back with generic carriers unchanged; every operation service is called once; lawful outcomes produce exactly their code-owned effect and copied problems; SI classifies only after same-family proof; no misleading success survives | focused hostile tests plus complete Kernel suite |
+| PRSC-008 | synthetic fixture; neutral registry service; real generic stages | execute applicability/materialization; familyless `NO_EFFECT`; certificate-style review service without product API; recursive identifier scan | synthetic refs logged; complete invalidation args observed; neutral services execute without product bindings/lookups or decorative reference data; no SI leakage or production registration | `test_profile_runtime_neutrality.py` |
+| PRSC-009 | SI provider's exact policy/registry provenance, exact REGSR outer/service binding, private lookup, and unchanged generic ordering | exact SI factory-family assertion; default-loaded versus explicit-injected SI scenario | stable normalized results, materializations, selected data, outputs, receipts, validation outcomes, and gate order; full Kernel suite passes | focused equivalence test plus complete Kernel suite |
 | PRSC-010 | existing registration/selection/architecture authorities | Serbia load/route refusal; registration/default assertions; forbidden-file diff; asymmetric extraction failure-set comparison | single-active-SI, no new extraction failure path, only explained removals caused by permitted edits, revised architecture ceilings, and all non-effects preserved | architecture, manifest, extraction, package, inventory, and diff checks |
 
 ### 13.1 Phase A verification
@@ -1068,9 +1204,11 @@ git status --short
 ```
 
 The focused command must contain the hostile composition, default-dependent
-signature, exact policy/lookup provenance, closed registry outcome, five legacy
-registry-mutation attempts, problem-copy, result-shape, rollback, synthetic
-neutrality, SI equivalence, legacy-policy exclusion, and Serbia cases. The
+signature, exact policy/registry provenance, exact REGSR and wrong-family
+bindings, detached neutral request, `NO_EFFECT`, certificate-style non-product
+classification, closed registry outcome, five legacy registry-mutation
+attempts, problem-copy, result-shape, rollback, synthetic neutrality, SI
+equivalence, legacy-policy exclusion, and Serbia cases. The
 complete Kernel run is required for unchanged SI materialization, output,
 receipt, and gate-order evidence. Generated historical executed-evidence files
 must not change as a test side effect.
@@ -1127,13 +1265,20 @@ and must not conceal a dirty tracked worktree.
 - Require the policy provider to retain the expected Store RuntimeBundle's
   exact selected `PROFILE_POLICY` component; matching refs, ids, digests, paths,
   or foreign bytes are not substitutes for exact component identity.
-- Bind registry reverification to the exact active descriptor and exact
-  provenance-bearing product lookup; bind that lookup to the expected
-  RuntimeBundle, descriptor family prefix, and selected-source identity tuple.
+- Bind registry reverification to the exact active descriptor and exact outer
+  optional `ReferenceFamily`; require the expected RuntimeBundle and selected-
+  input identity tuple only for a bound family, and exact absent/empty
+  provenance for no family. Keep every lookup and domain interpretation
+  private to the profile service.
+- Make admitted profile source the semantic authority for the optional
+  capability family, pin the SI factory and SI service constructor to the
+  descriptor's exact REGSR family, and let generic validation prove only outer/
+  service/descriptor/Store coherence. Do not add a common family-role or
+  product vocabulary.
 - Give registry reverification only a frozen detached request with no generic
-  mutable carrier, let the generic gate skip not-required work, and admit only
-  the exact closed outcome states `REVERIFIED`, `REVIEW_REQUIRED`, and
-  `REFUSED` when a call is required.
+  mutable carrier, call it for every operation that reaches its fixed position,
+  and admit only the exact closed outcome states `NO_EFFECT`, `REVERIFIED`,
+  `REVIEW_REQUIRED`, and `REFUSED`.
 - Let `ValidationGate` validate every outcome and copied problem and exclusively
   author the corresponding no-op, success log, review reason, or fixed refusal.
 - Treat explicit injection as a private graph handoff whose production caller
@@ -1155,7 +1300,8 @@ and must not conceal a dirty tracked worktree.
 ### Open decisions
 
 None. The exact-head review choices about default-dependent call forms, Store
-and context ownership, exact policy and lookup provenance, mutation-free
+and context ownership, exact policy and capability-bound selected-input
+provenance, profile-owned applicability/family choice, mutation-free neutral
 registry input, closed outcome/effect semantics, registry descriptor identity,
 explicit-injection provenance, jointly usable architecture ceilings, and
 asymmetric extraction-baseline handling are closed above.
@@ -1183,17 +1329,29 @@ asymmetric extraction-baseline handling are closed above.
   components. This revision removes the generic mutable carrier from the
   service call, makes the generic gate the sole effect author, and adds exact
   policy-component and lookup-provenance checks plus the requested hostile
-  cases. It makes no claim of clearance before a new exact-head review.
+  cases. Head `e23872030e02d119a5695cb6c49cdd52d730847e` then received a
+  [formal review with two Blockers](https://github.com/samovers/OFARM2/pull/362#pullrequestreview-5114622747):
+  the common boundary had become an SI-shaped product-decision lookup and the
+  capability had no authoritative exact-family binding. This revision removes
+  all product lookup, product role, decision-number, and generic applicability
+  logic from the common contract; adds provider-owned `NO_EFFECT`; binds the
+  service to one exact optional outer `ReferenceFamily` plus Store-selected
+  input identities; pins the SI provider and service constructor to exact
+  REGSR; and adds familyless, certificate-style, GERK, FFSNaprave, and cross-
+  family hostile evidence. It
+  makes no claim of clearance before a new exact-head review.
 - Should-fixes: the [same-head focused review comment](https://github.com/samovers/OFARM2/pull/362#issuecomment-5540642541)
   found that the 950/265 ceilings were not jointly spendable and that exact
   extraction-set equality could stop a correct synthetic-fixture edit. The
   following revision used 975/265 coupled ceilings; the latest blocker-driven
-  type/provenance additions supersede those with the bounded, jointly usable
-  1,060/300 limits and stricter per-PR module caps in section 10. Section 13.2
-  permits only explained removals while refusing every new failure path.
-- Independence: these review artifacts were posted by the PR-author account.
-  Their findings are incorporated, but they do not supply independent Phase A
-  clearance.
+  type/provenance additions first required bounded 1,060/300 limits. Removal of
+  the rejected common lookup now reduces those to the jointly usable 1,050/295
+  limits and the 1,200 focused-test cap in section 10. Section 13.2 permits only
+  explained removals while refusing every new failure path.
+- Account provenance: these review artifacts were posted by the PR-author
+  account. Their findings are incorporated as exact-head technical review, but
+  they are not represented as independent authorship. The task user's explicit
+  approval remains the separate Phase B authority required by this workflow.
 - Follow-ups: #161, only after #160 is implemented, reviewed, and merged.
   Optional unification of `descriptor` and `active_profile` naming is a separate
   future refactor, is not required here, and has no issue or implementation in
@@ -1203,10 +1361,10 @@ asymmetric extraction-baseline handling are closed above.
 
 ### Merge stop rule
 
-Phase B must not begin until an independent exact-head Phase A review finds no
-demonstrated in-scope Blocker and the task user explicitly approves this exact
-contract. Approval authorizes only bounded implementation in the same named
-draft PR; it does not authorize merge.
+Phase B must not begin until an exact-head Phase A review finds no demonstrated
+in-scope Blocker and the task user explicitly approves this exact contract.
+Approval authorizes only bounded implementation in the same named draft PR; it
+does not authorize merge.
 
 After implementation, the PR must not merge until every invariant has the
 mapped evidence and no demonstrated Blocker remains. New ideas, Preferences,
@@ -1221,7 +1379,8 @@ Stop before editing runtime code and request a new or amended contract if:
 2. unchanged SI behavior, output, materialization identity, receipt, or gate
    order cannot remain assertion-equivalent;
 3. a public plugin system, dynamic discovery, descriptor-controlled import,
-   mutable registry, capability bag, or profile composition becomes necessary;
+   mutable registry, capability bag, generic family-role vocabulary,
+   multi-family registry capability, or profile composition becomes necessary;
 4. a Serbian descriptor, provider, fixture, or activation becomes necessary;
 5. D22/#240 provider import or bytecode authority must change;
 6. a schema, migration, manifest, `ActiveArtifactSet`, evidence lane,
