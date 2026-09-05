@@ -22,8 +22,13 @@ without implementation effect
 **Phase A comparison base:**
 `fcb729b62c365b833c58b0f4ef759aa877bc0ced`
 
-**Named draft implementation PR:** pending creation from
+**Named draft implementation PR:**
+[#364](https://github.com/samovers/OFARM2/pull/364), from
 `delivery/issue-363-runtime-bundle-selector`
+
+**Exact Phase A head:** the commit containing this exact RFC; its immutable
+hash is recorded in the live PR description after publication. A commit cannot
+embed its own hash without changing that hash.
 
 **Phase A review-head boundary:** this RFC only
 
@@ -1060,7 +1065,8 @@ The required order is:
 
 1. commit this RFC alone on the named branch;
 2. open one Draft implementation PR for issue #363;
-3. bind that PR number and exact Phase A head into this RFC and PR description;
+3. bind that PR number into this RFC and bind the resulting exact Phase A head
+   into the live PR description;
 4. review that exact head to zero demonstrated Blockers;
 5. display a live decision card that matches the committed RFC;
 6. receive the designated architect's exact approval as the entire visible
