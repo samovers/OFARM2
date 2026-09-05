@@ -8,7 +8,8 @@ Checks, in order:
    deliberately small JSON Schema subset validator (the subset the OFARM
    machine contracts actually use: type, const, enum, required, properties,
    Boolean additionalProperties, pattern, items, item/length bounds, oneOf,
-   local references, date-time format, and numeric bounds).
+   local references within one schema resource, date-time format, and numeric
+   bounds). Draft 2020-12 is the only supported explicit dialect.
 4. the non-default temporal-governance coordinate, carrier matrix,
    intervention carrier-selection, governed-command, and RuntimeBundle carrier
    candidates satisfy their semantic and non-activation contracts; and
@@ -28,12 +29,12 @@ import subprocess
 import sys
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlsplit
 
 PKG = Path(__file__).resolve().parent.parent
 
-ANNOTATION_KEYWORDS = frozenset({
-    "$schema", "$id", "title", "$comment", "description",
-})
+ANNOTATION_KEYWORDS = frozenset({"title", "$comment", "description"})
+IDENTIFICATION_KEYWORDS = frozenset({"$schema", "$id"})
 APPLICATOR_KEYWORDS = frozenset({
     "$ref", "$defs", "properties", "items", "oneOf",
 })
@@ -42,12 +43,16 @@ ASSERTION_KEYWORDS = frozenset({
     "minItems", "maxItems", "minLength", "format", "minimum", "maximum",
 })
 SUPPORTED_KEYWORDS = (
-    ANNOTATION_KEYWORDS | APPLICATOR_KEYWORDS | ASSERTION_KEYWORDS
+    ANNOTATION_KEYWORDS
+    | IDENTIFICATION_KEYWORDS
+    | APPLICATOR_KEYWORDS
+    | ASSERTION_KEYWORDS
 )
 SUPPORTED_TYPES = frozenset({
     "object", "array", "string", "number", "integer", "boolean", "null",
 })
 SUPPORTED_FORMATS = frozenset({"date-time"})
+SUPPORTED_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 
 TYPES = {
     "object": dict, "array": list, "string": str,
@@ -100,6 +105,18 @@ def _json_number(value: object) -> bool:
     return isinstance(value, float) and math.isfinite(value)
 
 
+def _json_integer(value: object) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    return (
+        isinstance(value, float)
+        and math.isfinite(value)
+        and value.is_integer()
+    )
+
+
 def _json_equal(left: object, right: object) -> bool:
     if isinstance(left, bool) or isinstance(right, bool):
         return isinstance(left, bool) and isinstance(right, bool) and left == right
@@ -123,7 +140,7 @@ def _json_equal(left: object, right: object) -> bool:
 
 
 def _non_negative_integer(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+    return _json_integer(value) and value >= 0
 
 
 def _decode_pointer_part(part: str, *, ref: str) -> str:
@@ -146,6 +163,51 @@ def resolve_ref(ref: str, root, *, path: str = "#"):
     return node
 
 
+def _supported_root_identifier(value: object) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    if any(
+        ord(character) < 0x21
+        or ord(character) > 0x7E
+        or character in '"<>\\^`{|}'
+        for character in value
+    ):
+        return False
+    if re.search(r"%(?![0-9A-Fa-f]{2})", value):
+        return False
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return False
+    return bool(parsed.scheme) and not parsed.fragment
+
+
+def _check_identification_keywords(schema, *, root, path: str) -> None:
+    if schema is not root:
+        if "$id" in schema:
+            raise SubsetError(
+                f"nested $id at {path}/$id declares an unsupported "
+                "embedded schema resource"
+            )
+        if "$schema" in schema:
+            raise SubsetError(
+                f"nested $schema at {path}/$schema declares an unsupported "
+                "schema dialect"
+            )
+        return
+
+    if "$schema" in schema and schema["$schema"] != SUPPORTED_DIALECT:
+        raise SubsetError(
+            f"unsupported root $schema {schema['$schema']!r} at {path}/$schema; "
+            f"only {SUPPORTED_DIALECT!r} is supported"
+        )
+    if "$id" in schema and not _supported_root_identifier(schema["$id"]):
+        raise SubsetError(
+            f"root $id at {path}/$id must be an absolute URI without a "
+            "non-empty fragment"
+        )
+
+
 def _check_schema_subset(schema, *, root, path: str, ref_stack: tuple[str, ...]):
     if not isinstance(schema, dict):
         raise SubsetError(f"schema at {path} must be an object")
@@ -153,6 +215,8 @@ def _check_schema_subset(schema, *, root, path: str, ref_stack: tuple[str, ...])
     for key in schema:
         if key not in SUPPORTED_KEYWORDS:
             raise SubsetError(f"unsupported schema keyword {key!r} at {path}")
+
+    _check_identification_keywords(schema, root=root, path=path)
 
     if "type" in schema:
         value = schema["type"]
@@ -299,7 +363,7 @@ def validate(instance, schema, path="$", root=None, _ref_stack=()):
         if expected == "number":
             ok = _json_number(instance)
         elif expected == "integer":
-            ok = isinstance(instance, int) and not isinstance(instance, bool)
+            ok = _json_integer(instance)
         else:
             ok = isinstance(instance, TYPES[expected])
         if not ok:
