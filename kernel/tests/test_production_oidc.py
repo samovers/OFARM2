@@ -586,7 +586,13 @@ def test_failed_expiry_refresh_cools_down_without_using_stale_keys():
     client.close()
 
 
-def test_waiter_uses_post_lock_time_after_failed_refresh():
+@pytest.mark.parametrize(
+    ("completion_time", "waiter_succeeds"),
+    [(99.5, True), (101, False)],
+)
+def test_waiter_uses_post_lock_time_after_failed_refresh(
+    completion_time, waiter_succeeds
+):
     private, jwk = _key("kid-retained")
     unknown_private, _unknown_jwk = _key("kid-refresh-trigger")
     clock = _Clock(90)
@@ -607,7 +613,8 @@ def test_waiter_uses_post_lock_time_after_failed_refresh():
         return httpx.Response(200, content=_jwks(jwk))
 
     client = _client(handler)
-    verifier = ProductionOidcVerifier(_config(), client, monotonic=clock)
+    config = _config(refresh_cooldown_seconds=1)
+    verifier = ProductionOidcVerifier(config, client, monotonic=clock)
     verifier.initialize()
     observed_lock = _ObservedLock()
     verifier._lock = observed_lock
@@ -621,24 +628,27 @@ def test_waiter_uses_post_lock_time_after_failed_refresh():
         assert refresh_started.wait(timeout=5)
         waiter = executor.submit(verifier.verify, _token(private, "kid-retained"))
         assert observed_lock.wait_for_attempts(2, timeout=5)
-        clock.value = 101
+        clock.value = completion_time
         release_refresh.set()
 
         with pytest.raises(AuthenticationError) as refresh_raised:
             refresh.result(timeout=5)
         assert refresh_raised.value.outcome is AuthenticationOutcome.VERIFIER_UNAVAILABLE
-        with pytest.raises(AuthenticationError) as waiter_raised:
-            waiter.result(timeout=5)
-        assert waiter_raised.value.outcome is AuthenticationOutcome.VERIFIER_UNAVAILABLE
+        if waiter_succeeds:
+            assert waiter.result(timeout=5).subject == "subject:Exact-01"
+        else:
+            with pytest.raises(AuthenticationError) as waiter_raised:
+                waiter.result(timeout=5)
+            assert waiter_raised.value.outcome is AuthenticationOutcome.VERIFIER_UNAVAILABLE
         assert calls == 2
 
-        clock.value = 103
+        clock.value = completion_time + 0.5
         with pytest.raises(AuthenticationError) as cooldown_raised:
             verifier.verify(_token(private, "kid-retained"))
         assert cooldown_raised.value.outcome is AuthenticationOutcome.VERIFIER_UNAVAILABLE
         assert calls == 2
 
-        clock.value = 104
+        clock.value = completion_time + 1
         assert verifier.verify(_token(private, "kid-retained")).subject
         assert calls == 3
     finally:
@@ -666,7 +676,8 @@ def test_waiters_use_successful_replacement_generation():
         return httpx.Response(200, content=_jwks(new_jwk))
 
     client = _client(handler)
-    verifier = ProductionOidcVerifier(_config(), client, monotonic=clock)
+    config = _config(refresh_cooldown_seconds=1)
+    verifier = ProductionOidcVerifier(config, client, monotonic=clock)
     verifier.initialize()
     observed_lock = _ObservedLock()
     verifier._lock = observed_lock

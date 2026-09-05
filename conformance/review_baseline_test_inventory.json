@@ -8481,7 +8481,12 @@
       "sourcePath": "kernel/tests/test_production_oidc.py"
     },
     {
-      "nodeid": "kernel/tests/test_production_oidc.py::test_waiter_uses_post_lock_time_after_failed_refresh",
+      "nodeid": "kernel/tests/test_production_oidc.py::test_waiter_uses_post_lock_time_after_failed_refresh[101-False]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_waiter_uses_post_lock_time_after_failed_refresh[99.5-True]",
       "sourceModule": "kernel.tests.test_production_oidc",
       "sourcePath": "kernel/tests/test_production_oidc.py"
     },
@@ -20596,8 +20601,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "7ef7878e1dd5996abb40b3afe750d9bae548eea669189e06ad39c81820bc92b2",
-  "entryCount": 4119,
+  "entriesSha256": "a94ce7d919c5917abd437eba360508a09ffc7c824ac1116d2bb0033a7c0ed44b",
+  "entryCount": 4120,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
