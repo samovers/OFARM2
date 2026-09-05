@@ -1147,6 +1147,95 @@ def test_descriptor_declared_files_are_exact_catalog_closure(tmp_path):
         _copied_checked_builder(root, checked_in).build()
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    (
+        ("profileInstanceFiles", "/tmp/absolute.json", "absolute path"),
+        ("profileInstanceFiles", "../outside.json", r"contain '\.\.'"),
+        ("profileInstanceFiles", "missing.json", "existing file"),
+        ("profileInstanceFiles", "directory", "existing file"),
+        ("evidencePolicyPath", "/tmp/absolute.json", "absolute path"),
+        ("evidencePolicyPath", "../outside.json", r"contain '\.\.'"),
+        ("evidencePolicyPath", "missing.json", "existing file"),
+        ("evidencePolicyPath", "directory", "existing file"),
+    ),
+)
+def test_builder_profile_paths_remain_fail_closed(
+    tmp_path, field, value, message
+):
+    root = tmp_path / "checkout"
+    checked_in = _copy_checked_selection(root)
+    profile_root = root / "profile_si_ffs"
+    (profile_root / "directory").mkdir()
+    descriptor_path = profile_root / "runtime_profile_descriptor.json"
+    descriptor = json.loads(descriptor_path.read_text())
+    if field == "profileInstanceFiles":
+        descriptor[field][0] = value
+    else:
+        descriptor[field] = value
+    descriptor_path.write_text(json.dumps(descriptor))
+
+    with pytest.raises(
+        RuntimeBundleError,
+        match=f"selected profile descriptor is inconsistent: .*{message}",
+    ):
+        _copied_checked_builder(root, checked_in).build()
+
+
+@pytest.mark.parametrize("field", ("profileInstanceFiles", "evidencePolicyPath"))
+def test_builder_profile_paths_reject_symlink_escape(tmp_path, field):
+    root = tmp_path / "checkout"
+    checked_in = _copy_checked_selection(root)
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}")
+    profile_root = root / "profile_si_ffs"
+    (profile_root / "escape.json").symlink_to(outside)
+    descriptor_path = profile_root / "runtime_profile_descriptor.json"
+    descriptor = json.loads(descriptor_path.read_text())
+    if field == "profileInstanceFiles":
+        descriptor[field][0] = "escape.json"
+    else:
+        descriptor[field] = "escape.json"
+    descriptor_path.write_text(json.dumps(descriptor))
+
+    with pytest.raises(
+        RuntimeBundleError,
+        match="selected profile descriptor is inconsistent: .*escapes the profile root",
+    ):
+        _copied_checked_builder(root, checked_in).build()
+
+
+def test_reference_source_path_still_matches_descriptor_examples(tmp_path):
+    root = tmp_path / "checkout"
+    checked_in = _copy_checked_selection(root)
+    selected = next(
+        spec for spec in checked_in.component_specs
+        if (
+            spec.role is RuntimeComponentRole.REFERENCE_SOURCE
+            and spec.logical_ref.startswith("artifact:")
+        )
+    )
+    alternate_path = "profile_si_ffs/alternate-reference-source.json"
+    shutil.copy2(root / selected.relative_path, root / alternate_path)
+    specs = tuple(
+        replace(spec, relative_path=alternate_path)
+        if spec.logical_ref == selected.logical_ref
+        else spec
+        for spec in checked_in.component_specs
+    )
+
+    with pytest.raises(
+        RuntimeBundleError,
+        match="reference source path does not match its artifact ref",
+    ):
+        RuntimeBundleBuilder(
+            root,
+            specs,
+            checked_in.contract_schema_paths,
+            require_profile_descriptor=True,
+        ).build()
+
+
 def test_contract_registry_schema_omitted_from_catalog_refuses(tmp_path):
     root = _selected_root(tmp_path / "checkout")
     for relative_directory in (
