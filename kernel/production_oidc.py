@@ -366,8 +366,8 @@ class ProductionOidcVerifier:
         return generation
 
     def _key(self, kid: str) -> RSAPublicKey:
-        now = self._monotonic()
         with self._lock:
+            now = self._monotonic()
             generation = self._generation
             if generation is None:
                 raise _unavailable("production OIDC verifier is not initialized")
