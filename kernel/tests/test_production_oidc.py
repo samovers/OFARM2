@@ -6,7 +6,7 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from threading import Barrier
+from threading import Barrier, Condition, Event, Lock
 
 import httpx
 import jwt
@@ -35,6 +35,30 @@ class _Clock:
 
     def __call__(self) -> float:
         return self.value
+
+
+class _ObservedLock:
+    def __init__(self):
+        self._mutex = Lock()
+        self._condition = Condition()
+        self._attempts = 0
+
+    def __enter__(self):
+        with self._condition:
+            self._attempts += 1
+            self._condition.notify_all()
+        self._mutex.acquire()
+        return self
+
+    def __exit__(self, _exc_type, _exc, _traceback):
+        self._mutex.release()
+
+    def wait_for_attempts(self, count: int, timeout: float) -> bool:
+        with self._condition:
+            return self._condition.wait_for(
+                lambda: self._attempts >= count,
+                timeout=timeout,
+            )
 
 
 class _BytesStream(httpx.SyncByteStream):
@@ -546,7 +570,7 @@ def test_failed_expiry_refresh_cools_down_without_using_stale_keys():
     client = _client(handler)
     verifier = ProductionOidcVerifier(_config(), client, monotonic=clock)
     verifier.initialize()
-    clock.value = 11
+    clock.value = 10
 
     for _attempt in range(2):
         with pytest.raises(AuthenticationError) as raised:
@@ -562,6 +586,115 @@ def test_failed_expiry_refresh_cools_down_without_using_stale_keys():
     client.close()
 
 
+def test_waiter_uses_post_lock_time_after_failed_refresh():
+    private, jwk = _key("kid-retained")
+    unknown_private, _unknown_jwk = _key("kid-refresh-trigger")
+    clock = _Clock(90)
+    refresh_started = Event()
+    release_refresh = Event()
+    calls = 0
+
+    def handler(request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(200, content=_jwks(jwk))
+        if calls == 2:
+            refresh_started.set()
+            if not release_refresh.wait(timeout=5):
+                raise AssertionError("refresh release was not signaled")
+            raise httpx.ConnectError("offline", request=request)
+        return httpx.Response(200, content=_jwks(jwk))
+
+    client = _client(handler)
+    verifier = ProductionOidcVerifier(_config(), client, monotonic=clock)
+    verifier.initialize()
+    observed_lock = _ObservedLock()
+    verifier._lock = observed_lock
+    clock.value = 99
+    executor = ThreadPoolExecutor(max_workers=2)
+    refresh = executor.submit(
+        verifier.verify,
+        _token(unknown_private, "kid-refresh-trigger"),
+    )
+    try:
+        assert refresh_started.wait(timeout=5)
+        waiter = executor.submit(verifier.verify, _token(private, "kid-retained"))
+        assert observed_lock.wait_for_attempts(2, timeout=5)
+        clock.value = 101
+        release_refresh.set()
+
+        with pytest.raises(AuthenticationError) as refresh_raised:
+            refresh.result(timeout=5)
+        assert refresh_raised.value.outcome is AuthenticationOutcome.VERIFIER_UNAVAILABLE
+        with pytest.raises(AuthenticationError) as waiter_raised:
+            waiter.result(timeout=5)
+        assert waiter_raised.value.outcome is AuthenticationOutcome.VERIFIER_UNAVAILABLE
+        assert calls == 2
+
+        clock.value = 103
+        with pytest.raises(AuthenticationError) as cooldown_raised:
+            verifier.verify(_token(private, "kid-retained"))
+        assert cooldown_raised.value.outcome is AuthenticationOutcome.VERIFIER_UNAVAILABLE
+        assert calls == 2
+
+        clock.value = 104
+        assert verifier.verify(_token(private, "kid-retained")).subject
+        assert calls == 3
+    finally:
+        release_refresh.set()
+        executor.shutdown(wait=True, cancel_futures=True)
+        client.close()
+
+
+def test_waiters_use_successful_replacement_generation():
+    old_private, old_jwk = _key("kid-old")
+    new_private, new_jwk = _key("kid-new")
+    clock = _Clock(90)
+    refresh_started = Event()
+    release_refresh = Event()
+    calls = 0
+
+    def handler(_request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(200, content=_jwks(old_jwk))
+        refresh_started.set()
+        if not release_refresh.wait(timeout=5):
+            raise AssertionError("refresh release was not signaled")
+        return httpx.Response(200, content=_jwks(new_jwk))
+
+    client = _client(handler)
+    verifier = ProductionOidcVerifier(_config(), client, monotonic=clock)
+    verifier.initialize()
+    observed_lock = _ObservedLock()
+    verifier._lock = observed_lock
+    clock.value = 99
+    new_token = _token(new_private, "kid-new")
+    old_token = _token(old_private, "kid-old")
+    executor = ThreadPoolExecutor(max_workers=3)
+    refresh = executor.submit(verifier.verify, new_token)
+    try:
+        assert refresh_started.wait(timeout=5)
+        new_waiter = executor.submit(verifier.verify, new_token)
+        old_waiter = executor.submit(verifier.verify, old_token)
+        assert observed_lock.wait_for_attempts(3, timeout=5)
+        clock.value = 101
+        release_refresh.set()
+
+        assert refresh.result(timeout=5).subject == "subject:Exact-01"
+        assert new_waiter.result(timeout=5).subject == "subject:Exact-01"
+        with pytest.raises(AuthenticationError) as old_raised:
+            old_waiter.result(timeout=5)
+        assert old_raised.value.outcome is AuthenticationOutcome.VERIFICATION_REFUSED
+        assert calls == 2
+    finally:
+        release_refresh.set()
+        executor.shutdown(wait=True, cancel_futures=True)
+        client.close()
+
+
 def test_expiry_causes_only_one_refresh_for_an_unknown_kid():
     private, jwk = _key("kid-current")
     calls = 0
@@ -575,7 +708,7 @@ def test_expiry_causes_only_one_refresh_for_an_unknown_kid():
     client = _client(handler)
     verifier = ProductionOidcVerifier(_config(), client, monotonic=clock)
     verifier.initialize()
-    clock.value = 11
+    clock.value = 10
 
     with pytest.raises(AuthenticationError):
         verifier.verify(_token(private, "kid-unknown-after-expiry"))

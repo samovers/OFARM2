@@ -464,6 +464,69 @@ def test_runtime_bundle_resolution_is_cached_by_identity_and_closes(
         unit.resolve_commit_operation_claim_draft_runtime_bundle()
 
 
+def test_resolved_bundle_has_no_public_install_or_transfer_path(
+    principal,
+    monkeypatch,
+):
+    first_connection = _Connection(principal)
+    second_connection = _Connection(principal)
+    first_expected = _trusted_token()
+    second_expected = _trusted_token()
+    calls = []
+
+    def resolve(connection, tenant_id):
+        calls.append((connection, tenant_id))
+        if connection is first_connection:
+            return first_expected
+        if connection is second_connection:
+            return second_expected
+        raise AssertionError("unexpected tenant connection")
+
+    monkeypatch.setattr(
+        tenant_uow_module,
+        "_resolve_commit_operation_claim_draft_runtime_bundle",
+        resolve,
+    )
+    first_manager = TenantUnitOfWorkManager(
+        _Pool(first_connection),
+        _Minter(),
+    )
+    second_manager = TenantUnitOfWorkManager(
+        _Pool(second_connection),
+        _Minter(),
+    )
+
+    with first_manager.unit_of_work(principal) as first_unit:
+        first = first_unit.resolve_commit_operation_claim_draft_runtime_bundle()
+        assert first is first_expected
+
+    with second_manager.unit_of_work(principal) as second_unit:
+        assert {name for name in dir(second_unit) if not name.startswith("_")} == {
+            "batch",
+            "begin_batch",
+            "binding",
+            "resolve_commit_operation_claim_draft_runtime_bundle",
+        }
+        with pytest.raises(TypeError):
+            second_unit.resolve_commit_operation_claim_draft_runtime_bundle(first)
+        with pytest.raises(RuntimeError, match="governed batch already exists"):
+            second_unit.begin_batch(first)  # type: ignore[arg-type]
+        for public_member in (
+            "batch",
+            "binding",
+            "resolve_commit_operation_claim_draft_runtime_bundle",
+        ):
+            with pytest.raises(AttributeError):
+                setattr(second_unit, public_member, first)
+        second = second_unit.resolve_commit_operation_claim_draft_runtime_bundle()
+
+    assert second is second_expected and second is not first
+    assert calls == [
+        (first_connection, principal.authority.tenant_id),
+        (second_connection, principal.authority.tenant_id),
+    ]
+
+
 def test_caught_selector_refusal_is_terminal_and_forces_rollback(
     principal,
     monkeypatch,

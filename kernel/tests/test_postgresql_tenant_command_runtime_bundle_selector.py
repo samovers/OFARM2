@@ -10,7 +10,18 @@ import psycopg
 import pytest
 
 from deployment.postgresql import tenant_command_runtime_bundle_selection as control
+from deployment.postgresql.audit_contract import SECURITY_AUDIT_CONTRACT
 from kernel.application_runtime import ApplicationRuntime
+from kernel.request_router_audit import RequestRouterAuditProducer
+from kernel.security_audit import CorrelationHmac
+from kernel.security_audit_client import PreTenantAuditClient
+from kernel.security_audit_health import SecurityAuditHealth
+from kernel.security_audit_runtime import (
+    PreTenantAuditRuntime,
+    _audit_producer_connection_factory,
+    _live_gap_controller,
+    _producer,
+)
 from kernel.tenant_command_runtime_bundle_selector import (
     CommandRuntimeBundleSelectionRefused,
     _fixed_binding,
@@ -24,6 +35,8 @@ from kernel.tenant_uow import (
     TenantUnitOfWorkManager,
     create_tenant_connection_pool,
 )
+from kernel.tests.postgresql_audit_support import audit_service_fixture  # noqa: F401
+from kernel.tests.postgresql_audit_support import role_dsn
 from kernel.tests.test_postgresql_tenant_migration import (
     CapabilityKeyAuthority,
     TenantAuthority,
@@ -47,12 +60,11 @@ _RESOLVER = (
 )
 
 
-class _RuntimeAudit:
-    def __init__(self, manager: TenantUnitOfWorkManager) -> None:
-        self._manager = manager
-
-    def unit_of_work(self, principal):
-        return self._manager.unit_of_work(principal)
+class _FixedCorrelationHmac:
+    def create(self) -> CorrelationHmac:
+        version = SECURITY_AUDIT_CONTRACT.correlation_hmac.key_version
+        assert version is not None
+        return CorrelationHmac(b"r" * 32, version)
 
 
 @pytest.fixture(scope="module")
@@ -112,9 +124,13 @@ def manager(
     value.close()
 
 
-def _tenant_state(target: TenantTarget, tenant_id: UUID) -> tuple[int, int, int]:
+def _tenant_state(
+    target: TenantTarget,
+    tenant_id: UUID,
+    audit_state: dict[str, object],
+) -> tuple[object, ...]:
     with psycopg.connect(target.target_admin_dsn) as connection:
-        return connection.execute(
+        tenant = connection.execute(
             """
             SELECT
                 (SELECT count(*)
@@ -127,17 +143,68 @@ def _tenant_state(target: TenantTarget, tenant_id: UUID) -> tuple[int, int, int]
             """,
             (tenant_id, tenant_id, tenant_id),
         ).fetchone()
+    with psycopg.connect(str(audit_state["target_admin_dsn"])) as connection:
+        audit = connection.execute(
+            "SELECT count(*) FROM ofarm_security.operational_security_event"
+        ).fetchone()
+    assert tenant is not None and audit is not None
+    return (*tenant, audit[0])
 
 
-def _runtime(manager: TenantUnitOfWorkManager) -> ApplicationRuntime:
-    return ApplicationRuntime(
-        _RuntimeAudit(manager),  # type: ignore[arg-type]
+def _runtime(
+    manager: TenantUnitOfWorkManager,
+    audit_state: dict[str, object],
+    monkeypatch,
+) -> tuple[ApplicationRuntime, list[tuple[object, object]], object]:
+    observed = []
+    original = RequestRouterAuditProducer.unit_of_work
+
+    def observe(request_router, principal):
+        observed.append((request_router, principal))
+        return original(request_router, principal)
+
+    monkeypatch.setattr(RequestRouterAuditProducer, "unit_of_work", observe)
+    health = SecurityAuditHealth()
+    request_router_client = PreTenantAuditClient(
+        _audit_producer_connection_factory(
+            role_dsn(audit_state, "ofarm_security_request_router_producer_login")
+        ),
+        _producer("REQUEST_ROUTER"),
+    )
+    request_router = RequestRouterAuditProducer(
+        manager,
+        _live_gap_controller(
+            role_dsn(audit_state, "ofarm_security_audit_control_login")
+        ).request_router_sink(
+            health.request_router_sink(
+                _FixedCorrelationHmac(),
+                request_router_client,
+            )
+        ),
+    )
+    runtime = ApplicationRuntime(
+        PreTenantAuditRuntime(
+            object(),  # type: ignore[arg-type]
+            request_router,
+            health,
+        ),
         object(),  # type: ignore[arg-type]
         object(),  # type: ignore[arg-type]
         object(),  # type: ignore[arg-type]
         object(),  # type: ignore[arg-type]
         manager,
     )
+    return runtime, observed, request_router
+
+
+def _set_app_resolver_execute(target: TenantTarget, *, granted: bool) -> None:
+    action = "GRANT" if granted else "REVOKE"
+    direction = "TO" if granted else "FROM"
+    with psycopg.connect(target.target_admin_dsn) as connection:
+        connection.execute("SET ROLE ofarm_owner")
+        connection.execute(
+            f"{action} EXECUTE ON FUNCTION {_RESOLVER} {direction} ofarm_app"
+        )
 
 
 def test_application_runtime_resolves_exact_bundle_once_without_a_write(
@@ -147,9 +214,15 @@ def test_application_runtime_resolves_exact_bundle_once_without_a_write(
     selected_bundle,
     active_selection,
     manager: TenantUnitOfWorkManager,
+    migrated_audit_service,
+    monkeypatch,
 ) -> None:
     del key_authority
-    before = _tenant_state(target, tenant_authority.tenant_id)
+    before = _tenant_state(
+        target,
+        tenant_authority.tenant_id,
+        migrated_audit_service,
+    )
     principal = _principal(target, tenant_authority)
     with psycopg.connect(target.role_dsn("ofarm_app")) as connection:
         _install_test_bound_context(connection, tenant_authority)
@@ -164,7 +237,12 @@ def test_application_runtime_resolves_exact_bundle_once_without_a_write(
         )
         _validate_closure(_fixed_binding(), loaded)
 
-    with _runtime(manager).tenant_unit_of_work(principal) as unit:
+    runtime, observed, request_router = _runtime(
+        manager,
+        migrated_audit_service,
+        monkeypatch,
+    )
+    with runtime.tenant_unit_of_work(principal) as unit:
         resolved = (
             unit.resolve_commit_operation_claim_draft_runtime_bundle()
         )
@@ -190,7 +268,12 @@ def test_application_runtime_resolves_exact_bundle_once_without_a_write(
             component.canonical_bytes for component in selected_bundle.components
         )
 
-    assert _tenant_state(target, tenant_authority.tenant_id) == before
+    assert observed == [(request_router, principal)]
+    assert _tenant_state(
+        target,
+        tenant_authority.tenant_id,
+        migrated_audit_service,
+    ) == before
     with pytest.raises(RuntimeError, match="closed"):
         unit.resolve_commit_operation_claim_draft_runtime_bundle()
 
@@ -346,18 +429,95 @@ def test_other_tenant_absence_is_one_opaque_refusal(
     target: TenantTarget,
     other_tenant_authority: TenantAuthority,
     active_selection,
+    manager: TenantUnitOfWorkManager,
+    migrated_audit_service,
+    monkeypatch,
 ) -> None:
     del active_selection
     with psycopg.connect(target.role_dsn("ofarm_app")) as connection:
         _install_test_bound_context(connection, other_tenant_authority)
         assert connection.execute(f"SELECT * FROM {_RESOLVER}").fetchall() == []
-        with pytest.raises(CommandRuntimeBundleSelectionRefused) as raised:
-            _resolve_commit_operation_claim_draft_runtime_bundle(
-                connection,
-                other_tenant_authority.tenant_id,
+    before = _tenant_state(
+        target,
+        other_tenant_authority.tenant_id,
+        migrated_audit_service,
+    )
+    principal = _principal(target, other_tenant_authority)
+    runtime, observed, request_router = _runtime(
+        manager,
+        migrated_audit_service,
+        monkeypatch,
+    )
+    with runtime.tenant_unit_of_work(principal) as unit:
+        for _attempt in range(2):
+            with pytest.raises(CommandRuntimeBundleSelectionRefused) as raised:
+                unit.resolve_commit_operation_claim_draft_runtime_bundle()
+            assert str(raised.value) == raised.value.outcome
+            assert raised.value.__cause__ is None
+        with pytest.raises(RuntimeError, match="rollback-only"):
+            unit.begin_batch(
+                GovernedBatchRequest(
+                    f"batch-selector-absent-{uuid4().hex}",
+                    "SELECTOR_ABSENT_FALLBACK",
+                    f"request-selector-absent-{uuid4().hex}",
+                    other_tenant_authority.runtime_bundle_digest,
+                )
             )
-    assert str(raised.value) == raised.value.outcome
-    assert raised.value.__cause__ is None
+
+    assert observed == [(request_router, principal)]
+    assert _tenant_state(
+        target,
+        other_tenant_authority.tenant_id,
+        migrated_audit_service,
+    ) == before
+
+
+def test_database_read_failure_stays_opaque_and_rolls_back_without_audit(
+    target: TenantTarget,
+    tenant_authority: TenantAuthority,
+    active_selection,
+    manager: TenantUnitOfWorkManager,
+    migrated_audit_service,
+    monkeypatch,
+) -> None:
+    del active_selection
+    before = _tenant_state(
+        target,
+        tenant_authority.tenant_id,
+        migrated_audit_service,
+    )
+    principal = _principal(target, tenant_authority)
+    runtime, observed, request_router = _runtime(
+        manager,
+        migrated_audit_service,
+        monkeypatch,
+    )
+    _set_app_resolver_execute(target, granted=False)
+    try:
+        with runtime.tenant_unit_of_work(principal) as unit:
+            for _attempt in range(2):
+                with pytest.raises(CommandRuntimeBundleSelectionRefused) as raised:
+                    unit.resolve_commit_operation_claim_draft_runtime_bundle()
+                assert str(raised.value) == raised.value.outcome
+                assert raised.value.__cause__ is None
+            with pytest.raises(RuntimeError, match="rollback-only"):
+                unit.begin_batch(
+                    GovernedBatchRequest(
+                        f"batch-selector-db-failure-{uuid4().hex}",
+                        "SELECTOR_DATABASE_FAILURE_FALLBACK",
+                        f"request-selector-db-failure-{uuid4().hex}",
+                        tenant_authority.runtime_bundle_digest,
+                    )
+                )
+    finally:
+        _set_app_resolver_execute(target, granted=True)
+
+    assert observed == [(request_router, principal)]
+    assert _tenant_state(
+        target,
+        tenant_authority.tenant_id,
+        migrated_audit_service,
+    ) == before
 
 
 def test_database_and_uow_ordering_guards_refuse_after_batch(

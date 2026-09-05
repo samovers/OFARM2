@@ -15,30 +15,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .profile_selection_validation import (
+    ProfileSelectionValidationError,
+    validate_profile_descriptor_document,
+    validate_profile_selection_documents,
+)
+
 DESCRIPTOR_FILENAME = "runtime_profile_descriptor.json"
 DESCRIPTOR_VERSION = "ofarm.profile-runtime-descriptor.local.v0_1"
 
 OMIT_FROM_CONTEXT = "OMIT_FROM_CONTEXT"
 REFUSE_CONTEXT = "REFUSE_CONTEXT"
-_MISSING_BEHAVIORS = {OMIT_FROM_CONTEXT, REFUSE_CONTEXT}
 
 _REF_RE = re.compile(r"^[a-z][a-z0-9_-]*:[A-Za-z0-9._:-]+$")
-_FAMILY_RE = re.compile(r"^[a-z][a-z0-9_.-]*$")
-
-_DESCRIPTOR_KEYS = {
-    "descriptorVersion",
-    "profileRef",
-    "packRef",
-    "packActivationSetRef",
-    "activeArtifactSetRef",
-    "codeBindingProfileRef",
-    "evidencePolicyRef",
-    "evidencePolicyPath",
-    "profileInstanceFiles",
-    "referenceFamilies",
-    "contextSnapshotIdPrefix",
-}
-_DESCRIPTOR_REQUIRED = _DESCRIPTOR_KEYS
 
 ROUTE_STATUS_ACTIVE = "ACTIVE"
 ROUTE_STATUS_DRAFT = "DRAFT"
@@ -50,26 +39,6 @@ _ROUTE_STATUSES = {
     ROUTE_STATUS_RETIRED,
     ROUTE_STATUS_REVOKED,
 }
-
-_REFERENCE_FAMILY_KEYS = {
-    "familyId",
-    "snapshotPrefix",
-    "dataFamily",
-    "requiredForNowContext",
-    "requiredForAsOfContext",
-    "missingFamilyBehaviorNow",
-    "missingFamilyBehaviorAsOf",
-    "shippedSnapshotRef",
-}
-_REFERENCE_FAMILY_REQUIRED = {
-    "familyId",
-    "snapshotPrefix",
-    "requiredForNowContext",
-    "requiredForAsOfContext",
-    "missingFamilyBehaviorNow",
-    "missingFamilyBehaviorAsOf",
-}
-
 
 class ProfileRuntimeError(RuntimeError):
     """The active profile descriptor is missing, malformed, or incoherent."""
@@ -553,7 +522,24 @@ def load_profile_runtime_descriptor(
         doc = json.loads(path.read_text())
     except (OSError, ValueError) as exc:
         raise ProfileRuntimeError(f"profile runtime descriptor unreadable at {path}: {exc}") from exc
-    profile_instance_files, families = _validated_descriptor_document(doc)
+    try:
+        validated = validate_profile_descriptor_document(doc)
+    except ProfileSelectionValidationError as exc:
+        raise ProfileRuntimeError(str(exc)) from exc
+    profile_instance_files = list(validated.profile_instance_files)
+    families = tuple(
+        ReferenceFamily(
+            family_id=family.family_id,
+            snapshot_prefix=family.snapshot_prefix,
+            data_family=family.data_family,
+            required_for_now_context=family.required_for_now_context,
+            required_for_as_of_context=family.required_for_as_of_context,
+            missing_family_behavior_now=family.missing_family_behavior_now,
+            missing_family_behavior_as_of=family.missing_family_behavior_as_of,
+            shipped_snapshot_ref=family.shipped_snapshot_ref,
+        )
+        for family in validated.reference_families
+    )
 
     evidence_policy_path = _existing_profile_file(root, doc["evidencePolicyPath"], "evidencePolicyPath")
     profile_instance_paths = tuple(
@@ -566,8 +552,7 @@ def load_profile_runtime_descriptor(
         profile_instance_files,
         profile_instance_paths,
     )
-    _validate_active_spine(doc, payloads)
-    _validate_shipped_reference_refs(families, payloads)
+    validate_profile_runtime_selection_documents(doc, payloads)
 
     return ProfileRuntimeDescriptor(
         profile_root=root,
@@ -592,44 +577,13 @@ def validate_profile_runtime_selection_documents(
     profile_instance_documents: Sequence[Any],
 ) -> None:
     """Validate the path-independent active spine retained by a runtime bundle."""
-    _files, families = _validated_descriptor_document(descriptor_document)
     try:
-        payloads = list(profile_instance_documents)
-    except TypeError as exc:
-        raise ProfileRuntimeError(
-            "profile instance documents must be a sequence"
-        ) from exc
-    if any(not isinstance(payload, dict) for payload in payloads):
-        raise ProfileRuntimeError("profile instance documents must be JSON objects")
-    _validate_active_spine(descriptor_document, payloads)
-    _validate_shipped_reference_refs(families, payloads)
-
-
-def _validated_descriptor_document(
-    doc: Any,
-) -> tuple[list[str], tuple[ReferenceFamily, ...]]:
-    if not isinstance(doc, dict):
-        raise ProfileRuntimeError("profile runtime descriptor must be a JSON object")
-    _reject_unknown(doc, _DESCRIPTOR_KEYS, "descriptor")
-    _require(doc, _DESCRIPTOR_REQUIRED, "descriptor")
-    if doc["descriptorVersion"] != DESCRIPTOR_VERSION:
-        raise ProfileRuntimeError(
-            f"unsupported descriptorVersion {doc['descriptorVersion']!r}; "
-            f"expected {DESCRIPTOR_VERSION!r}")
-    for field in (
-        "profileRef",
-        "packRef",
-        "packActivationSetRef",
-        "activeArtifactSetRef",
-        "codeBindingProfileRef",
-        "evidencePolicyRef",
-        "contextSnapshotIdPrefix",
-    ):
-        _validate_ref(doc[field], field)
-    files = _string_list(doc["profileInstanceFiles"], "profileInstanceFiles")
-    if len(files) != len(set(files)):
-        raise ProfileRuntimeError("profileInstanceFiles contains duplicate entries")
-    return files, _reference_families(doc["referenceFamilies"])
+        validate_profile_selection_documents(
+            descriptor_document,
+            profile_instance_documents,
+        )
+    except ProfileSelectionValidationError as exc:
+        raise ProfileRuntimeError(str(exc)) from exc
 
 
 def _discoverable_profile_packages(package_root: Path) -> tuple[tuple[str, Path], ...]:
@@ -851,27 +805,9 @@ def _reject_duplicate_descriptor_refs(
             seen[value] = candidate.package_name
 
 
-def _reject_unknown(doc: dict[str, Any], allowed: set[str], label: str) -> None:
-    unknown = sorted(set(doc) - allowed)
-    if unknown:
-        raise ProfileRuntimeError(f"{label} contains unknown field(s): {unknown}")
-
-
-def _require(doc: dict[str, Any], required: set[str], label: str) -> None:
-    missing = sorted(required - set(doc))
-    if missing:
-        raise ProfileRuntimeError(f"{label} missing required field(s): {missing}")
-
-
 def _validate_ref(value: Any, field: str) -> str:
     if not isinstance(value, str) or not _REF_RE.fullmatch(value):
         raise ProfileRuntimeError(f"{field} is not a valid OFARM-style ref: {value!r}")
-    return value
-
-
-def _validate_family_id(value: Any, field: str) -> str:
-    if not isinstance(value, str) or not _FAMILY_RE.fullmatch(value):
-        raise ProfileRuntimeError(f"{field} is not a valid reference family id: {value!r}")
     return value
 
 
@@ -892,86 +828,6 @@ def _existing_profile_file(root: Path, rel: Any, field: str) -> Path:
     if not resolved.is_file():
         raise ProfileRuntimeError(f"{field} does not name an existing file: {rel!r}")
     return resolved
-
-
-def _string_list(value: Any, field: str) -> list[str]:
-    if not isinstance(value, list) or not value or not all(isinstance(i, str) for i in value):
-        raise ProfileRuntimeError(f"{field} must be a non-empty list of strings")
-    return value
-
-
-def _reference_families(value: Any) -> tuple[ReferenceFamily, ...]:
-    if not isinstance(value, list) or not value:
-        raise ProfileRuntimeError("referenceFamilies must be a non-empty list")
-    families = []
-    seen_ids: set[str] = set()
-    seen_prefixes: set[str] = set()
-    for i, item in enumerate(value):
-        label = f"referenceFamilies[{i}]"
-        if not isinstance(item, dict):
-            raise ProfileRuntimeError(f"{label} must be an object")
-        _reject_unknown(item, _REFERENCE_FAMILY_KEYS, label)
-        _require(item, _REFERENCE_FAMILY_REQUIRED, label)
-        family_id = _validate_family_id(item["familyId"], f"{label}.familyId")
-        prefix = _validate_ref(item["snapshotPrefix"], f"{label}.snapshotPrefix")
-        if family_id in seen_ids:
-            raise ProfileRuntimeError(f"duplicate reference family id {family_id!r}")
-        if prefix in seen_prefixes:
-            raise ProfileRuntimeError(f"duplicate reference snapshot prefix {prefix!r}")
-        seen_ids.add(family_id)
-        seen_prefixes.add(prefix)
-        data_family = item.get("dataFamily")
-        if data_family is not None:
-            _validate_family_id(data_family, f"{label}.dataFamily")
-        required_now = _bool(item["requiredForNowContext"], f"{label}.requiredForNowContext")
-        required_as_of = _bool(item["requiredForAsOfContext"], f"{label}.requiredForAsOfContext")
-        behavior_now = _missing_behavior(item["missingFamilyBehaviorNow"],
-                                         f"{label}.missingFamilyBehaviorNow")
-        behavior_as_of = _missing_behavior(item["missingFamilyBehaviorAsOf"],
-                                           f"{label}.missingFamilyBehaviorAsOf")
-        _assert_required_behavior(required_now, behavior_now, f"{label}.NOW")
-        _assert_required_behavior(required_as_of, behavior_as_of, f"{label}.AS_OF")
-        shipped = item.get("shippedSnapshotRef")
-        if shipped is not None:
-            _validate_ref(shipped, f"{label}.shippedSnapshotRef")
-            if not _matches_family(shipped, prefix):
-                raise ProfileRuntimeError(
-                    f"{label}.shippedSnapshotRef {shipped!r} does not match prefix {prefix!r}")
-        families.append(ReferenceFamily(
-            family_id=family_id,
-            snapshot_prefix=prefix,
-            data_family=data_family,
-            required_for_now_context=required_now,
-            required_for_as_of_context=required_as_of,
-            missing_family_behavior_now=behavior_now,
-            missing_family_behavior_as_of=behavior_as_of,
-            shipped_snapshot_ref=shipped,
-        ))
-    return tuple(families)
-
-
-def _bool(value: Any, field: str) -> bool:
-    if not isinstance(value, bool):
-        raise ProfileRuntimeError(f"{field} must be a boolean")
-    return value
-
-
-def _missing_behavior(value: Any, field: str) -> str:
-    if value not in _MISSING_BEHAVIORS:
-        raise ProfileRuntimeError(f"{field} must be one of {sorted(_MISSING_BEHAVIORS)}")
-    return value
-
-
-def _assert_required_behavior(required: bool, behavior: str, field: str) -> None:
-    expected = REFUSE_CONTEXT if required else OMIT_FROM_CONTEXT
-    if behavior != expected:
-        raise ProfileRuntimeError(
-            f"{field} required flag and missing behavior disagree: "
-            f"required={required!r}, behavior={behavior!r}, expected {expected!r}")
-
-
-def _matches_family(snapshot_ref: str, prefix: str) -> bool:
-    return snapshot_ref == prefix or snapshot_ref.startswith(prefix + ".")
 
 
 def _validate_policy_ref(path: Path, expected_ref: str) -> None:
@@ -1001,72 +857,3 @@ def _load_profile_instance_payloads(
                 f"profile instance file {rel!r} must be a JSON object")
         payloads.append(payload)
     return payloads
-
-
-def _validate_active_spine(doc: dict[str, Any], payloads: list[dict[str, Any]]) -> None:
-    activation = _payload_by_id(payloads, "packActivationSetId", doc["packActivationSetRef"])
-    artifact = _payload_by_id(payloads, "activeArtifactSetId", doc["activeArtifactSetRef"])
-    profile = _payload_by_id(payloads, "agronomicCodeBindingProfileId",
-                             doc["codeBindingProfileRef"])
-
-    if activation.get("activePackRefs") != [doc["packRef"]]:
-        raise ProfileRuntimeError(
-            "PackActivationSet must declare exactly one active pack matching packRef")
-    if activation.get("activeProfileRefs") != [doc["profileRef"]]:
-        raise ProfileRuntimeError(
-            "PackActivationSet must declare exactly one active profile matching profileRef")
-    if artifact.get("activePackRefs") != [doc["packRef"]]:
-        raise ProfileRuntimeError(
-            "ActiveArtifactSet must declare exactly one active pack matching packRef")
-    if artifact.get("activeProfileRefs") != [doc["profileRef"]]:
-        raise ProfileRuntimeError(
-            "ActiveArtifactSet must declare exactly one active profile matching profileRef")
-    if doc["packRef"] not in activation.get("activePackRefs", []):
-        raise ProfileRuntimeError("packRef is not active in the PackActivationSet")
-    if doc["profileRef"] not in activation.get("activeProfileRefs", []):
-        raise ProfileRuntimeError("profileRef is not active in the PackActivationSet")
-    if doc["packActivationSetRef"] not in artifact.get("sourcePackActivationSetRefs", []):
-        raise ProfileRuntimeError("ActiveArtifactSet does not source the PackActivationSet")
-    if set(artifact.get("activePackRefs", [])) != set(activation.get("activePackRefs", [])):
-        raise ProfileRuntimeError("ActiveArtifactSet activePackRefs do not match PackActivationSet")
-    if set(artifact.get("activeProfileRefs", [])) != set(activation.get("activeProfileRefs", [])):
-        raise ProfileRuntimeError(
-            "ActiveArtifactSet activeProfileRefs do not match PackActivationSet")
-    if doc["codeBindingProfileRef"] not in artifact.get("activeArtifactRefs", []):
-        raise ProfileRuntimeError("ActiveArtifactSet does not deploy the code-binding profile")
-    if doc["evidencePolicyRef"] not in artifact.get("activeArtifactRefs", []):
-        raise ProfileRuntimeError("ActiveArtifactSet does not deploy the evidence policy")
-    if profile.get("profileState") != "ACTIVE":
-        raise ProfileRuntimeError("code-binding profile is not ACTIVE")
-    profile_scope = profile.get("profileScope")
-    if not isinstance(profile_scope, dict):
-        raise ProfileRuntimeError(
-            "code-binding profile profileScope must be an object")
-    pack_refs = _string_list(
-        profile_scope.get("packRefs"),
-        "code-binding profile profileScope.packRefs",
-    )
-    if pack_refs != [doc["packRef"]]:
-        raise ProfileRuntimeError(
-            "code-binding profile profileScope.packRefs must match descriptor packRef")
-
-
-def _payload_by_id(payloads: list[dict[str, Any]], id_field: str, expected: str) -> dict[str, Any]:
-    matches = [p for p in payloads if p.get(id_field) == expected]
-    if len(matches) != 1:
-        raise ProfileRuntimeError(
-            f"expected exactly one profile instance with {id_field}={expected!r}, "
-            f"found {len(matches)}")
-    return matches[0]
-
-
-def _validate_shipped_reference_refs(
-    families: tuple[ReferenceFamily, ...],
-    payloads: list[dict[str, Any]],
-) -> None:
-    snapshots = {p.get("referenceSnapshotId") for p in payloads if p.get("referenceSnapshotId")}
-    for family in families:
-        if family.shipped_snapshot_ref and family.shipped_snapshot_ref not in snapshots:
-            raise ProfileRuntimeError(
-                f"shipped snapshot {family.shipped_snapshot_ref!r} for family "
-                f"{family.family_id!r} is not in profileInstanceFiles")

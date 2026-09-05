@@ -2346,6 +2346,86 @@
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://[2001:db8::1]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://[2001:db8::1]:8443/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://[v1.a:b]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://example.test/a%5Bb%5D]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://example.test/schema#]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://example.test/schema?filter=a/b?c]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://example.test:8443/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://user:password@example.test/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[mailto:John.Doe@example.com]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[urn:example:test]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_refuses_nested_schema_resources_before_validation[full-validator-invalid]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_refuses_nested_schema_resources_before_validation[full-validator-valid]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_rejects_integer_number_one_of_overlap",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_rejects_reviewed_malformed_root_identifiers[https://a@b@c/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_rejects_reviewed_malformed_root_identifiers[https://example.test/a[b]]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_rejects_reviewed_malformed_root_identifiers[https://example.test:abc/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_process_rejects_bound_non_finite_number",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
@@ -2471,12 +2551,107 @@
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
     {
-      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_every_declared_annotation_keyword_is_inert",
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_every_declared_assertion_keyword_is_executable",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
     {
-      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_every_declared_assertion_keyword_is_executable",
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_every_declared_descriptive_annotation_keyword_is_inert",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_instance_valued_data_is_not_treated_as_a_schema_declaration[const-data]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_instance_valued_data_is_not_treated_as_a_schema_declaration[enum-data]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_instance_valued_data_is_not_treated_as_a_schema_declaration[property-names]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_and_number_one_of_counts_json_schema_matches[1-2]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_and_number_one_of_counts_json_schema_matches[1.0-2]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_and_number_one_of_counts_json_schema_matches[1.5-1]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_and_number_one_of_counts_json_schema_matches[True-0]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_semantics_apply_beneath_properties_and_local_refs",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_type_uses_finite_mathematical_value[-2.0-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_type_uses_finite_mathematical_value[-inf-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_type_uses_finite_mathematical_value[0.0-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_type_uses_finite_mathematical_value[1-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_type_uses_finite_mathematical_value[1.0-True]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_type_uses_finite_mathematical_value[1.5-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_type_uses_finite_mathematical_value[False-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_type_uses_finite_mathematical_value[True-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_type_uses_finite_mathematical_value[inf-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integer_type_uses_finite_mathematical_value[nan-False]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_integral_exponent_notation_uses_integer_value_semantics",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
@@ -2492,6 +2667,11 @@
     },
     {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_invalid_local_ref_fails_closed[contracts/schema.json]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_large_integer_does_not_require_float_conversion",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
@@ -2517,6 +2697,91 @@
     },
     {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_local_ref_may_be_reused_on_independent_paths",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://2001:db8::1/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://[2001:db8::1]suffix/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://[2001:db8::zz]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://[v1.]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://[vG.bad]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://example.test/schema?filter=[value]]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://example.test:/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://example.test:80:90/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://user[name]@example.test/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_nested_resources_and_dialects_fail_before_instance_evaluation[$defs-$id]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_nested_resources_and_dialects_fail_before_instance_evaluation[$defs-$schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_nested_resources_and_dialects_fail_before_instance_evaluation[items-$id]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_nested_resources_and_dialects_fail_before_instance_evaluation[items-$schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_nested_resources_and_dialects_fail_before_instance_evaluation[oneOf-$id]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_nested_resources_and_dialects_fail_before_instance_evaluation[oneOf-$schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_nested_resources_and_dialects_fail_before_instance_evaluation[properties-$id]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_nested_resources_and_dialects_fail_before_instance_evaluation[properties-$schema]",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
@@ -2626,6 +2891,26 @@
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_reviewed_malformed_root_identifiers_fail_preflight[https://a@b@c/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_reviewed_malformed_root_identifiers_fail_preflight[https://example.test/a[b]]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_reviewed_malformed_root_identifiers_fail_preflight[https://example.test:abc/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_root_identification_and_dialect_headers_remain_optional",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_strict_json_loader_rejects_non_json_numbers[-Infinity]",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
@@ -2637,6 +2922,111 @@
     },
     {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_strict_json_loader_rejects_non_json_numbers[NaN]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identification_and_dialect_declarations",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://[2001:db8::1]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://[2001:db8::1]:8443/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://[v1.a:b]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://example.test/a%5Bb%5D]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://example.test/schema#]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://example.test/schema?filter=a/b?c]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://example.test:8443/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://user:password@example.test/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[mailto:John.Doe@example.com]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[urn:example:test]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_root_declarations_fail_closed[$id-None]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_root_declarations_fail_closed[$id-]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_root_declarations_fail_closed[$id-https://example.test/%ZZ]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_root_declarations_fail_closed[$id-https://example.test/invalid percent]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_root_declarations_fail_closed[$id-https://example.test/root#fragment]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_root_declarations_fail_closed[$id-relative/root]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_root_declarations_fail_closed[$schema-None]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_root_declarations_fail_closed[$schema-]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_root_declarations_fail_closed[$schema-https://json-schema.org/draft/2019-09/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_unsupported_or_malformed_root_declarations_fail_closed[$schema-value3]",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
@@ -6421,6 +6811,11 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py::test_database_read_failure_stays_opaque_and_rolls_back_without_audit",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_command_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py::test_new_uow_observes_later_head_without_changing_selection",
       "sourceModule": "kernel.tests.test_postgresql_tenant_command_runtime_bundle_selector",
       "sourcePath": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py"
@@ -8086,6 +8481,16 @@
       "sourcePath": "kernel/tests/test_production_oidc.py"
     },
     {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_waiter_uses_post_lock_time_after_failed_refresh",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_waiters_use_successful_replacement_generation",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_harness_bridge.py::test_profile_harness_declared_modules_have_root_collection_bridges",
       "sourceModule": "kernel.tests.test_profile_harness_bridge",
       "sourcePath": "kernel/tests/test_profile_harness_bridge.py"
@@ -9494,6 +9899,71 @@
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_validation_services_require_explicit_profile_policy",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_complete_bundle_builds_when_runtime_profile_modules_are_refused",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_profile_loader_retains_public_reference_family_identity",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[active-spine-exactly one active pack]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[bad-ref-profileRef]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[descriptor-not-object-must be a JSON object]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[duplicate-family-duplicate reference family]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[duplicate-file-duplicate entries]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[non-object-instance-must be JSON objects]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[profile-scope-profileScope.packRefs]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[shipped-ref-is not in profileInstanceFiles]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[unknown-field-unknown field]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_selection_validation_does_not_mutate_inputs",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_validated_descriptor_is_deterministic_immutable_and_non_mutating",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
     },
     {
       "nodeid": "kernel/tests/test_profile_si_demo_payloads.py::test_d2_identity_payload_facades_match_profile_helpers",
@@ -11341,6 +11811,71 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_accepts_the_closed_module_edges",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_direct_runtime_import[config]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_direct_runtime_import[profile_policy]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_direct_runtime_import[profile_runtime]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[from .profile_runtime import ProfileRuntimeError/n-exact pure import set differs]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[from pathlib import Path/n-exact pure import set differs]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[import os/nvalue = os.getenv('PROFILE')/n-exact pure import set differs]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[import psycopg/nvalue = psycopg.connect('')/n-exact pure import set differs]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[import socket/nvalue = socket.socket()/n-exact pure import set differs]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[value = __import__('kernel.profile_runtime')/n-dynamic import mechanism]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[value = open('input.json')/n-prohibited observation 'open']",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_lazy_runtime_import",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_transitive_runtime_import",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_provider_import_policy_allows_read_only_module_attestation",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -11551,6 +12086,11 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_selector_refuses_legacy_reachability",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_selector_refuses_the_selection_control_import",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -11682,6 +12222,56 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_active_profile_catalog_cannot_omit_descriptor_selected_policy",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_reject_symlink_escape[evidencePolicyPath]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_reject_symlink_escape[profileInstanceFiles]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[evidencePolicyPath-../outside.json-contain '//.//.']",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[evidencePolicyPath-/tmp/absolute.json-absolute path]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[evidencePolicyPath-directory-existing file]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[evidencePolicyPath-missing.json-existing file]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[profileInstanceFiles-../outside.json-contain '//.//.']",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[profileInstanceFiles-/tmp/absolute.json-absolute path]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[profileInstanceFiles-directory-existing file]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[profileInstanceFiles-missing.json-existing file]",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -12272,6 +12862,11 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_reference_source_path_must_match_profile_artifact_resolution",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_reference_source_path_still_matches_descriptor_examples",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -19946,6 +20541,11 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     },
     {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_resolved_bundle_has_no_public_install_or_transfer_path",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
       "nodeid": "kernel/tests/test_tenant_uow.py::test_resolver_after_batch_and_reentrant_resolution_refuse",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
@@ -19996,8 +20596,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "8a70abad28a535cfb575d82431f47c54a4d797f6e2f1e1242104425287c5fd05",
-  "entryCount": 3999,
+  "entriesSha256": "7ef7878e1dd5996abb40b3afe750d9bae548eea669189e06ad39c81820bc92b2",
+  "entryCount": 4119,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
