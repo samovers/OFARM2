@@ -1,7 +1,7 @@
 # OFARM2 Tenant Command RuntimeBundle Selector Admission — Phase A Contract v0.1
 
-**Status:** proposed Phase A contract; documentation-only, unapproved, and
-without implementation effect
+**Status:** approved Phase A contract; Phase B implementation is authorized
+inside the closed boundary and exact allowlist in this document
 
 **Decision identity:**
 `OFARM2-ISSUE363-TRUSTED-COMMAND-RUNTIME-BUNDLE-SELECTOR-001`, version `1`
@@ -29,6 +29,14 @@ without implementation effect
 **Exact Phase A head:** the commit containing this exact RFC; its immutable
 hash is recorded in the live PR description after publication. A commit cannot
 embed its own hash without changing that hash.
+
+**Approval evidence:** on 2026-09-05, after review of exact Phase A head
+`340c1b9bfddded8a9b98c13c4abc09cb310692d1` in named Draft PR #364, the
+designated architect supplied the exact entire-message approval:
+
+```text
+I approve OFARM2 decision OFARM2-ISSUE363-TRUSTED-COMMAND-RUNTIME-BUNDLE-SELECTOR-001 version 1.
+```
 
 **Phase A review-head boundary:** this RFC only
 

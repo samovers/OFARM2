@@ -17,6 +17,10 @@ from psycopg_pool import ConnectionPool
 from .authentication import VerifiedIdentity
 from .principal import AuthenticatedPrincipal, PrincipalAuthority
 from .tenant_capability_issuer import CapabilityMintError, TenantChallenge
+from .tenant_command_runtime_bundle_selector import (
+    CommandRuntimeBundleSelectionRefused, TrustedCommandRuntimeBundle,
+    _resolve_commit_operation_claim_draft_runtime_bundle,
+)
 
 _ASCII_ID = re.compile(r"[A-Za-z0-9._:-]{1,255}")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
@@ -55,7 +59,6 @@ class TenantBoundaryError(RuntimeError):
 
 class TenantUnitOfWorkStartupError(RuntimeError):
     pass
-
 
 def _uuid(value: object, label: str, *, version_four: bool = False) -> UUID:
     if type(value) is not UUID or value.int == 0:
@@ -185,11 +188,20 @@ class GovernedWriteBatch:
 
 
 _BatchAllocator = Callable[[GovernedBatchRequest], GovernedWriteBatch]
+_BundleResolver = Callable[[], TrustedCommandRuntimeBundle]
 
+class _SelectorState(Enum):
+    UNRESOLVED = "UNRESOLVED"
+    RESOLVING = "RESOLVING"
+    RESOLVED = "RESOLVED"
+    REFUSED_ROLLBACK_ONLY = "REFUSED_ROLLBACK_ONLY"
+    CLOSED = "CLOSED"
 
 def _closed_batch_allocator(_request: GovernedBatchRequest) -> GovernedWriteBatch:
     raise RuntimeError("tenant UnitOfWork is closed")
 
+def _closed_bundle_resolver() -> TrustedCommandRuntimeBundle:
+    raise RuntimeError("tenant UnitOfWork is closed")
 
 def _allocate_governed_batch(
     connection: Connection,
@@ -252,13 +264,24 @@ def _allocate_governed_batch(
 
 
 class TenantUnitOfWork:
-    __slots__ = ("__binding", "__active", "__allocate_batch", "__batch")
+    __slots__ = (
+        "__binding", "__active", "__allocate_batch", "__batch",
+        "__resolve_bundle", "__selector_state", "__selected_bundle",
+        "__rollback_only",
+    )
 
-    def __init__(self, binding: TenantBinding, allocate_batch: _BatchAllocator) -> None:
+    def __init__(
+        self, binding: TenantBinding, allocate_batch: _BatchAllocator,
+        resolve_bundle: _BundleResolver,
+    ) -> None:
         self.__binding = binding
         self.__active = True
         self.__allocate_batch = allocate_batch
         self.__batch: GovernedWriteBatch | None = None
+        self.__resolve_bundle = resolve_bundle
+        self.__selector_state = _SelectorState.UNRESOLVED
+        self.__selected_bundle: TrustedCommandRuntimeBundle | None = None
+        self.__rollback_only = False
 
     @property
     def binding(self) -> TenantBinding:
@@ -272,17 +295,57 @@ class TenantUnitOfWork:
         if not self.__active:
             raise RuntimeError("tenant UnitOfWork is closed")
 
-    def _finish(self) -> None:
+    def _finish(self) -> bool:
         self.__active = False
         self.__allocate_batch = _closed_batch_allocator
+        self.__resolve_bundle = _closed_bundle_resolver
+        self.__selector_state = _SelectorState.CLOSED
+        return self.__rollback_only
+
+    def _refuse_selection(self) -> None:
+        self.__selector_state = _SelectorState.REFUSED_ROLLBACK_ONLY
+        self.__rollback_only = True
 
     def begin_batch(self, request: GovernedBatchRequest) -> GovernedWriteBatch:
         self._require_active()
+        if self.__rollback_only:
+            raise RuntimeError("tenant UnitOfWork is rollback-only")
         if type(request) is not GovernedBatchRequest or self.__batch is not None:
             raise RuntimeError("governed batch already exists")
         self.__batch = self.__allocate_batch(request)
         return self.__batch
 
+    def resolve_commit_operation_claim_draft_runtime_bundle(
+        self,
+    ) -> TrustedCommandRuntimeBundle:
+        self._require_active()
+        if self.__batch is not None:
+            self._refuse_selection()
+            raise CommandRuntimeBundleSelectionRefused from None
+        if self.__selector_state is _SelectorState.RESOLVED:
+            if self.__selected_bundle is None:  # pragma: no cover
+                self._refuse_selection()
+                raise RuntimeError("selector cache differs")
+            return self.__selected_bundle
+        if self.__selector_state is not _SelectorState.UNRESOLVED:
+            self._refuse_selection()
+            raise CommandRuntimeBundleSelectionRefused from None
+        self.__selector_state = _SelectorState.RESOLVING
+        try:
+            result = self.__resolve_bundle()
+            if self.__selector_state is not _SelectorState.RESOLVING:
+                raise CommandRuntimeBundleSelectionRefused
+            if type(result) is not TrustedCommandRuntimeBundle:
+                raise RuntimeError("selector result differs")
+        except CommandRuntimeBundleSelectionRefused:
+            self._refuse_selection()
+            raise CommandRuntimeBundleSelectionRefused from None
+        except BaseException:
+            self._refuse_selection()
+            raise
+        self.__selected_bundle = result
+        self.__selector_state = _SelectorState.RESOLVED
+        return result
 
 def _idle(connection: Connection) -> bool:
     try:
@@ -428,6 +491,10 @@ class TenantUnitOfWorkManager:
                 binding,
                 request,
             ),
+            lambda: _resolve_commit_operation_claim_draft_runtime_bundle(
+                connection,
+                binding.tenant_id,
+            ),
         )
         try:
             yield unit
@@ -435,7 +502,10 @@ class TenantUnitOfWorkManager:
             unit._finish()
             _rollback_or_discard(connection)
             raise
-        unit._finish()
+        rollback_only = unit._finish()
+        if rollback_only:
+            _rollback_or_discard(connection)
+            return
         try:
             connection.commit()
         except Exception:

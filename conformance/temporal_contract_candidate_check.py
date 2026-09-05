@@ -315,6 +315,40 @@ GLOBAL_CONTENT_RETENTION_MIGRATION_ABSENT = (
 GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED = (
     "GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED"
 )
+TRUSTED_COMMAND_SELECTOR_MIGRATION_FILENAME = (
+    "0010_tenant_command_runtime_bundle_selector.sql"
+)
+TRUSTED_COMMAND_SELECTOR_V9_PREFIX_DIGEST = (
+    "sha256:cef599a81bda42f84c6c9718845b245ecfa7d97564f5c132b0f12dda526d1293"
+)
+TRUSTED_COMMAND_SELECTOR_V10_DIGEST = (
+    "sha256:bd80785f567e593edea9f88898c18cc8b8269bc8d71eb5aa385c595abc9d7b95"
+)
+TRUSTED_COMMAND_SELECTOR_MIGRATION_BYTES = 24_684
+TRUSTED_COMMAND_SELECTOR_MIGRATION_SHA256 = (
+    "sha256:695e38aa0d91ae6a56b8563a6285faf7b2837203e9de378437bc18a6e47da213"
+)
+TRUSTED_COMMAND_SELECTOR_STRUCTURAL_DIGEST = (
+    "sha256:f3d9e802a965e789300240a75dbe8c638743e1d45bcc0ba9ea133877bea0452f"
+)
+TRUSTED_COMMAND_SELECTOR_CATALOG_DIGEST = (
+    "sha256:d9855f9be527f892f54cc5309df17ba00ce16168595bc646ea5a5aa82c53a123"
+)
+TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH = (
+    "kernel/tenant_command_runtime_bundle_selector.py"
+)
+TRUSTED_COMMAND_SELECTOR_MODULE = (
+    "kernel.tenant_command_runtime_bundle_selector"
+)
+TRUSTED_COMMAND_SELECTOR_MIGRATION_ABSENT = (
+    "TRUSTED_COMMAND_SELECTOR_MIGRATION_ABSENT"
+)
+TRUSTED_COMMAND_SELECTOR_MIGRATION_CLASSIFIED = (
+    "TRUSTED_COMMAND_SELECTOR_MIGRATION_CLASSIFIED"
+)
+TRUSTED_COMMAND_SELECTOR_FIXED_FUNCTION = (
+    "ofarm.resolve_commit_operation_claim_draft_runtime_bundle_selection"
+)
 _GCRC_REQUIRED_MARKERS = (
     "ofarm.runtime-bundle-global-content-retention-admission.issue176.v0.1",
     "ofarm.retain_runtime_content",
@@ -519,6 +553,8 @@ SELECTION_STORAGE_REQUIRED_AUTHORITIES = (
 SELECTION_STORAGE_ALLOWED_PRODUCTION_PATHS = frozenset(
     {
         "kernel/migrations/0008_tenant_command_runtime_bundle_selection.sql",
+        "kernel/migrations/0010_tenant_command_runtime_bundle_selector.sql",
+        TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH,
         "deployment/postgresql/tenant_command_runtime_bundle_selection.py",
     }
 )
@@ -540,6 +576,26 @@ SELECTION_STORAGE_MARKERS = (
     ),
     "sha256:56fb0f14a2514b34428841cb7bfc8681bb577ea3ecf57598be480683fb68524f",
 )
+TRUSTED_COMMAND_SELECTOR_PIN_LITERALS = {
+    "_SELECTION_SCHEMA_BYTES": 17_252,
+    "_SELECTION_SCHEMA_DIGEST": (
+        "sha256:56604a52465ffc027382e99dea96f2c9bc1bd2479cbaff30dec6bd39c08e6b3d"
+    ),
+    "_SELECTION_BINDING_FILE_BYTES": 15_993,
+    "_SELECTION_BINDING_FILE_DIGEST": (
+        "sha256:1500ffbbfdf11207a6657848fce12618347f767578e55dc070bb282dc5775aac"
+    ),
+    "_SELECTION_BINDING_CANONICAL_BYTES": 13_287,
+    "_SELECTION_BINDING_CANONICAL_DIGEST": SELECTION_STORAGE_MARKERS[1],
+    "_SELECTION_BINDING_ID": SELECTION_STORAGE_MARKERS[0],
+    "_COMMAND_ID": "COMMIT_OPERATION_CLAIM_DRAFT",
+    "_COMMAND_BINDING_ID": (
+        "ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1"
+    ),
+    "_COMMAND_BINDING_DIGEST": (
+        "sha256:6dad47b836b737c8d58b38f566ed0a7d6caeba9023a734357320326630309da1"
+    ),
+}
 SELECTION_STORAGE_CONFORMANT_ABSENT = "CONFORMANT_ABSENT"
 SELECTION_STORAGE_CONFORMANT_CLASSIFIED = "CONFORMANT_CLASSIFIED"
 SELECTION_STORAGE_V3_PREFIX_DIGEST = (
@@ -3458,9 +3514,9 @@ def _validate_selection_storage_migration_prefix(
 ) -> None:
     migration_set = authority.migration_set
     migrations = migration_set.migrations
-    if len(migrations) not in (7, 8, 9):
+    if len(migrations) not in (7, 8, 9, 10):
         raise TemporalCandidateError(
-            "selection-storage migration state is not exact V7, V8, or V9"
+            "selection-storage migration state is not exact V7, V8, V9, or V10"
         )
     if tuple(migration.version for migration in migrations) != tuple(
         range(1, len(migrations) + 1)
@@ -3540,15 +3596,20 @@ def _classify_selection_storage_pair(
         occurrences = tuple(
             marker in migration.source_bytes for marker in marker_bytes
         )
-        is_allowed = (
+        is_v8 = (
             migration.version == 8
             and migration.filename == SELECTION_STORAGE_MIGRATION_FILENAME
         )
-        if any(occurrences) and not is_allowed:
+        is_v10 = (
+            migration.version == 10
+            and migration.filename
+            == TRUSTED_COMMAND_SELECTOR_MIGRATION_FILENAME
+        )
+        if any(occurrences) and not (is_v8 or is_v10):
             raise TemporalCandidateError(
                 "selection-storage marker entered another authenticated migration"
             )
-        if is_allowed and not all(occurrences):
+        if is_v8 and not all(occurrences):
             raise TemporalCandidateError(
                 "selection-storage migration marker pair differs"
             )
@@ -3562,8 +3623,9 @@ def _classify_selection_storage_pair(
                 raise TemporalCandidateError(
                     "selection-storage adapter marker pair differs"
                 )
-        elif relative_path == (
+        elif relative_path in (
             TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH
+            , TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH
         ):
             # The subordinate publication classifier owns this exact path and
             # requires the complete six-marker conjunction later in the same
@@ -3588,9 +3650,9 @@ def _classify_global_content_retention_migration(
     version_8_prefix: str,
 ) -> str:
     migrations = authority.migration_set.migrations
-    if len(migrations) not in (8, 9):
+    if len(migrations) not in (8, 9, 10):
         raise TemporalCandidateError(
-            "global-content-retention migration state is not exact V8 or V9"
+            "global-content-retention migration state is not exact V8, V9, or V10"
         )
     if version_8_prefix != GLOBAL_CONTENT_RETENTION_V8_PREFIX_DIGEST:
         raise TemporalCandidateError(
@@ -3638,19 +3700,232 @@ def _classify_global_content_retention_migration(
         raise TemporalCandidateError(
             "global-content-retention version-9 prefix authentication failed"
         ) from exc
-    complete_digest = authority.migration_set.digest
     if (
         type(prefix_9) is not str
         or type(complete_prefix) is not str
-        or type(complete_digest) is not str
-        or prefix_9 != complete_prefix
-        or complete_digest != prefix_9
-        or complete_digest == version_8_prefix
+        or prefix_9 == version_8_prefix
+    ):
+        raise TemporalCandidateError(
+            "global-content-retention version-9 migration-set identity differs"
+        )
+    if len(migrations) == 9 and (
+        complete_prefix != prefix_9
+        or authority.migration_set.digest != prefix_9
+    ):
+        raise TemporalCandidateError(
+            "global-content-retention version-9 migration-set identity differs"
+        )
+    if len(migrations) == 10 and (
+        prefix_9 != TRUSTED_COMMAND_SELECTOR_V9_PREFIX_DIGEST
+        or complete_prefix != authority.migration_set.digest
     ):
         raise TemporalCandidateError(
             "global-content-retention version-9 migration-set identity differs"
         )
     return GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED
+
+
+def _top_level_literal(tree: ast.Module, name: str) -> object:
+    assignments = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        and any(
+            isinstance(target, ast.Name) and target.id == name
+            for target in (
+                node.targets if isinstance(node, ast.Assign) else (node.target,)
+            )
+        )
+    ]
+    if len(assignments) != 1:
+        raise TemporalCandidateError(
+            f"trusted command selector literal {name} differs"
+        )
+    try:
+        return ast.literal_eval(assignments[0].value)
+    except (TypeError, ValueError) as exc:
+        raise TemporalCandidateError(
+            f"trusted command selector literal {name} differs"
+        ) from exc
+
+
+def _validate_trusted_selector_module(
+    snapshot: architecture.PythonSourceSnapshotV1,
+) -> None:
+    selector = snapshot.modules_by_relative_path.get(
+        TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH
+    )
+    control_adapter = snapshot.modules_by_relative_path.get(
+        SELECTION_STORAGE_ADAPTER_RELATIVE_PATH
+    )
+    if (
+        selector is None
+        or selector.module_name != TRUSTED_COMMAND_SELECTOR_MODULE
+        or control_adapter is None
+        or control_adapter.module_name != SELECTION_STORAGE_ADAPTER_MODULE
+    ):
+        raise TemporalCandidateError(
+            "trusted command selector source pair differs"
+        )
+    try:
+        selector_tree = snapshot.ast_for(TRUSTED_COMMAND_SELECTOR_MODULE)
+        control_tree = snapshot.ast_for(SELECTION_STORAGE_ADAPTER_MODULE)
+    except (KeyError, architecture.PythonSourceSnapshotRefusal) as exc:
+        raise TemporalCandidateError(
+            "trusted command selector AST custody failed"
+        ) from exc
+    for name, expected in TRUSTED_COMMAND_SELECTOR_PIN_LITERALS.items():
+        if (
+            _top_level_literal(selector_tree, name) != expected
+            or _top_level_literal(control_tree, name) != expected
+        ):
+            raise TemporalCandidateError(
+                f"trusted command selector pin parity differs: {name}"
+            )
+    if _top_level_literal(selector_tree, "__all__") != (
+        "CommandRuntimeBundleSelectionRefused",
+        "TrustedCommandRuntimeBundle",
+    ):
+        raise TemporalCandidateError(
+            "trusted command selector export surface differs"
+        )
+    resolvers = [
+        node
+        for node in selector_tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name
+        == "_resolve_commit_operation_claim_draft_runtime_bundle"
+    ]
+    if len(resolvers) != 1:
+        raise TemporalCandidateError(
+            "trusted command selector resolver count differs"
+        )
+    arguments = resolvers[0].args
+    if (
+        tuple(argument.arg for argument in arguments.args)
+        != ("connection", "tenant_id")
+        or arguments.posonlyargs
+        or arguments.kwonlyargs
+        or arguments.vararg is not None
+        or arguments.kwarg is not None
+        or arguments.defaults
+    ):
+        raise TemporalCandidateError(
+            "trusted command selector resolver signature differs"
+        )
+    imports = {
+        edge.target
+        for edge in snapshot.import_graph[TRUSTED_COMMAND_SELECTOR_MODULE]
+    }
+    if imports != {"kernel.runtime_bundle"}:
+        raise TemporalCandidateError(
+            "trusted command selector import boundary differs"
+        )
+    uow_imports = {
+        edge.target for edge in snapshot.import_graph["kernel.tenant_uow"]
+    }
+    if TRUSTED_COMMAND_SELECTOR_MODULE not in uow_imports:
+        raise TemporalCandidateError(
+            "tenant UnitOfWork does not import the fixed selector"
+        )
+    path = snapshot.production_reachability.get(
+        TRUSTED_COMMAND_SELECTOR_MODULE
+    )
+    if (
+        type(path) is not tuple
+        or path[-3:]
+        != (
+            "kernel.application_runtime",
+            "kernel.tenant_uow",
+            TRUSTED_COMMAND_SELECTOR_MODULE,
+        )
+    ):
+        raise TemporalCandidateError(
+            "trusted command selector production path differs"
+        )
+    if TRUSTED_COMMAND_SELECTOR_MODULE in snapshot.legacy_reachability:
+        raise TemporalCandidateError(
+            "trusted command selector entered the legacy import closure"
+        )
+    function_marker = TRUSTED_COMMAND_SELECTOR_FIXED_FUNCTION + "()"
+    owners = [
+        unit.relative_path
+        for unit in snapshot.modules_by_relative_path.values()
+        if function_marker in unit.source_text
+        and not _is_python_marker_exemption(unit.relative_path)
+    ]
+    if owners != [TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH]:
+        raise TemporalCandidateError(
+            "trusted command selector function marker ownership differs"
+        )
+
+
+def _classify_trusted_command_selector(
+    authority: TenantMigrationAuthoritySnapshot,
+    snapshot: architecture.PythonSourceSnapshotV1,
+    selection_state: str,
+    retention_state: str | None,
+) -> str:
+    migrations = authority.migration_set.migrations
+    has_migration = len(migrations) == 10
+    has_module = (
+        TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH
+        in snapshot.modules_by_relative_path
+    )
+    if has_migration != has_module:
+        raise TemporalCandidateError(
+            "trusted command selector implementation pair is incomplete"
+        )
+    if not has_migration:
+        return TRUSTED_COMMAND_SELECTOR_MIGRATION_ABSENT
+    if (
+        selection_state != SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+        or retention_state != GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED
+    ):
+        raise TemporalCandidateError(
+            "trusted command selector foundation state differs"
+        )
+    migration = migrations[9]
+    if (
+        migration.version != 10
+        or migration.filename != TRUSTED_COMMAND_SELECTOR_MIGRATION_FILENAME
+        or migration.byte_length != TRUSTED_COMMAND_SELECTOR_MIGRATION_BYTES
+        or migration.source_sha256
+        != TRUSTED_COMMAND_SELECTOR_MIGRATION_SHA256
+        or TRUSTED_COMMAND_SELECTOR_FIXED_FUNCTION.encode("utf-8")
+        not in migration.source_bytes
+    ):
+        raise TemporalCandidateError(
+            "trusted command selector version-10 migration differs"
+        )
+    try:
+        prefix_9 = authority.migration_set.prefix_digest(9)
+        prefix_10 = authority.migration_set.prefix_digest(10)
+    except Exception as exc:
+        raise TemporalCandidateError(
+            "trusted command selector migration authentication failed"
+        ) from exc
+    if (
+        prefix_9 != TRUSTED_COMMAND_SELECTOR_V9_PREFIX_DIGEST
+        or prefix_10 != TRUSTED_COMMAND_SELECTOR_V10_DIGEST
+        or authority.migration_set.digest != prefix_10
+    ):
+        raise TemporalCandidateError(
+            "trusted command selector migration-set identity differs"
+        )
+    catalog = snapshot.modules_by_relative_path.get(
+        "deployment/postgresql/catalog_identity.py"
+    )
+    if (
+        catalog is None
+        or TRUSTED_COMMAND_SELECTOR_CATALOG_DIGEST
+        not in catalog.source_text
+    ):
+        raise TemporalCandidateError(
+            "trusted command selector catalog identity differs"
+        )
+    _validate_trusted_selector_module(snapshot)
+    return TRUSTED_COMMAND_SELECTOR_MIGRATION_CLASSIFIED
 
 
 def _classify_temporal_runtime_bundle_publication_adapter(
@@ -3741,6 +4016,11 @@ def _classify_temporal_runtime_bundle_publication_adapter(
             if occurrences != selection_ownership:
                 raise TemporalCandidateError(
                     "selection adapter publication-marker ownership differs"
+                )
+        elif relative_path == TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH:
+            if occurrences != selection_ownership:
+                raise TemporalCandidateError(
+                    "trusted selector publication-marker ownership differs"
                 )
         elif relative_path == TEMPORAL_DECISION_LOG_CHECK_RELATIVE_PATH:
             decision_log_owner_present = True
@@ -3889,6 +4169,7 @@ def _validate_selection_storage_isolation(
     snapshot: architecture.PythonSourceSnapshotV1,
     selection_state: str,
     publication_state: str,
+    selector_state: str,
 ) -> None:
     # The supported invocation reaches this helper only after
     # _build_selection_storage_snapshot authenticated these descriptor roots.
@@ -3916,6 +4197,22 @@ def _validate_selection_storage_isolation(
             raise TemporalCandidateError(
                 f"publication adapter entered the {label} import closure"
             )
+        selector_reachable = TRUSTED_COMMAND_SELECTOR_MODULE in reachability
+        if label == "legacy" and selector_reachable:
+            raise TemporalCandidateError(
+                "trusted command selector entered the legacy import closure"
+            )
+        if (
+            label == "production"
+            and selector_reachable
+            != (
+                selector_state
+                == TRUSTED_COMMAND_SELECTOR_MIGRATION_CLASSIFIED
+            )
+        ):
+            raise TemporalCandidateError(
+                "trusted command selector production reachability differs"
+            )
         for unit in snapshot.modules_by_relative_path.values():
             if (
                 _is_python_marker_exemption(unit.relative_path)
@@ -3939,6 +4236,9 @@ def _validate_selection_storage_active_authorities() -> None:
         *PUBLICATION_ADAPTER_REQUIRED_MARKERS,
         TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_RELATIVE_PATH,
         TEMPORAL_RUNTIME_BUNDLE_PUBLICATION_ADAPTER_MODULE,
+        TRUSTED_COMMAND_SELECTOR_FIXED_FUNCTION,
+        TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH,
+        TRUSTED_COMMAND_SELECTOR_MODULE,
     )
     for path in SELECTION_STORAGE_ACTIVE_NON_PYTHON_PATHS:
         try:
@@ -4018,12 +4318,19 @@ def _validate_selection_storage_conformance(
             retention_state,
         )
     )
+    selector_state = _classify_trusted_command_selector(
+        authority,
+        snapshot,
+        state,
+        retention_state,
+    )
     _validate_global_content_retention_python_isolation(snapshot)
     _validate_selection_storage_active_authorities()
     _validate_selection_storage_isolation(
         snapshot,
         state,
         publication_state,
+        selector_state,
     )
     return state
 

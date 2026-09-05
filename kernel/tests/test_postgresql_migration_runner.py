@@ -1070,7 +1070,7 @@ def test_tenant_v8_branch_is_ordered_and_reauthenticates_literal_set() -> None:
     )
 
 
-def test_tenant_v9_has_no_runner_bypass_and_uses_the_ordinary_boundary() -> None:
+def test_tenant_v9_and_v10_have_no_runner_bypass() -> None:
     source = inspect.getsource(migration_runner_module._migrate_service)
     v8_branch_at = source.index("observed_version == 7")
     ordinary_else_at = source.index("else:", v8_branch_at)
@@ -1084,6 +1084,7 @@ def test_tenant_v9_has_no_runner_bypass_and_uses_the_ordinary_boundary() -> None
         "_locked_tenant_v8_post_source_boundary_differences"
     ) == 1
     assert "0009_runtime_bundle_global_content_retention.sql" not in source
+    assert "0010_tenant_command_runtime_bundle_selector.sql" not in source
     assert "retain_runtime_content" not in source
     assert v8_branch_at < ordinary_else_at < ordinary_boundary_at
     assert ordinary_boundary_at < ledger_append_at
@@ -2350,7 +2351,7 @@ def _tenant_v7_migration_set() -> MigrationSet:
         Path(__file__).resolve().parents[2],
         TENANT_SERVICE,
     )
-    assert len(full_set.migrations) in (8, 9)
+    assert len(full_set.migrations) in (8, 9, 10)
     return MigrationSet(
         service=TENANT_SERVICE,
         migrations=full_set.migrations[:7],

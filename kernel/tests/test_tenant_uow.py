@@ -9,7 +9,12 @@ from uuid import uuid4
 import pytest
 from psycopg.pq import TransactionStatus
 
+import kernel.tenant_uow as tenant_uow_module
 from kernel.principal import AuthenticatedPrincipal
+from kernel.tenant_command_runtime_bundle_selector import (
+    CommandRuntimeBundleSelectionRefused,
+    TrustedCommandRuntimeBundle,
+)
 from kernel.tenant_uow import (
     GovernedBatchRequest,
     TenantBoundaryError,
@@ -411,6 +416,7 @@ def test_sql_surface_is_absent_and_later_refusal_rolls_back(principal):
                 "batch",
                 "begin_batch",
                 "binding",
+                "resolve_commit_operation_claim_draft_runtime_bundle",
             }
             assert not hasattr(unit, "__dict__")
             assert not hasattr(unit, "_connection")
@@ -422,6 +428,140 @@ def test_sql_surface_is_absent_and_later_refusal_rolls_back(principal):
 
     executed = tuple(query for query, _parameters in connection.events)
     assert all(query not in executed for query in hostile_sql)
+    assert connection.events[-1] == ("ROLLBACK", ())
+
+
+def _trusted_token() -> TrustedCommandRuntimeBundle:
+    return object.__new__(TrustedCommandRuntimeBundle)
+
+
+def test_runtime_bundle_resolution_is_cached_by_identity_and_closes(
+    principal,
+    monkeypatch,
+):
+    connection = _Connection(principal)
+    manager = TenantUnitOfWorkManager(_Pool(connection), _Minter())
+    expected = _trusted_token()
+    calls = []
+
+    def resolve(_connection, tenant_id):
+        calls.append(tenant_id)
+        return expected
+
+    monkeypatch.setattr(
+        tenant_uow_module,
+        "_resolve_commit_operation_claim_draft_runtime_bundle",
+        resolve,
+    )
+    with manager.unit_of_work(principal) as unit:
+        first = unit.resolve_commit_operation_claim_draft_runtime_bundle()
+        second = unit.resolve_commit_operation_claim_draft_runtime_bundle()
+        assert first is expected and second is first
+
+    assert calls == [principal.authority.tenant_id]
+    assert connection.events[-1] == ("COMMIT", ())
+    with pytest.raises(RuntimeError, match="closed"):
+        unit.resolve_commit_operation_claim_draft_runtime_bundle()
+
+
+def test_caught_selector_refusal_is_terminal_and_forces_rollback(
+    principal,
+    monkeypatch,
+):
+    connection = _Connection(principal)
+    manager = TenantUnitOfWorkManager(_Pool(connection), _Minter())
+    calls = []
+
+    def refuse(_connection, tenant_id):
+        calls.append(tenant_id)
+        raise CommandRuntimeBundleSelectionRefused
+
+    monkeypatch.setattr(
+        tenant_uow_module,
+        "_resolve_commit_operation_claim_draft_runtime_bundle",
+        refuse,
+    )
+    with manager.unit_of_work(principal) as unit:
+        for _attempt in range(2):
+            with pytest.raises(CommandRuntimeBundleSelectionRefused) as raised:
+                unit.resolve_commit_operation_claim_draft_runtime_bundle()
+            assert raised.value.outcome == (
+                "RUNTIME_BUNDLE_SELECTION_REFUSED_NO_WRITE"
+            )
+            assert raised.value.__cause__ is None
+        with pytest.raises(RuntimeError, match="rollback-only"):
+            unit.begin_batch(
+                GovernedBatchRequest(
+                    "batch-fallback",
+                    "TEST_OPERATION",
+                    "request-fallback",
+                    "sha256:" + "7" * 64,
+                )
+            )
+
+    assert calls == [principal.authority.tenant_id]
+    assert connection.events[-1] == ("ROLLBACK", ())
+
+
+def test_caught_unexpected_selector_failure_still_forces_rollback(
+    principal,
+    monkeypatch,
+):
+    connection = _Connection(principal)
+    manager = TenantUnitOfWorkManager(_Pool(connection), _Minter())
+    failure = KeyboardInterrupt()
+
+    def crash(_connection, _tenant_id):
+        raise failure
+
+    monkeypatch.setattr(
+        tenant_uow_module,
+        "_resolve_commit_operation_claim_draft_runtime_bundle",
+        crash,
+    )
+    with manager.unit_of_work(principal) as unit:
+        with pytest.raises(KeyboardInterrupt) as raised:
+            unit.resolve_commit_operation_claim_draft_runtime_bundle()
+        assert raised.value is failure
+
+    assert connection.events[-1] == ("ROLLBACK", ())
+
+
+def test_resolver_after_batch_and_reentrant_resolution_refuse(
+    principal,
+    monkeypatch,
+):
+    connection = _Connection(principal)
+    manager = TenantUnitOfWorkManager(_Pool(connection), _Minter())
+    unit_holder = []
+
+    def reenter(_connection, _tenant_id):
+        return unit_holder[0].resolve_commit_operation_claim_draft_runtime_bundle()
+
+    monkeypatch.setattr(
+        tenant_uow_module,
+        "_resolve_commit_operation_claim_draft_runtime_bundle",
+        reenter,
+    )
+    with manager.unit_of_work(principal) as unit:
+        unit_holder.append(unit)
+        with pytest.raises(CommandRuntimeBundleSelectionRefused):
+            unit.resolve_commit_operation_claim_draft_runtime_bundle()
+    assert connection.events[-1] == ("ROLLBACK", ())
+
+    connection = _Connection(principal)
+    manager = TenantUnitOfWorkManager(_Pool(connection), _Minter())
+    with manager.unit_of_work(principal) as unit:
+        unit.begin_batch(
+            GovernedBatchRequest(
+                "batch-before-selector",
+                "TEST_OPERATION",
+                "request-before-selector",
+                "sha256:" + "7" * 64,
+            )
+        )
+        with pytest.raises(CommandRuntimeBundleSelectionRefused):
+            unit.resolve_commit_operation_claim_draft_runtime_bundle()
     assert connection.events[-1] == ("ROLLBACK", ())
 
 

@@ -1794,9 +1794,9 @@ def test_authoritative_source_ledger_contract_and_apply_noop(
         "write-lock-early-call-refused",
     )
     assert tenant_target.v7_report.applied_versions == (7,)
-    assert tenant_target.first_report.applied_versions == (8, 9)
+    assert tenant_target.first_report.applied_versions == (8, 9, 10)
     assert tenant_target.noop_report.applied_versions == ()
-    assert tenant_target.noop_report.final_version == 9
+    assert tenant_target.noop_report.final_version == 10
 
 
 def test_tenant_knowledge_position_catalog_is_structurally_compatible(
@@ -7583,7 +7583,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:4d9bcb9efc13ed0f21dcdf0b00bd1ed36f06b1e4b5feab72082b21a4c87e1afe"
+                "sha256:f3d9e802a965e789300240a75dbe8c638743e1d45bcc0ba9ea133877bea0452f"
             )
         finally:
             migrator.rollback()
@@ -8272,12 +8272,12 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:4d9bcb9efc13ed0f21dcdf0b00bd1ed36f06b1e4b5feab72082b21a4c87e1afe"
+        "sha256:f3d9e802a965e789300240a75dbe8c638743e1d45bcc0ba9ea133877bea0452f"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
-    assert row[7] == 9
-    assert row[9] == 9
+    assert row[7] == 10
+    assert row[9] == 10
     assert row[10] is False
 
 
@@ -8341,6 +8341,7 @@ def test_selection_storage_is_empty_closed_and_function_only(
             WHERE namespace.nspname = 'ofarm'
               AND relation.relname =
                     'tenant_command_runtime_bundle_selection'
+            ORDER BY policy.polname, role.rolname
             """
         ).fetchall() == [
             (
@@ -8348,7 +8349,13 @@ def test_selection_storage_is_empty_closed_and_function_only(
                 "ofarm_owner",
                 "*",
                 True,
-            )
+            ),
+            (
+                "tenant_command_runtime_bundle_selection_runtime_reader_owner",
+                "ofarm_owner",
+                "r",
+                True,
+            ),
         ]
         assert admin.execute(
             """
