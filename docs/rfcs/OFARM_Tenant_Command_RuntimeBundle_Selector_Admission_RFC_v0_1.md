@@ -377,13 +377,13 @@ Migration V10 adds exactly one externally named database capability:
 ofarm.resolve_commit_operation_claim_draft_runtime_bundle_selection()
 ```
 
-It has zero arguments. It is `STABLE`, `PARALLEL UNSAFE`, and
-`SECURITY DEFINER`, is owned by `ofarm_owner`, uses only explicitly
-schema-qualified objects, and fixes `search_path` to `pg_catalog, pg_temp`.
-All privileges are revoked from `PUBLIC`; execute is granted only to
-`ofarm_app` and `ofarm_worker`. The function itself also requires
-`SESSION_USER` to be exactly one of those two login roles, so role membership
-does not widen the callable set.
+It has zero arguments. It is `LANGUAGE plpgsql`, `STABLE`,
+`PARALLEL UNSAFE`, and `SECURITY DEFINER`, is owned by `ofarm_owner`, uses
+only explicitly schema-qualified objects, and fixes `search_path` to
+`pg_catalog, pg_temp`. All privileges are revoked from `PUBLIC`; execute is
+granted only to `ofarm_app` and `ofarm_worker`. The function itself also
+requires `SESSION_USER` to be exactly one of those two login roles, so role
+membership does not widen the callable set.
 
 The function requires `READ COMMITTED`, obtains the tenant only through
 `ofarm.current_tenant_id()`, and returns zero rows for an absent selection. It
@@ -394,11 +394,13 @@ does not accept even the fixed identity as an argument.
 The selection table remains unavailable directly to application and worker
 roles. V10 grants them no table privilege.
 
-Because forced RLS also applies to the table owner, V10 adds two owner-facing,
-`FOR SELECT`-only policies used by the security-definer function:
+Because forced RLS also applies to the table owner, V10 adds exactly these two
+owner-facing, `FOR SELECT`-only policies used by the security-definer function:
 
-- one on `ofarm.tenant_command_runtime_bundle_selection`; and
-- one on `ofarm.governed_write_batch`.
+- `tenant_command_runtime_bundle_selection_runtime_reader_owner` on
+  `ofarm.tenant_command_runtime_bundle_selection`; and
+- `tenant_command_runtime_bundle_head_runtime_reader_owner` on
+  `ofarm.governed_write_batch`.
 
 Each policy is true only when:
 
@@ -431,20 +433,20 @@ One SQL statement inside the function must:
 7. return the complete row plus `Kselection` only when every relationship is
    exact.
 
-The result columns are closed to:
+The `RETURNS TABLE` columns and PostgreSQL types are closed to:
 
 ```text
-tenant_id
-tenant_ref
-selection_binding_id
-selection_binding_canonical_digest
-command_id
-command_binding_id
-command_binding_canonical_digest
-selection_batch_id
-selection_knowledge_position
-runtime_bundle_digest
-selection_knowledge_cut
+tenant_id: uuid
+tenant_ref: text
+selection_binding_id: text
+selection_binding_canonical_digest: text
+command_id: text
+command_binding_id: text
+command_binding_canonical_digest: text
+selection_batch_id: text
+selection_knowledge_position: int8
+runtime_bundle_digest: text
+selection_knowledge_cut: int8
 ```
 
 The statement must require:
@@ -554,8 +556,9 @@ Tests must prove that malformed direct construction is refused.
 ### 9.2 Opaque internal refusal
 
 All expected absence, database, row-shape, binding, visibility, bundle,
-content, schema, and closure failures normalize to one internal exception and
-one fixed outcome:
+content, schema, and closure failures normalize to exactly one internal
+exception class, `CommandRuntimeBundleSelectionRefused`, and one fixed
+`outcome` value:
 
 ```text
 RUNTIME_BUNDLE_SELECTION_REFUSED_NO_WRITE
@@ -567,8 +570,9 @@ raised without a public cause chain. The module emits no log, audit row,
 receipt, or public `RuntimeProblem`.
 
 Programming defects and process-level failures are not misreported as a
-semantic refusal. They propagate to the existing UnitOfWork exception path,
-which rolls back or discards the connection.
+semantic refusal. The UnitOfWork marks itself rollback-only before propagating
+them. The existing manager therefore rolls back or discards the connection
+even if an in-scope caller catches the propagated failure inside the context.
 
 ## 10. Tenant UnitOfWork state machine
 
@@ -604,6 +608,8 @@ Rules:
   UnitOfWork returns that same object by identity;
 - expected refusal caches a terminal refusal and marks the UnitOfWork
   rollback-only;
+- any unexpected exception or process-level failure from the private callback
+  marks the UnitOfWork rollback-only before it propagates;
 - later calls after refusal raise the same opaque outcome without database
   access;
 - `begin_batch()` after selector refusal is rejected, so caught refusal cannot
@@ -803,6 +809,10 @@ Architecture conformance changes the existing ceilings to:
 The global maximum of 80 lines per production function remains unchanged. A
 need to exceed these ceilings is a design review event, not a reason to relax
 them silently.
+
+Architecture conformance also places each new selector-focused test module
+under the existing default ceiling of 800 physical lines. Hostile matrices use
+parameterization instead of relaxing that ceiling.
 
 ### 14.3 Elegance audit
 
