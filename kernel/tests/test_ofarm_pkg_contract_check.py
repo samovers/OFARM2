@@ -51,6 +51,34 @@ NESTED_RESOURCE_SCHEMA = {
         }
     },
 }
+REVIEWED_MALFORMED_ROOT_IDENTIFIERS = (
+    "https://example.test:abc/schema",
+    "https://example.test/a[b]",
+    "https://a@b@c/schema",
+)
+MALFORMED_ROOT_IDENTIFIER_EDGE_CASES = (
+    "https://example.test:/schema",
+    "https://example.test:80:90/schema",
+    "https://[2001:db8::zz]/schema",
+    "https://2001:db8::1/schema",
+    "https://[2001:db8::1]suffix/schema",
+    "https://example.test/schema?filter=[value]",
+    "https://user[name]@example.test/schema",
+    "https://[vG.bad]/schema",
+    "https://[v1.]/schema",
+)
+SUPPORTED_ROOT_IDENTIFIER_CONTROLS = (
+    "https://example.test:8443/schema",
+    "https://example.test/a%5Bb%5D",
+    "urn:example:test",
+    "https://[2001:db8::1]/schema",
+    "https://[2001:db8::1]:8443/schema",
+    "https://user:password@example.test/schema",
+    "https://example.test/schema?filter=a/b?c",
+    "https://[v1.a:b]/schema",
+    "https://example.test/schema#",
+    "mailto:John.Doe@example.com",
+)
 
 
 def _errors(instance: object, schema: dict) -> list[str]:
@@ -150,6 +178,29 @@ def test_unsupported_or_malformed_root_declarations_fail_closed(
 ) -> None:
     with pytest.raises(checker.SubsetError):
         checker.check_keywords({keyword: value})
+
+
+@pytest.mark.parametrize("identifier", REVIEWED_MALFORMED_ROOT_IDENTIFIERS)
+def test_reviewed_malformed_root_identifiers_fail_preflight(
+    identifier: str,
+) -> None:
+    with pytest.raises(checker.SubsetError):
+        checker.check_keywords({"$id": identifier, "type": "integer"})
+
+
+@pytest.mark.parametrize("identifier", MALFORMED_ROOT_IDENTIFIER_EDGE_CASES)
+def test_malformed_root_identifier_edge_cases_fail_preflight(
+    identifier: str,
+) -> None:
+    with pytest.raises(checker.SubsetError):
+        checker.check_keywords({"$id": identifier, "type": "integer"})
+
+
+@pytest.mark.parametrize("identifier", SUPPORTED_ROOT_IDENTIFIER_CONTROLS)
+def test_supported_root_identifier_controls_pass_preflight(
+    identifier: str,
+) -> None:
+    checker.check_keywords({"$id": identifier, "type": "integer"})
 
 
 @pytest.mark.parametrize(
@@ -599,6 +650,38 @@ def test_child_main_rejects_integer_number_one_of_overlap(tmp_path: Path) -> Non
     assert "RESULT: FAIL (1 failures)" in invalid.stdout
     assert valid.returncode == 0, valid.stdout + valid.stderr
     assert "RESULT: PASS (0 failures)" in valid.stdout
+
+
+@pytest.mark.parametrize("identifier", REVIEWED_MALFORMED_ROOT_IDENTIFIERS)
+def test_child_main_rejects_reviewed_malformed_root_identifiers(
+    tmp_path: Path,
+    identifier: str,
+) -> None:
+    process = _run_package_main(
+        tmp_path,
+        {"$schema": SUPPORTED_DIALECT, "$id": identifier, "type": "integer"},
+        1,
+    )
+
+    assert process.returncode != 0
+    assert "SUBSET GAP schema.json" in process.stdout
+    assert "root $id" in process.stdout
+    assert "RESULT: FAIL (1 failures)" in process.stdout
+
+
+@pytest.mark.parametrize("identifier", SUPPORTED_ROOT_IDENTIFIER_CONTROLS)
+def test_child_main_accepts_supported_root_identifier_controls(
+    tmp_path: Path,
+    identifier: str,
+) -> None:
+    process = _run_package_main(
+        tmp_path,
+        {"$schema": SUPPORTED_DIALECT, "$id": identifier, "type": "integer"},
+        1,
+    )
+
+    assert process.returncode == 0, process.stdout + process.stderr
+    assert "RESULT: PASS (0 failures)" in process.stdout
 
 
 @pytest.mark.parametrize(

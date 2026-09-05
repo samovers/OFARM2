@@ -2336,6 +2336,56 @@
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://[2001:db8::1]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://[2001:db8::1]:8443/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://[v1.a:b]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://example.test/a%5Bb%5D]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://example.test/schema#]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://example.test/schema?filter=a/b?c]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://example.test:8443/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[https://user:password@example.test/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[mailto:John.Doe@example.com]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_accepts_supported_root_identifier_controls[urn:example:test]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_refuses_nested_schema_resources_before_validation[full-validator-invalid]",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
@@ -2347,6 +2397,21 @@
     },
     {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_rejects_integer_number_one_of_overlap",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_rejects_reviewed_malformed_root_identifiers[https://a@b@c/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_rejects_reviewed_malformed_root_identifiers[https://example.test/a[b]]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_child_main_rejects_reviewed_malformed_root_identifiers[https://example.test:abc/schema]",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
@@ -2626,6 +2691,51 @@
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://2001:db8::1/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://[2001:db8::1]suffix/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://[2001:db8::zz]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://[v1.]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://[vG.bad]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://example.test/schema?filter=[value]]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://example.test:/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://example.test:80:90/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_malformed_root_identifier_edge_cases_fail_preflight[https://user[name]@example.test/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_nested_resources_and_dialects_fail_before_instance_evaluation[$defs-$id]",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
@@ -2771,6 +2881,21 @@
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_reviewed_malformed_root_identifiers_fail_preflight[https://a@b@c/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_reviewed_malformed_root_identifiers_fail_preflight[https://example.test/a[b]]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_reviewed_malformed_root_identifiers_fail_preflight[https://example.test:abc/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_root_identification_and_dialect_headers_remain_optional",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
@@ -2792,6 +2917,56 @@
     },
     {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identification_and_dialect_declarations",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://[2001:db8::1]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://[2001:db8::1]:8443/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://[v1.a:b]/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://example.test/a%5Bb%5D]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://example.test/schema#]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://example.test/schema?filter=a/b?c]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://example.test:8443/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[https://user:password@example.test/schema]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[mailto:John.Doe@example.com]",
+      "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
+      "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_supported_root_identifier_controls_pass_preflight[urn:example:test]",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
@@ -19796,8 +19971,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "a4e12b2f96ad7b46242ce99158adb661c2b05e55a6cb1120a9bab7e6488ef1a4",
-  "entryCount": 3959,
+  "entriesSha256": "fe2bd04df8961bdf1cdd59901ee21b76741dc9dbb6972cb5ec8f87ad5a3dea52",
+  "entryCount": 3994,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

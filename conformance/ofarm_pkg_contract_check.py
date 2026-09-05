@@ -28,8 +28,8 @@ import re
 import subprocess
 import sys
 from datetime import date
+from ipaddress import IPv6Address
 from pathlib import Path
-from urllib.parse import urlsplit
 
 PKG = Path(__file__).resolve().parent.parent
 
@@ -53,6 +53,11 @@ SUPPORTED_TYPES = frozenset({
 })
 SUPPORTED_FORMATS = frozenset({"date-time"})
 SUPPORTED_DIALECT = "https://json-schema.org/draft/2020-12/schema"
+_URI_HEXDIGITS = frozenset("0123456789ABCDEFabcdef")
+_URI_UNRESERVED = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+)
+_URI_SUB_DELIMITERS = frozenset("!$&'()*+,;=")
 
 TYPES = {
     "object": dict, "array": list, "string": str,
@@ -163,23 +168,112 @@ def resolve_ref(ref: str, root, *, path: str = "#"):
     return node
 
 
+def _valid_uri_component(value: str, *, extra_characters: str = "") -> bool:
+    allowed = _URI_UNRESERVED | _URI_SUB_DELIMITERS | frozenset(extra_characters)
+    index = 0
+    while index < len(value):
+        if value[index] == "%":
+            if (
+                index + 2 >= len(value)
+                or value[index + 1] not in _URI_HEXDIGITS
+                or value[index + 2] not in _URI_HEXDIGITS
+            ):
+                return False
+            index += 3
+            continue
+        if value[index] not in allowed:
+            return False
+        index += 1
+    return True
+
+
+def _valid_uri_ip_literal(value: str) -> bool:
+    if value[:1].lower() == "v":
+        version, separator, address = value.partition(".")
+        return (
+            bool(separator)
+            and len(version) > 1
+            and all(character in _URI_HEXDIGITS for character in version[1:])
+            and bool(address)
+            and "%" not in address
+            and _valid_uri_component(address, extra_characters=":")
+        )
+    if "%" in value:
+        return False
+    try:
+        IPv6Address(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _valid_uri_authority(value: str) -> bool:
+    if value.count("@") > 1:
+        return False
+    userinfo, separator, host_and_port = value.partition("@")
+    if not separator:
+        host_and_port = userinfo
+    elif not _valid_uri_component(userinfo, extra_characters=":"):
+        return False
+
+    if host_and_port.startswith("["):
+        closing_bracket = host_and_port.find("]")
+        if closing_bracket < 0:
+            return False
+        literal = host_and_port[1:closing_bracket]
+        remainder = host_and_port[closing_bracket + 1:]
+        if not _valid_uri_ip_literal(literal):
+            return False
+        if not remainder:
+            return True
+        # This checker deliberately supports only an explicit decimal port.
+        return (
+            remainder.startswith(":")
+            and len(remainder) > 1
+            and all(character in "0123456789" for character in remainder[1:])
+        )
+
+    if "[" in host_and_port or "]" in host_and_port:
+        return False
+    if host_and_port.count(":") > 1:
+        return False
+    host, separator, port = host_and_port.partition(":")
+    if separator and (
+        not port or any(character not in "0123456789" for character in port)
+    ):
+        return False
+    return _valid_uri_component(host)
+
+
 def _supported_root_identifier(value: object) -> bool:
     if not isinstance(value, str) or not value:
         return False
-    if any(
-        ord(character) < 0x21
-        or ord(character) > 0x7E
-        or character in '"<>\\^`{|}'
-        for character in value
+    if any(ord(character) < 0x21 or ord(character) > 0x7E for character in value):
+        return False
+
+    uri, fragment_separator, fragment = value.partition("#")
+    if fragment_separator and fragment:
+        return False
+    scheme, scheme_separator, remainder = uri.partition(":")
+    if (
+        not scheme_separator
+        or re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*", scheme) is None
     ):
         return False
-    if re.search(r"%(?![0-9A-Fa-f]{2})", value):
+
+    hierarchical_part, query_separator, query = remainder.partition("?")
+    if query_separator and not _valid_uri_component(query, extra_characters="/:@?"):
         return False
-    try:
-        parsed = urlsplit(value)
-    except ValueError:
-        return False
-    return bool(parsed.scheme) and not parsed.fragment
+    if hierarchical_part.startswith("//"):
+        authority_and_path = hierarchical_part[2:]
+        authority, path_separator, path = authority_and_path.partition("/")
+        if path_separator:
+            path = f"/{path}"
+        return _valid_uri_authority(authority) and _valid_uri_component(
+            path,
+            extra_characters="/:@",
+        )
+    return _valid_uri_component(hierarchical_part, extra_characters="/:@")
 
 
 def _check_identification_keywords(schema, *, root, path: str) -> None:
@@ -203,8 +297,8 @@ def _check_identification_keywords(schema, *, root, path: str) -> None:
         )
     if "$id" in schema and not _supported_root_identifier(schema["$id"]):
         raise SubsetError(
-            f"root $id at {path}/$id must be an absolute URI without a "
-            "non-empty fragment"
+            f"root $id at {path}/$id must be a supported absolute URI without "
+            "a non-empty fragment"
         )
 
 
