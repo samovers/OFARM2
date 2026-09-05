@@ -8356,7 +8356,12 @@
       "sourcePath": "kernel/tests/test_production_oidc.py"
     },
     {
-      "nodeid": "kernel/tests/test_production_oidc.py::test_waiter_uses_post_lock_time_after_failed_refresh",
+      "nodeid": "kernel/tests/test_production_oidc.py::test_waiter_uses_post_lock_time_after_failed_refresh[101-False]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_waiter_uses_post_lock_time_after_failed_refresh[99.5-True]",
       "sourceModule": "kernel.tests.test_production_oidc",
       "sourcePath": "kernel/tests/test_production_oidc.py"
     },
@@ -9774,6 +9779,71 @@
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_validation_services_require_explicit_profile_policy",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_complete_bundle_builds_when_runtime_profile_modules_are_refused",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_profile_loader_retains_public_reference_family_identity",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[active-spine-exactly one active pack]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[bad-ref-profileRef]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[descriptor-not-object-must be a JSON object]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[duplicate-family-duplicate reference family]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[duplicate-file-duplicate entries]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[non-object-instance-must be JSON objects]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[profile-scope-profileScope.packRefs]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[shipped-ref-is not in profileInstanceFiles]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_pure_and_compatibility_entry_points_refuse_identically[unknown-field-unknown field]",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_selection_validation_does_not_mutate_inputs",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_selection_validation.py::test_validated_descriptor_is_deterministic_immutable_and_non_mutating",
+      "sourceModule": "kernel.tests.test_profile_selection_validation",
+      "sourcePath": "kernel/tests/test_profile_selection_validation.py"
     },
     {
       "nodeid": "kernel/tests/test_profile_si_demo_payloads.py::test_d2_identity_payload_facades_match_profile_helpers",
@@ -11641,6 +11711,71 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_accepts_the_closed_module_edges",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_direct_runtime_import[config]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_direct_runtime_import[profile_policy]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_direct_runtime_import[profile_runtime]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[from .profile_runtime import ProfileRuntimeError/n-exact pure import set differs]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[from pathlib import Path/n-exact pure import set differs]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[import os/nvalue = os.getenv('PROFILE')/n-exact pure import set differs]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[import psycopg/nvalue = psycopg.connect('')/n-exact pure import set differs]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[import socket/nvalue = socket.socket()/n-exact pure import set differs]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[value = __import__('kernel.profile_runtime')/n-dynamic import mechanism]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_impure_validator[value = open('input.json')/n-prohibited observation 'open']",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_lazy_runtime_import",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_transitive_runtime_import",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_provider_import_policy_allows_read_only_module_attestation",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -11972,6 +12107,56 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_active_profile_catalog_cannot_omit_descriptor_selected_policy",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_reject_symlink_escape[evidencePolicyPath]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_reject_symlink_escape[profileInstanceFiles]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[evidencePolicyPath-../outside.json-contain '//.//.']",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[evidencePolicyPath-/tmp/absolute.json-absolute path]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[evidencePolicyPath-directory-existing file]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[evidencePolicyPath-missing.json-existing file]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[profileInstanceFiles-../outside.json-contain '//.//.']",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[profileInstanceFiles-/tmp/absolute.json-absolute path]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[profileInstanceFiles-directory-existing file]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builder_profile_paths_remain_fail_closed[profileInstanceFiles-missing.json-existing file]",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -12562,6 +12747,11 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_reference_source_path_must_match_profile_artifact_resolution",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_reference_source_path_still_matches_descriptor_examples",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -20001,8 +20191,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "2fa89b019d6e52aa081323783550427e5d07bf61ed7cedec3d8e6d4dac1da3d1",
-  "entryCount": 4000,
+  "entriesSha256": "a222a30e19c039b445ee179fccec45064e63983baeb3a3feb0234e43764bd8ac",
+  "entryCount": 4038,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

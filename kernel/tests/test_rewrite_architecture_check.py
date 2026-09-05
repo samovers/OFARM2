@@ -404,6 +404,141 @@ def _snapshot_tree(
     return tmp_path
 
 
+_PURE_PROFILE_SELECTION_SOURCE = """\
+from __future__ import annotations
+import re
+from dataclasses import dataclass
+"""
+
+
+def _profile_selection_tree(
+    tmp_path: Path,
+    *,
+    runtime_bundle_source: str = (
+        "from .profile_selection_validation import "
+        "validate_profile_selection_documents\n"
+    ),
+    profile_runtime_source: str = (
+        "from .profile_selection_validation import "
+        "validate_profile_selection_documents\n"
+    ),
+    validation_source: str = _PURE_PROFILE_SELECTION_SOURCE,
+    extra_sources: dict[str, str] | None = None,
+) -> Path:
+    sources = {
+        "kernel/config.py": "",
+        "kernel/profile_policy.py": "",
+        "kernel/runtime_bundle.py": runtime_bundle_source,
+        "kernel/profile_runtime.py": profile_runtime_source,
+        "kernel/profile_selection_validation.py": validation_source,
+        **(extra_sources or {}),
+    }
+    return _snapshot_tree(tmp_path, sources)
+
+
+def _profile_selection_failures(root: Path) -> list[str]:
+    snapshot = rewrite_architecture_check.build_python_source_snapshot(root)
+    trees = rewrite_architecture_check._snapshot_trees(snapshot)
+    return rewrite_architecture_check._check_profile_selection_architecture(
+        snapshot, trees
+    )
+
+
+def test_profile_selection_architecture_accepts_the_closed_module_edges(tmp_path):
+    root = _profile_selection_tree(tmp_path)
+
+    assert _profile_selection_failures(root) == []
+
+
+@pytest.mark.parametrize(
+    "forbidden",
+    ("profile_runtime", "config", "profile_policy"),
+)
+def test_profile_selection_architecture_rejects_direct_runtime_import(
+    tmp_path, forbidden
+):
+    source = (
+        "from .profile_selection_validation import "
+        "validate_profile_selection_documents\n"
+        f"from .{forbidden} import value\n"
+    )
+    root = _profile_selection_tree(tmp_path, runtime_bundle_source=source)
+
+    failures = _profile_selection_failures(root)
+
+    assert any(
+        f"kernel.runtime_bundle -> kernel.{forbidden}" in failure
+        for failure in failures
+    )
+
+
+def test_profile_selection_architecture_rejects_lazy_runtime_import(tmp_path):
+    source = (
+        "from .profile_selection_validation import "
+        "validate_profile_selection_documents\n"
+        "def build():\n"
+        "    from .profile_runtime import load_profile_runtime_descriptor\n"
+    )
+    root = _profile_selection_tree(tmp_path, runtime_bundle_source=source)
+
+    failures = _profile_selection_failures(root)
+
+    assert any("kernel/runtime_bundle.py:3" in failure for failure in failures)
+    assert any("reaches forbidden module 'kernel.profile_runtime'" in failure for failure in failures)
+
+
+def test_profile_selection_architecture_rejects_transitive_runtime_import(tmp_path):
+    source = (
+        "from .profile_selection_validation import "
+        "validate_profile_selection_documents\n"
+        "from .helper import value\n"
+    )
+    root = _profile_selection_tree(
+        tmp_path,
+        runtime_bundle_source=source,
+        extra_sources={
+            "kernel/helper.py": "from .profile_runtime import value\n",
+        },
+    )
+
+    failures = _profile_selection_failures(root)
+
+    assert any(
+        "kernel.runtime_bundle -> kernel.helper -> kernel.profile_runtime"
+        in failure
+        for failure in failures
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    (
+        ("from pathlib import Path\n", "exact pure import set differs"),
+        ("import os\nvalue = os.getenv('PROFILE')\n", "exact pure import set differs"),
+        ("import psycopg\nvalue = psycopg.connect('')\n", "exact pure import set differs"),
+        ("import socket\nvalue = socket.socket()\n", "exact pure import set differs"),
+        ("value = open('input.json')\n", "prohibited observation 'open'"),
+        (
+            "value = __import__('kernel.profile_runtime')\n",
+            "dynamic import mechanism",
+        ),
+        (
+            "from .profile_runtime import ProfileRuntimeError\n",
+            "exact pure import set differs",
+        ),
+    ),
+)
+def test_profile_selection_architecture_rejects_impure_validator(
+    tmp_path, source, message
+):
+    root = _profile_selection_tree(
+        tmp_path,
+        validation_source=_PURE_PROFILE_SELECTION_SOURCE + source,
+    )
+
+    assert any(message in failure for failure in _profile_selection_failures(root))
+
+
 def _execution_state(root: Path):
     snapshot = rewrite_architecture_check.build_python_source_snapshot(root)
     trees = rewrite_architecture_check._snapshot_trees(snapshot)

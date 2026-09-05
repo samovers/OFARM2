@@ -359,9 +359,13 @@ class ProductionOidcVerifier:
             expires_at=self._monotonic() + config.cache_ttl_seconds,
         )
 
-    def _refresh(self, now: float) -> _JwksGeneration:
-        self._next_refresh_at = now + self._config.refresh_cooldown_seconds
-        generation = self._fetch_generation()
+    def _refresh(self) -> _JwksGeneration:
+        try:
+            generation = self._fetch_generation()
+        finally:
+            self._next_refresh_at = (
+                self._monotonic() + self._config.refresh_cooldown_seconds
+            )
         self._generation = generation
         return generation
 
@@ -375,12 +379,12 @@ class ProductionOidcVerifier:
             if expired:
                 if now < self._next_refresh_at:
                     raise _unavailable("JWKS refresh is cooling down")
-                generation = self._refresh(now)
+                generation = self._refresh()
             key = generation.keys.get(kid)
             if key is not None:
                 return key
             if not expired and now >= self._next_refresh_at:
-                generation = self._refresh(now)
+                generation = self._refresh()
                 key = generation.keys.get(kid)
                 if key is not None:
                     return key
