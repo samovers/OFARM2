@@ -863,8 +863,10 @@ kernel/tests/test_tenant_uow.py
 kernel/tests/test_application_runtime.py
 kernel/tests/test_migration_sets.py
 kernel/tests/test_postgresql_catalog_identity_unit.py
+kernel/tests/test_postgresql_migration_runner.py
 kernel/tests/test_postgresql_provisioning.py
 kernel/tests/test_postgresql_readiness_unit.py
+kernel/tests/test_postgresql_structural_compatibility.py
 kernel/tests/test_postgresql_tenant_migration.py
 kernel/tests/test_temporal_contract_governance.py
 kernel/tests/test_rewrite_architecture_check.py
@@ -982,8 +984,10 @@ python3.12 -m pytest -q \
   kernel/tests/test_application_runtime.py \
   kernel/tests/test_migration_sets.py \
   kernel/tests/test_postgresql_catalog_identity_unit.py \
+  kernel/tests/test_postgresql_migration_runner.py \
   kernel/tests/test_postgresql_provisioning.py \
   kernel/tests/test_postgresql_readiness_unit.py \
+  kernel/tests/test_postgresql_structural_compatibility.py \
   kernel/tests/test_postgresql_tenant_migration.py \
   kernel/tests/test_temporal_contract_governance.py \
   kernel/tests/test_rewrite_architecture_check.py \
@@ -1053,8 +1057,10 @@ None.
 - Demonstrated Phase A Blockers: pending exact-head design review.
 - Corrected before approval: the first draft's Phase B allowlist omitted the
   external tenant catalog-identity pin and its existing catalog/readiness
-  tests. The corrected allowlist admits only those mechanical V10 verifier
-  consequences inside this same boundary.
+  tests; the next pass also identified the existing migration-runner test for
+  the exact provisioning release classifier and the existing live structural-
+  drift test seam. The corrected allowlist admits only those mechanical V10
+  verifier and R10 classifier consequences inside this same boundary.
 - Follow-ups: future governed command/batch consumption, authorization #175,
   durable post-binding refusal, and later valid-time/dual-cut work each retain
   their own boundaries.
