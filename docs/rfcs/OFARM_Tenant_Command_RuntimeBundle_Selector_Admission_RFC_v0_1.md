@@ -853,6 +853,7 @@ docs/rfcs/OFARM_Tenant_Command_RuntimeBundle_Selector_Admission_RFC_v0_1.md
 kernel/migrations/0010_tenant_command_runtime_bundle_selector.sql
 deployment/postgresql/migration_sets.py
 deployment/postgresql/provisioning.py
+deployment/postgresql/catalog_identity.py
 deployment/postgresql/README.md
 kernel/tenant_command_runtime_bundle_selector.py
 kernel/tenant_uow.py
@@ -861,7 +862,10 @@ kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py
 kernel/tests/test_tenant_uow.py
 kernel/tests/test_application_runtime.py
 kernel/tests/test_migration_sets.py
+kernel/tests/test_postgresql_catalog_identity_unit.py
 kernel/tests/test_postgresql_provisioning.py
+kernel/tests/test_postgresql_readiness_unit.py
+kernel/tests/test_postgresql_tenant_migration.py
 kernel/tests/test_temporal_contract_governance.py
 kernel/tests/test_rewrite_architecture_check.py
 conformance/temporal_contract_candidate_check.py
@@ -903,6 +907,8 @@ V10 must:
 - advance the exact structural verifier to V10 only after every new catalog
   object, owner, definition, policy, ACL, RLS posture, and function grant is
   exact;
+- update the external tenant verifier/observer catalog-identity digest from a
+  clean, fully migrated PostgreSQL 17 target;
 - update `CURRENT_MIGRATION_SET`, provisioning phase classification, and
   PostgreSQL documentation mechanically; and
 - remain replayable only as the next migration after exact V9.
@@ -975,7 +981,10 @@ python3.12 -m pytest -q \
   kernel/tests/test_tenant_uow.py \
   kernel/tests/test_application_runtime.py \
   kernel/tests/test_migration_sets.py \
+  kernel/tests/test_postgresql_catalog_identity_unit.py \
   kernel/tests/test_postgresql_provisioning.py \
+  kernel/tests/test_postgresql_readiness_unit.py \
+  kernel/tests/test_postgresql_tenant_migration.py \
   kernel/tests/test_temporal_contract_governance.py \
   kernel/tests/test_rewrite_architecture_check.py \
   kernel/tests/test_tenant_command_runtime_bundle_selection.py
@@ -1042,6 +1051,10 @@ None.
 ### 18.3 Review disposition
 
 - Demonstrated Phase A Blockers: pending exact-head design review.
+- Corrected before approval: the first draft's Phase B allowlist omitted the
+  external tenant catalog-identity pin and its existing catalog/readiness
+  tests. The corrected allowlist admits only those mechanical V10 verifier
+  consequences inside this same boundary.
 - Follow-ups: future governed command/batch consumption, authorization #175,
   durable post-binding refusal, and later valid-time/dual-cut work each retain
   their own boundaries.
