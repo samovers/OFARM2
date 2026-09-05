@@ -58,6 +58,7 @@ SECURITY_AUDIT_OBSERVER_ROOT_REFERENCE_AST_SHA256 = (
 SECURITY_AUDIT_OBSERVER_ROOT_MAX_LINES = 1_800
 SECURITY_AUDIT_OBSERVER_ROOT_MAX_PHYSICAL_LINE_LENGTH = 120
 MODULE_BUDGETS = {
+    "kernel/profile_selection_validation.py": 320,
     "kernel/profile_runtime_provider.py": 350,
     "kernel/provider_import_policy.py": 260,
     "kernel/profile_runtime_services.py": 295,
@@ -417,6 +418,7 @@ _CREDENTIAL_DIAGNOSTIC_CARRIERS = (
     ),
 )
 TEST_GLOBS = (
+    "kernel/tests/*profile_selection*.py",
     "kernel/tests/*profile_runtime*.py",
     "kernel/tests/*oidc*.py",
     "kernel/tests/*principal*.py",
@@ -438,6 +440,10 @@ TEST_GLOBS = (
     "kernel/tests/*security_audit_store_loss*.py",
 )
 DIRECT_IMPORT_BOUNDS = {
+    "kernel/profile_selection_validation.py": frozenset(),
+    "kernel/runtime_bundle.py": frozenset(
+        {"kernel.profile_selection_validation"}
+    ),
     "kernel/security_audit_gap.py": frozenset(
         {
             "deployment.postgresql.audit_contract",
@@ -771,6 +777,59 @@ PROFILE_NEUTRAL_MODULES = (
     "kernel.legacy_m1.runtime",
 )
 PROFILE_LOADER_MODULE = "kernel.profile_runtime_provider"
+PROFILE_SELECTION_VALIDATION_MODULE = "kernel.profile_selection_validation"
+PROFILE_SELECTION_CONSUMERS = (
+    "kernel.profile_runtime",
+    "kernel.runtime_bundle",
+)
+PROFILE_SELECTION_RUNTIME_BUNDLE_MODULE = "kernel.runtime_bundle"
+PROFILE_SELECTION_FORBIDDEN_RUNTIME_MODULES = frozenset(
+    {
+        "kernel.config",
+        "kernel.profile_policy",
+        "kernel.profile_runtime",
+    }
+)
+PROFILE_SELECTION_PURE_IMPORTS = frozenset(
+    {
+        ("IMPORT", "re", 0, None),
+        ("FROM", "__future__", 0, (("annotations", None),)),
+        ("FROM", "dataclasses", 0, (("dataclass", None),)),
+    }
+)
+PROFILE_SELECTION_PURE_FORBIDDEN_NAMES = frozenset(
+    {
+        "Path",
+        "Popen",
+        "__import__",
+        "breakpoint",
+        "compile",
+        "connect",
+        "environ",
+        "eval",
+        "exec",
+        "getenv",
+        "import_module",
+        "input",
+        "now",
+        "open",
+        "print",
+        "read_bytes",
+        "read_text",
+        "request",
+        "resolve",
+        "run",
+        "sleep",
+        "socket",
+        "system",
+        "time",
+        "time_ns",
+        "urlopen",
+        "utcnow",
+        "write_bytes",
+        "write_text",
+    }
+)
 SI_SPECIFIC_NAME = re.compile(r"^SI(?![a-z])")
 
 
@@ -3192,6 +3251,104 @@ def _check_direct_import_bounds(snapshot: PythonSourceSnapshotV1) -> list[str]:
     return failures
 
 
+def _profile_selection_import_statements(
+    tree: ast.Module,
+) -> list[tuple[str, str | None, int, object]]:
+    statements = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            statements.extend(
+                ("IMPORT", alias.name, 0, alias.asname)
+                for alias in node.names
+            )
+        elif isinstance(node, ast.ImportFrom):
+            statements.append(
+                (
+                    "FROM",
+                    node.module,
+                    node.level,
+                    tuple((alias.name, alias.asname) for alias in node.names),
+                )
+            )
+    return statements
+
+
+def _profile_selection_purity_violations(tree: ast.Module) -> list[str]:
+    violations = []
+    imports = _profile_selection_import_statements(tree)
+    if (
+        len(imports) != len(PROFILE_SELECTION_PURE_IMPORTS)
+        or frozenset(imports) != PROFILE_SELECTION_PURE_IMPORTS
+    ):
+        violations.append("exact pure import set differs")
+    for line, reason in _dynamic_import_violations(tree):
+        violations.append(f"line {line}: dynamic import mechanism ({reason})")
+    for node in ast.walk(tree):
+        name = None
+        if isinstance(node, ast.Name):
+            name = node.id
+        elif isinstance(node, ast.Attribute):
+            if (
+                node.attr == "compile"
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "re"
+            ):
+                continue
+            name = node.attr
+        if name in PROFILE_SELECTION_PURE_FORBIDDEN_NAMES:
+            violations.append(f"line {node.lineno}: prohibited observation {name!r}")
+    return sorted(set(violations))
+
+
+def _check_profile_selection_architecture(
+    snapshot: PythonSourceSnapshotV1,
+    trees: collections.abc.Mapping[str, ast.Module],
+) -> list[str]:
+    required = {
+        PROFILE_SELECTION_VALIDATION_MODULE,
+        *PROFILE_SELECTION_CONSUMERS,
+    }
+    missing = sorted(required - set(snapshot.modules_by_name))
+    if missing:
+        return [f"required profile-selection module {module!r} is missing" for module in missing]
+
+    failures = [
+        f"kernel/profile_selection_validation.py:{violation}"
+        for violation in _profile_selection_purity_violations(
+            trees[PROFILE_SELECTION_VALIDATION_MODULE]
+        )
+    ]
+    graph = snapshot.import_graph
+    for consumer in PROFILE_SELECTION_CONSUMERS:
+        targets = {edge.target for edge in graph[consumer]}
+        if PROFILE_SELECTION_VALIDATION_MODULE not in targets:
+            relative = snapshot.modules_by_name[consumer].relative_path
+            failures.append(
+                f"{relative}: does not import the pure profile-selection validator"
+            )
+    runtime_targets = {edge.target for edge in graph[PROFILE_SELECTION_RUNTIME_BUNDLE_MODULE]}
+    if runtime_targets != {PROFILE_SELECTION_VALIDATION_MODULE}:
+        failures.append(
+            "kernel/runtime_bundle.py: direct repository imports differ from the "
+            "pure profile-selection boundary"
+        )
+
+    paths = _derive_reachability(
+        graph,
+        (PROFILE_SELECTION_RUNTIME_BUNDLE_MODULE,),
+    )
+    for forbidden in sorted(PROFILE_SELECTION_FORBIDDEN_RUNTIME_MODULES & paths.keys()):
+        path = paths[forbidden]
+        source = path[-2]
+        edge = next(edge for edge in graph[source] if edge.target == forbidden)
+        relative = snapshot.modules_by_name[source].relative_path
+        failures.append(
+            f"{relative}:{edge.line}: runtime bundle import path "
+            f"{' -> '.join(path)} reaches forbidden module {forbidden!r}"
+        )
+    return failures
+
+
 def _check_security_audit_gap_surface(
     snapshot: PythonSourceSnapshotV1,
     trees: collections.abc.Mapping[str, ast.Module],
@@ -5362,6 +5519,7 @@ def main() -> int:
         )
     )
     failures.extend(_check_direct_import_bounds(snapshot))
+    failures.extend(_check_profile_selection_architecture(snapshot, trees))
     failures.extend(_check_security_audit_gap_surface(snapshot, trees))
     failures.extend(_check_security_audit_approval_surface(snapshot, trees))
     failures.extend(_check_security_audit_break_glass_surface(snapshot, trees))

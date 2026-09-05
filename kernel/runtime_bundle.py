@@ -15,6 +15,12 @@ from typing import Any, Iterable
 
 import jsonschema
 
+from .profile_selection_validation import (
+    ProfileSelectionValidationError,
+    validate_profile_descriptor_document,
+    validate_profile_selection_documents,
+)
+
 
 BUNDLE_SCHEMA_VERSION = "ofarm.runtime-bundle.local.v1"
 COMPONENT_CATALOG_VERSION = "ofarm.runtime-component-catalog.local.v1"
@@ -902,15 +908,9 @@ def _validate_runtime_bundle_semantics(
             RuntimeComponentRole.REFERENCE_SNAPSHOT,
         }
     ]
-    from .profile_runtime import (
-        ProfileRuntimeError,
-        validate_profile_runtime_selection_documents,
-    )
     try:
-        validate_profile_runtime_selection_documents(
-            descriptor, profile_documents
-        )
-    except ProfileRuntimeError as exc:
+        validate_profile_selection_documents(descriptor, profile_documents)
+    except ProfileSelectionValidationError as exc:
         raise RuntimeBundleError(
             f"selected profile runtime is inconsistent: {exc}"
         ) from exc
@@ -1098,16 +1098,18 @@ def _validate_active_selection(
         )
 
     selected_tenant_refs: list[str] = []
-    for document, field in (
+    for document, scope_field in (
         (pack_activation_set, "targetScope"),
         (active_set, "deploymentScope"),
         (manifest, "deploymentScope"),
     ):
-        scope = document.get(field)
+        scope = document.get(scope_field)
         if type(scope) is not dict or scope.get("scopeType") != "TENANT":
-            raise RuntimeBundleError(f"selected {field} is not a tenant scope")
+            raise RuntimeBundleError(
+                f"selected {scope_field} is not a tenant scope"
+            )
         selected_tenant_refs.append(require_tenant_ref(
-            scope.get("scopeRef"), f"selected {field} tenant scope"
+            scope.get("scopeRef"), f"selected {scope_field} tenant scope"
         ))
 
     query_refs = {
@@ -1428,7 +1430,7 @@ class RuntimeBundleBuilder:
             for path in self.contract_schema_paths
         )
         bundle = RuntimeBundle.create(components)
-        self._validate_profile_descriptor_paths()
+        self._validate_profile_descriptor_paths(bundle)
         return bundle
 
     def _component_from_spec(self, spec: RuntimeComponentSpec) -> RuntimeComponent:
@@ -1454,7 +1456,7 @@ class RuntimeBundleBuilder:
             selected_bytes=raw,
         )
 
-    def _validate_profile_descriptor_paths(self) -> None:
+    def _validate_profile_descriptor_paths(self, bundle: RuntimeBundle) -> None:
         descriptor_specs = tuple(
             spec for spec in self.component_specs
             if spec.role is RuntimeComponentRole.PROFILE_DESCRIPTOR
@@ -1468,20 +1470,41 @@ class RuntimeBundleBuilder:
         descriptor_path = self.package_root.joinpath(
             *PurePosixPath(descriptor_spec.relative_path).parts
         )
-        from .profile_runtime import (
-            ProfileRuntimeError,
-            load_profile_runtime_descriptor,
+        descriptor_document, _canonical = strict_json_document(
+            bundle.component(
+                RuntimeComponentRole.PROFILE_DESCRIPTOR,
+                descriptor_spec.logical_ref,
+            ).canonical_bytes,
+            "selected profile descriptor",
         )
         try:
-            descriptor = load_profile_runtime_descriptor(
-                descriptor_path.parent, descriptor_path=descriptor_path
-            )
-        except ProfileRuntimeError as exc:
+            descriptor = validate_profile_descriptor_document(descriptor_document)
+        except ProfileSelectionValidationError as exc:
             raise RuntimeBundleError(
                 f"selected profile descriptor is inconsistent: {exc}"
             ) from exc
 
-        declared_instance_paths = set(descriptor.profile_instance_paths)
+        profile_root = descriptor_path.parent.resolve(strict=True)
+        try:
+            selected_policy_path = self._resolve_profile_file(
+                profile_root,
+                descriptor_document["evidencePolicyPath"],
+                "evidencePolicyPath",
+            )
+            declared_instance_paths = {
+                self._resolve_profile_file(
+                    profile_root,
+                    relative_path,
+                    f"profileInstanceFiles[{index}]",
+                )
+                for index, relative_path in enumerate(
+                    descriptor.profile_instance_files
+                )
+            }
+        except RuntimeBundleError as exc:
+            raise RuntimeBundleError(
+                f"selected profile descriptor is inconsistent: {exc}"
+            ) from exc
         catalog_instance_paths = {
             self.package_root.joinpath(
                 *PurePosixPath(spec.relative_path).parts
@@ -1503,13 +1526,42 @@ class RuntimeBundleBuilder:
         policy_path = self.package_root.joinpath(
             *PurePosixPath(policy_spec.relative_path).parts
         ).resolve(strict=True)
-        if policy_path != descriptor.evidence_policy_path:
+        if policy_path != selected_policy_path:
             raise RuntimeBundleError(
                 "component catalog does not retain the "
                 "descriptor-selected policy path"
             )
 
-        examples_root = (descriptor.profile_root / "examples").resolve(strict=True)
+        self._validate_reference_source_paths(profile_root)
+
+    @staticmethod
+    def _resolve_profile_file(root: Path, relative_path: object, field: str) -> Path:
+        if not isinstance(relative_path, str) or not relative_path:
+            raise RuntimeBundleError(f"{field} must be a non-empty relative path")
+        path = Path(relative_path)
+        if path.is_absolute():
+            raise RuntimeBundleError(
+                f"{field} must not be an absolute path: {relative_path!r}"
+            )
+        if ".." in path.parts:
+            raise RuntimeBundleError(
+                f"{field} must not contain '..': {relative_path!r}"
+            )
+        try:
+            resolved = (root / path).resolve()
+            resolved.relative_to(root)
+        except (OSError, ValueError) as exc:
+            raise RuntimeBundleError(
+                f"{field} escapes the profile root: {relative_path!r}"
+            ) from exc
+        if not resolved.is_file():
+            raise RuntimeBundleError(
+                f"{field} does not name an existing file: {relative_path!r}"
+            )
+        return resolved
+
+    def _validate_reference_source_paths(self, profile_root: Path) -> None:
+        examples_root = (profile_root / "examples").resolve(strict=True)
         for spec in self.component_specs:
             if (
                 spec.role is RuntimeComponentRole.REFERENCE_SOURCE
