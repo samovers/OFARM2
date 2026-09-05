@@ -10271,6 +10271,26 @@
       "sourcePath": "kernel/tests/test_review_baseline.py"
     },
     {
+      "nodeid": "kernel/tests/test_review_baseline_outcome_reporting.py::test_child_reporter_runs_are_deterministic_and_isolated",
+      "sourceModule": "kernel.tests.test_review_baseline_outcome_reporting",
+      "sourcePath": "kernel/tests/test_review_baseline_outcome_reporting.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_baseline_outcome_reporting.py::test_expected_failure_reasons_preserve_xpass_and_xfail_classifications",
+      "sourceModule": "kernel.tests.test_review_baseline_outcome_reporting",
+      "sourcePath": "kernel/tests/test_review_baseline_outcome_reporting.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_baseline_outcome_reporting.py::test_ordinary_pass_is_accepted_by_existing_consumers",
+      "sourceModule": "kernel.tests.test_review_baseline_outcome_reporting",
+      "sourcePath": "kernel/tests/test_review_baseline_outcome_reporting.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_baseline_outcome_reporting.py::test_strict_xpass_remains_failed_and_rejected",
+      "sourceModule": "kernel.tests.test_review_baseline_outcome_reporting",
+      "sourcePath": "kernel/tests/test_review_baseline_outcome_reporting.py"
+    },
+    {
       "nodeid": "kernel/tests/test_review_fixes.py::test_h1_as_of_reconstruction_is_coherent_across_supersession",
       "sourceModule": "kernel.tests.test_review_fixes",
       "sourcePath": "kernel/tests/test_review_fixes.py"
@@ -20601,8 +20621,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "a94ce7d919c5917abd437eba360508a09ffc7c824ac1116d2bb0033a7c0ed44b",
-  "entryCount": 4120,
+  "entriesSha256": "240ca0cee73593aa35d86924ae8b963692b6c7f86d1dc397edc74926c8a502cd",
+  "entryCount": 4124,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
