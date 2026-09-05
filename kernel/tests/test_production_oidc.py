@@ -570,7 +570,7 @@ def test_failed_expiry_refresh_cools_down_without_using_stale_keys():
     client = _client(handler)
     verifier = ProductionOidcVerifier(_config(), client, monotonic=clock)
     verifier.initialize()
-    clock.value = 11
+    clock.value = 10
 
     for _attempt in range(2):
         with pytest.raises(AuthenticationError) as raised:
