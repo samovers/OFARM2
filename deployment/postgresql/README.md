@@ -332,6 +332,19 @@ release operations and structural readiness. Once deployed, closed admission,
 an ineligible key, an invalid signature, a stale principal, a reused or wrong
 challenge, or any contract mismatch makes binding refuse.
 
+The additive `0011` migration exposes `ofarm.current_tenant_challenge()` to
+`ofarm_app` and `ofarm_worker`. Call it in a separate statement after creating
+the challenge in the same transaction. It returns only the current challenge
+UUID and its original database creation time in Unix microseconds, selected by
+the current PID and already-assigned full xid8. Missing or consumed context
+refuses with SQLSTATE `55000`. It does not allocate an xid, renew a challenge,
+or decide expiry; even an expired CHALLENGE reports its original time. Runtime
+roles retain no raw context-table or backend-observer access. The sealed
+two-column creator and binder are unchanged. See the
+[observation contract](../../docs/rfcs/OFARM_Tenant_Challenge_Observation_RFC_v0_1.md).
+The issuer must consume this metadata in a separate change before audit K-01
+can be closed; this migration alone does not repair capability issuance.
+
 The additive `0002` migration exposes three read-only issue #172 entry points:
 the pinned authentication runtime contract, exact active principal authority,
 and current signing authority. They are owned by the unreachable schema owner
