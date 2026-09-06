@@ -15,6 +15,7 @@ pin.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -23,6 +24,7 @@ from .context import ContextNotReconstructible, mint, parse_ts
 from .contracts import ContractViolation
 from .emission import PromotionEmitter, ReplayWriter, submission_evidence_refs
 from .problems import runtime_problem
+from .profile_runtime import ProfileRuntimeError
 
 if TYPE_CHECKING:
     from .profile_runtime_services import ProfileRuntimeServices
@@ -417,6 +419,18 @@ class EnvelopePersist:
 # stage: static profile applicability (ContextSnapshot assembly)
 # ---------------------------------------------------------------------------
 
+def _required_result_ref(result: object, field: str, owner: str) -> str:
+    try:
+        value = result.get(field) if isinstance(result, Mapping) else None
+    except Exception as exc:
+        raise ProfileRuntimeError(f"{owner} returned an unreadable result") from exc
+    if type(value) is not str or not value:
+        raise ProfileRuntimeError(
+            f"{owner} result requires a non-empty {field}"
+        )
+    return value
+
+
 class ProfileApplicabilityGate:
     def run(self, ctx: GateContext) -> GatePass | GateRefusal:
         try:
@@ -434,8 +448,12 @@ class ProfileApplicabilityGate:
                     f"({exc}); the claim stays a draft (fail closed)",
                     suggested_remediation="restore the active profile spine and "
                     "required reference snapshots before resubmitting")])
-        ctx.log("PACK_PROFILE_APPLICABILITY", "APPLICABLE",
-                refs=[snapshot["contextSnapshotId"]])
+        snapshot_ref = _required_result_ref(
+            snapshot,
+            "contextSnapshotId",
+            "profile applicability",
+        )
+        ctx.log("PACK_PROFILE_APPLICABILITY", "APPLICABLE", refs=[snapshot_ref])
         return GatePass()
 
 
@@ -686,10 +704,16 @@ class MaterializationGate:
             farm_scope_ref=ctx.farm_ref,
             reason_code="TRUTH_BASIS_ADVANCED")
         mat = materializer.recompute(ctx.cur, ctx.farm_ref)
+        basis_ref = _required_result_ref(mat, "basisRef", "materialization")
+        snapshot_ref = _required_result_ref(
+            mat,
+            "snapshotRef",
+            "materialization",
+        )
         # NOTE: no materializationResultRef on the trace — the commit-time
         # recompute emits Basis+Snapshot, not a boundary Result; those
         # receipts ride the gateSequence entry below
         ctx.materialization_triggered = True
         ctx.log("CURRENT_STATE_MATERIALIZATION", "UPDATED",
-                refs=[mat["basisRef"], mat["snapshotRef"]])
+                refs=[basis_ref, snapshot_ref])
         return GatePass()

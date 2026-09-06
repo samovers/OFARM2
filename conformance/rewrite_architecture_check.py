@@ -42,6 +42,7 @@ _PYTHON_SOURCE_SNAPSHOT_RFC_SHA256 = (
 MAX_FUNCTION_LINES = 80
 MAX_TEST_LINES = 800
 TEST_MODULE_BUDGETS = {
+    "kernel/tests/test_profile_runtime_services.py": 1_200,
     "kernel/tests/test_security_audit_process_crash.py": 1_250,
     "kernel/tests/test_security_audit_store_loss.py": 1_700,
 }
@@ -57,9 +58,10 @@ SECURITY_AUDIT_OBSERVER_ROOT_REFERENCE_AST_SHA256 = (
 SECURITY_AUDIT_OBSERVER_ROOT_MAX_LINES = 1_800
 SECURITY_AUDIT_OBSERVER_ROOT_MAX_PHYSICAL_LINE_LENGTH = 120
 MODULE_BUDGETS = {
+    "kernel/profile_selection_validation.py": 320,
     "kernel/profile_runtime_provider.py": 350,
     "kernel/provider_import_policy.py": 260,
-    "kernel/profile_runtime_services.py": 250,
+    "kernel/profile_runtime_services.py": 295,
     "kernel/profiles/si_ffs/runtime_provider.py": 120,
     "kernel/profiles/si_ffs/manifest_inputs.py": 90,
     "kernel/authentication.py": 100,
@@ -73,7 +75,8 @@ MODULE_BUDGETS = {
     "kernel/google_kms_signer.py": 120,
     "kernel/tenant_capability_issuer.py": 180,
     "kernel/key_control.py": 350,
-    "kernel/tenant_uow.py": 450,
+    "kernel/tenant_command_runtime_bundle_selector.py": 420,
+    "kernel/tenant_uow.py": 520,
     "kernel/api.py": 120,
     "kernel/deployment_identity.py": 50,
     "kernel/runtime_config.py": 180,
@@ -104,7 +107,7 @@ COMMAND_MODULE_BUDGETS = {
 }
 GROUP_BUDGETS = {
     "profile runtime": (
-        900,
+        1_050,
         (
             "kernel/profile_runtime_provider.py",
             "kernel/provider_import_policy.py",
@@ -155,8 +158,11 @@ GROUP_BUDGETS = {
         ),
     ),
     "tenant transaction": (
-        450,
-        ("kernel/tenant_uow.py",),
+        940,
+        (
+            "kernel/tenant_command_runtime_bundle_selector.py",
+            "kernel/tenant_uow.py",
+        ),
     ),
     "security audit ingest": (
         350,
@@ -416,6 +422,7 @@ _CREDENTIAL_DIAGNOSTIC_CARRIERS = (
     ),
 )
 TEST_GLOBS = (
+    "kernel/tests/*profile_selection*.py",
     "kernel/tests/*profile_runtime*.py",
     "kernel/tests/*oidc*.py",
     "kernel/tests/*principal*.py",
@@ -424,6 +431,7 @@ TEST_GLOBS = (
     "kernel/tests/*application_runtime*.py",
     "kernel/tests/*runtime_config*.py",
     "kernel/tests/*tenant_uow*.py",
+    "kernel/tests/*tenant_command_runtime_bundle_selector*.py",
     "kernel/tests/*security_audit_client*.py",
     "kernel/tests/*authentication_audit*.py",
     "kernel/tests/*request_router_audit*.py",
@@ -437,6 +445,10 @@ TEST_GLOBS = (
     "kernel/tests/*security_audit_store_loss*.py",
 )
 DIRECT_IMPORT_BOUNDS = {
+    "kernel/profile_selection_validation.py": frozenset(),
+    "kernel/runtime_bundle.py": frozenset(
+        {"kernel.profile_selection_validation"}
+    ),
     "kernel/security_audit_gap.py": frozenset(
         {
             "deployment.postgresql.audit_contract",
@@ -700,10 +712,54 @@ SECURITY_AUDIT_OBSERVER_ROOT_PROBE = (
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 _TENANT_UOW_MODULE = "kernel.tenant_uow"
-_TENANT_UOW_PUBLIC_SURFACE = frozenset({"binding", "batch", "begin_batch"})
-_TENANT_UOW_INIT_PARAMETERS = ("self", "binding", "allocate_batch")
+_TENANT_SELECTOR_MODULE = "kernel.tenant_command_runtime_bundle_selector"
+_TENANT_SELECTOR_RELATIVE_PATH = (
+    "kernel/tenant_command_runtime_bundle_selector.py"
+)
+_TENANT_UOW_PUBLIC_SURFACE = frozenset(
+    {
+        "binding",
+        "batch",
+        "begin_batch",
+        "resolve_commit_operation_claim_draft_runtime_bundle",
+    }
+)
+_TENANT_UOW_INIT_PARAMETERS = (
+    "self",
+    "binding",
+    "allocate_batch",
+    "resolve_bundle",
+)
 _TENANT_UOW_SLOTS = frozenset(
-    {"__binding", "__active", "__allocate_batch", "__batch"}
+    {
+        "__binding",
+        "__active",
+        "__allocate_batch",
+        "__batch",
+        "__resolve_bundle",
+        "__selector_state",
+        "__selected_bundle",
+        "__rollback_only",
+    }
+)
+_LEGACY_TENANT_UOW_SHAPE = (
+    frozenset({"binding", "batch", "begin_batch"}),
+    ("self", "binding", "allocate_batch"),
+    frozenset({"__binding", "__active", "__allocate_batch", "__batch"}),
+)
+_TENANT_UOW_SHAPE = (
+    _TENANT_UOW_PUBLIC_SURFACE,
+    _TENANT_UOW_INIT_PARAMETERS,
+    _TENANT_UOW_SLOTS,
+)
+_TENANT_SELECTOR_FORBIDDEN_IMPORTS = frozenset(
+    {
+        "deployment.postgresql.tenant_command_runtime_bundle_selection",
+        "deployment.postgresql.temporal_runtime_bundle_publication",
+        "kernel.profile_runtime",
+        "kernel.runtime_bundle_repository",
+        "kernel.store",
+    }
 )
 PROVIDER_IMPORT_POLICY_MODULES = (
     "kernel.profile_runtime_provider",
@@ -757,6 +813,7 @@ PRODUCTION_COMPOSITION_MODULES = frozenset(
         "kernel.signing_authority",
         "kernel.signing_receipt",
         "kernel.tenant_capability_issuer",
+        "kernel.tenant_command_runtime_bundle_selector",
         "kernel.tenant_uow",
     }
 )
@@ -770,6 +827,59 @@ PROFILE_NEUTRAL_MODULES = (
     "kernel.legacy_m1.runtime",
 )
 PROFILE_LOADER_MODULE = "kernel.profile_runtime_provider"
+PROFILE_SELECTION_VALIDATION_MODULE = "kernel.profile_selection_validation"
+PROFILE_SELECTION_CONSUMERS = (
+    "kernel.profile_runtime",
+    "kernel.runtime_bundle",
+)
+PROFILE_SELECTION_RUNTIME_BUNDLE_MODULE = "kernel.runtime_bundle"
+PROFILE_SELECTION_FORBIDDEN_RUNTIME_MODULES = frozenset(
+    {
+        "kernel.config",
+        "kernel.profile_policy",
+        "kernel.profile_runtime",
+    }
+)
+PROFILE_SELECTION_PURE_IMPORTS = frozenset(
+    {
+        ("IMPORT", "re", 0, None),
+        ("FROM", "__future__", 0, (("annotations", None),)),
+        ("FROM", "dataclasses", 0, (("dataclass", None),)),
+    }
+)
+PROFILE_SELECTION_PURE_FORBIDDEN_NAMES = frozenset(
+    {
+        "Path",
+        "Popen",
+        "__import__",
+        "breakpoint",
+        "compile",
+        "connect",
+        "environ",
+        "eval",
+        "exec",
+        "getenv",
+        "import_module",
+        "input",
+        "now",
+        "open",
+        "print",
+        "read_bytes",
+        "read_text",
+        "request",
+        "resolve",
+        "run",
+        "sleep",
+        "socket",
+        "system",
+        "time",
+        "time_ns",
+        "urlopen",
+        "utcnow",
+        "write_bytes",
+        "write_text",
+    }
+)
 SI_SPECIFIC_NAME = re.compile(r"^SI(?![a-z])")
 
 
@@ -3021,7 +3131,15 @@ def _environment_reads(tree: ast.Module) -> list[int]:
     return visitor.lines
 
 
-def _tenant_uow_class_violations(tree: ast.Module) -> list[tuple[int, str]]:
+def _tenant_uow_class_violations(
+    tree: ast.Module,
+    expected_shape: tuple[frozenset[str], tuple[str, ...], frozenset[str]] = (
+        _LEGACY_TENANT_UOW_SHAPE
+    ),
+) -> list[tuple[int, str]]:
+    expected_public_surface, expected_init_parameters, expected_slots = (
+        expected_shape
+    )
     classes = [
         node
         for node in tree.body
@@ -3045,7 +3163,7 @@ def _tenant_uow_class_violations(tree: ast.Module) -> list[tuple[int, str]]:
         ):
             public_surface.add(node.attr)
     violations = []
-    if public_surface != _TENANT_UOW_PUBLIC_SURFACE:
+    if public_surface != expected_public_surface:
         violations.append(
             (
                 unit.lineno,
@@ -3065,7 +3183,7 @@ def _tenant_uow_class_violations(tree: ast.Module) -> list[tuple[int, str]]:
         positional = (*arguments.posonlyargs, *arguments.args)
         parameter_names = tuple(argument.arg for argument in positional)
         if (
-            parameter_names != _TENANT_UOW_INIT_PARAMETERS
+            parameter_names != expected_init_parameters
             or arguments.vararg is not None
             or arguments.kwarg is not None
             or arguments.kwonlyargs
@@ -3085,7 +3203,7 @@ def _tenant_uow_class_violations(tree: ast.Module) -> list[tuple[int, str]]:
             for element in member.value.elts
         ):
             slots = frozenset(element.value for element in member.value.elts)
-    if slots != _TENANT_UOW_SLOTS:
+    if slots != expected_slots:
         violations.append((unit.lineno, "TenantUnitOfWork slots differ"))
     for node in ast.walk(unit):
         if (
@@ -3119,7 +3237,9 @@ def _check_tenant_uow_architecture(
 ) -> list[str]:
     failures = [
         f"kernel/tenant_uow.py:{line}: {reason}"
-        for line, reason in _tenant_uow_class_violations(trees[_TENANT_UOW_MODULE])
+        for line, reason in _tenant_uow_class_violations(
+            trees[_TENANT_UOW_MODULE], _TENANT_UOW_SHAPE
+        )
     ]
     for module in sorted(execution_closures.production):
         if module == _TENANT_UOW_MODULE or not (
@@ -3132,6 +3252,68 @@ def _check_tenant_uow_architecture(
                 f"{relative}:{line}: tenant UnitOfWork private-state access "
                 f"{attribute!r}"
             )
+    return failures
+
+
+def _check_tenant_runtime_bundle_selector_architecture(
+    snapshot: PythonSourceSnapshotV1,
+    execution_closures: _ImportExecutionClosuresV1,
+) -> list[str]:
+    failures = []
+    unit = snapshot.modules_by_relative_path.get(_TENANT_SELECTOR_RELATIVE_PATH)
+    if unit is None or unit.module_name != _TENANT_SELECTOR_MODULE:
+        return [f"{_TENANT_SELECTOR_RELATIVE_PATH}: selector module differs"]
+    path = execution_closures.production.get(_TENANT_SELECTOR_MODULE)
+    if path is None:
+        failures.append(
+            f"{_TENANT_SELECTOR_RELATIVE_PATH}: selector is not production reachable"
+        )
+    else:
+        targets = tuple(transition.target for transition in path)
+        required = (
+            "kernel.application_runtime",
+            _TENANT_UOW_MODULE,
+            _TENANT_SELECTOR_MODULE,
+        )
+        if targets[-len(required):] != required:
+            failures.append(
+                f"{_TENANT_SELECTOR_RELATIVE_PATH}: production path differs"
+            )
+    if _TENANT_SELECTOR_MODULE in execution_closures.legacy:
+        failures.append(
+            f"{_TENANT_SELECTOR_RELATIVE_PATH}: selector is legacy reachable"
+        )
+    selector_imports = {
+        edge.target for edge in snapshot.import_graph[_TENANT_SELECTOR_MODULE]
+    }
+    forbidden = {
+        target
+        for target in selector_imports
+        if target in _TENANT_SELECTOR_FORBIDDEN_IMPORTS
+        or target.startswith("kernel.legacy_m1.")
+        or target.startswith("kernel.profiles.")
+    }
+    if forbidden:
+        failures.append(
+            f"{_TENANT_SELECTOR_RELATIVE_PATH}: forbidden imports "
+            f"{sorted(forbidden)!r}"
+        )
+    if "kernel.runtime_bundle" not in selector_imports:
+        failures.append(
+            f"{_TENANT_SELECTOR_RELATIVE_PATH}: pure RuntimeBundle model import differs"
+        )
+    uow_imports = {
+        edge.target for edge in snapshot.import_graph[_TENANT_UOW_MODULE]
+    }
+    if _TENANT_SELECTOR_MODULE not in uow_imports:
+        failures.append(
+            "kernel/tenant_uow.py: fixed selector import is absent"
+        )
+    api_imports = {
+        edge.target for edge in snapshot.import_graph["kernel.api"]
+    }
+    if _TENANT_SELECTOR_MODULE in api_imports:
+        failures.append("kernel/api.py: selector is directly route reachable")
     return failures
 
 
@@ -3188,6 +3370,104 @@ def _check_direct_import_bounds(snapshot: PythonSourceSnapshotV1) -> list[str]:
                 f"{relative}: direct repository imports {sorted(actual)!r} "
                 f"do not equal fixed bound {sorted(expected)!r}"
             )
+    return failures
+
+
+def _profile_selection_import_statements(
+    tree: ast.Module,
+) -> list[tuple[str, str | None, int, object]]:
+    statements = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            statements.extend(
+                ("IMPORT", alias.name, 0, alias.asname)
+                for alias in node.names
+            )
+        elif isinstance(node, ast.ImportFrom):
+            statements.append(
+                (
+                    "FROM",
+                    node.module,
+                    node.level,
+                    tuple((alias.name, alias.asname) for alias in node.names),
+                )
+            )
+    return statements
+
+
+def _profile_selection_purity_violations(tree: ast.Module) -> list[str]:
+    violations = []
+    imports = _profile_selection_import_statements(tree)
+    if (
+        len(imports) != len(PROFILE_SELECTION_PURE_IMPORTS)
+        or frozenset(imports) != PROFILE_SELECTION_PURE_IMPORTS
+    ):
+        violations.append("exact pure import set differs")
+    for line, reason in _dynamic_import_violations(tree):
+        violations.append(f"line {line}: dynamic import mechanism ({reason})")
+    for node in ast.walk(tree):
+        name = None
+        if isinstance(node, ast.Name):
+            name = node.id
+        elif isinstance(node, ast.Attribute):
+            if (
+                node.attr == "compile"
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "re"
+            ):
+                continue
+            name = node.attr
+        if name in PROFILE_SELECTION_PURE_FORBIDDEN_NAMES:
+            violations.append(f"line {node.lineno}: prohibited observation {name!r}")
+    return sorted(set(violations))
+
+
+def _check_profile_selection_architecture(
+    snapshot: PythonSourceSnapshotV1,
+    trees: collections.abc.Mapping[str, ast.Module],
+) -> list[str]:
+    required = {
+        PROFILE_SELECTION_VALIDATION_MODULE,
+        *PROFILE_SELECTION_CONSUMERS,
+    }
+    missing = sorted(required - set(snapshot.modules_by_name))
+    if missing:
+        return [f"required profile-selection module {module!r} is missing" for module in missing]
+
+    failures = [
+        f"kernel/profile_selection_validation.py:{violation}"
+        for violation in _profile_selection_purity_violations(
+            trees[PROFILE_SELECTION_VALIDATION_MODULE]
+        )
+    ]
+    graph = snapshot.import_graph
+    for consumer in PROFILE_SELECTION_CONSUMERS:
+        targets = {edge.target for edge in graph[consumer]}
+        if PROFILE_SELECTION_VALIDATION_MODULE not in targets:
+            relative = snapshot.modules_by_name[consumer].relative_path
+            failures.append(
+                f"{relative}: does not import the pure profile-selection validator"
+            )
+    runtime_targets = {edge.target for edge in graph[PROFILE_SELECTION_RUNTIME_BUNDLE_MODULE]}
+    if runtime_targets != {PROFILE_SELECTION_VALIDATION_MODULE}:
+        failures.append(
+            "kernel/runtime_bundle.py: direct repository imports differ from the "
+            "pure profile-selection boundary"
+        )
+
+    paths = _derive_reachability(
+        graph,
+        (PROFILE_SELECTION_RUNTIME_BUNDLE_MODULE,),
+    )
+    for forbidden in sorted(PROFILE_SELECTION_FORBIDDEN_RUNTIME_MODULES & paths.keys()):
+        path = paths[forbidden]
+        source = path[-2]
+        edge = next(edge for edge in graph[source] if edge.target == forbidden)
+        relative = snapshot.modules_by_name[source].relative_path
+        failures.append(
+            f"{relative}:{edge.line}: runtime bundle import path "
+            f"{' -> '.join(path)} reaches forbidden module {forbidden!r}"
+        )
     return failures
 
 
@@ -5360,7 +5640,14 @@ def main() -> int:
             execution_closures,
         )
     )
+    failures.extend(
+        _check_tenant_runtime_bundle_selector_architecture(
+            snapshot,
+            execution_closures,
+        )
+    )
     failures.extend(_check_direct_import_bounds(snapshot))
+    failures.extend(_check_profile_selection_architecture(snapshot, trees))
     failures.extend(_check_security_audit_gap_surface(snapshot, trees))
     failures.extend(_check_security_audit_approval_surface(snapshot, trees))
     failures.extend(_check_security_audit_break_glass_surface(snapshot, trees))

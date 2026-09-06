@@ -95,6 +95,7 @@ The only accepted migrations are:
 - `kernel/migrations/0007_tenant_write_lock_selection_owner_admission.sql`;
 - `kernel/migrations/0008_tenant_command_runtime_bundle_selection.sql`;
 - `kernel/migrations/0009_runtime_bundle_global_content_retention.sql`;
+- `kernel/migrations/0010_tenant_command_runtime_bundle_selector.sql`;
 - `security_audit/migrations/0001_initial.sql`;
 - `security_audit/migrations/0002_hmac_v2_operations.sql`; and
 - `security_audit/migrations/0003_outcome_reason_vocabulary.sql`; and
@@ -172,6 +173,23 @@ append-only global blob inside the caller's transaction. Retention alone adds
 no tenant, bundle membership, selection, runtime activation, route, output, or
 current-truth effect. The existing RuntimeBundle publication function and role
 topology, including the governed database-owner path, remain unchanged.
+
+Tenant migration `0010` adds one zero-argument, read-only resolver for the
+persisted `COMMIT_OPERATION_CLAIM_DRAFT` selection. Only exact `ofarm_app` and
+`ofarm_worker` sessions may execute it after tenant binding. Two owner-facing
+SELECT-only RLS policies let the security-definer function observe the fixed
+same-tenant selection and its governed activation batch; the runtime roles
+still receive no direct selection-table privilege. The function returns the
+selection and the greatest tenant knowledge position visible in its one
+`READ COMMITTED` statement. It allocates no batch, takes no tenant write lock,
+and writes no selection, audit, route, output, or command state.
+
+`kernel/tenant_command_runtime_bundle_selector.py` then reconstructs the whole
+sealed bundle from retained bytes, authenticates the fixed binding and its
+sixteen required components, and returns one immutable result through the
+existing tenant UnitOfWork. Expected absence or corruption becomes one opaque,
+rollback-only refusal. The selection-control adapter remains unchanged and is
+not imported by the production reader.
 
 The A0/A1/A2/A4 matrix is the sole durable phase authority. A0 through head 4
 has all three capsules and no admission grants. A1 at exact head 5 has the V5

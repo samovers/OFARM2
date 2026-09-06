@@ -153,9 +153,9 @@ def test_exact_injected_trust_anchor_accepts_and_one_byte_change_refuses() -> No
         )
 
 
-def test_tenant_v9_external_catalog_anchor_is_literal() -> None:
+def test_tenant_v10_external_catalog_anchor_is_literal() -> None:
     assert catalog.TENANT_CATALOG_VERIFIER_DIGEST == (
-        "sha256:63439452af1358dcf717abf923e775f3d50f78fd8c8602b633b6dd4b838375c4"
+        "sha256:d9855f9be527f892f54cc5309df17ba00ce16168595bc646ea5a5aa82c53a123"
     )
 
 

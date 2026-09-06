@@ -46,6 +46,24 @@ jobs:
           conformance/evidence_publication_policy.py
           conformance/review_baseline_admission.py
           conformance/test_review_baseline_admission.py
+      - name: Test package schema-subset validator
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: >-
+          .review-venv/bin/python -m pytest
+          kernel/tests/test_ofarm_pkg_contract_check.py
+          -q
+          -p no:cacheprovider
+      - name: Test review baseline outcome reporting
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: >-
+          .review-venv/bin/python -m pytest
+          kernel/tests/test_review_baseline_outcome_reporting.py
+          -q
+          -p no:cacheprovider
       - name: Check package contracts and architecture
         run: .review-venv/bin/python conformance/ofarm_pkg_contract_check.py
       - name: Reject pull-request whitespace errors

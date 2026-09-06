@@ -2,6 +2,7 @@
 
 from ...context import (
     ContextAssembler,
+    SI_REGSR_FAMILY_ID,
     SIProductRegister,
     SIReferenceBindings,
 )
@@ -49,9 +50,10 @@ def build_si_runtime_services(
 
     policy_provider = DescriptorPolicyProvider.from_runtime_bundle(
         descriptor,
-        policy_component.canonical_bytes,
+        policy_component,
         supported_checks=OPERATION_FLOOR_CHECKS,
     )
+    registry_family = descriptor.reference_family(SI_REGSR_FAMILY_ID)
     reference_bindings = SIReferenceBindings.from_runtime_descriptor(descriptor)
     product_lookup = SIProductRegister(reference_bindings)
     product_lookup.load_from_store(store)
@@ -73,9 +75,11 @@ def build_si_runtime_services(
         materialization_specification=SI_MATERIALIZATION_SPECIFICATION,
         materializer=materializer,
         registry_reverification=RegistryReverificationValidator(
-            snapshot_prefix=reference_bindings.regsr_snapshot_prefix,
+            active_profile=descriptor,
+            reference_family=registry_family,
             product_lookup=product_lookup,
         ),
+        registry_reference_family=registry_family,
         output_specification=SI_OUTPUT_SPECIFICATION,
         output_assembler=SIOutputAssembler(
             store,

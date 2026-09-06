@@ -35,7 +35,7 @@ from .emission import PromotionTraceWriter, ReplayWriter
 from .problems import runtime_problem
 from .profile_runtime import (ProfileRuntimeError, resolve_bound_descriptor,
                               resolve_profile_route)
-from .profile_runtime_provider import load_profile_runtime_services
+from .profile_runtime_provider import _validate_services, load_profile_runtime_services
 from .profile_runtime_services import ProfileRuntimeServices
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
                      GateContext, GateRefusal, GateReplay, IngressHeader,
@@ -101,12 +101,11 @@ class GatePipeline:
                 store.active_profile_package_name,
                 descriptor,
             )
-        elif (
-            type(runtime_services) is not ProfileRuntimeServices
-            or runtime_services.descriptor is not descriptor
-        ):
-            raise ProfileRuntimeError(
-                "GatePipeline requires services bound to its exact descriptor"
+        else:
+            runtime_services = _validate_services(
+                runtime_services,
+                descriptor,
+                store,
             )
         self.runtime_services = runtime_services
         self.authority = AuthorityEvaluator(store)

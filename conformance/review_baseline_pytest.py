@@ -112,7 +112,7 @@ def pytest_runtest_logreport(report):
         "phase": report.when,
         "outcome": report.outcome,
     }
-    if getattr(report, "wasxfail", None):
+    if hasattr(report, "wasxfail"):
         phase["expectedFailure"] = str(report.wasxfail)
         phase["classification"] = (
             "xfailed" if report.outcome == "skipped" else "xpassed"

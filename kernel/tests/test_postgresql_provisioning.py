@@ -844,6 +844,7 @@ def _stable_release_protocol_evidence(
     v8_authority: AuthoritativeMigration,
     *,
     v9_authority: AuthoritativeMigration | None = None,
+    v10_authority: AuthoritativeMigration | None = None,
     replacement_index: int | None = None,
     replacement_value: object = None,
 ) -> _AdmissionConnection:
@@ -856,7 +857,13 @@ def _stable_release_protocol_evidence(
         ("r", "source_sha256", "text"),
         ("r", "version", "integer"),
     ]
-    ledger_head = 9 if v9_authority is not None else 8
+    ledger_head = (
+        10
+        if v10_authority is not None
+        else 9
+        if v9_authority is not None
+        else 8
+    )
     ledger_summary: list[object] = [
         ledger_head,
         1,
@@ -889,6 +896,22 @@ def _stable_release_protocol_evidence(
         TENANT_PROVISIONING_SPEC.digest
         if v9_authority is not None
         else None,
+        v10_authority.filename if v10_authority is not None else None,
+        v10_authority.source_sha256 if v10_authority is not None else None,
+        v10_authority.byte_length if v10_authority is not None else None,
+        (
+            v10_authority.applied_prefix_digest
+            if v10_authority is not None
+            else None
+        ),
+        (
+            TENANT_PROVISIONING_SPEC.migration_service.identity
+            if v10_authority is not None
+            else None
+        ),
+        TENANT_PROVISIONING_SPEC.digest
+        if v10_authority is not None
+        else None,
     ]
     if replacement_index is not None:
         ledger_summary[replacement_index] = replacement_value
@@ -914,7 +937,7 @@ def _controlled_v8_authority() -> AuthoritativeMigration:
 def _controlled_r9_release(
 ) -> tuple[AuthoritativeMigrationSet, AuthoritativeMigration]:
     authority = provisioning_module.TENANT_AUTHORITATIVE_MIGRATION_SET
-    assert len(authority.migrations) in (8, 9)
+    assert len(authority.migrations) in (8, 9, 10)
     v8_authority = (
         provisioning_module._authoritative_tenant_selection_activation_migration()
     )
@@ -924,7 +947,7 @@ def _controlled_r9_release(
         ._authoritative_tenant_global_content_retention_migration()
     )
     assert current_v9_authority == (
-        authority.migrations[8] if len(authority.migrations) == 9 else None
+        authority.migrations[8] if len(authority.migrations) >= 9 else None
     )
     controlled_r8 = replace(
         authority,
@@ -945,6 +968,31 @@ def _controlled_r9_release(
             digest=v9_authority.applied_prefix_digest,
         ),
         v9_authority,
+    )
+
+
+def _controlled_r10_release(
+) -> tuple[
+    AuthoritativeMigrationSet,
+    AuthoritativeMigration,
+    AuthoritativeMigration,
+]:
+    r9_authority, v9_authority = _controlled_r9_release()
+    v10_authority = AuthoritativeMigration(
+        version=10,
+        filename="0010_tenant_command_runtime_bundle_selector.sql",
+        source_sha256="sha256:" + "c" * 64,
+        byte_length=1010,
+        applied_prefix_digest="sha256:" + "d" * 64,
+    )
+    return (
+        replace(
+            r9_authority,
+            migrations=r9_authority.migrations + (v10_authority,),
+            digest=v10_authority.applied_prefix_digest,
+        ),
+        v9_authority,
+        v10_authority,
     )
 
 
@@ -1043,11 +1091,81 @@ def test_tenant_binding_stable_v8_refuses_without_literal_eighth_authority(
     assert differences == ["tenant binding admission phase differs"]
 
 
-def test_closed_tenant_release_family_recognizes_exact_r8_and_r9(
+def test_tenant_binding_stable_r10_is_the_same_a4_acl_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority, v9_authority, v10_authority = _controlled_r10_release()
+    monkeypatch.setattr(
+        provisioning_module,
+        "TENANT_AUTHORITATIVE_MIGRATION_SET",
+        authority,
+    )
+
+    classification, differences = (
+        provisioning_module._tenant_binding_admission_classification(
+            _stable_release_protocol_evidence(
+                authority.migrations[7],
+                v9_authority=v9_authority,
+                v10_authority=v10_authority,
+            ),  # type: ignore[arg-type]
+            TENANT_PROVISIONING_SPEC,
+        )
+    )
+
+    assert differences == []
+    assert classification is not None
+    assert classification.phase.name == "A4"
+    assert classification.selection_acl_substate.value == "STABLE_V8"
+
+
+@pytest.mark.parametrize(
+    "replacement_index",
+    (0, 1, 2, 21, 22, 23, 24, 25, 26),
+    ids=(
+        "count",
+        "minimum",
+        "maximum",
+        "filename",
+        "source-digest",
+        "source-length",
+        "prefix-digest",
+        "service",
+        "spec-digest",
+    ),
+)
+def test_tenant_binding_stable_r10_refuses_substituted_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    replacement_index: int,
+) -> None:
+    authority, v9_authority, v10_authority = _controlled_r10_release()
+    monkeypatch.setattr(
+        provisioning_module,
+        "TENANT_AUTHORITATIVE_MIGRATION_SET",
+        authority,
+    )
+
+    classification, differences = (
+        provisioning_module._tenant_binding_admission_classification(
+            _stable_release_protocol_evidence(
+                authority.migrations[7],
+                v9_authority=v9_authority,
+                v10_authority=v10_authority,
+                replacement_index=replacement_index,
+                replacement_value=None,
+            ),  # type: ignore[arg-type]
+            TENANT_PROVISIONING_SPEC,
+        )
+    )
+
+    assert classification is None
+    assert differences == ["tenant binding admission phase differs"]
+
+
+def test_closed_tenant_release_family_recognizes_exact_r8_r9_and_r10(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     current_authority = provisioning_module.TENANT_AUTHORITATIVE_MIGRATION_SET
-    assert len(current_authority.migrations) in (8, 9)
+    assert len(current_authority.migrations) == 10
     assert (
         provisioning_module
         ._authoritative_tenant_selection_activation_migration()
@@ -1058,9 +1176,14 @@ def test_closed_tenant_release_family_recognizes_exact_r8_and_r9(
         ._authoritative_tenant_global_content_retention_migration()
         == (
             current_authority.migrations[8]
-            if len(current_authority.migrations) == 9
+            if len(current_authority.migrations) >= 9
             else None
         )
+    )
+    assert (
+        provisioning_module
+        ._authoritative_tenant_runtime_bundle_selector_migration()
+        == current_authority.migrations[9]
     )
 
     r9_authority, v9_authority = _controlled_r9_release()
@@ -1080,38 +1203,62 @@ def test_closed_tenant_release_family_recognizes_exact_r8_and_r9(
         == v9_authority
     )
 
+    r10_authority, v9_authority, v10_authority = _controlled_r10_release()
+    monkeypatch.setattr(
+        provisioning_module,
+        "TENANT_AUTHORITATIVE_MIGRATION_SET",
+        r10_authority,
+    )
+    assert (
+        provisioning_module
+        ._authoritative_tenant_selection_activation_migration()
+        == r10_authority.migrations[7]
+    )
+    assert (
+        provisioning_module
+        ._authoritative_tenant_global_content_retention_migration()
+        == v9_authority
+    )
+    assert (
+        provisioning_module
+        ._authoritative_tenant_runtime_bundle_selector_migration()
+        == v10_authority
+    )
+
 
 @pytest.mark.parametrize(
     "malformation",
     (
         "length-7",
-        "length-10",
+        "length-11",
         "wrong-service",
         "reordered",
         "wrong-v8-version",
         "wrong-v8-filename",
         "wrong-v9-version",
         "wrong-v9-filename",
+        "wrong-v10-version",
+        "wrong-v10-filename",
     ),
 )
 def test_closed_tenant_release_family_refuses_malformed_authority(
     monkeypatch: pytest.MonkeyPatch,
     malformation: str,
 ) -> None:
-    authority, _v9_authority = _controlled_r9_release()
+    authority, _v9_authority, _v10_authority = _controlled_r10_release()
     migrations = list(authority.migrations)
     if malformation == "length-7":
         authority = replace(authority, migrations=tuple(migrations[:7]))
-    elif malformation == "length-10":
+    elif malformation == "length-11":
         authority = replace(
             authority,
             migrations=tuple(migrations)
             + (
                 AuthoritativeMigration(
-                    version=10,
-                    filename="0010_unsupported.sql",
+                    version=11,
+                    filename="0011_unsupported.sql",
                     source_sha256="sha256:" + "c" * 64,
-                    byte_length=1010,
+                    byte_length=1111,
                     applied_prefix_digest="sha256:" + "d" * 64,
                 ),
             ),
@@ -1128,7 +1275,13 @@ def test_closed_tenant_release_family_refuses_malformed_authority(
         migrations[7], migrations[8] = migrations[8], migrations[7]
         authority = replace(authority, migrations=tuple(migrations))
     else:
-        index = 7 if malformation.startswith("wrong-v8") else 8
+        index = (
+            7
+            if malformation.startswith("wrong-v8")
+            else 8
+            if malformation.startswith("wrong-v9")
+            else 9
+        )
         field = "version" if malformation.endswith("version") else "filename"
         value: object = 80 + index if field == "version" else "substitute.sql"
         migrations[index] = replace(migrations[index], **{field: value})
@@ -1147,6 +1300,11 @@ def test_closed_tenant_release_family_refuses_malformed_authority(
     assert (
         provisioning_module
         ._authoritative_tenant_global_content_retention_migration()
+        is None
+    )
+    assert (
+        provisioning_module
+        ._authoritative_tenant_runtime_bundle_selector_migration()
         is None
     )
 

@@ -25,6 +25,7 @@ from pathlib import Path
 
 from . import config
 from .problems import REGISTERED_REASON_CODES
+from .runtime_bundle import RuntimeComponent, RuntimeComponentRole
 
 
 INSUFFICIENCY_REASON_CODES = frozenset({
@@ -405,6 +406,7 @@ class DescriptorPolicyProvider:
     ):
         self.descriptor = descriptor
         self.policy_ref = descriptor.evidence_policy_ref
+        self.runtime_component = None
         self.recognized_rule_refs = frozenset({
             descriptor.evidence_policy_ref,
             descriptor.profile_ref,
@@ -427,16 +429,27 @@ class DescriptorPolicyProvider:
     def from_runtime_bundle(
         cls,
         descriptor,
-        canonical_policy_bytes,
+        runtime_component,
         *,
         supported_checks,
     ):
         """Build the governed provider from immutable selected policy bytes."""
-        return cls(
+        if (
+            type(runtime_component) is not RuntimeComponent
+            or runtime_component.role is not RuntimeComponentRole.PROFILE_POLICY
+            or runtime_component.logical_ref != descriptor.evidence_policy_ref
+        ):
+            raise ProfilePolicyError(
+                "runtime policy provider requires the descriptor's exact "
+                "PROFILE_POLICY component"
+            )
+        provider = cls(
             descriptor,
-            canonical_policy_bytes=canonical_policy_bytes,
+            canonical_policy_bytes=runtime_component.canonical_bytes,
             supported_checks=supported_checks,
         )
+        provider.runtime_component = runtime_component
+        return provider
 
     @staticmethod
     def _supported_checks_key(supported_checks) -> tuple[str, ...] | None:

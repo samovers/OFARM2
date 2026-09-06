@@ -10,12 +10,20 @@ hard floor breaks refuse (RETAIN_DRAFT), exceptions route to the advisor queue.
 """
 from __future__ import annotations
 
+import copy
+import json
 from datetime import datetime, timedelta, timezone
 
 from . import config, policy, profile_policy, sufficiency
-from .context import current_reference_snapshot, parse_ts
-from .contracts import ContractViolation, UnknownContract, sha256_of
-from .problems import runtime_problem
+from .context import SI_REGSR_FAMILY_ID, current_reference_snapshot, parse_ts
+from .contracts import ContractViolation, UnknownContract, canonical_json, sha256_of
+from .problems import REGISTERED_REASON_CODES, runtime_problem
+from .profile_runtime import ProfileRuntimeDescriptor, ProfileRuntimeError, ReferenceFamily
+from .profile_runtime_services import (
+    RegistryReverificationDisposition,
+    RegistryReverificationOutcome,
+    RegistryReverificationRequest,
+)
 from .stages import GateContext, GatePass, GateRefusal
 
 
@@ -190,17 +198,6 @@ def _structure_target_identity(ctx: GateContext, assertion_ref: str) -> str | No
         return None
     payload = ctx.store.get_payload(sp[0]["dst_record_id"])
     return payload.get("identityRecordRef") if payload else None
-
-
-def _verified_product_binding(ctx: GateContext) -> dict | None:
-    """The carrier's first CROP_PROTECTION_PRODUCT binding, if any. Resolves
-    binding refs kind-checked (a wrong-kind ref is not a binding and never a
-    KeyError); CodeBindingValidator refuses wrong-kind refs governably first."""
-    bindings = sufficiency.resolved_bindings(
-        ctx.store, ctx.sub["payload"].get("agronomicIdentityBindingRefs", []))
-    product_bindings = [b for b in bindings
-                        if b.get("bindingRole") == "CROP_PROTECTION_PRODUCT"]
-    return product_bindings[0] if product_bindings else None
 
 
 def _carrier_admits_bound(payload: dict) -> bool:
@@ -1072,25 +1069,88 @@ class RegistryReverificationValidator:
     snapshot advance is identity-grade only where the snapshot carries
     decision-number data; anything weaker routes to review.
 
-    A selected profile provider supplies the snapshot family and lookup.
+    A selected profile provider supplies the exact REGSR family and lookup.
     """
 
-    def __init__(self, *, snapshot_prefix, product_lookup):
-        self.snapshot_prefix = snapshot_prefix
+    def __init__(self, *, active_profile, reference_family, product_lookup):
+        if type(active_profile) is not ProfileRuntimeDescriptor:
+            raise ProfileRuntimeError(
+                "SI registry service requires a trusted profile descriptor"
+            )
+        expected_family = active_profile.reference_family(SI_REGSR_FAMILY_ID)
+        if type(reference_family) is not ReferenceFamily \
+                or reference_family is not expected_family:
+            raise ProfileRuntimeError(
+                "SI registry service requires the descriptor's exact REGSR family"
+            )
+        if (
+            getattr(product_lookup, "runtime_bundle", None) is None
+            or product_lookup.bindings.regsr_snapshot_prefix
+            != reference_family.snapshot_prefix
+        ):
+            raise ProfileRuntimeError(
+                "SI registry lookup lacks exact REGSR runtime provenance"
+            )
+        self.active_profile = active_profile
+        self.reference_family = reference_family
+        self.runtime_bundle = product_lookup.runtime_bundle
+        self.selected_input_bindings = product_lookup.selected_input_bindings
+        self.snapshot_prefix = reference_family.snapshot_prefix
         self.product_lookup = product_lookup
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
-        product_binding = _verified_product_binding(ctx)
+    def run(
+        self,
+        request: RegistryReverificationRequest,
+    ) -> RegistryReverificationOutcome:
+        if type(request) is not RegistryReverificationRequest:
+            raise ProfileRuntimeError(
+                "SI registry service requires the exact detached request type"
+            )
+        try:
+            claim = json.loads(request.claim_canonical_bytes)
+            bindings = tuple(
+                json.loads(value)
+                for value in request.resolved_binding_canonical_bytes
+            )
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ProfileRuntimeError("SI registry request bytes are invalid") from exc
+        if type(claim) is not dict or any(type(value) is not dict for value in bindings):
+            raise ProfileRuntimeError("SI registry request payloads must be objects")
+        product_bindings = [
+            binding for binding in bindings
+            if binding.get("bindingRole") == "CROP_PROTECTION_PRODUCT"
+        ]
+        product_binding = product_bindings[0] if product_bindings else None
         if not (product_binding and product_binding["bindingState"] == "VERIFIED"):
-            return None
-        current = current_reference_snapshot(ctx.store, self.snapshot_prefix)
-        current_id = current["referenceSnapshotId"] if current else None
-        captured_against = ctx.sub.get("capturedAgainstSnapshotRef") \
+            return RegistryReverificationOutcome(
+                RegistryReverificationDisposition.NO_EFFECT
+            )
+        current_id = request.current_reference_snapshot_ref
+        captured_against = claim.get("capturedAgainstSnapshotRef") \
             or (product_binding.get("referenceSnapshotRefs") or [None])[0]
         if not (current_id and captured_against and captured_against != current_id):
-            return None
-        event_time = ctx.event_time or ctx.captured_at
+            return RegistryReverificationOutcome(
+                RegistryReverificationDisposition.NO_EFFECT
+            )
+        family_root = self.reference_family.snapshot_prefix
+        if not (current_id == family_root or current_id.startswith(family_root + ".")):
+            raise ProfileRuntimeError("current registry snapshot is outside REGSR")
         decision_number = product_binding["bindingValue"].get("registrationRef")
+        if not (
+            captured_against == family_root
+            or captured_against.startswith(family_root + ".")
+        ):
+            return RegistryReverificationOutcome(
+                RegistryReverificationDisposition.REVIEW_REQUIRED,
+                problem=runtime_problem(
+                    "PRODUCT_BINDING_UNRESOLVED",
+                    "Re-verification not confirmable",
+                    f"captured snapshot {captured_against} is outside the active "
+                    f"registry family {family_root}; identity cannot be "
+                    "re-confirmed, so the record routes to review",
+                    severity="WARNING",
+                ),
+            )
         confirmed = (
             self.product_lookup.lookup_by_decision(current_id, decision_number)
             if decision_number else None
@@ -1098,26 +1158,31 @@ class RegistryReverificationValidator:
         if confirmed is not None:
             valid_until = (confirmed.get("decision", {}).get("validUntil")
                            or confirmed.get("registrationValidUntil") or "")
-            if valid_until and valid_until < (event_time or "")[:10]:
-                ctx.review_route_reasons.append(runtime_problem(
-                    "SUPERSEDED_RECORD_USED", "Registry snapshot discrepancy",
-                    f"decision {decision_number} validity ended {valid_until} per "
-                    f"current snapshot {current_id}, before the event time; "
-                    "discrepancy recorded and routed to review, never silent "
-                    "acceptance", severity="WARNING"))
-            else:
-                ctx.log("VALIDATION", "REGISTRY_REVERIFIED",
-                        rationale=f"identity re-verified by decision number "
-                                  f"{decision_number} against {current_id}")
-        else:
-            ctx.review_route_reasons.append(runtime_problem(
+            if valid_until and valid_until < request.event_time[:10]:
+                return RegistryReverificationOutcome(
+                    RegistryReverificationDisposition.REVIEW_REQUIRED,
+                    problem=runtime_problem(
+                        "SUPERSEDED_RECORD_USED", "Registry snapshot discrepancy",
+                        f"decision {decision_number} validity ended {valid_until} per "
+                        f"current snapshot {current_id}, before the event time; "
+                        "discrepancy recorded and routed to review, never silent "
+                        "acceptance", severity="WARNING"),
+                )
+            return RegistryReverificationOutcome(
+                RegistryReverificationDisposition.REVERIFIED,
+                rationale=f"identity re-verified by decision number "
+                          f"{decision_number} against {current_id}",
+            )
+        return RegistryReverificationOutcome(
+            RegistryReverificationDisposition.REVIEW_REQUIRED,
+            problem=runtime_problem(
                 "PRODUCT_BINDING_UNRESOLVED", "Re-verification not confirmable",
                 f"the current snapshot {current_id} carries no decision-number "
                 f"data for {decision_number or 'this binding'}; identity cannot "
                 "be re-confirmed on this surface (regsrCode is a locator, not "
                 "identity — D9), so the record routes to review",
-                severity="WARNING"))
-        return None
+                severity="WARNING"),
+        )
 
 
 class CarrierStore:
@@ -1161,9 +1226,8 @@ COMMON_SEQUENCE = (
 # trace — the validation checks passed, the storage step refused)
 def _operation_sequence_for_validation_policy(
     validation_policy: dict,
-    registry_reverification,
 ) -> tuple:
-    sequence = (
+    return (
         CarrierSchemaValidator(),
         CarrierSemanticsValidator(validation_policy),
         ExecutionExtentValidator(validation_policy),
@@ -1171,7 +1235,92 @@ def _operation_sequence_for_validation_policy(
         ActorAttributionValidator(),
         CodeBindingValidator(validation_policy),
     )
-    return sequence + (registry_reverification,)
+
+
+def _registry_request(ctx: GateContext) -> RegistryReverificationRequest:
+    try:
+        family = ctx.runtime_services.registry_reference_family
+        current = (
+            current_reference_snapshot(ctx.store, family.snapshot_prefix)
+            if family is not None else None
+        )
+        binding_refs = ctx.sub["payload"].get(
+            "agronomicIdentityBindingRefs", []
+        )
+        bindings = sufficiency.resolved_bindings(ctx.store, binding_refs)
+        return RegistryReverificationRequest(
+            claim_canonical_bytes=canonical_json(ctx.sub).encode("utf-8"),
+            resolved_binding_canonical_bytes=tuple(
+                canonical_json(binding).encode("utf-8") for binding in bindings
+            ),
+            current_reference_snapshot_ref=(
+                current["referenceSnapshotId"] if current else None
+            ),
+            event_time=ctx.event_time or ctx.captured_at,
+        )
+    except Exception as exc:
+        raise ProfileRuntimeError(
+            "registry reverification request could not be constructed"
+        ) from exc
+
+
+def _validated_registry_problem(
+    ctx: GateContext,
+    problem: object,
+    severity: str,
+) -> dict:
+    if type(problem) is not dict:
+        raise ProfileRuntimeError("registry outcome requires a RuntimeProblem")
+    try:
+        contract = ctx.store.registry.validate(problem)
+        accepted = copy.deepcopy(problem)
+    except Exception as exc:
+        raise ProfileRuntimeError("registry outcome problem is invalid") from exc
+    if (
+        contract.kind != "ofarm.runtimeproblem.v0.1"
+        or accepted.get("reasonCode") not in REGISTERED_REASON_CODES
+        or accepted.get("severity") != severity
+    ):
+        raise ProfileRuntimeError("registry outcome problem is not admissible")
+    return accepted
+
+
+def _run_registry_reverification(ctx: GateContext) -> GateRefusal | None:
+    request = _registry_request(ctx)
+    try:
+        outcome = ctx.runtime_services.registry_reverification.run(request)
+    except Exception as exc:
+        raise ProfileRuntimeError("registry reverification service failed") from exc
+    if (
+        type(outcome) is not RegistryReverificationOutcome
+        or type(outcome.disposition) is not RegistryReverificationDisposition
+    ):
+        raise ProfileRuntimeError("registry reverification returned an invalid outcome")
+    disposition = outcome.disposition
+    if disposition is RegistryReverificationDisposition.NO_EFFECT:
+        if outcome.problem is not None or outcome.rationale is not None:
+            raise ProfileRuntimeError("NO_EFFECT registry outcome has extra fields")
+        return None
+    if disposition is RegistryReverificationDisposition.REVERIFIED:
+        if (outcome.problem is not None or type(outcome.rationale) is not str
+                or not outcome.rationale):
+            raise ProfileRuntimeError("REVERIFIED registry outcome is malformed")
+        ctx.log("VALIDATION", "REGISTRY_REVERIFIED", rationale=outcome.rationale)
+        return None
+    if outcome.rationale is not None:
+        raise ProfileRuntimeError("registry problem outcome has a rationale")
+    severity = (
+        "WARNING"
+        if disposition is RegistryReverificationDisposition.REVIEW_REQUIRED
+        else "ERROR"
+    )
+    problem = _validated_registry_problem(ctx, outcome.problem, severity)
+    if disposition is RegistryReverificationDisposition.REVIEW_REQUIRED:
+        ctx.review_route_reasons.append(problem)
+        return None
+    if disposition is RegistryReverificationDisposition.REFUSED:
+        return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", problem)
+    raise ProfileRuntimeError("registry reverification disposition is unknown")
 
 
 class ValidationGate:
@@ -1216,13 +1365,15 @@ class ValidationGate:
             return _validation_policy_refusal(ctx, exc)
         operation_sequence = _operation_sequence_for_validation_policy(
             validation_policy,
-            ctx.runtime_services.registry_reverification,
         )
 
         for validator in operation_sequence:
             refusal = validator.run(ctx)
             if refusal:
                 return refusal
+        refusal = _run_registry_reverification(ctx)
+        if refusal:
+            return refusal
         # the trace's VALIDATION entry surfaces the attribution decision so
         # both authority decisions are visible on the promotion path
         ctx.log("VALIDATION", "PASS",
