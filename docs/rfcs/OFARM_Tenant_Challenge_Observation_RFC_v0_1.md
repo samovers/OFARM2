@@ -1,10 +1,12 @@
 # Current-transaction tenant challenge observation
 
-Status: proposed Phase A; no implementation or approval claimed.
+Status: implemented under the approved design; final hosted evidence and
+exact-head acceptance are pending.
 
 Decision: `OFARM2-TENANT-CHALLENGE-OBSERVATION-001`, version `1`.
 Base: `samovers/OFARM2` at `fcac9ba505226e7e2fa2ede0aedb7585721b1841`.
-Delivery and draft PR: assigned during Phase A preparation.
+Delivery: [#375](https://github.com/samovers/OFARM2/issues/375).
+PR: [#376](https://github.com/samovers/OFARM2/pull/376).
 Parent Tracking Epic: #167. Recovery status: None.
 
 ## Problem and one capability
@@ -104,7 +106,8 @@ to a savepoint removes a challenge created after that savepoint normally.
 
 ## Invariants and executable acceptance
 
-These are required future tests, not claimed execution evidence.
+The table defines required evidence. Executed local results are recorded below;
+the final hosted evidence remains a separate gate.
 
 | ID | Invariant | Owning implementation | Supported-entry negative case / proving test |
 |---|---|---|---|
@@ -195,6 +198,28 @@ evidence historical; do not relabel it as a new-head pass.
 
 ## Decision status, non-goals and follow-ups
 
+Local verification used Python 3.12.13 on Darwin and disposable PostgreSQL
+17.10 ARM clusters with the frozen native verifier image. It is supplemental,
+not a replacement for the locked hosted baseline. All 21 reader tests passed,
+including genuine challenge expiration and actual signed binding. The complete
+migration test passed rollback, exact 10-to-11 upgrade, no-op replay and catalog
+drift refusal. Nine affected existing live regressions and 119 unchanged
+capability-contract/vector tests passed. The focused migration/catalog/readiness/
+temporal unit selection passed 508 tests; four additional V11-tail refusal
+cases and 90 provisioning classification cases also passed. Selected-suite
+deselections are not presented as full baseline coverage. The package checker
+passed, and the generated full test inventory contains 4,194 cases.
+
+The existing ADRs are frozen conformance inputs and remain byte-identical.
+Follow-up navigation is confined to this RFC and the deployment README.
+
+No new production Python module, role, sealer, admission phase, writer, clock
+policy or duplicate expiry validator was introduced. The new reader's body is
+24 lines; the remaining SQL authenticates and updates the existing catalog
+verifier. All version-1 through version-10 migration bytes and the signed
+capability manifest are unchanged. The provisioning and conformance changes
+admit the exact version-11 release using the existing stable admission state.
+
 Not provisional. This observation has a permanent, narrow contract; there is no
 temporary adapter or deletion timer. Pre-deployment repository approval does
 not authorize deployment, release, production access or readiness claims.
@@ -203,7 +228,10 @@ Two independent source/design reviews found zero substantive design Blockers.
 They checked the PID/full-xid identity argument, existing owner read privileges
 and frozen-contract separation. Wording clarifications distinguish ordinary
 SELECT locks, backend-observer authority and STABLE statement snapshots.
-Delivery/PR publication and implementation evidence are pending.
+The task user approved decision version 1 after the live card in Codex task
+`01a07734-2572-7990-8e0d-c3bd908123c2`, at `2026-09-06T17:54:11.124Z`.
+The original task message is authority; this reference is navigation only.
+Final hosted evidence and exact-head merge authorization are pending.
 
 The separate issuer Delivery must compare the reader UUID with the creator UUID
 and bind this timestamp to the same immutable challenge object,
@@ -212,5 +240,5 @@ with protected creation time before KMS signing, and prove the real
 issuer-to-binder flow with delayed observations and exhausted windows. Legacy
 promotion findings and production import simplification remain separate work.
 
-Next: review this Phase A, create the named draft PR, and present decision
-version 1 for the required same-task approval before implementation.
+Next: complete the approved database observation slice and its verification,
+then present the exact-head acceptance packet before any merge.
