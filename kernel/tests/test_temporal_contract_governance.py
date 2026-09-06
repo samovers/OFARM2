@@ -30,6 +30,12 @@ _SELECTION_STORAGE_V8_CATALOG_SOURCE_SHA256 = (
 _SELECTION_STORAGE_V9_CATALOG_SOURCE_SHA256 = (
     "sha256:625935c7342205e1561ed5148826b4e6c866b13a1b4bff33fbc58c5c02f1420c"
 )
+_SELECTION_STORAGE_V10_CATALOG_DIGEST = (
+    "sha256:d9855f9be527f892f54cc5309df17ba00ce16168595bc646ea5a5aa82c53a123"
+)
+_SELECTION_STORAGE_V10_CATALOG_SOURCE_SHA256 = (
+    "sha256:4332df23952a77bd889280eb454cb556360c3e559beaf061b78bea247afe7590"
+)
 _SECURITY_AUDIT_V3_CATALOG_DIGEST = (
     "sha256:d897f0a02f851b37f64d883d384e2fa01ee356160553ffb5061f24de4581c074"
 )
@@ -351,23 +357,27 @@ def _selection_storage_catalog_source(*, classified: bool) -> bytes:
     v7_digest = _SELECTION_STORAGE_V7_CATALOG_DIGEST.encode("utf-8")
     v8_digest = _SELECTION_STORAGE_V8_CATALOG_DIGEST.encode("utf-8")
     v9_digest = _SELECTION_STORAGE_V9_CATALOG_DIGEST.encode("utf-8")
+    v10_digest = _SELECTION_STORAGE_V10_CATALOG_DIGEST.encode("utf-8")
 
     if (
         current.count(v7_digest) == 1
         and current.count(v8_digest) == 0
         and current.count(v9_digest) == 0
+        and current.count(v10_digest) == 0
     ):
         v7_source = current
     elif (
         current.count(v7_digest) == 0
         and current.count(v8_digest) == 1
         and current.count(v9_digest) == 0
+        and current.count(v10_digest) == 0
     ):
         v7_source = current.replace(v8_digest, v7_digest)
     elif (
         current.count(v7_digest) == 0
         and current.count(v8_digest) == 0
         and current.count(v9_digest) == 1
+        and current.count(v10_digest) == 0
     ):
         if (
             len(current) != byte_length
@@ -376,9 +386,22 @@ def _selection_storage_catalog_source(*, classified: bool) -> bytes:
         ):
             raise AssertionError("current V9 tenant catalog source differs")
         v7_source = current.replace(v9_digest, v7_digest)
+    elif (
+        current.count(v7_digest) == 0
+        and current.count(v8_digest) == 0
+        and current.count(v9_digest) == 0
+        and current.count(v10_digest) == 1
+    ):
+        if (
+            len(current) != byte_length
+            or "sha256:" + hashlib.sha256(current).hexdigest()
+            != _SELECTION_STORAGE_V10_CATALOG_SOURCE_SHA256
+        ):
+            raise AssertionError("current V10 tenant catalog source differs")
+        v7_source = current.replace(v10_digest, v7_digest)
     else:
         raise AssertionError(
-            "current tenant catalog source is not exact V7, V8, or V9"
+            "current tenant catalog source is not exact V7, V8, V9, or V10"
         )
 
     if (
@@ -446,7 +469,7 @@ def _selection_storage_v7_authority(
     current = temporal.load_tenant_migration_authority_snapshot()
     migrations = current.migration_set.migrations
     if (
-        len(migrations) not in (7, 8, 9)
+        len(migrations) not in (7, 8, 9, 10)
         or tuple(migration.version for migration in migrations[:7])
         != tuple(range(1, 8))
         or current.migration_set.prefix_digest(7)
@@ -653,7 +676,7 @@ def _selection_storage_expected_current_state() -> str:
     if len(migrations) == 7 and not adapter_present:
         return temporal.SELECTION_STORAGE_CONFORMANT_ABSENT
     if (
-        len(migrations) in (8, 9)
+        len(migrations) in (8, 9, 10)
         and migrations[7].version == 8
         and migrations[7].filename
         == temporal.SELECTION_STORAGE_MIGRATION_FILENAME
@@ -671,9 +694,20 @@ def _selection_storage_expected_current_state() -> str:
             )
             == temporal.GLOBAL_CONTENT_RETENTION_MIGRATION_CLASSIFIED
         ):
-            return temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+            if len(migrations) == 9:
+                return temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
+            if (
+                migrations[9].version == 10
+                and migrations[9].filename
+                == temporal.TRUSTED_COMMAND_SELECTOR_MIGRATION_FILENAME
+                and (
+                    PACKAGE_ROOT
+                    / temporal.TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH
+                ).is_file()
+            ):
+                return temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
     raise AssertionError(
-        "current selection-storage pair is not exact V7, V8, or V9"
+        "current selection-storage pair is not exact V7, V8, V9, or V10"
     )
 
 
@@ -2526,7 +2560,11 @@ def test_complete_check_uses_one_public_snapshot_and_one_initializer_ast(
     )
 
     assert builder_calls == [temporal.PACKAGE_ROOT]
-    assert ast_calls == [temporal.POSTGRESQL_INITIALIZER_MODULE]
+    assert ast_calls == [
+        temporal.TRUSTED_COMMAND_SELECTOR_MODULE,
+        temporal.SELECTION_STORAGE_ADAPTER_MODULE,
+        temporal.POSTGRESQL_INITIALIZER_MODULE,
+    ]
 
 
 def test_complete_check_propagates_classified_state(
@@ -3976,15 +4014,16 @@ def test_selection_storage_refuses_invalid_migration_state(
     migrations = current.migration_set.migrations
     if state == "too-short":
         changed = migrations[:6]
-        message = "not exact V7, V8, or V9"
+        message = "not exact V7, V8, V9, or V10"
     elif state == "too-long":
         changed = (
             *migrations,
             migrations[-1],
             migrations[-1],
             migrations[-1],
+            migrations[-1],
         )
-        message = "not exact V7, V8, or V9"
+        message = "not exact V7, V8, V9, or V10"
     else:
         changed = (
             _changed_migration(migrations[0], version=2),
@@ -4226,6 +4265,226 @@ def test_selection_storage_refuses_every_initializer_import_form(
         temporal._validate_selection_storage_conformance(
             authority,
             snapshot,
+        )
+
+
+@pytest.fixture(scope="module")
+def trusted_selector_evidence():
+    authority = temporal.load_tenant_migration_authority_snapshot()
+    snapshot = temporal._build_selection_storage_snapshot()
+    selection_state = temporal._classify_selection_storage_pair(
+        authority,
+        snapshot,
+    )
+    retention_state = temporal._classify_global_content_retention_migration(
+        authority,
+        authority.migration_set.prefix_digest(8),
+    )
+    return authority, snapshot, selection_state, retention_state
+
+
+def _classify_trusted_selector(evidence, snapshot=None, authority=None):
+    current_authority, current_snapshot, selection_state, retention_state = (
+        evidence
+    )
+    return temporal._classify_trusted_command_selector(
+        authority or current_authority,
+        snapshot or current_snapshot,
+        selection_state,
+        retention_state,
+    )
+
+
+def test_trusted_command_selector_v10_is_exactly_classified(
+    trusted_selector_evidence,
+):
+    assert _classify_trusted_selector(trusted_selector_evidence) == (
+        temporal.TRUSTED_COMMAND_SELECTOR_MIGRATION_CLASSIFIED
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("version", 11),
+        ("filename", "0010_substitute.sql"),
+        ("byte_length", 1),
+        ("source_sha256", "sha256:" + "0" * 64),
+        ("source_bytes", b"SELECT 1"),
+    ),
+)
+def test_trusted_command_selector_refuses_changed_v10_migration(
+    trusted_selector_evidence,
+    field,
+    value,
+):
+    authority = trusted_selector_evidence[0]
+    migrations = list(authority.migration_set.migrations)
+    migrations[9] = _changed_migration(migrations[9], **{field: value})
+    changed = _changed_global_content_retention_authority(
+        authority,
+        migrations=tuple(migrations),
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="version-10 migration differs",
+    ):
+        _classify_trusted_selector(
+            trusted_selector_evidence,
+            authority=changed,
+        )
+
+
+@pytest.mark.parametrize(
+    ("digest", "prefix_overrides"),
+    (
+        ("sha256:" + "1" * 64, {}),
+        (None, {9: "sha256:" + "2" * 64}),
+        (None, {10: "sha256:" + "3" * 64}),
+    ),
+)
+def test_trusted_command_selector_refuses_release_identity_drift(
+    trusted_selector_evidence,
+    digest,
+    prefix_overrides,
+):
+    authority = _changed_global_content_retention_authority(
+        trusted_selector_evidence[0],
+        digest=digest,
+        prefix_overrides=prefix_overrides,
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="migration-set identity differs",
+    ):
+        _classify_trusted_selector(
+            trusted_selector_evidence,
+            authority=authority,
+        )
+
+
+@pytest.mark.parametrize("target", ("selector", "control"))
+def test_trusted_command_selector_refuses_binding_pin_drift(
+    trusted_selector_evidence,
+    target,
+):
+    _authority, snapshot, _selection, _retention = trusted_selector_evidence
+    module = (
+        temporal.TRUSTED_COMMAND_SELECTOR_MODULE
+        if target == "selector"
+        else temporal.SELECTION_STORAGE_ADAPTER_MODULE
+    )
+    source = snapshot.modules_by_name[module].source_text.replace(
+        temporal.TRUSTED_COMMAND_SELECTOR_PIN_LITERALS[
+            "_COMMAND_BINDING_DIGEST"
+        ],
+        "sha256:" + "0" * 64,
+        1,
+    )
+    changed_tree = ast.parse(source)
+    original_ast_for = snapshot.ast_for
+
+    def ast_for(module_name):
+        return changed_tree if module_name == module else original_ast_for(module_name)
+
+    changed = _selection_storage_snapshot_view(snapshot, ast_for=ast_for)
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="pin parity differs",
+    ):
+        _classify_trusted_selector(
+            trusted_selector_evidence,
+            snapshot=changed,
+        )
+
+
+def test_trusted_command_selector_refuses_control_or_profile_import(
+    trusted_selector_evidence,
+):
+    _authority, snapshot, _selection, _retention = trusted_selector_evidence
+    graph = dict(snapshot.import_graph)
+    edge_type = type(graph[temporal.TRUSTED_COMMAND_SELECTOR_MODULE][0])
+    graph[temporal.TRUSTED_COMMAND_SELECTOR_MODULE] = (
+        *graph[temporal.TRUSTED_COMMAND_SELECTOR_MODULE],
+        edge_type(
+            "deployment.postgresql.tenant_command_runtime_bundle_selection",
+            1,
+        ),
+        edge_type("kernel.profile_runtime", 2),
+    )
+    changed = _selection_storage_snapshot_view(snapshot, import_graph=graph)
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="import boundary differs",
+    ):
+        _classify_trusted_selector(
+            trusted_selector_evidence,
+            snapshot=changed,
+        )
+
+
+@pytest.mark.parametrize("closure", ("production", "legacy"))
+def test_trusted_command_selector_refuses_reachability_drift(
+    trusted_selector_evidence,
+    closure,
+):
+    _authority, snapshot, _selection, _retention = trusted_selector_evidence
+    if closure == "production":
+        reachability = dict(snapshot.production_reachability)
+        reachability.pop(temporal.TRUSTED_COMMAND_SELECTOR_MODULE)
+        changed = _selection_storage_snapshot_view(
+            snapshot,
+            production_reachability=reachability,
+        )
+        message = "production path differs"
+    else:
+        reachability = dict(snapshot.legacy_reachability)
+        reachability[temporal.TRUSTED_COMMAND_SELECTOR_MODULE] = (
+            "kernel.legacy_m1.api",
+            temporal.TRUSTED_COMMAND_SELECTOR_MODULE,
+        )
+        changed = _selection_storage_snapshot_view(
+            snapshot,
+            legacy_reachability=reachability,
+        )
+        message = "legacy import closure"
+
+    with pytest.raises(temporal.TemporalCandidateError, match=message):
+        _classify_trusted_selector(
+            trusted_selector_evidence,
+            snapshot=changed,
+        )
+
+
+def test_trusted_command_selector_refuses_a_second_function_marker_owner(
+    trusted_selector_evidence,
+):
+    _authority, snapshot, _selection, _retention = trusted_selector_evidence
+    modules = dict(snapshot.modules_by_relative_path)
+    original = modules[temporal.TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH]
+    modules["kernel/second_selector.py"] = SimpleNamespace(
+        relative_path="kernel/second_selector.py",
+        module_name="kernel.second_selector",
+        source_text=(
+            temporal.TRUSTED_COMMAND_SELECTOR_FIXED_FUNCTION + "()"
+        ),
+    )
+    assert original.source_text
+    changed = _selection_storage_snapshot_view(
+        snapshot,
+        modules_by_relative_path=modules,
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="marker ownership differs",
+    ):
+        _classify_trusted_selector(
+            trusted_selector_evidence,
+            snapshot=changed,
         )
 
 

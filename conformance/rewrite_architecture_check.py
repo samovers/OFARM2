@@ -75,7 +75,8 @@ MODULE_BUDGETS = {
     "kernel/google_kms_signer.py": 120,
     "kernel/tenant_capability_issuer.py": 180,
     "kernel/key_control.py": 350,
-    "kernel/tenant_uow.py": 450,
+    "kernel/tenant_command_runtime_bundle_selector.py": 420,
+    "kernel/tenant_uow.py": 520,
     "kernel/api.py": 120,
     "kernel/deployment_identity.py": 50,
     "kernel/runtime_config.py": 180,
@@ -157,8 +158,11 @@ GROUP_BUDGETS = {
         ),
     ),
     "tenant transaction": (
-        450,
-        ("kernel/tenant_uow.py",),
+        940,
+        (
+            "kernel/tenant_command_runtime_bundle_selector.py",
+            "kernel/tenant_uow.py",
+        ),
     ),
     "security audit ingest": (
         350,
@@ -427,6 +431,7 @@ TEST_GLOBS = (
     "kernel/tests/*application_runtime*.py",
     "kernel/tests/*runtime_config*.py",
     "kernel/tests/*tenant_uow*.py",
+    "kernel/tests/*tenant_command_runtime_bundle_selector*.py",
     "kernel/tests/*security_audit_client*.py",
     "kernel/tests/*authentication_audit*.py",
     "kernel/tests/*request_router_audit*.py",
@@ -707,10 +712,54 @@ SECURITY_AUDIT_OBSERVER_ROOT_PROBE = (
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 _TENANT_UOW_MODULE = "kernel.tenant_uow"
-_TENANT_UOW_PUBLIC_SURFACE = frozenset({"binding", "batch", "begin_batch"})
-_TENANT_UOW_INIT_PARAMETERS = ("self", "binding", "allocate_batch")
+_TENANT_SELECTOR_MODULE = "kernel.tenant_command_runtime_bundle_selector"
+_TENANT_SELECTOR_RELATIVE_PATH = (
+    "kernel/tenant_command_runtime_bundle_selector.py"
+)
+_TENANT_UOW_PUBLIC_SURFACE = frozenset(
+    {
+        "binding",
+        "batch",
+        "begin_batch",
+        "resolve_commit_operation_claim_draft_runtime_bundle",
+    }
+)
+_TENANT_UOW_INIT_PARAMETERS = (
+    "self",
+    "binding",
+    "allocate_batch",
+    "resolve_bundle",
+)
 _TENANT_UOW_SLOTS = frozenset(
-    {"__binding", "__active", "__allocate_batch", "__batch"}
+    {
+        "__binding",
+        "__active",
+        "__allocate_batch",
+        "__batch",
+        "__resolve_bundle",
+        "__selector_state",
+        "__selected_bundle",
+        "__rollback_only",
+    }
+)
+_LEGACY_TENANT_UOW_SHAPE = (
+    frozenset({"binding", "batch", "begin_batch"}),
+    ("self", "binding", "allocate_batch"),
+    frozenset({"__binding", "__active", "__allocate_batch", "__batch"}),
+)
+_TENANT_UOW_SHAPE = (
+    _TENANT_UOW_PUBLIC_SURFACE,
+    _TENANT_UOW_INIT_PARAMETERS,
+    _TENANT_UOW_SLOTS,
+)
+_TENANT_SELECTOR_FORBIDDEN_IMPORTS = frozenset(
+    {
+        "deployment.postgresql.tenant_command_runtime_bundle_selection",
+        "deployment.postgresql.temporal_runtime_bundle_publication",
+        "kernel.profile_runtime",
+        "kernel.runtime_bundle_repository",
+        "kernel.store",
+    }
 )
 PROVIDER_IMPORT_POLICY_MODULES = (
     "kernel.profile_runtime_provider",
@@ -764,6 +813,7 @@ PRODUCTION_COMPOSITION_MODULES = frozenset(
         "kernel.signing_authority",
         "kernel.signing_receipt",
         "kernel.tenant_capability_issuer",
+        "kernel.tenant_command_runtime_bundle_selector",
         "kernel.tenant_uow",
     }
 )
@@ -3081,7 +3131,15 @@ def _environment_reads(tree: ast.Module) -> list[int]:
     return visitor.lines
 
 
-def _tenant_uow_class_violations(tree: ast.Module) -> list[tuple[int, str]]:
+def _tenant_uow_class_violations(
+    tree: ast.Module,
+    expected_shape: tuple[frozenset[str], tuple[str, ...], frozenset[str]] = (
+        _LEGACY_TENANT_UOW_SHAPE
+    ),
+) -> list[tuple[int, str]]:
+    expected_public_surface, expected_init_parameters, expected_slots = (
+        expected_shape
+    )
     classes = [
         node
         for node in tree.body
@@ -3105,7 +3163,7 @@ def _tenant_uow_class_violations(tree: ast.Module) -> list[tuple[int, str]]:
         ):
             public_surface.add(node.attr)
     violations = []
-    if public_surface != _TENANT_UOW_PUBLIC_SURFACE:
+    if public_surface != expected_public_surface:
         violations.append(
             (
                 unit.lineno,
@@ -3125,7 +3183,7 @@ def _tenant_uow_class_violations(tree: ast.Module) -> list[tuple[int, str]]:
         positional = (*arguments.posonlyargs, *arguments.args)
         parameter_names = tuple(argument.arg for argument in positional)
         if (
-            parameter_names != _TENANT_UOW_INIT_PARAMETERS
+            parameter_names != expected_init_parameters
             or arguments.vararg is not None
             or arguments.kwarg is not None
             or arguments.kwonlyargs
@@ -3145,7 +3203,7 @@ def _tenant_uow_class_violations(tree: ast.Module) -> list[tuple[int, str]]:
             for element in member.value.elts
         ):
             slots = frozenset(element.value for element in member.value.elts)
-    if slots != _TENANT_UOW_SLOTS:
+    if slots != expected_slots:
         violations.append((unit.lineno, "TenantUnitOfWork slots differ"))
     for node in ast.walk(unit):
         if (
@@ -3179,7 +3237,9 @@ def _check_tenant_uow_architecture(
 ) -> list[str]:
     failures = [
         f"kernel/tenant_uow.py:{line}: {reason}"
-        for line, reason in _tenant_uow_class_violations(trees[_TENANT_UOW_MODULE])
+        for line, reason in _tenant_uow_class_violations(
+            trees[_TENANT_UOW_MODULE], _TENANT_UOW_SHAPE
+        )
     ]
     for module in sorted(execution_closures.production):
         if module == _TENANT_UOW_MODULE or not (
@@ -3192,6 +3252,68 @@ def _check_tenant_uow_architecture(
                 f"{relative}:{line}: tenant UnitOfWork private-state access "
                 f"{attribute!r}"
             )
+    return failures
+
+
+def _check_tenant_runtime_bundle_selector_architecture(
+    snapshot: PythonSourceSnapshotV1,
+    execution_closures: _ImportExecutionClosuresV1,
+) -> list[str]:
+    failures = []
+    unit = snapshot.modules_by_relative_path.get(_TENANT_SELECTOR_RELATIVE_PATH)
+    if unit is None or unit.module_name != _TENANT_SELECTOR_MODULE:
+        return [f"{_TENANT_SELECTOR_RELATIVE_PATH}: selector module differs"]
+    path = execution_closures.production.get(_TENANT_SELECTOR_MODULE)
+    if path is None:
+        failures.append(
+            f"{_TENANT_SELECTOR_RELATIVE_PATH}: selector is not production reachable"
+        )
+    else:
+        targets = tuple(transition.target for transition in path)
+        required = (
+            "kernel.application_runtime",
+            _TENANT_UOW_MODULE,
+            _TENANT_SELECTOR_MODULE,
+        )
+        if targets[-len(required):] != required:
+            failures.append(
+                f"{_TENANT_SELECTOR_RELATIVE_PATH}: production path differs"
+            )
+    if _TENANT_SELECTOR_MODULE in execution_closures.legacy:
+        failures.append(
+            f"{_TENANT_SELECTOR_RELATIVE_PATH}: selector is legacy reachable"
+        )
+    selector_imports = {
+        edge.target for edge in snapshot.import_graph[_TENANT_SELECTOR_MODULE]
+    }
+    forbidden = {
+        target
+        for target in selector_imports
+        if target in _TENANT_SELECTOR_FORBIDDEN_IMPORTS
+        or target.startswith("kernel.legacy_m1.")
+        or target.startswith("kernel.profiles.")
+    }
+    if forbidden:
+        failures.append(
+            f"{_TENANT_SELECTOR_RELATIVE_PATH}: forbidden imports "
+            f"{sorted(forbidden)!r}"
+        )
+    if "kernel.runtime_bundle" not in selector_imports:
+        failures.append(
+            f"{_TENANT_SELECTOR_RELATIVE_PATH}: pure RuntimeBundle model import differs"
+        )
+    uow_imports = {
+        edge.target for edge in snapshot.import_graph[_TENANT_UOW_MODULE]
+    }
+    if _TENANT_SELECTOR_MODULE not in uow_imports:
+        failures.append(
+            "kernel/tenant_uow.py: fixed selector import is absent"
+        )
+    api_imports = {
+        edge.target for edge in snapshot.import_graph["kernel.api"]
+    }
+    if _TENANT_SELECTOR_MODULE in api_imports:
+        failures.append("kernel/api.py: selector is directly route reachable")
     return failures
 
 
@@ -5515,6 +5637,12 @@ def main() -> int:
         _check_tenant_uow_architecture(
             snapshot,
             trees,
+            execution_closures,
+        )
+    )
+    failures.extend(
+        _check_tenant_runtime_bundle_selector_architecture(
+            snapshot,
             execution_closures,
         )
     )

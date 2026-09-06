@@ -2343,13 +2343,21 @@ def test_legacy_initializer_reverse_import_uses_initializer_provenance(
 
 _VALID_TENANT_UOW_SOURCE = """\
 class TenantUnitOfWork:
-    __slots__ = ("__binding", "__active", "__allocate_batch", "__batch")
+    __slots__ = (
+        "__binding", "__active", "__allocate_batch", "__batch",
+        "__resolve_bundle", "__selector_state", "__selected_bundle",
+        "__rollback_only",
+    )
 
-    def __init__(self, binding, allocate_batch):
+    def __init__(self, binding, allocate_batch, resolve_bundle):
         self.__binding = binding
         self.__active = False
         self.__allocate_batch = allocate_batch
         self.__batch = None
+        self.__resolve_bundle = resolve_bundle
+        self.__selector_state = None
+        self.__selected_bundle = None
+        self.__rollback_only = False
 
     @property
     def binding(self):
@@ -2362,6 +2370,9 @@ class TenantUnitOfWork:
     def begin_batch(self):
         self.__batch = self.__allocate_batch()
         return self.__batch
+
+    def resolve_commit_operation_claim_draft_runtime_bundle(self):
+        return self.__resolve_bundle()
 """
 
 
@@ -2401,6 +2412,98 @@ def test_tenant_policy_scans_reached_kernel_initializers(
         f"{initializer}:1: tenant UnitOfWork private-state access "
         "'_TenantUnitOfWork__connection'"
     ]
+
+
+def _tenant_selector_execution_state(
+    tmp_path,
+    selector_extra="",
+    legacy_runtime_extra="",
+):
+    root = _snapshot_tree(
+        tmp_path,
+        {
+            "kernel/__init__.py": "",
+            "kernel/api.py": "",
+            "kernel/application_runtime.py": (
+                "from .tenant_uow import TenantUnitOfWork\n"
+            ),
+            "kernel/tenant_uow.py": (
+                "from .tenant_command_runtime_bundle_selector import "
+                "TrustedCommandRuntimeBundle\n"
+                + _VALID_TENANT_UOW_SOURCE
+            ),
+            "kernel/tenant_command_runtime_bundle_selector.py": (
+                "from .runtime_bundle import RuntimeBundle\n" + selector_extra
+            ),
+            "kernel/runtime_bundle.py": "class RuntimeBundle: pass\n",
+            "kernel/legacy_m1/__init__.py": "",
+            "kernel/legacy_m1/api.py": "",
+            "kernel/legacy_m1/runtime.py": legacy_runtime_extra,
+            "deployment/__init__.py": "",
+            "deployment/postgresql/__init__.py": "",
+            (
+                "deployment/postgresql/"
+                "tenant_command_runtime_bundle_selection.py"
+            ): "",
+        },
+    )
+    return _execution_state(root)
+
+
+def test_tenant_selector_has_one_fixed_production_path(tmp_path):
+    snapshot, _trees, closures = _tenant_selector_execution_state(tmp_path)
+
+    assert (
+        rewrite_architecture_check
+        ._check_tenant_runtime_bundle_selector_architecture(
+            snapshot,
+            closures,
+        )
+        == []
+    )
+
+
+def test_tenant_selector_refuses_the_selection_control_import(tmp_path):
+    snapshot, _trees, closures = _tenant_selector_execution_state(
+        tmp_path,
+        "from deployment.postgresql import "
+        "tenant_command_runtime_bundle_selection\n",
+    )
+
+    assert (
+        rewrite_architecture_check
+        ._check_tenant_runtime_bundle_selector_architecture(
+            snapshot,
+            closures,
+        )
+        == [
+            "kernel/tenant_command_runtime_bundle_selector.py: forbidden "
+            "imports "
+            "['deployment.postgresql.tenant_command_runtime_bundle_selection']"
+        ]
+    )
+
+
+def test_tenant_selector_refuses_legacy_reachability(tmp_path):
+    snapshot, _trees, closures = _tenant_selector_execution_state(
+        tmp_path,
+        legacy_runtime_extra=(
+            "from kernel.tenant_command_runtime_bundle_selector "
+            "import TrustedCommandRuntimeBundle\n"
+        ),
+    )
+
+    assert (
+        rewrite_architecture_check
+        ._check_tenant_runtime_bundle_selector_architecture(
+            snapshot,
+            closures,
+        )
+        == [
+            "kernel/tenant_command_runtime_bundle_selector.py: "
+            "selector is legacy reachable"
+        ]
+    )
 
 
 def test_public_snapshot_golden_fixture_is_unchanged(tmp_path):

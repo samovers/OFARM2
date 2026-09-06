@@ -180,6 +180,18 @@ def test_image_identity_is_validated_before_runtime_io(monkeypatch):
     assert events == []
 
 
+def test_unchanged_application_composition_reaches_the_fixed_selector():
+    method = (
+        application_runtime.TenantUnitOfWork
+        .resolve_commit_operation_claim_draft_runtime_bundle
+    )
+
+    assert tuple(inspect.signature(method).parameters) == ("self",)
+    assert "tenant_command_runtime_bundle_selector" not in inspect.getsource(
+        application_runtime
+    )
+
+
 def _install_graph_fakes(monkeypatch, events, failures=None):
     failures = failures or {}
 
