@@ -1,6 +1,7 @@
 # Tenant capability issuance bounded by protected challenge time
 
-Status: proposed Phase A; implementation is not authorized by this document.
+Status: implemented under the approved design; final verification and exact-head
+acceptance remain separate gates. This document does not supply approval.
 Decision: `OFARM2-TENANT-CAPABILITY-DEADLINE-001`, version `1`.
 Delivery: [#377](https://github.com/samovers/OFARM2/issues/377), under #167.
 Base: `bb3fe718f16721165fcd1ac9cb634cf8fb2815c7`.
@@ -104,7 +105,7 @@ digests, preserving the existing helper-call evaluation order and refusal path.
 
 Both module and aggregate budgets apply. At the stated base:
 
-| Constraint | Existing limit | Baseline | Static corrected-design projection |
+| Constraint | Existing limit | Baseline | Implemented source |
 | --- | ---: | ---: | ---: |
 | Issuer module | 180 | 155 | 161 |
 | Capability-signing group | 1000 | 991 | 997 |
@@ -117,10 +118,10 @@ ceiling of 164 lines. The earlier factory-only estimate of 177 missed that
 aggregate constraint and would produce 1013 group lines. Removing the
 single-consumer helper eliminates a function, call and argument transfer in
 the same issuer boundary; it does not offset signing growth with UOW deletions.
-Keep all budgets unchanged, with no unrelated cleanup, line stuffing or new
-module. These projections were measured on throwaway candidate text, not an
-executed implementation. Actual source must pass all existing checks after
-implementation; line counts do not replace correctness or readability review.
+All budgets remain unchanged, with no unrelated cleanup, line stuffing or new
+production module. The implementation matches the corrected static projection
+and passes the existing architecture check. Line counts do not replace
+correctness or readability review.
 
 Preserve the frozen creator, binder, signed manifest, migrations, roles, key
 lifecycle, receipt verifier, signer, principal resolver, runtime composition,
@@ -160,11 +161,18 @@ binder/key/principal concurrency evidence for final revalidation.
 After semantic approval and implementation, run cheap checks and obtain a
 zero-Blocker exact-head content review before the existing admitted Linux
 x86_64/Python 3.12.13/PostgreSQL 17.10 three-cluster, two-run baseline and separate
-publication receipt. Old PR #376 evidence remains historical. There are no
-executed implementation results at this Phase A head.
+publication receipt. Old PR #376 evidence remains historical. The PR's current
+verification record identifies the exact implemented head and executed results;
+local Darwin/ARM checks do not establish locked Linux baseline equivalence.
+
+The task user approved this version in Codex task
+`01a07734-2572-7990-8e0d-c3bd908123c2` at `2026-09-07T11:11:30.828Z`, original
+message `msg_01a07b90-ee0c-79f3-bc4b-fe109dac7f2a`, after the refreshed complete
+card naming PR #378. This is navigation only; the original task message is
+authority. No merge or deployment authority is supplied by semantic approval.
 
 Not provisional: there is no temporary compatibility path. Repository approval
 does not authorize deployment, release, production access or a readiness claim.
 
-Next: complete Phase A review and present the named draft PR's decision card
-before implementing this capability.
+Next: complete the implemented slice's verification and present its exact-head
+final acceptance packet before any merge.

@@ -92,6 +92,8 @@ class _Connection:
         self._commit_error = commit_error
         self._rollback_error = rollback_error
         self._batch_position = batch_position
+        self._challenge_id = uuid4()
+        self._challenge_created_at_us = 1_788_000_000_000_123
 
     def execute(self, query, parameters=()):
         compact = " ".join(query.split())
@@ -100,7 +102,10 @@ class _Connection:
             self.info.transaction_status = TransactionStatus.INTRANS
             return _Cursor()
         if "create_tenant_challenge" in compact:
-            return _Cursor((uuid4(), AUDIENCE))
+            self._challenge_id = uuid4()
+            return _Cursor((self._challenge_id, AUDIENCE))
+        if "current_tenant_challenge" in compact:
+            return _Cursor((self._challenge_id, self._challenge_created_at_us))
         if "bind_tenant_capability" in compact:
             return _Cursor((None,))
         if "current_tenant_context" in compact:
@@ -243,6 +248,8 @@ def test_unit_of_work_binds_allocates_one_batch_and_commits(principal):
             del unit.binding
         assert unit.binding.tenant_id == principal.authority.tenant_id
         assert minter.challenges[0].audience == AUDIENCE
+        assert minter.challenges[0].challenge_id == connection._challenge_id
+        assert minter.challenges[0].created_at_us == connection._challenge_created_at_us
         batch = unit.begin_batch(request)
         assert batch.full_xid == 42
         assert batch.knowledge_position == 1
