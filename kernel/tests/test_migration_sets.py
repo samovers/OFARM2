@@ -256,7 +256,7 @@ def test_tenant_v8_pins_selection_storage_and_complete_release_identity():
     assert migration_set.prefix_digest(8) == \
         "sha256:7231c869066c56f7c642460d33391bab00456daecdb04530b34da7210e8e8a54"
     assert migration_set.digest == \
-        "sha256:bd80785f567e593edea9f88898c18cc8b8269bc8d71eb5aa385c595abc9d7b95"
+        "sha256:9d4f8716e4b547b449c7d312ab738ca04048fa4cc7a75d048cc77e1bb1e0e672"
     assert b"observed_migration_count <> 8" in migration.source_bytes
     assert b"version-8 selection policy inventory differs" in migration.source_bytes
     assert b"activate_commit_operation_claim_draft_runtime_bundle_selection" in (
@@ -279,7 +279,7 @@ def test_tenant_v9_pins_inert_runtime_content_retention_and_release_identity():
     assert migration_set.prefix_digest(9) == \
         "sha256:cef599a81bda42f84c6c9718845b245ecfa7d97564f5c132b0f12dda526d1293"
     assert migration_set.digest == \
-        "sha256:bd80785f567e593edea9f88898c18cc8b8269bc8d71eb5aa385c595abc9d7b95"
+        "sha256:9d4f8716e4b547b449c7d312ab738ca04048fa4cc7a75d048cc77e1bb1e0e672"
     assert b"observed_migration_count <> 9" in migration.source_bytes
     assert b"CREATE FUNCTION ofarm.retain_runtime_content(" in (
         migration.source_bytes
@@ -308,7 +308,7 @@ def test_tenant_v10_pins_fixed_read_only_selector_and_release_identity():
     assert migration.byte_length == 24_684
     assert migration_set.prefix_digest(10) == \
         "sha256:bd80785f567e593edea9f88898c18cc8b8269bc8d71eb5aa385c595abc9d7b95"
-    assert migration_set.digest == migration_set.prefix_digest(10)
+    assert migration_set.digest == migration_set.prefix_digest(11)
     assert b"observed_migration_count <> 10" in migration.source_bytes
     assert migration.source_bytes.count(
         b"CREATE POLICY tenant_command_runtime_bundle_"

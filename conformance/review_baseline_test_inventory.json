@@ -4026,7 +4026,7 @@
       "sourcePath": "kernel/tests/test_postgresql_catalog_identity_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_catalog_identity_unit.py::test_tenant_v10_external_catalog_anchor_is_literal",
+      "nodeid": "kernel/tests/test_postgresql_catalog_identity_unit.py::test_tenant_v11_external_catalog_anchor_is_literal",
       "sourceModule": "kernel.tests.test_postgresql_catalog_identity_unit",
       "sourcePath": "kernel/tests/test_postgresql_catalog_identity_unit.py"
     },
@@ -5806,12 +5806,27 @@
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_closed_tenant_release_family_recognizes_exact_r8_r9_and_r10",
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_closed_tenant_release_family_recognizes_exact_r8_through_r11[10]",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_closed_tenant_release_family_refuses_malformed_authority[length-11]",
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_closed_tenant_release_family_recognizes_exact_r8_through_r11[11]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_closed_tenant_release_family_recognizes_exact_r8_through_r11[8]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_closed_tenant_release_family_recognizes_exact_r8_through_r11[9]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_closed_tenant_release_family_refuses_malformed_authority[length-12]",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
@@ -5822,6 +5837,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_closed_tenant_release_family_refuses_malformed_authority[reordered]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_closed_tenant_release_family_refuses_malformed_authority[unknown-v11]",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
@@ -5837,6 +5857,16 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_closed_tenant_release_family_refuses_malformed_authority[wrong-v10-version]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_closed_tenant_release_family_refuses_malformed_authority[wrong-v11-filename]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_closed_tenant_release_family_refuses_malformed_authority[wrong-v11-version]",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
@@ -5996,11 +6026,6 @@
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r10_is_the_same_a4_acl_projection",
-      "sourceModule": "kernel.tests.test_postgresql_provisioning",
-      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
-    },
-    {
       "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r10_refuses_substituted_evidence[count]",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
@@ -6042,6 +6067,161 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r10_refuses_substituted_evidence[spec-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[count]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[maximum]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[minimum]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v10-filename]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v10-prefix-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v10-service]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v10-source-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v10-source-length]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v10-spec-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v11-filename]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v11-prefix-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v11-service]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v11-source-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v11-source-length]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v11-spec-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v8-filename]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v8-prefix-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v8-service]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v8-source-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v8-source-length]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v8-spec-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v9-filename]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v9-prefix-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v9-service]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v9-source-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v9-source-length]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_r11_refuses_substituted_prefix_or_tail_evidence[v9-spec-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_release_uses_same_a4_acl_projection[10]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_release_uses_same_a4_acl_projection[11]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_release_uses_same_a4_acl_projection[8]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_binding_stable_release_uses_same_a4_acl_projection[9]",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
@@ -6167,6 +6347,46 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_release_and_ledger_projection_is_closed[r9-l9]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_release_and_ledger_projection_refuses_a_newer_known_release[10-10]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_release_and_ledger_projection_refuses_a_newer_known_release[10-11]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_release_and_ledger_projection_refuses_a_newer_known_release[10-8]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_release_and_ledger_projection_refuses_a_newer_known_release[10-9]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_release_and_ledger_projection_refuses_a_newer_known_release[11-10]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_release_and_ledger_projection_refuses_a_newer_known_release[11-11]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_release_and_ledger_projection_refuses_a_newer_known_release[11-8]",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_tenant_release_and_ledger_projection_refuses_a_newer_known_release[11-9]",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
@@ -6779,6 +6999,116 @@
       "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_tenant_structural_observation_requires_native_verifier_extension",
       "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
       "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_migration.py::test_challenge_migration_rollback_upgrade_replay_and_drift_refusal",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_absent_observation_never_assigns_a_transaction_id[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_absent_observation_never_assigns_a_transaction_id[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_expired_worker_challenge_remains_observable_without_renewal",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_observation_acquires_no_row_or_advisory_lock",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_observation_has_one_closed_function_acl_and_no_observer_membership",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_observation_returns_exact_stored_metadata_without_renewing[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_observation_returns_exact_stored_metadata_without_renewing[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_previous_transaction_challenge_cannot_be_observed[commit]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_previous_transaction_challenge_cannot_be_observed[rollback]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_runtime_observation_adds_no_raw_table_or_custody_privilege[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_runtime_observation_adds_no_raw_table_or_custody_privilege[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_savepoint_rollback_preserves_only_the_top_level_challenge",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_simultaneous_sessions_observe_only_their_own_challenge",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_successful_existing_bind_consumes_observable_challenge[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_successful_existing_bind_consumes_observable_challenge[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_temp_objects_and_caller_search_path_cannot_substitute_metadata[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_temp_objects_and_caller_search_path_cannot_substitute_metadata[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_unrelated_controller_logins_cannot_observe_challenges[ofarm_capability_key_control_login]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_unrelated_controller_logins_cannot_observe_challenges[ofarm_command_runtime_bundle_selection_control_login]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_unrelated_controller_logins_cannot_observe_challenges[ofarm_identity_control_login]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_challenge_observation.py::test_unrelated_controller_logins_cannot_observe_challenges[ofarm_tenant_control_login]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_challenge_observation",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
     },
     {
       "nodeid": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py::test_application_runtime_resolves_exact_bundle_once_without_a_write",
@@ -18241,6 +18571,26 @@
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_challenge_observation_rejects_changed_v11_tail[filename]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_challenge_observation_rejects_changed_v11_tail[prefix]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_challenge_observation_rejects_changed_v11_tail[release]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_challenge_observation_rejects_changed_v11_tail[source]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_classified_state_does_not_evaluate_obsolete_v7_catalog_pin",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
@@ -20621,8 +20971,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "240ca0cee73593aa35d86924ae8b963692b6c7f86d1dc397edc74926c8a502cd",
-  "entryCount": 4124,
+  "entriesSha256": "6c521f9ef91723c7016529e4f55a1ac9676b0bac9d59cf5d75df88cf5401e64d",
+  "entryCount": 4194,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

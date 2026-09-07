@@ -2351,7 +2351,7 @@ def _tenant_v7_migration_set() -> MigrationSet:
         Path(__file__).resolve().parents[2],
         TENANT_SERVICE,
     )
-    assert len(full_set.migrations) in (8, 9, 10)
+    assert len(full_set.migrations) in (8, 9, 10, 11)
     return MigrationSet(
         service=TENANT_SERVICE,
         migrations=full_set.migrations[:7],
