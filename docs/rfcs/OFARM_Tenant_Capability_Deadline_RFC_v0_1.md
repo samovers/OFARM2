@@ -62,6 +62,7 @@ expires_at = min(
 ```
 
 Use the two existing named limits even though both are currently 60 seconds.
+Import them explicitly; no `tenant_contract` or `__all__` change is needed.
 Pass both `now_unix_microseconds=S` and
 `challenge_created_at_unix_microseconds=C` to the existing
 `validate_tenant_capability` before serialization for signing or a KMS RPC.
@@ -92,11 +93,34 @@ reuse in a replacement transaction.
 ## Containment and simplicity
 
 Move the existing inline UOW row decoding into the existing challenge value's
-factory, and replace that block with the observer query and factory call. This
-keeps the integration within the present 520-line UOW budget. Keep the issuer
-within its existing 180-line budget without unrelated cleanup, line stuffing,
-new modules or increased budgets. The factory isolates one real boundary; it
-does not add a general decoding framework or a second challenge representation.
+factory, and replace that block with the observer query and factory call. The
+factory isolates the required two-row join without SQL execution or a second
+challenge representation. Also remove the issuer's single-use `_capability`
+helper and construct the same fully named payload directly inside `mint`,
+before its existing validation and signing. Remove the now-unused
+`SigningAuthority` annotation import. Evaluate the nonce factory before reading
+the signing observation into the local issued time and converting authority
+digests, preserving the existing helper-call evaluation order and refusal path.
+
+Both module and aggregate budgets apply. At the stated base:
+
+| Constraint | Existing limit | Baseline | Static corrected-design projection |
+| --- | ---: | ---: | ---: |
+| Issuer module | 180 | 155 | 161 |
+| Capability-signing group | 1000 | 991 | 997 |
+| UOW module | 520 | 520 | 520 |
+| Tenant-transaction group | 940 | 932 | 932 |
+| Each function | 80 | `mint`: 48 | `mint`: 75 |
+
+The other signing-group modules remain unchanged, leaving an effective issuer
+ceiling of 164 lines. The earlier factory-only estimate of 177 missed that
+aggregate constraint and would produce 1013 group lines. Removing the
+single-consumer helper eliminates a function, call and argument transfer in
+the same issuer boundary; it does not offset signing growth with UOW deletions.
+Keep all budgets unchanged, with no unrelated cleanup, line stuffing or new
+module. These projections were measured on throwaway candidate text, not an
+executed implementation. Actual source must pass all existing checks after
+implementation; line counts do not replace correctness or readability review.
 
 Preserve the frozen creator, binder, signed manifest, migrations, roles, key
 lifecycle, receipt verifier, signer, principal resolver, runtime composition,
@@ -116,7 +140,10 @@ Prove exact boundary values and hostile row shapes before KMS signing. Exercise
 positive delay with a long-lived key, a shorter key issuance end, exhausted
 windows, backward clock observations inside and outside the existing skew,
 integer limits, immutable value transport and unchanged identity/audience
-refusals. Test statement order, observer failures and cancellation before yield;
+refusals. The direct `mint` test for C=None must assert `CapabilityMintError`
+and zero KMS calls, not a broad exception: the generic validator's absent
+challenge context is optional, and a raw arithmetic TypeError is not the
+specified issuer refusal. Test statement order, observer failures and cancellation before yield;
 no invalid admission may expose a unit of work or contaminate a reused session.
 Before yield, cancellation may terminate the open transaction by closing and
 discarding its connection under existing UOW behavior; it need not issue an
