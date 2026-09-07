@@ -81,13 +81,13 @@ ACCEPTANCE_BY_ASSERTION_TYPE = {
 }
 
 # action classes the runtime evaluates OUTSIDE the commit-class map:
-# review acceptance, publication approval/filing, and read access. One
-# home consumed by the manifest builder, its grounding check, and the
-# law-binding test — never re-typed per call site. (The literals at the
-# evaluate() call sites themselves are the things these ground.)
+# review actions, correction retirement, publication approval/filing, and read
+# access. The manifest and law-binding check consume this declaration inventory;
+# behavioral tests and authority receipts prove the actions are mediated.
 NON_COMMIT_ACTION_CLASSES = frozenset({
     "REVIEW_ACCEPT",
     "REVIEW_REJECT_OR_CONTEST",
+    "REVIEW_SUPERSEDE",
     "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
     "OUTPUT_FILE_SUBMISSION_ASSEMBLY",
     "RECEIVE_READ_DATA",
@@ -98,8 +98,9 @@ NON_COMMIT_ACTION_CLASSES = frozenset({
 # AUTHORITY action — REJECT/CONTEST share REVIEW_REJECT_OR_CONTEST, distinct from
 # REVIEW_ACCEPT (Authority Action Matrix; NO_INHERIT, so holding one never confers
 # the other). An unrecognized verb maps to no action and the AuthorityGate
-# default-denies (Kernel rule 2). REVIEW_SUPERSEDE / REVIEW_REQUEST are not wired
-# in G5 and so are absent here (they refuse the same way).
+# default-denies (Kernel rule 2). Standalone REVIEW_SUPERSEDE / REVIEW_REQUEST
+# remain absent and refuse. The separate correction-retirement check exercises
+# REVIEW_SUPERSEDE only after an ordinary accepting review has been admitted.
 REVIEW_ACTION_AUTHORITY = {
     "REVIEW_ACCEPT": "REVIEW_ACCEPT",
     "REVIEW_REJECT_OR_CONTEST": "REVIEW_REJECT_OR_CONTEST",

@@ -1,6 +1,8 @@
 # Legacy correction authorization, version 2
 
-Status: proposed Phase A; no semantic approval or implementation yet.
+Status: version-2 semantic approval received; implementation written for draft
+PR #380, with verification and exact-head content review pending. No merge or
+deployment authorization.
 Decision: `OFARM2-LEGACY-CORRECTION-AUTHORIZATION-001`, version 2.
 Primary trust boundary: semantic promotion and supersession authorization.
 Delivery: #379. Named draft PR: #380.
@@ -262,11 +264,15 @@ a new decision rather than loosening this matrix silently.
 
 ## Verification and approval
 
-Phase A review must reach zero Blockers before the complete decision card
-names the existing draft PR. The later exact same-task user approval authorizes
-implementation in that PR. There is no approval yet.
+Version-2 Phase A reached zero design Blockers. The complete card naming draft
+PR #380 was followed by the exact user approval in Codex task
+`01a07cc8-4157-7b33-a0ca-becb772e0e8b` on 2026-09-07. That same-task approval
+authorizes implementation within this decision; it does not authorize merge or
+deployment. The shared relationship check, checked transient emitter inputs,
+and retirement authorization operation are now written. Their implementation
+evidence and exact-head content review remain pending.
 
-After approval: add adversarial and lawful-control tests for C01–C10 using the
+Verification requires adversarial and lawful-control tests for C01–C10 using the
 real legacy HTTP/pipeline/store, plus focused malformed-provenance probes,
 existing correction/dispute/replay/rollback tests and production-closure
 regressions. For C10, use the ordinary distinct-reviewer path for observation
@@ -305,5 +311,6 @@ this Phase A-only head. Preserve existing gates and final exact-head human
 merge authorization. These actions grant no release, deployment, current or
 default promotion, production access or security waiver.
 
-Next: publish and independently review the draft Phase A, then present the
-complete decision card before implementation.
+Next: complete isolated C01–C10 execution and cheap checks, resolve any in-boundary
+failures, and obtain zero-Blocker exact-head content review before baseline
+admission. Preserve the later final-packet and exact-head merge-authorization stop.

@@ -102,25 +102,25 @@ def substrate_records(
          "grantedByPartyRef": refs.farmer,
          "grantTarget": {"targetKind": "PARTY", "targetRef": refs.farmer},
          "targetScope": farm_scope,
-         "authorityActionClasses": ["REVIEW_ACCEPT"],
+         "authorityActionClasses": ["REVIEW_ACCEPT", "REVIEW_SUPERSEDE"],
          "validFrom": refs.valid_from,
          "inheritanceMode": "NO_INHERIT",
          "grantState": "ACTIVE",
-         "purpose": "self-review of routine operation claims on own farm (D8)"},
+         "purpose": "self-review of eligible claims and retirement of compatible "
+                    "corrections on own farm (fictional test actor)"},
 
         {"schemaVersion": "ofarm.authoritygrant.v0.1",
          "authorityGrantId": "grant:demo.advisor.one.review",
          "grantedByPartyRef": refs.farmer,
          "grantTarget": {"targetKind": "PARTY", "targetRef": refs.advisor},
          "targetScope": farm_scope,
-         "authorityActionClasses": ["REVIEW_ACCEPT", "REVIEW_REJECT_OR_CONTEST",
-                                    "RECEIVE_READ_DATA"],
+         "authorityActionClasses": ["REVIEW_ACCEPT", "REVIEW_SUPERSEDE",
+                                    "REVIEW_REJECT_OR_CONTEST", "RECEIVE_READ_DATA"],
          "validFrom": refs.valid_from,
          "inheritanceMode": "NO_INHERIT",
          "grantState": "ACTIVE",
-         "purpose": "advisor reviews queue exceptions and non-routine claims — "
-                    "accepts or rejects (D8: self-review covers routine operation "
-                    "claims only)"},
+         "purpose": "advisor accepts or rejects queued claims and retires "
+                    "compatible corrections (fictional test actor)"},
 
         {"schemaVersion": "ofarm.delegationgrant.v0.1",
          "delegationGrantId": refs.worker_delegation,

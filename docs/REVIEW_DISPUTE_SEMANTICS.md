@@ -1,6 +1,9 @@
 # Review / dispute state-transition semantics
 
 **Status:** G5-1 (REJECT) settled · G5-3 (CONTEST) settled — see §6.
+The approved PR #380 correction authorization amendment is recorded in §6.7
+and the [version-2 design](rfcs/OFARM_Legacy_Correction_Authorization_RFC_v0_2.md);
+its implementation is written, with verification and content review pending.
 **Scope:** generic Core/Platform review-verb semantics only. No Slovenia
 specifics (those ride a profile through the generic mechanism — M2 brief
 mechanism-boundary rule). **This is a candidate package decision (DECISIONS.md
@@ -505,7 +508,8 @@ the disputed *facts* — is **deferred to a later factual-dispute-carrier ticket
 that would specify its required fields, linkage to the contest, validation, and
 tests. Until then a contest states its objection in the `ReviewDecision.notes`
 rationale (and optional validated evidence), and the factual correction arrives
-through the ordinary `recordClass = "CORRECTION"` resolution path (§6.7).
+through a supported assertion's explicit supersession path (§6.7).
+`recordClass = "CORRECTION"` carrier admission remains closed.
 
 ### 6.5 `disputeStatus` derivation — closes the latent M4 over-claim
 
@@ -611,10 +615,42 @@ high-consequence reliance (dispute axis).
 
 ### 6.7 Resolution — by supersession, never by edit
 
-A dispute resolves the way every correction does: a governed **CORRECTION** — a
-new claim carrying `supersedesConsequenceRef = <disputed consequence>` — committed
-and accepted, which emits a new in-force consequence with a `LINEAGE_SUPERSEDES`
-edge to the disputed one (`kernel/emission.py:294-302`). The disputed consequence
+A dispute resolves through a supported new assertion carrying
+`supersedesConsequenceRef = <disputed consequence>`. The approved PR #380
+amendment separates validating that relationship from authorizing retirement:
+
+- Structure preserves the exact typed identity and its sole current structural
+  predecessor. Operation, observation and compliance preserve the source
+  assertion family, expected consequence type and exact subject. Same subject
+  does not prove a unique operation or proposition; the explicit predecessor
+  selects lineage.
+- One shared check resolves the accepted predecessor's exact accepting review,
+  assertion and source event, with agreeing scalar references and unique required
+  edges. It verifies the relevant structure, operation or compliance carrier.
+  The predecessor must be a visible, same-farm, in-force accepted consequence.
+- Submission validates the relationship before recording inert intent. Ordinary
+  assertion authority can queue that intent. Acceptance rechecks its persisted
+  target and currentness; a review body cannot substitute a new target. Pending,
+  direct and queued emitters consume the checked predecessor, and queue acceptance
+  consumes the checked original event.
+- Actual retirement additionally requires the transport-bound acting reviewer's
+  `REVIEW_SUPERSEDE`, after ordinary `REVIEW_ACCEPT` admission. The existing
+  evaluator receives `PROMOTION`, current farm scope, `actingAgentRef`,
+  `aiAssistance` and required revocation checking. Only exact `ALLOW` permits
+  emission. Its request, result and trace are persisted and referenced by the
+  `PromotionTrace` gate's `relatedArtifactRefs`.
+
+This preserves all four acceptance → contest → compatible correction paths and
+the existing evidence, self-review, CONTEST and REJECT rules. Refusal and rejection
+retire nothing. Accepted history may originate under an older RuntimeBundle;
+a queued assertion being accepted must still satisfy the existing current-bundle
+gate. Standalone `REVIEW_SUPERSEDE` requests and `recordClass = "CORRECTION"`
+carriers remain closed. The primary trust boundary is semantic promotion and
+supersession authorization; production activation and transaction ownership are
+outside this amendment.
+
+Authorized acceptance emits a new in-force consequence with a
+`LINEAGE_SUPERSEDES` edge to the disputed one. The disputed consequence
 then leaves force (`is_superseded` true), the dispute is **resolved by the edge
 fact** (no record edited), and the dependent materializations re-stale and
 recompute against the corrected consequence. The recomputed current basis now
