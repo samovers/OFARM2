@@ -8,6 +8,9 @@ import psycopg
 import pytest
 from psycopg import sql
 
+from deployment.postgresql.tenant_contract import TenantCapabilityContractError
+from kernel.tenant_capability_issuer import CapabilityMintError, TenantChallenge
+from kernel.tests._tenant_signing_support import live_signing
 from kernel.tests.test_postgresql_tenant_migration import (
     CapabilityKeyAuthority,
     TenantAuthority,
@@ -17,6 +20,7 @@ from kernel.tests.test_postgresql_tenant_migration import (
     capability_key,  # noqa: F401 - imported fixture
     tenant_target,  # noqa: F401 - imported fixture
 )
+from kernel.tests.test_postgresql_tenant_uow import _principal
 
 
 _OBSERVE = "SELECT * FROM ofarm.current_tenant_challenge()"
@@ -111,13 +115,19 @@ def test_observation_returns_exact_stored_metadata_without_renewing(
 
 def test_expired_worker_challenge_remains_observable_without_renewal(
     target: TenantTarget,
+    tenant_authority: TenantAuthority,
+    key_authority: CapabilityKeyAuthority,
 ) -> None:
     # The existing worker limits allow 120s transactions and 60s statements.
     # Keep the transaction active while crossing the genuine 60s challenge
     # window; do not alter a protected timestamp or any role timeout.
+    principal = _principal(target, tenant_authority)
     with psycopg.connect(target.role_dsn("ofarm_worker")) as worker:
-        worker.execute("SELECT * FROM ofarm.create_tenant_challenge()")
+        created = worker.execute(
+            "SELECT * FROM ofarm.create_tenant_challenge()"
+        ).fetchone()
         original = _observe(worker)
+        challenge = TenantChallenge.from_database_rows(created, original)
         for _ in range(2):
             worker.execute("SELECT pg_catalog.pg_sleep(31)")
             assert _observe(worker) == original
@@ -128,6 +138,18 @@ def test_expired_worker_challenge_remains_observable_without_renewal(
             """
         ).fetchone()[0]
         assert now_us > original[1] + 60_000_000
+        # Refresh the simulated external receipt after the genuine wait, then
+        # use the actual reader/verifier/issuer. Refusal must be the challenge
+        # interval, not a stale receipt, retired key or fabricated DB clock.
+        signing = live_signing(target, key_authority.kid)
+        signing_authority = signing.reader.current(key_authority.kid)
+        assert now_us <= signing_authority.observed_at_us
+        assert signing_authority.issuance_end_us > signing_authority.observed_at_us
+        with pytest.raises(CapabilityMintError) as refused:
+            signing.issuer.mint(principal.identity, principal.authority, challenge)
+        assert isinstance(refused.value.__cause__, TenantCapabilityContractError)
+        assert signing.client.calls == []
+        assert _observe(worker) == original
         worker.commit()
         assert _stored_challenge(target, original[0]) == (
             *original, "CHALLENGE"

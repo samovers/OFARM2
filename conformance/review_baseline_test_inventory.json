@@ -606,7 +606,67 @@
       "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
     },
     {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_challenge_fields_are_immutable[audience]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_challenge_fields_are_immutable[challenge_id]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_challenge_fields_are_immutable[created_at_us]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_challenge_requires_creation_time_without_compatibility_default",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_accepts_safe_int64_edges[maximum-safe-challenge]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_accepts_safe_int64_edges[maximum-safe-database-observation]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_accepts_safe_int64_edges[minimum-safe-challenge]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
       "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_builds_the_frozen_capability_and_reads_each_mint",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_closed_time_windows_without_signing[backward-skew-plus-one]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_closed_time_windows_without_signing[challenge-expired]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_closed_time_windows_without_signing[challenge-expiry-equality]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_closed_time_windows_without_signing[key-expired]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_closed_time_windows_without_signing[key-expiry-equality]",
       "sourceModule": "kernel.tests.test_google_kms_signing",
       "sourcePath": "kernel/tests/test_google_kms_signing.py"
     },
@@ -621,7 +681,142 @@
       "sourcePath": "kernel/tests/test_google_kms_signing.py"
     },
     {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_integer_extremes_even_when_minimum_masks_them[above-int64-masked-by-key-end]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_integer_extremes_even_when_minimum_masks_them[below-int64]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_integer_extremes_even_when_minimum_masks_them[challenge-add-age-overflow-masked-by-key-end]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_integer_extremes_even_when_minimum_masks_them[challenge-subtract-skew-underflow]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_integer_extremes_even_when_minimum_masks_them[database-add-skew-overflow]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_integer_extremes_even_when_minimum_masks_them[maximum-masked-by-key-end]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_integer_extremes_even_when_minimum_masks_them[minimum]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_invalid_receipt_freshness_before_kms[expiry-equality]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_invalid_receipt_freshness_before_kms[future-receipt]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
       "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_refuses_when_database_issuance_window_is_exhausted",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_requires_exact_integer_creation_before_key_read[false]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_requires_exact_integer_creation_before_key_read[float]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_requires_exact_integer_creation_before_key_read[int-subclass]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_requires_exact_integer_creation_before_key_read[none]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_requires_exact_integer_creation_before_key_read[text]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_requires_exact_integer_creation_before_key_read[true]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_signed_times_obey_each_deadline[backward-skew-equality]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_signed_times_obey_each_deadline[created-equality]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_signed_times_obey_each_deadline[half-window]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_signed_times_obey_each_deadline[inside-backward-skew]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_signed_times_obey_each_deadline[key-end-wins]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_signed_times_obey_each_deadline[last-key-microsecond]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_signed_times_obey_each_deadline[last-microsecond]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_signed_times_obey_each_deadline[lifetime-bound-wins]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_signed_times_obey_each_deadline[one-ms-delay]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_signed_times_obey_each_deadline[one-second-delay]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_signed_times_obey_each_deadline[one-us-delay]",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_signed_times_obey_each_deadline[three-equal-bounds]",
       "sourceModule": "kernel.tests.test_google_kms_signing",
       "sourcePath": "kernel/tests/test_google_kms_signing.py"
     },
@@ -657,6 +852,16 @@
     },
     {
       "nodeid": "kernel/tests/test_google_kms_signing.py::test_kms_signer_uses_raw_data_crc_no_retry_and_bounded_timeout",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_nonce_is_evaluated_once_before_invalid_authority_digest_refuses",
+      "sourceModule": "kernel.tests.test_google_kms_signing",
+      "sourcePath": "kernel/tests/test_google_kms_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_signing.py::test_receipt_time_is_freshness_evidence_not_issuance_clock",
       "sourceModule": "kernel.tests.test_google_kms_signing",
       "sourcePath": "kernel/tests/test_google_kms_signing.py"
     },
@@ -6999,6 +7204,31 @@
       "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_tenant_structural_observation_requires_native_verifier_extension",
       "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
       "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_capability_retirement.py::test_real_issuer_refuses_retired_pinned_key_and_closed_admission",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_capability_retirement",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_capability_retirement.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_capability_signing.py::test_real_delayed_issuer_binds_exact_protected_challenge_deadline",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_capability_signing",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_capability_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_capability_signing.py::test_real_issuer_cancellation_rolls_back_and_next_transaction_is_fresh[after-bind]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_capability_signing",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_capability_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_capability_signing.py::test_real_issuer_cancellation_rolls_back_and_next_transaction_is_fresh[before-bind]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_capability_signing",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_capability_signing.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_capability_signing.py::test_real_observation_uuid_substitution_refuses_before_signing",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_capability_signing",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_capability_signing.py"
     },
     {
       "nodeid": "kernel/tests/test_postgresql_tenant_challenge_migration.py::test_challenge_migration_rollback_upgrade_replay_and_drift_refusal",
@@ -20969,10 +21199,155 @@
       "nodeid": "kernel/tests/test_tenant_uow.py::test_unit_of_work_refuses_invalid_database_knowledge_position[True]",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_malformed_or_misjoined_rows_refuse_before_mint_and_binding[creator-absent]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_malformed_or_misjoined_rows_refuse_before_mint_and_binding[creator-empty]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_malformed_or_misjoined_rows_refuse_before_mint_and_binding[creator-extra]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_malformed_or_misjoined_rows_refuse_before_mint_and_binding[creator-short]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_malformed_or_misjoined_rows_refuse_before_mint_and_binding[creator-uuid-string]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_malformed_or_misjoined_rows_refuse_before_mint_and_binding[creator-zero-uuid]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_malformed_or_misjoined_rows_refuse_before_mint_and_binding[observer-absent]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_malformed_or_misjoined_rows_refuse_before_mint_and_binding[observer-empty]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_malformed_or_misjoined_rows_refuse_before_mint_and_binding[observer-extra]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_malformed_or_misjoined_rows_refuse_before_mint_and_binding[observer-other-uuid]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_malformed_or_misjoined_rows_refuse_before_mint_and_binding[observer-short]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_malformed_or_misjoined_rows_refuse_before_mint_and_binding[observer-uuid-string]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_malformed_or_misjoined_rows_refuse_before_mint_and_binding[observer-zero-uuid]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_new_transaction_after_observer_refusal_uses_fresh_challenge",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_observation_and_mint_use_one_transaction_and_immutable_exact_value",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_observer_sql_failure_rolls_back_or_discards_before_pool_return[discard-database-error-execute]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_observer_sql_failure_rolls_back_or_discards_before_pool_return[discard-database-error-fetch]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_observer_sql_failure_rolls_back_or_discards_before_pool_return[discard-statement-cancelled-execute]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_observer_sql_failure_rolls_back_or_discards_before_pool_return[discard-statement-cancelled-fetch]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_observer_sql_failure_rolls_back_or_discards_before_pool_return[rollback-database-error-execute]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_observer_sql_failure_rolls_back_or_discards_before_pool_return[rollback-database-error-fetch]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_observer_sql_failure_rolls_back_or_discards_before_pool_return[rollback-statement-cancelled-execute]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_observer_sql_failure_rolls_back_or_discards_before_pool_return[rollback-statement-cancelled-fetch]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_pre_yield_cancellation_discards_transaction_before_pool_return[keyboard-interrupt-execute]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_pre_yield_cancellation_discards_transaction_before_pool_return[keyboard-interrupt-fetch]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_pre_yield_cancellation_discards_transaction_before_pool_return[keyboard-interrupt-mint]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_pre_yield_cancellation_discards_transaction_before_pool_return[task-cancelled-execute]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_pre_yield_cancellation_discards_transaction_before_pool_return[task-cancelled-fetch]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_pre_yield_cancellation_discards_transaction_before_pool_return[task-cancelled-mint]",
+      "sourceModule": "kernel.tests.test_tenant_uow_observation",
+      "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "6c521f9ef91723c7016529e4f55a1ac9676b0bac9d59cf5d75df88cf5401e64d",
-  "entryCount": 4194,
+  "entriesSha256": "9e0bbaa539e5a539b35b09d8677e6c1fd81d8d82a5fab920a42d39e118c17be3",
+  "entryCount": 4269,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
