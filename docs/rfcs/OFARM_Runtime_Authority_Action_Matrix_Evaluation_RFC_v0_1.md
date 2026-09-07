@@ -2,16 +2,17 @@
 
 Date: 2026-09-07
 
-Design revision: 5. This develops G3's production interface, trusted-source
-mapping, tenant read plan and transaction handoff. It preserves the revision 4
-handshake reviewed at `263cd32722ff2b482910bd7bb880f91aa8391838` and records
-the subsequently applied issue-scope amendment. It does not claim that the
-missing source factories, machine contracts or commit guards now exist.
+Design revision: 6. This addresses the non-blocking reader-failure
+clarification in the focused revision 5 review at
+`87584f2e368fc791f0c12e4288885dc5425ea287`. The proposed interface, trusted-source
+map and transaction handoff remain intact, including the earlier reviewed
+approval handshake. Missing source factories, machine contracts and commit
+guards remain prerequisites, not newly supplied infrastructure.
 The unapproved legacy proposal at
 `178f150ce56f1bdad96330ba845d210ee0911f2a` remains superseded. No accepted OFARM
 law changes.
 
-Status: revision 5 design review pending; G1 scope amendment applied;
+Status: revision 6 clarification review pending; G1 scope amendment applied;
 G2 canonical readiness and G3 implementation prerequisites remain open.
 No OFARM2 semantic approval, runtime implementation, baseline
 admission, merge, current/default promotion, or deployment is authorized.
@@ -399,10 +400,35 @@ simple plan avoids depending on an unproven authority search index:
    prospective finalization input only in its admitted role. An MVCC label,
    maximum knowledge position or immutable row alone is not the governed
    `authorityEvaluationSnapshotRef` required by PR #11 section 16.1.
-7. Return immutable verified facts, their canonical snapshot binding and the
-   complete local read footprint. Missing canonical snapshot/visibility proof
-   returns no successful capture, even when the SQL rows are internally
-   consistent. No standalone canonical snapshot record family is invented.
+7. Return an immutable observation containing proved facts, explicit missing
+   or invalid proof with its affected roles, and the actual read footprint.
+   Assert snapshot availability, visibility and complete sets only where
+   proven. Missing canonical proof is not a successful complete snapshot,
+   even when SQL rows are internally consistent; preserve the failure facts
+   for canonical evaluation rather than inventing snapshot evidence or a
+   standalone canonical snapshot record family.
+
+The reader distinguishes an observation from an operational failure; it does
+not reduce every missing proof to a database error. The evaluator owns the
+disposition under pinned PR #11 section 15:
+
+| Observed situation | Reader-to-evaluator mapping |
+|---|---|
+| Global prerequisites pass and a completeness-proven observation contains no applicable path, including all candidates being inapplicable | Produce canonical `DENY` / `NO_AUTHORITY_BASIS`, with no selected path; not an infrastructure refusal. |
+| An authorization-global prerequisite, such as authority-snapshot availability, is unproven | Preserve every independently established failure; apply canonical global DENY-before-REQUIRE_REVIEW ordering and mark dependent checks `NOT_EVALUATED`. Do not infer target or tenant failure from a prerequisite that was never proved. |
+| One path is revoked, unsupported or otherwise fails while another is independently sufficient | Preserve the exact per-path dispositions and aggregate canonically. A path-local failure cannot become a whole-read infrastructure refusal or override another sufficient path. |
+| The database or adapter actually fails to perform the observation | Preserve infrastructure failure and the existing rollback-only/discard discipline. Do not fabricate a canonical decision or durable result. |
+
+An empty result without completeness proof, or an incomplete/overflowed read,
+is not proof that no authority exists.
+Likewise, malformed source evidence is not automatically a failed adapter:
+report the affected fact/role and let its exact canonical binding determine
+whether the failure is global or path-local. Ingress failures remain outside
+this lattice as section 7 specifies. Any prepared non-ALLOW decision must
+still meet its admitted failure-evidence contract truthfully; missing evidence
+cannot be repaired with a placeholder snapshot. G3-READ must settle that exact
+failure encoding when G2 supplies the machine bindings. These distinctions
+add no reason code, schema, outcome or alternative authorization engine.
 
 The statement must have deterministic ordering and server-side row/byte/work
 bounds with explicit overflow detection. Overflow refuses the whole capture;
@@ -950,6 +976,13 @@ claims of executed tests:
   row/byte over the bound. Exact-bound complete data remains usable; overflow
   yields no partial complete-set claim. Demonstrate usable representative
   tenant sizes, not just refusal of every realistic capture.
+- AUTH-007/009/010: contrast a complete no-path observation (`DENY` /
+  `NO_AUTHORITY_BASIS`) with an incomplete read, a missing global snapshot
+  prerequisite (canonical global ordering and dependent `NOT_EVALUATED`),
+  and a revoked/unsupported path alongside a sufficient path (canonical
+  aggregation). A real adapter/database fault follows infrastructure handling.
+  Inspect truthful failure evidence without inventing a snapshot, suppressing
+  path diagnostics or treating every failed authority proof as an exception.
 - AUTH-011/012/014: retain both bound methods after closure and call them in a
   rollback-only UoW; no reader runs. Inject a database failure and verify the
   existing rollback/discard path, including a consumer that catches the error;
@@ -1035,11 +1068,17 @@ three read/guard obligation forms and focused verification. It identifies
 missing producers instead of creating them in this boundary. It also records
 G1's applied issue amendment and the later canonical planning sources.
 
-Review the new interface/source/read/handoff proposal and affected
-AUTH-002/003/007/009–019 and EXC invariants. Do not reopen the earlier nine
-findings or the settled revision 4 handshake without new evidence of a
-defect. G2/G3 remain open; the new head starts REVIEW_PENDING and carries no
-new zero-Blocker sign-off or implementation approval.
+The [focused revision 5 review](https://github.com/samovers/OFARM2/pull/359#pullrequestreview-5132918721)
+at `87584f2e368fc791f0c12e4288885dc5425ea287` reported zero blocking findings
+and one non-blocking S1 clarification: make the reader-to-evaluator failure
+mapping explicit. It preserved the interface direction and prior handshake,
+and did not close G2/G3 or approve implementation.
+
+Revision 6 addresses S1 in the reader plan and AUTH-007/009/010 cases above.
+Review only that clarification and its affected invariants; do not reopen the
+earlier findings or architecture without new evidence of a defect. The
+revision 5 zero-Blocker disposition remains historical, not review of this new
+head. No new source producer, guard, runtime behavior or canonical law is added.
 
 ## 12. Expected implementation areas and code excellence
 
@@ -1181,7 +1220,7 @@ The remaining G3 work is bounded, not a request to restart canonical design:
 | Item | Required closure evidence | Boundary and sequencing |
 |---|---|---|
 | G3-INPUT | Exact mappings and real producers for principal/representation/CP3, session/act, attempt/deadline and compatible selection; reject forged/mixed frames through production composition | Consume existing accepted producers where sufficient. Any new authentication/session, selection or transaction authority needs separately scoped work and user direction before edits; do not mint proof in this provider. |
-| G3-READ | Exact admitted schema/hash/extractor mapping, coherent SQL, source visibility/currentness and canonical snapshot proof, bounded representative workload, same final-snapshot/protection context for the handshake | Reader/projection implementation belongs here after G2. Missing storage, permission, snapshot authority or transaction protection belongs to its owner, not a database change hidden in the reader. |
+| G3-READ | Exact admitted schema/hash/extractor mapping, coherent SQL, source visibility/currentness and canonical snapshot proof, truthful global/path/infrastructure failure encoding, bounded representative workload, same final-snapshot/protection context for the handshake | Reader/projection implementation belongs here after G2. Missing storage, permission, snapshot authority or transaction protection belongs to its owner, not a database change hidden in the reader. |
 | G3-HANDOFF | Actual typed transaction interface covering every record/set/absence/external/time obligation and attempt-bound prepared evidence, with an independently usable provider completion test | Settle the interface with #178's design before approving provider code. Durable command coordination, guards and consumer race/recovery tests remain #178/applicable consumer work. Their later delivery cannot excuse a provider that only accepts invented fixtures. |
 | G3-SHAPE | Review the exact facade proposal and architecture edges in section 12, then a measured final partition/size and focused production-path test plan against the admitted bindings | One authorization boundary. Existing zero headroom is explicit; no automatic checker relaxation or budget increase. |
 
@@ -1208,8 +1247,8 @@ disaster/store-loss recovery. The old command successor is a compatibility
 gate for its consumer, not a reason to amend approved canonical PR #26.
 No new Delivery issue is created in this revision.
 
-Review disposition: revision 5 is REVIEW_PENDING. G1 is applied; G2/G3 and the
-later G4 card/approval remain outstanding. The revision 4 review stays attached
+Review disposition: revision 6 is REVIEW_PENDING. G1 is applied; G2/G3 and the
+later G4 card/approval remain outstanding. The revision 5 review stays attached
 to its exact historical head and is not transferred to this revision. Exact
 private names and test-file partitioning are Preferences only after the
 substantive interface is settled.
@@ -1241,8 +1280,8 @@ transaction coordination, protected effects, selection authority and temporal
 persistence with their own owners. No cross-boundary implementation is hidden
 in this plan.
 
-What is next: review revision 5's concrete interface/source/read/handoff
-proposal and affected invariants at its new head; close the listed G2/G3
+What is next: review revision 6's bounded reader-failure clarification and
+affected AUTH-007/009/010 invariants at its new head; close the listed G2/G3
 prerequisites with their existing owners before presenting the fresh #359
 decision card. No runtime edits, new Delivery issue, baseline or merge are
 authorized by this design revision.
