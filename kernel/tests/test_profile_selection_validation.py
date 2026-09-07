@@ -198,7 +198,7 @@ print(json.dumps({
     assert json.loads(completed.stdout) == {
         "components": 95,
         "digest": (
-            "sha256:8816a0097d230cf7d165aca2ea54faca8f41794131be35a17363630f959f497f"
+            "sha256:ee43613b9fbee4d2be60388e981ad917b419e6dcd5d33c3daf95a7761c4bd4a9"
         ),
         "tenant": "tenant:si.ffs.pilot.demo",
     }
