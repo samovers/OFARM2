@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 from deployment.postgresql.tenant_contract import (
     TENANT_CAPABILITY_CONTRACT,
     TENANT_CAPABILITY_MAX_TTL_MICROSECONDS,
+    TENANT_CHALLENGE_MAX_AGE_MICROSECONDS,
     TenantCapability,
     TenantCapabilityContractError,
     canonical_jws_signing_input,
@@ -19,7 +20,6 @@ from .authentication import VerifiedIdentity
 from .google_kms_signer import GoogleKmsSigner, KmsSigningError
 from .principal import PrincipalAuthority
 from .signing_authority import (
-    SigningAuthority,
     SigningAuthorityReader,
     SigningAuthorityUnavailable,
 )
@@ -33,6 +33,24 @@ class CapabilityMintError(RuntimeError):
 class TenantChallenge:
     challenge_id: UUID
     audience: str
+    created_at_us: int
+
+    @classmethod
+    def from_database_rows(
+        cls,
+        created: tuple[object, ...] | None,
+        observed: tuple[object, ...] | None,
+    ) -> TenantChallenge:
+        if (
+            created is None or len(created) != 2
+            or observed is None or len(observed) != 2
+            or type(created[0]) is not UUID
+            or created[0].int == 0
+            or type(observed[0]) is not UUID
+            or created[0] != observed[0]
+        ):
+            raise ValueError("tenant challenge observation differs")
+        return cls(created[0], created[1], observed[1])
 
 
 def _raw_digest(value: str) -> bytes:
@@ -48,45 +66,6 @@ def _raw_digest(value: str) -> bytes:
         raise CapabilityMintError(
             "capability authority digest is invalid"
         ) from exc
-
-
-def _capability(
-    identity: VerifiedIdentity,
-    authority: PrincipalAuthority,
-    challenge: TenantChallenge,
-    signing: SigningAuthority,
-    nonce: UUID,
-) -> TenantCapability:
-    issued_at = signing.observed_at_us
-    return TenantCapability(
-        contract_digest=TENANT_CAPABILITY_CONTRACT.raw_digest,
-        challenge_id=challenge.challenge_id,
-        audience=challenge.audience,
-        key_id=signing.kid,
-        equality_policy=identity.equality_policy,
-        issuer=identity.issuer,
-        subject=identity.subject,
-        binding_version_id=authority.binding_version_id,
-        binding_version_digest=_raw_digest(authority.binding_version_digest),
-        lifecycle_head_id=authority.lifecycle_head_id,
-        lifecycle_head_digest=_raw_digest(authority.lifecycle_head_digest),
-        tenant_id=authority.tenant_id,
-        tenant_registration_digest=_raw_digest(
-            authority.tenant_registration_digest
-        ),
-        party_ref=authority.party_ref,
-        party_record_kind=authority.party_record_kind,
-        party_record_id=authority.party_record_id,
-        party_schema_digest=_raw_digest(authority.party_schema_digest),
-        party_payload_digest=_raw_digest(authority.party_payload_digest),
-        issued_at_unix_microseconds=issued_at,
-        not_before_unix_microseconds=issued_at,
-        expires_at_unix_microseconds=min(
-            issued_at + TENANT_CAPABILITY_MAX_TTL_MICROSECONDS,
-            signing.issuance_end_us,
-        ),
-        nonce=nonce,
-    )
 
 
 class TenantCapabilityIssuer:
@@ -115,6 +94,7 @@ class TenantCapabilityIssuer:
             type(challenge) is not TenantChallenge
             or type(challenge.challenge_id) is not UUID
             or challenge.challenge_id.int == 0
+            or type(challenge.created_at_us) is not int
             or (
                 identity.equality_policy,
                 identity.issuer,
@@ -131,16 +111,42 @@ class TenantCapabilityIssuer:
             signing = self._signing_authority_reader.current(self._kid)
             if challenge.audience != signing.audience:
                 raise CapabilityMintError("challenge audience differs")
-            capability = _capability(
-                identity,
-                authority,
-                challenge,
-                signing,
-                self._nonce_factory(),
+            nonce = self._nonce_factory()
+            issued_at = signing.observed_at_us
+            capability = TenantCapability(
+                contract_digest=TENANT_CAPABILITY_CONTRACT.raw_digest,
+                challenge_id=challenge.challenge_id,
+                audience=challenge.audience,
+                key_id=signing.kid,
+                equality_policy=identity.equality_policy,
+                issuer=identity.issuer,
+                subject=identity.subject,
+                binding_version_id=authority.binding_version_id,
+                binding_version_digest=_raw_digest(authority.binding_version_digest),
+                lifecycle_head_id=authority.lifecycle_head_id,
+                lifecycle_head_digest=_raw_digest(authority.lifecycle_head_digest),
+                tenant_id=authority.tenant_id,
+                tenant_registration_digest=_raw_digest(
+                    authority.tenant_registration_digest
+                ),
+                party_ref=authority.party_ref,
+                party_record_kind=authority.party_record_kind,
+                party_record_id=authority.party_record_id,
+                party_schema_digest=_raw_digest(authority.party_schema_digest),
+                party_payload_digest=_raw_digest(authority.party_payload_digest),
+                issued_at_unix_microseconds=issued_at,
+                not_before_unix_microseconds=issued_at,
+                expires_at_unix_microseconds=min(
+                    issued_at + TENANT_CAPABILITY_MAX_TTL_MICROSECONDS,
+                    challenge.created_at_us + TENANT_CHALLENGE_MAX_AGE_MICROSECONDS,
+                    signing.issuance_end_us,
+                ),
+                nonce=nonce,
             )
             validate_tenant_capability(
                 capability,
                 now_unix_microseconds=signing.observed_at_us,
+                challenge_created_at_unix_microseconds=challenge.created_at_us,
             )
             signature = self._signer.sign(
                 canonical_jws_signing_input(capability),

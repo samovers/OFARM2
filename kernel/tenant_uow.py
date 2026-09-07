@@ -427,11 +427,11 @@ class TenantUnitOfWorkManager:
         challenge_row = connection.execute(
             "SELECT * FROM ofarm.create_tenant_challenge()"
         ).fetchone()
-        if challenge_row is None or len(challenge_row) != 2:
-            raise ValueError("tenant challenge row shape differs")
-        challenge = TenantChallenge(
-            challenge_id=_uuid(challenge_row[0], "challenge id"),
-            audience=challenge_row[1],
+        observation_row = connection.execute(
+            "SELECT * FROM ofarm.current_tenant_challenge()"
+        ).fetchone()
+        challenge = TenantChallenge.from_database_rows(
+            challenge_row, observation_row
         )
         capability = self._minter.mint(
             principal.identity, principal.authority, challenge

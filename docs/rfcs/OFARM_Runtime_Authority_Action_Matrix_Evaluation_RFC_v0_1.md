@@ -1,22 +1,25 @@
 # OFARM Production Authorization Provider — Phase A RFC v0.1
 
-Date: 2026-09-06
+Date: 2026-09-07
 
-Design revision: 4. This addresses the focused review of revision 3 at
-`4f863fa98c4407d95b06642aaf9e8487088e9d7b`: provider-owned challenge-state
-comparison, complete approval inputs, exact retry semantics and the reviewed
-facade-extension gate. The unapproved legacy proposal at
+Design revision: 5. This develops G3's production interface, trusted-source
+mapping, tenant read plan and transaction handoff. It preserves the revision 4
+handshake reviewed at `263cd32722ff2b482910bd7bb880f91aa8391838` and records
+the subsequently applied issue-scope amendment. It does not claim that the
+missing source factories, machine contracts or commit guards now exist.
+The unapproved legacy proposal at
 `178f150ce56f1bdad96330ba845d210ee0911f2a` remains superseded. No accepted OFARM
 law changes.
 
-Status: design review pending; scope amendment and implementation prerequisites
-remain open. No OFARM2 semantic approval, runtime implementation, baseline
+Status: revision 5 design review pending; G1 scope amendment applied;
+G2 canonical readiness and G3 implementation prerequisites remain open.
+No OFARM2 semantic approval, runtime implementation, baseline
 admission, merge, current/default promotion, or deployment is authorized.
 
 Delivery issue: [OFARM2 #353](https://github.com/samovers/OFARM2/issues/353).
 Tracking epic: [OFARM2 #175](https://github.com/samovers/OFARM2/issues/175).
 The one existing draft PR is [#359](https://github.com/samovers/OFARM2/pull/359).
-Inspected OFARM2 main: `fcac9ba505226e7e2fa2ede0aedb7585721b1841`.
+Inspected/integrated OFARM2 main: `ff092c414db9fa24dbd6ab86c7722db89e0c95b5`.
 Inspected canonical OFARM main: `71ca724a8b6ec23f1655b086a6f549496d10a47f`.
 
 ## 1. Outcome and place in the original work
@@ -38,19 +41,17 @@ inside this PR.
 
 Authorization is necessary but insufficient for a write. This provider does
 not validate the protected result, consume a decision, commit evidence, or
-promise a durable outcome. Those distinctions are the proposed scope amendment
-below, not a claim that the existing issue already accepts this narrower
-completion condition.
+promise a durable outcome. Issue #353 now explicitly distinguishes these
+owners, while retaining full admitted action/evaluation coverage.
 
-## 2. Explicit proposed amendment to issue #353
+## 2. Applied amendment to issue #353
 
-The issue still requires a code-owned matrix, migration of existing callers,
-SI behavior equivalence, and a durable decision trace. Its old PR also assumed
-legacy callers were production. Do not silently mark those requirements met.
+The task user directed applying the four-point scope amendment. The
+[issue amendment record](https://github.com/samovers/OFARM2/issues/353#issuecomment-5566519997)
+preserves the original issue text and that limited instruction. This is the
+current work definition, not formal implementation approval:
 
-The recommendation for steward review is:
-
-| Existing requirement | Proposed replacement and consequence |
+| Superseded requirement | Applied replacement and consequence |
 |---|---|
 | Independently authored code-owned action table | Execute the exact content-addressed canonical rule bundle. A compiled immutable view is permitted only as a verifiably equivalent representation, not a second policy source. |
 | Migrate existing legacy evaluator and SI callers | Add the provider to the real production composition and prove its typed tenant-bound entry point. Keep the separate legacy surface quarantined and unchanged; legacy test success is not production evidence. |
@@ -70,12 +71,13 @@ provider understands it. Applicable sharing and human-finalization checks are
 part of evaluation coverage; creating sharing grants, running an approval
 ceremony, disclosure, and protected effects remain separate capabilities.
 
-These amendments are **proposed, not approved**. They must be accepted
-explicitly in the later #353 decision scope before an implementation card is
-ready. Until then the original criteria remain unsatisfied and #353 cannot
-close on a prepared-evidence handoff. If the steward retains provider-owned
-durable trace delivery, stop and re-plan the boundary/dependencies; do not add
-a second transaction owner or quietly absorb #178.
+G1 is satisfied as an issue-scope editing step. The later complete #353
+decision card must include this amended scope and receive its own exact
+task-user approval. #353 cannot close on this RFC, types alone, one action, or
+blanket refusal: it must prove an independently usable production provider
+with the complete admitted coverage. Any later request for provider-owned
+durability changes this boundary and requires re-planning, not a second
+transaction owner or quiet absorption of #178.
 
 ## 3. Current production facts that change the old design
 
@@ -95,6 +97,14 @@ At the inspected base:
 - `kernel/principal.py` binds a verified identity to an exact active Party
   record and tenant. It does not by itself prove a natural-person
   representative or the complete CP3 agent evidence.
+- `kernel/production_oidc.py` verifies a required JWT `exp`, but the returned
+  `VerifiedIdentity` carries only equality policy, issuer and subject.
+  `PrincipalAuthority` carries its own `valid_from` / `valid_until`. Neither
+  object supplies the complete human-session or protected-effect attempt
+  interface. Credential expiry is not automatically a human-session deadline.
+- Main includes the separately reviewed tenant-challenge observation and
+  signing-deadline work. Challenge creation time and capability expiry are
+  not a protected-effect transaction deadline or a complete commit guard.
 - `ofarm.kernel_record` and `ofarm.kernel_record_reference` are existing
   tenant-bound tables with immutable record/batch and typed-reference
   provenance. Their existence and SELECT privileges do not prove that all
@@ -209,13 +219,19 @@ The following are exact semantic planning sources, **not executable authority**:
 | Candidate | Exact reviewed source head | Relevance |
 |---|---|---|
 | [OFARM PR #11](https://github.com/samovers/OFARM/pull/11) | `03a21f669ee04f96d444e14f00ae7212cab04803` | Complete action rules, principal/CP3/finalization axes, paths, snapshot, v0.2 evidence and staged delivery |
+| [OFARM PR #17](https://github.com/samovers/OFARM/pull/17) | `9ef08030b25eb3db1c2da14d6595300198384ff2` | Human final-review protected-effect planning source |
 | [OFARM PR #20](https://github.com/samovers/OFARM/pull/20) | `98f8c4fafbae42c8f7fd931f43f53adcb4733713` | Human-finalization transaction protocol; excludes NOT_REQUIRED |
 | [OFARM PR #23](https://github.com/samovers/OFARM/pull/23) | `622376e2998cf8b3954ca19e81d2cce6fd57e5fe` | AssertionRecord submission protected-effect contract |
 | [OFARM PR #26](https://github.com/samovers/OFARM/pull/26) | `e042efa2911b2ef0a61603b8e0adaa6911c03ac0` | NOT_REQUIRED atomic protocol and first operation-claim handoff |
+| [OFARM PR #28](https://github.com/samovers/OFARM/pull/28) | `4e186aab5c238215906fcf9b24ce74443abb6f72` | Exact SharingGrant TERMINATE protected-effect planning source; not a revocation command in this PR |
 
 The [PR #26 approval](https://github.com/samovers/OFARM/pull/26#issuecomment-5560085396)
 closes that candidate's Phase A semantic review. It does not merge its bytes,
 materialize contracts, promote currentness, or approve OFARM2 implementation.
+The [PR #28 approval](https://github.com/samovers/OFARM/pull/28#issuecomment-5570649266)
+has the same limited effect for its candidate. Its completion does not change
+the first implementation consumer from operation-claim submission to grant
+revocation.
 
 Before code, replace this planning inventory with exact source paths, source
 commits, byte digests, canonical currentness status, OFARM2 extraction paths,
@@ -243,65 +259,170 @@ of these steps.
 
 ## 6. Proposed production interface and data ownership
 
-Use one small production-only provider and a narrow tenant read adapter.
-Private names below describe ownership; they are not new machine contracts or
-a frozen API while the exact source bindings remain absent.
+Use one production-only evaluator and one narrow tenant read adapter. The
+following is a concrete local interface proposal for review, not executable
+code or new canonical record schemas. Exact machine bindings and the named
+upstream factories remain G2/G3 dependencies.
 
-The intended entry point is a typed authorization provider on the active
-`TenantUnitOfWork`, reached through `ApplicationRuntime.tenant_unit_of_work`.
-Composition constructs its private dependencies from the same connection.
-It must be exercised through that actual composition, not only by importing
-a pure helper. Its bounded preparation and final-evaluation operations share
-one implementation of the canonical policy, authorization-view extraction,
-relevant-state projection/comparison, path selection and cutoff rules.
+### Closed entry points and trusted construction
 
-The trusted input binds, as one immutable value:
+The public work surface gains exactly two synchronous methods:
 
-- the authenticated principal and exact TenantBinding;
-- the selected command/action and exact current policy/rule/binding manifest;
-- the schema-valid full effect intent and canonical digest;
-- current trusted attempt identity, time, exclusive deadline and snapshot
-  provenance from the transaction-policy owner;
-- applicable persisted prerequisites with exact immutable record/digest and
-  snapshot-visibility proof, including the exact challenge revision, display
-  bytes/retrievability proof, renderer/display-policy metadata and retention
-  binding for fresh approval;
-- the exact authenticated human act where required, including server-observed
-  `humanActedAt` from its trusted boundary, never client time as authority; and
-- for final evaluation, the separately typed, mode-correct prospective
-  finalization evidence described below, constructed by the transaction
-  consumer but not yet committed.
+```python
+def prepare_authorization(self, call: AuthorizationCall) -> PreparationOutcome:
+    ...
 
-A request cannot construct that value by supplying a tenant, deadline, stage,
-posture, policy URL, grant dictionary, or snapshot label. The provider applies
-the rule-selected schema and identity-only JSON Pointer extraction; a second
-caller-supplied authorization view is prohibited. Runtime-completed fields
-must come from their owning command protocol, not a second completion
-algorithm inside the evaluator.
+def evaluate_authorization(
+    self,
+    call: AuthorizationCall,
+    finalization: ProspectiveFinalization | None = None,
+) -> EvaluationOutcome:
+    ...
+```
 
-The read facade returns typed immutable records and completeness evidence.
-It uses only closed, parameterized queries through the bound connection and
-checks family, schema/content digest, immutable identity, tenant, lifecycle,
-visibility and relevant reference bindings. It does not accept a connection,
-SQL expression, table name, transaction callback, or caller-filtered candidate
-list. Existing Row-Level Security remains an independent backstop.
+They are reached through `ApplicationRuntime.tenant_unit_of_work`, its existing
+security-audit wrapper, and the manager-created active `TenantUnitOfWork`.
+The manager injects one private frozen pair of closed callables,
+`_AuthorizationCalls`, bound to the authenticated principal, exact
+TenantBinding and the same connection. The UoW exposes neither this pair nor
+an independently usable provider handle. Both calls use the same evaluator
+for policy, extraction, projection/comparison, paths and cutoffs.
 
-The read footprint includes principal/representation/CP3 evidence, target,
-typed inputs and effect subject, role/grant/delegation/sharing candidates,
-source records, revocations, purpose/condition evidence, sovereignty,
-applicable policy and currentness facts. For fresh approval it includes every
-input selected by the rule-owned relevant-state projection and its exact JSON
-Pointers, including eligible authority paths and approver-separation facts,
-plus the challenge/display and act-validity proof required below. It must
-cover absence and complete sets as well as positive rows. Bounds may reject an
-oversized/incomplete evaluation; they may not truncate a set and call it complete.
+Each method checks active and not rollback-only before invoking its private
+callable. `_finish` seals the new dependency as well as the existing ones.
+Retaining a bound method cannot bypass those checks. Results contain immutable
+data only, never callables, cursors or a connection. Unexpected database or
+adapter failures mark the existing `__rollback_only` flag before re-raising
+into the UoW rollback/discard path. Catching that error in consumer code cannot
+make the UoW committable again. The provider cannot swallow a broken transaction
+and report a durable refusal.
+Ordinary typed preparation/ingress refusals and canonical non-ALLOW decisions
+do not themselves assert rollback or durability.
 
-The concrete PostgreSQL read plan, immutable snapshot representation,
-transaction-policy input factory, and complete read/guard interface are a
-**design gate**, not already implemented infrastructure. A series of ordinary
-READ COMMITTED queries or caller-authored proof objects does not satisfy it.
-A coherent single-statement read may help capture a snapshot, but is not by
-itself a commit guard or authority to introduce a new snapshot contract.
+`AuthorizationCall` has three closed roles, not a general proof dictionary:
+
+| Local member | Content and admission rule |
+|---|---|
+| `attempt` | Owner-issued protected-effect attempt frame: exact operation/generation where applicable, attempt/transaction binding, fixed transaction deadline, trusted time/session/act and final-snapshot/guard inputs required by the selected protocol. It must match this bound UoW. |
+| `selection` | Owner-issued exact command/action, policy/rule and binding-manifest selection. Verify its provenance, content and compatibility; a matching action string alone is insufficient. |
+| `effect_intent` | Exact full intent bytes and their claimed identity/digest. The provider validates and derives its authorization view itself. Owner-completed fields must already be bound by the command protocol. |
+
+These names describe local envelopes around admitted contracts; they do not
+duplicate the contracts' field inventories. Python type/frozen-object checks
+prevent accidental mixing, not forgery by a caller. Production composition
+must obtain `attempt` and `selection` from their reviewed owning factories,
+and the provider verifies their binding to its privately held principal/UoW.
+Those complete factories are not present at this base. A constructor in an
+HTTP handler, test fixture or this evaluator is not a substitute.
+
+There is no caller-set tenant, resolved actor kind, authority subject, stage,
+condition mask, approval mode, policy URL, grant list or equality flag. The
+principal comes only from composition. Party classification uses the exact
+anchored governed Party; representation and CP3 need their own evidence.
+Authority subject is derived per candidate path, never selected globally
+before path resolution. Optional AI metadata remains authority-inert.
+
+`ProspectiveFinalization` carries complete candidate bytes, immutable identity
+and digest, plus their exact attempt and, for fresh approval, preparation
+binding. It is the only prospective-proof role accepted by this API; it cannot
+replace persisted authority sources. Supplying `None` never disables a rule's
+human requirement. Whether an absent candidate permits a canonical
+REQUIRE_HUMAN_APPROVAL decision or causes protocol refusal follows the admitted
+rule/profile, not a caller-selected mode. Preparation is only for the post-act
+fresh-approval handshake; direct-human and NOT_REQUIRED use final evaluation.
+
+`PreparationOutcome` is either the complete non-decision view described below
+or a typed preparation refusal. `EvaluationOutcome` is either a truthful
+ingress/infrastructure refusal or a complete prepared decision with immutable
+read/guard obligations. These are disjoint types: no shared `allowed` flag,
+fabricated canonical DENY on malformed ingress, or `committed` field. Neither
+successful result is portable to another attempt or a closed UoW.
+
+### Trusted-source map and missing producers
+
+| Required fact | Existing source and provider use | Remaining owner dependency |
+|---|---|---|
+| Authenticated Party and tenant anchor | `AuthenticatedPrincipal` / `PrincipalAuthority`, checked against `TenantBinding` and exact Party record identity/digest | Map the admitted principal-resolution revision and its validity interval to canonical evidence; do not treat the anchor as complete representation/CP3 proof. |
+| Natural-person representation or software actorship | Read immutable governed evidence and apply the selected contracts; Party classification and sponsorship alone confer no representation/delegation | Inventory exact current representation/CP3 bindings and their provenance. PR #11 says the current CP3 envelope is semantically sufficient; this is not permission to change it. |
+| Human session and exact act | The existing verifier establishes issuer/subject; owner-issued act proof must bind the authenticated session, act bytes and server-observed time | No complete session/act proof factory is present. Its owner must define the mapping and custody; this provider must not reparse an unverified JWT or copy verifier logic. |
+| Transaction attempt, deadline, final snapshot and protection | Same bound connection supplies tenant/full-transaction identity; the protected-effect protocol owns admission and time/guard proof | Current UoW has no complete attempt/deadline/guard factory. Tenant challenge time, token lifetime, batch allocation and `bound_at` are not substitutes. #178 must resolve its transaction-side interface. |
+| Command/action and authorization policy | Consume exact verified selections and content-addressed admitted bytes | Current fixed selector selects the incompatible old command in section 9, not a general v0.2 policy. Its owner must supply a compatible reviewed selection; this PR cannot reinterpret it. |
+| Canonical authority snapshot/currentness and source visibility | Provider verifies canonical proof against coherent tenant reads and exact source/batch provenance | G2 must supply exact bindings; G3 must identify how existing sources prove every required watermark/visibility fact. A SQL snapshot label does not fill this gap. |
+| Challenge, display and act prerequisites | Read exact immutable references and verify owner-supplied retrievable display bytes and metadata | Human protocol/display/retention owners supply real proof and lifecycle eligibility. No ceremony, renderer, retention store or generation writer is added here. |
+
+For time, follow PR #11 section 18.2 precisely: principal-resolution/session
+validity ends contribute where required; an explicitly unbounded governed
+interval contributes no cutoff. A missing required end is not an unbounded
+interval. JWT `exp`, JWKS cache expiry, capability expiry and interactive
+session expiry are distinct facts; this RFC creates no rule equating them.
+The owning policy must settle any required mapping. Once proof is available,
+the provider computes the canonical minimum using exclusive UTC ends, not a
+locally chosen authorization TTL. Missing producer authority prevents a usable
+handoff; a proved expired fact follows the canonical evaluation disposition.
+
+### Concrete tenant read plan and snapshot limits
+
+The initial closed reader proposal is one parameterized SELECT on the bound
+connection per authority observation. No public SQL, filter, table-name or
+transaction callback is added. Start with complete tenant-visible canonical
+record/reference sets, not a request's grant candidates. This deliberately
+simple plan avoids depending on an unproven authority search index:
+
+1. Capture `ofarm.current_tenant_context()` and the current full transaction
+   identity in that statement; compare them with the privately held binding
+   and admitted attempt. Existing RLS remains an independent backstop.
+2. Read canonical-lane `ofarm.kernel_record` rows for that tenant, including
+   exact record kind/ID, schema digest, payload/digest, batch ID/full XID,
+   runtime-bundle digest and record time. Read their
+   `ofarm.kernel_record_reference` rows and matching `governed_write_batch`
+   provenance in the same statement. Do not discard revoked/rejected paths
+   before evaluation. Draft-lane rows cannot become canonical authority.
+3. Preserve exact reference role, JSON Pointer, ordinal, extractor
+   version/digest and target lane. Verify the derived reference index against
+   source payload and its admitted extractor; an index row is not authority
+   independently of that source. Validate relevant global content against
+   exact selected/manifest-bound content, never a caller URL.
+4. Parse and validate required record families against admitted schemas;
+   verify identity and digest under each family's exact hash projection.
+   `payload` is JSONB, not preserved original wire bytes: do not hash arbitrary
+   database serialization or trust `payload_digest` without verification.
+   Missing, malformed or inconsistent required proof cannot be silently
+   removed to make a set look complete.
+5. From this coherent capture derive the complete rule-selected resource,
+   principal/representation/CP3, role/grant/delegation/sharing, revocation,
+   condition/evidence/purpose and sovereignty inputs. Include all facts
+   required by rejected-path diagnostics and the relevant-state projection,
+   plus exact absence and complete-set claims, not just the winning path.
+6. Verify every source's required snapshot visibility/currentness proof.
+   READ COMMITTED sees this transaction's own writes too: a same-attempt row
+   cannot be labelled an already committed prerequisite. Use the separate
+   prospective finalization input only in its admitted role. An MVCC label,
+   maximum knowledge position or immutable row alone is not the governed
+   `authorityEvaluationSnapshotRef` required by PR #11 section 16.1.
+7. Return immutable verified facts, their canonical snapshot binding and the
+   complete local read footprint. Missing canonical snapshot/visibility proof
+   returns no successful capture, even when the SQL rows are internally
+   consistent. No standalone canonical snapshot record family is invented.
+
+The statement must have deterministic ordering and server-side row/byte/work
+bounds with explicit overflow detection. Overflow refuses the whole capture;
+LIMIT without a completeness/overflow check is prohibited. Materialized
+subsets and joins must not multiply or truncate away reference/negative proof.
+The exact SQL, bounds and representative tenant-size evidence remain a G3
+implementation-plan item once G2 fixes the record bindings. Optimizing to
+smaller family/reference closures is acceptable only with the same provable
+completeness. A tenant scan that makes the intended production workload
+unusable does not satisfy #353 merely because it fails closed.
+
+This is a concrete query shape and verification plan, not a claim of an
+implemented or measured reader. Sequential ordinary READ COMMITTED queries
+are not a substitute for one coherent observation. A coherent observation is
+not a commit guard: the transaction owner must protect the complete footprint.
+For preparation/final evaluation, its interface must establish the same final
+snapshot and protection context required by PR #20. Merely running the SELECT
+twice cannot prove that continuity. Any loss of that proof prevents successful
+finalization; any relevant drift follows section 7. The provider still owns
+final projection recomputation, never a consumer-supplied equality assertion.
 
 ### Preparation is distinct from a prepared decision
 
@@ -627,7 +748,8 @@ Every prepared decision binds the current transaction attempt and full
 intent. Compute decisionValidUntil as the canonical minimum of the trusted
 transaction deadline, session/principal, applicable source/representation,
 policy/snapshot, resource/evidence/sovereignty and approval cutoffs. Ends are
-exclusive. Required missing/unparseable ends or a minimum not later than the
+exclusive; explicitly unbounded governed intervals add no cutoff. Required
+missing/unparseable ends or a minimum not later than the
 evaluation time produce no consumable decision. A newly admitted attempt needs
 a fresh evaluation; returning an existing committed receipt is not another use
 of old authority and does not require another evaluation.
@@ -642,6 +764,40 @@ This PR does not claim that READ COMMITTED, the tenant-binding lock, or batch
 allocation already provides that protection. Changing isolation, adding a
 guard protocol, or inventing authoritative commit-status lookup is outside
 this PR. #178 must close its own concrete implementation design.
+
+### Closed read-to-guard handoff
+
+The prepared decision's local handoff is bound to the exact tenant, operation
+and attempt, intent, selected command/policy, canonical snapshot, complete
+request/result/trace bytes and decision-bundle digest. It also carries
+`decisionValidUntil` and the complete provider-observed footprint. The wrapper
+is internal data, not another persisted ledger, a new canonical proof schema
+or authority to execute SQL supplied by the provider.
+
+The footprint has three closed forms; none can be replaced by a boolean
+`guarded` supplied by the caller:
+
+| Form | Required meaning | Owning transaction must establish |
+|---|---|---|
+| Exact record/content fact | Tenant, family, immutable ID/digest, relevant revision/lifecycle and source visibility; includes selected and rejected bases required by canonical evidence | The same fact remains admissible through the protected effect, or the consumer refuses/restarts under its protocol. |
+| Absence or complete set | The rule-selected predicate, its exact tenant/resource scope, expected complete membership and canonical currentness proof; includes applicable revocation, competing authority and prospective-subject absence | Protection against insertions and other changes to that predicate, not just locks on the rows that happened to exist. |
+| External binding or time | Exact selected policy/currentness, identity/session/act/display proof and every required exclusive cutoff not established by tenant rows | Its owning authority's admitted validity/recheck mechanism and timely final consumption; a database row lock alone is insufficient. |
+
+These forms identify obligations, not new predicate semantics or a generic
+query language. The bound rule/profile owns the exact predicates and canonical
+evidence mapping. Provider completeness tests compare the entire handoff with
+its observed footprint; the consumer must reject an omitted, unknown,
+mismatched or unprotectable obligation before consumption. No successful
+handoff may silently reduce this to the selected grant's ID and expiry.
+
+Before Phase B, G3 must connect these forms to the transaction owner's actual
+typed attempt/guard input and exact canonical profile. In particular it must
+prove final-snapshot continuity across preparation and final evaluation,
+external validity and set/absence protection under concurrency. No such
+complete production interface exists at the inspected base. This RFC chooses
+the producer/consumer split and required contents; it does not select locks,
+change isolation or certify a fictional guard receipt. Tests with handcrafted
+frames can exercise provider logic but cannot close this source/guard gate.
 
 ### Durable outcomes belong to the consumer
 
@@ -775,6 +931,39 @@ must additionally cover revocation/set changes between evaluation and commit,
 exclusive deadlines, duplicate consumption, persistence failure, committed
 refusal with lost response, and separately unknown evidence commits.
 
+### Focused verification for the revision 5 interface
+
+These are planned cases under existing invariants, not new canonical rules or
+claims of executed tests:
+
+- AUTH-002/003/011: through the real runtime/UoW, substitute a frame from
+  another tenant/attempt, a handler-constructed selection, a caller deadline,
+  or a JWT cache/challenge expiry for required session proof. None becomes a
+  trusted input. Separately prove that an explicitly unbounded governed
+  interval is handled without inventing a cutoff.
+- AUTH-007/010: capture two tenants, rejected and revoked paths, complete
+  reference sets and a prospective absence. Tamper with a payload/digest,
+  reference extractor, batch provenance or required watermark. Inject a
+  same-transaction row claimed as a committed prerequisite. Each failure
+  prevents the corresponding successful proof; no row is silently omitted.
+- AUTH-007/009: reverse row order and exercise exact reader bounds plus one
+  row/byte over the bound. Exact-bound complete data remains usable; overflow
+  yields no partial complete-set claim. Demonstrate usable representative
+  tenant sizes, not just refusal of every realistic capture.
+- AUTH-011/012/014: retain both bound methods after closure and call them in a
+  rollback-only UoW; no reader runs. Inject a database failure and verify the
+  existing rollback/discard path, including a consumer that catches the error;
+  no provider commit or false durable result follows. Verify exact
+  constructor/slots/import edges and no raw handle.
+- AUTH-013/019: delete a set/absence or external obligation from the returned
+  handoff; completeness verification fails. Attempt the two-step approval
+  handshake without proof of one final snapshot/protection context; no
+  successful finalization. Actual race prevention still needs owner tests.
+- AUTH-015–019: execute valid fresh-approval, direct-human and NOT_REQUIRED
+  cases through the two methods, including same-person eligibility, exact
+  candidate equality and admitted fresh-attempt retry. Preparation cannot
+  masquerade as a decision; `None` cannot bypass the rule's human requirement.
+
 ## 11. Disposition of the existing nine-blocker review
 
 The [review at the old head](https://github.com/samovers/OFARM2/pull/359#pullrequestreview-5065359533)
@@ -791,12 +980,12 @@ not reviewer approval or a claim that executable prerequisites now exist.
 | B5: scope masquerading as target proof | Sections 6–7; PR #11 sections 7–8 define target/input/subject extraction and existence postures. | Exact rule bindings, typed reader and AUTH-004. |
 | B6: trace cannot express promised proof | Sections 5 and 7; consume new canonical decision evidence, never misuse dataSovereigntyBoundaryRefs. | Machine materialization/extraction and AUTH-010. |
 | B7: read SharingGrant overlay | Section 7 puts applicable sharing inside the one authorization evaluation. | AUTH-008; no disclosure/output implementation. |
-| B8: refusal evidence rolled back by error | Sections 2 and 8 explicitly separate prepared evidence from consumer-owned durable refusal and response. | Steward must approve the #353 criterion amendment; consumer commit/recovery proof remains #178/applicable consumer work. |
+| B8: refusal evidence rolled back by error | Sections 2 and 8 explicitly separate prepared evidence from consumer-owned durable refusal and response. | The issue amendment is applied; formal implementation approval and consumer-owned commit/recovery proof remain outstanding. |
 | B9: six unsupported lineage expansions | Section 7 removes L; approved PR #11 section 7 supplies D/X/N ceilings and no derived-lineage row. | Exact artifact equivalence and AUTH-007. |
 
-Fresh review must evaluate these corrections and the production/interface
-changes. It must not treat the old review's recommendation to retain a
-code-owned table as authority over the later canonical bundle ownership.
+This table preserves the correction history. Current review is limited as
+specified below; the old review's recommendation to retain a code-owned table
+is not authority over the later canonical bundle ownership.
 
 ### Revision 2 review: bounded B1 correction
 
@@ -811,8 +1000,9 @@ PR #20 protocol, not new law or transaction-coordination ownership.
 
 Re-review is limited to that fix and affected invariants unless new evidence
 demonstrates a broader defect. The earlier nine findings are not reopened.
-The scope, canonical-readiness and concrete-interface gates remain open; this
-correction does not claim a new zero-Blocker review or implementation approval.
+At revision 2 the scope, canonical-readiness and concrete-interface gates
+remained open; that correction did not itself confer reviewer sign-off or
+implementation approval.
 
 ### Revision 3 review: bounded B1 and related corrections
 
@@ -830,10 +1020,26 @@ preserves the earlier handshake and addresses that focused review:
 | S4: exact act retry confused with candidate portability | Section 8 and AUTH-018 distinguish admissible original-act reuse from forbidden old preparation/candidate reuse; committed retries return the existing receipt. | Provider fixture plus separately owned consumer retry/receipt tests. |
 | Preference: final evaluation appears before EVALUATED | Section 8 replaces the ordinary evaluation step with the fresh-approval handshake. | One final decision-producing operation, with no extra evaluation step. |
 
-These are proposed design corrections, not reviewer sign-off. Re-review is
-limited to this fix and affected invariants unless new evidence demonstrates
-a broader defect. The old nine findings stay closed to reopening without such
-evidence; G1–G4 remain open and no implementation approval is claimed.
+The [focused revision 4 review](https://github.com/samovers/OFARM2/pull/359#pullrequestreview-5126174929)
+at `263cd32722ff2b482910bd7bb880f91aa8391838` closed B1 at design level,
+accepted the related corrections with its stated qualifications, and requested
+no further patch. It did not close G2/G3 or approve implementation. That
+exact-head disposition is historical evidence, not review of revision 5.
+
+### Revision 5: concrete G3 proposal, not a new correction cycle
+
+This revision follows the task user's instruction to return to the original
+implementation work. It specifies the two closed entry points, dependency and
+lifetime, an evidence-source ledger, the initial coherent tenant-read plan,
+three read/guard obligation forms and focused verification. It identifies
+missing producers instead of creating them in this boundary. It also records
+G1's applied issue amendment and the later canonical planning sources.
+
+Review the new interface/source/read/handoff proposal and affected
+AUTH-002/003/007/009–019 and EXC invariants. Do not reopen the earlier nine
+findings or the settled revision 4 handshake without new evidence of a
+defect. G2/G3 remain open; the new head starts REVIEW_PENDING and carries no
+new zero-Blocker sign-off or implementation approval.
 
 ## 12. Expected implementation areas and code excellence
 
@@ -847,7 +1053,7 @@ Expected later areas, not a path allowlist:
   bound input/output and selected-proof values;
 - a narrow production tenant authority-read adapter, plus the necessary typed
   hook in `kernel/tenant_uow.py`;
-- production composition in `kernel/application_runtime.py`, and a reviewed
+- production composition through the existing runtime/UoW path, and a reviewed
   exact facade/architecture-contract extension without weakening its
   legacy/SQL firewall;
 - focused evaluator, PostgreSQL, composition, route-closure and UoW tests;
@@ -858,9 +1064,9 @@ command writer, runtime selector adaptation, principal/authentication edit,
 audit-custody change or profile activation is included. Discovery of a file
 inside the approved boundary can travel; discovery of a new authority cannot.
 
-### Facade shape and size are a concrete-interface gate
+### Exact proposed facade extension and remaining size gate
 
-At the inspected base and reviewed revision 3, the architecture checker pins
+At the inspected main, the architecture checker pins
 the TenantUnitOfWork shape exactly, not merely by convention:
 
 ```text
@@ -905,6 +1111,47 @@ must explicitly settle its coverage and size bound and register focused test
 coverage (the default covered test-module limit is 800 lines). Re-measure at
 the implementation base. This design revision edits no checker or runtime.
 
+Revision 5 proposes this exact new shape, replacing the earlier open-ended
+provider-hook description:
+
+```text
+public surface = {binding, batch, begin_batch,
+                  resolve_commit_operation_claim_draft_runtime_bundle,
+                  prepare_authorization, evaluate_authorization}
+constructor = (self, binding, allocate_batch, resolve_bundle, authorization)
+slots = {__binding, __active, __allocate_batch, __batch, __resolve_bundle,
+         __selector_state, __selected_bundle, __rollback_only,
+         __authorization}
+authorization = one private frozen _AuthorizationCalls pair
+```
+
+The pair contains only typed preparation/evaluation callables, not a generic
+executor. The manager builds it against the same connection and privately held
+principal/binding; `_finish` replaces it with closed callables. Public
+`ApplicationRuntime` methods and existing authentication, audit and selector
+semantics do not change. The two new UoW methods check lifetime/rollback-only;
+they do not allocate a batch, commit, acquire locks or choose policy. Concrete
+reader SQL stays in the private tenant authority adapter, not the facade or a
+legacy module. Architecture verification must allow only those exact new
+edges and preserve the existing raw-handle, generic-SQL and legacy firewalls.
+
+Proposed implementation partition is the evaluator, narrow reader and closed
+local input/output types needed by those two operations; no plugin registry,
+generic policy framework or parallel authorization path. The type dependency
+direction must avoid a circular import back into `tenant_uow`; place shared
+values separately only when the concrete implementation needs it.
+
+The measured current size outcome is **no UoW headroom**, not an approved size
+for this extension. No code sketch or arbitrary allowance is presented as a
+measured implementation. After G2 fixes the actual contracts and G3 fixes
+trusted constructors/query bounds, the Phase A implementation plan must name
+the final module partition, measure the facade/wiring delta and justify exact
+module/group budgets, including explicit coverage of all new modules. If it
+does not fit, bring the smallest in-boundary simplification or specific budget
+proposal for review. Do not move existing transaction code merely to hide the
+growth. The exact surface is now proposed; G3's size outcome is still open and
+Phase B remains prohibited.
+
 | Code-excellence invariant | Planned assessment |
 |---|---|
 | EXC-001 — one authoritative path | One canonical semantic source and one production authorization implementation shared by non-decision preparation and final evaluation; the transaction owner constructs evidence from those values, not a second extractor, relevant-state projection/comparison, path-selection or cutoff engine. |
@@ -922,17 +1169,35 @@ deployment, but executable bytes and concrete trusted interfaces are absent.
 No fallback, weakened proof, old-schema compatibility or synthetic authority
 path is authorized.
 
-| Gate | What must be settled before implementation approval |
+| Gate | Current state and what remains before implementation approval |
 |---|---|
-| G1 — Delivery scope | Steward explicitly accepts the issue amendments in section 2, including prepared-versus-durable evidence and production-only callers; full evaluation coverage remains explicit. |
+| G1 — Delivery scope | Applied in issue #353 with the preserved amendment record in section 2. The later formal decision card must include this scope; full evaluation coverage remains explicit. This is not implementation approval. |
 | G2 — Canonical readiness | Complete the governing staged sequence and replace missing entries in section 5 with reviewed exact promoted/extracted bytes and provenance. Semantic approval alone is insufficient. |
-| G3 — Concrete trusted interface | Close the production principal/representation/CP3 input mapping, policy selection compatibility, coherent typed read/snapshot plan, deadline source and complete guard handoff. Settle section 12's exact facade dependency/constructor/slots/public surface, architecture proof and module/group budget outcome before Phase B. Include the sections 6–8 handshake: provider-owned current relevant-state projection/digest and challenge comparison; complete bound authorization view; display/separation/trusted-act revalidation; distinct prospective uncommitted evidence; exact candidate/final basis/window equality; and nonportable preparation/candidates without prohibiting admitted exact act retries. Verify AUTH-015–019 through the same provider, including relevant-change refusal and unrelated-history success. Demonstrate independently useful production-provider completion without inventing another authority owner. Split any demonstrated new boundary before editing it. |
+| G3 — Concrete trusted interface | Sections 6, 8 and 12 now propose the exact closed surface, trusted-source map, coherent read shape and guard handoff. Review those choices and close the specific unresolved items below; no production factories, canonical snapshot proof, measured query bounds or final module budget are implied. Preserve the revision 4 handshake and prove independently useful full-coverage production-provider completion. |
 | G4 — Fresh OFARM2 approval | Review this corrected Phase A to zero Blockers, then present a complete decision card naming existing PR #359 and obtain the required exact later task-user approval. No such card is issued by this revision. |
+
+The remaining G3 work is bounded, not a request to restart canonical design:
+
+| Item | Required closure evidence | Boundary and sequencing |
+|---|---|---|
+| G3-INPUT | Exact mappings and real producers for principal/representation/CP3, session/act, attempt/deadline and compatible selection; reject forged/mixed frames through production composition | Consume existing accepted producers where sufficient. Any new authentication/session, selection or transaction authority needs separately scoped work and user direction before edits; do not mint proof in this provider. |
+| G3-READ | Exact admitted schema/hash/extractor mapping, coherent SQL, source visibility/currentness and canonical snapshot proof, bounded representative workload, same final-snapshot/protection context for the handshake | Reader/projection implementation belongs here after G2. Missing storage, permission, snapshot authority or transaction protection belongs to its owner, not a database change hidden in the reader. |
+| G3-HANDOFF | Actual typed transaction interface covering every record/set/absence/external/time obligation and attempt-bound prepared evidence, with an independently usable provider completion test | Settle the interface with #178's design before approving provider code. Durable command coordination, guards and consumer race/recovery tests remain #178/applicable consumer work. Their later delivery cannot excuse a provider that only accepts invented fixtures. |
+| G3-SHAPE | Review the exact facade proposal and architecture edges in section 12, then a measured final partition/size and focused production-path test plan against the admitted bindings | One authorization boundary. Existing zero headroom is explicit; no automatic checker relaxation or budget increase. |
+
+The #353 -> #178 -> #176 sequence describes capability completion; it cannot
+postpone an indispensable input producer until after its consumer. If G3
+requires an authority producer that exists only in unfinished #178 work, that
+is a dependency cycle to resolve before approval, not permission to use fake
+frames. First determine whether an already accepted interface suffices. If
+not, propose an independently usable prerequisite in its own boundary and
+reconcile the Delivery issue structure with the user before creating it.
+Neither a type-only companion PR nor silently expanding #353 resolves this.
 
 Evidence requiring redesign: a machine binding contradicts the approved
 candidate; the exact reader/guard/proof needs a new authority; full admitted
-coverage cannot be supplied by one coherent provider; or the durable-trace
-criterion is retained. The upgrade path is a reviewed revision with exact
+coverage cannot be supplied by one coherent provider; or provider-owned
+durability is requested again. The upgrade path is a reviewed revision with exact
 bindings and concrete interfaces, and a new semantic decision version where
 required—not a compatibility fallback.
 
@@ -943,10 +1208,11 @@ disaster/store-loss recovery. The old command successor is a compatibility
 gate for its consumer, not a reason to amend approved canonical PR #26.
 No new Delivery issue is created in this revision.
 
-Review disposition: REVIEW_PENDING, with G1–G4 preventing an implementation
-approval packet. The old nine findings have proposed corrections, not a new
-zero-Blocker sign-off. Exact private names and test-file partitioning are
-Preferences only after the substantive interface is settled.
+Review disposition: revision 5 is REVIEW_PENDING. G1 is applied; G2/G3 and the
+later G4 card/approval remain outstanding. The revision 4 review stays attached
+to its exact historical head and is not transferred to this revision. Exact
+private names and test-file partitioning are Preferences only after the
+substantive interface is settled.
 
 ## 14. Verification and handoff
 
@@ -975,7 +1241,8 @@ transaction coordination, protected effects, selection authority and temporal
 persistence with their own owners. No cross-boundary implementation is hidden
 in this plan.
 
-What is next: re-review the revision 3 B1 and related corrections at the new
-head, limited to the fix and affected invariants;
-resolve the still-open scope, canonical-readiness and concrete-interface gates
-before a fresh #359 decision approval and runtime edits.
+What is next: review revision 5's concrete interface/source/read/handoff
+proposal and affected invariants at its new head; close the listed G2/G3
+prerequisites with their existing owners before presenting the fresh #359
+decision card. No runtime edits, new Delivery issue, baseline or merge are
+authorized by this design revision.
