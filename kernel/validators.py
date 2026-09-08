@@ -171,9 +171,11 @@ def _assert_parent_scope_contained(ctx: GateContext, ref: str,
 
 
 class _CorrectionProofError(ValueError):
-    def __init__(self, detail: str, reason: str = "CORRECTION_REQUIRED"):
+    def __init__(self, detail: str, reason: str = "CORRECTION_REQUIRED", *,
+                 refusal: GateRefusal | None = None):
         super().__init__(detail)
         self.reason = reason
+        self.refusal = refusal
 
 
 def _correction_record(ctx: GateContext, ref, kind: str | None = None, *,
@@ -214,7 +216,21 @@ def _assertion_event(ctx: GateContext, assertion: dict) -> dict:
     _correction_farm(ctx, assertion)
     event_ref = _correction_edge(ctx, assertion["assertionRecordId"], "EVENT_SOURCE")
     event = _correction_record(ctx, event_ref, "ofarm.semanticeventenvelope.v0.1")
-    _correction_farm(ctx, event)
+    anchors = event.get("anchorScopes")
+    if not isinstance(anchors, list) or not anchors:
+        raise _CorrectionProofError("Source event requires governed anchor scopes",
+                                    "SCOPE_NOT_AUTHORIZED")
+    for anchor in anchors:
+        if (not isinstance(anchor, dict)
+                or not isinstance(anchor.get("scopeType"), str)
+                or not isinstance(anchor.get("scopeRef"), str)):
+            raise _CorrectionProofError("Source event anchor scope is malformed",
+                                        "SCOPE_NOT_AUTHORIZED")
+        refusal = _assert_contained(ctx, anchor["scopeType"], anchor["scopeRef"],
+                                    "Source event anchorScopes")
+        if refusal is not None:
+            # Containment already logged the governed refusal; preserve it once.
+            raise _CorrectionProofError("Source event scope is not contained", refusal=refusal)
     commit_class = next((name for name, family in policy.COMMIT_CLASS_TO_ASSERTION_TYPE.items()
                          if family == assertion.get("assertionType")), None)
     if (commit_class is None
@@ -225,7 +241,9 @@ def _assertion_event(ctx: GateContext, assertion: dict) -> dict:
 
 
 def _structure_identity(ctx: GateContext, payload: dict) -> tuple[str, str]:
-    identity_type = policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE.get(payload.get("schemaVersion"))
+    schema_version = payload.get("schemaVersion")
+    identity_type = (policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE.get(schema_version)
+                     if isinstance(schema_version, str) else None)
     identity_ref = payload.get("identityRecordRef")
     if identity_type is None or not isinstance(identity_ref, str) or not identity_ref.strip():
         raise _CorrectionProofError("Correction requires an exact typed structural identity")
@@ -334,6 +352,8 @@ def _validate_correction(ctx: GateContext, predecessor, assertion: dict,
 
 
 def _correction_refusal(ctx: GateContext, exc: _CorrectionProofError) -> GateRefusal:
+    if exc.refusal is not None:
+        return exc.refusal
     return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
         exc.reason, "Correction relationship refused", str(exc)))
 

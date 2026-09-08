@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from kernel import config, demo
 from kernel.authority import AuthorityEvaluator
 from kernel.context import now_iso
+from kernel.contracts import canonical_json
 from kernel.legacy_m1.api import create_test_app
 
 
@@ -299,6 +300,72 @@ def test_direct_correction_requires_both_actions_and_accepts_direct_origin(env, 
     assert env.store.is_superseded(old)
 
 
+@pytest.mark.parametrize("schema_version", ([], {}), ids=("list", "object"))
+def test_structural_correction_refuses_unhashable_schema_version(env, schema_version):
+    original, old = _original(env, "STRUCTURE_ASSERTION")
+    old_row = deepcopy(env.store.get_record(old))
+    correction = _correction(original, old, actor=env.reviewer)
+    correction["payload"]["schemaVersion"] = schema_version
+    before = _truth(env.store)
+    refused = _commit(env, correction)
+    _refused(env, refused, before, old)
+    assert not refused.get("emittedAssertionRecordRefs"), refused
+    trace = _assert_receipt(env.store, refused)
+    assert trace["finalOutcome"] == refused["decisionOutcome"]
+    assert any(gate["gate"] == "VALIDATION" and gate["outcome"].startswith("FAIL_")
+               for gate in trace["gateSequence"])
+    assert env.store.edges_to(old, "LINEAGE_SUPERSEDES_INTENT") == []
+    assert env.store.edges_to(old, "LINEAGE_SUPERSEDES") == []
+    assert env.store.get_record(old) == old_row
+
+
+@pytest.mark.parametrize("family", FAMILIES)
+@pytest.mark.parametrize("correct", (False, True), ids=("ordinary-acceptance", "correction-chain"))
+def test_field_only_event_scopes_preserve_acceptance_and_correction(env, family, correct):
+    """Contained field anchors remain immutable through both lawful queue paths."""
+    original = _submission(family, env.author)
+    original["targetScopes"] = [{"scopeType": "FIELD", "scopeRef": demo.FIELD}]
+    assertion = _queue(env, original)
+    event = env.store.edges_from(assertion, "EVENT_SOURCE")[0]["dst_record_id"]
+    event_payload = env.store.get_payload(event)
+    assert event_payload["anchorScopes"] == original["targetScopes"]
+    event_bytes = canonical_json(event_payload).encode()
+    accepted = _review(env, assertion)
+    assert accepted["decisionOutcome"] == "PROMOTE_ACCEPTED", accepted
+    old = accepted["emittedAcceptedConsequenceRefs"][0]
+    assert env.store.get_payload(old)["sourceEventRef"] == event
+    assert canonical_json(env.store.get_payload(event)).encode() == event_bytes
+    _assert_receipt(env.store, accepted)
+    if not correct:
+        return
+
+    old_row = deepcopy(env.store.get_record(old))
+    contest = _post(env, "/review/contest", {
+        "farmRef": demo.FARM, "consequenceRef": old,
+        "rationale": "Fictional reviewer disputes this field-scoped source",
+        "idempotencyKey": _id("contest"),
+    }, env.reviewer)
+    dispute = contest["emittedReviewDecisionRefs"][0]
+    assert env.store.get_payload(dispute)["decisionOutcomeState"] == "CONTESTED"
+    queued = _queue(env, _correction(original, old))
+    queued_event = env.store.edges_from(queued, "EVENT_SOURCE")[0]["dst_record_id"]
+    queued_bytes = canonical_json(env.store.get_payload(queued_event)).encode()
+    assert env.store.get_payload(queued_event)["anchorScopes"] == original["targetScopes"]
+    assert not env.store.is_superseded(old)
+    corrected = _review(env, queued)
+    assert corrected["decisionOutcome"] == "PROMOTE_ACCEPTED", corrected
+    successor = corrected["emittedAcceptedConsequenceRefs"][0]
+    assert env.store.get_payload(successor)["sourceEventRef"] == queued_event
+    assert [edge["dst_record_id"] for edge in env.store.edges_from(
+        successor, "LINEAGE_SUPERSEDES")] == [old]
+    assert env.store.is_superseded(old)
+    assert env.outputs._lineage_has_dispute(successor)
+    assert env.store.get_record(old) == old_row
+    assert canonical_json(env.store.get_payload(event)).encode() == event_bytes
+    assert canonical_json(env.store.get_payload(queued_event)).encode() == queued_bytes
+    _retirement_receipt(env.store, corrected, env.reviewer, allowed=True)
+
+
 @pytest.mark.parametrize("target", [None, "", " ", False, 17, [], {}, "conseq:missing",
                                     demo.PHOTO_EVIDENCE])
 def test_supplied_target_must_be_a_nonempty_visible_consequence(env, target):
@@ -461,6 +528,64 @@ def test_malformed_origin_reads_fail_closed(env, monkeypatch, fault):
     result = _review(env, assertion)
     _refused(env, result, before, old)
     assert env.store.edges_from(assertion, "REVIEW") == []
+
+
+@pytest.mark.parametrize("phase", ("accepted-origin", "queued-correction"))
+@pytest.mark.parametrize("anchor_fault", (
+    "foreign-farm", "foreign-field", "missing-type", "missing-ref",
+    "non-object-scope", "empty-anchors", "mixed-farms", "mixed-fields",
+))
+def test_correction_source_event_refuses_cross_farm_anchors(
+        env, monkeypatch, phase, anchor_fault):
+    """Synthetic event-read fault; each anchor must prove its farm containment."""
+    original, old = _original(env, "OPERATION_CLAIM")
+    assertion = _queue(env, _correction(original, old))
+    event = (env.store.get_payload(old)["sourceEventRef"] if phase == "accepted-origin"
+             else env.store.edges_from(assertion, "EVENT_SOURCE")[0]["dst_record_id"])
+    event_row = deepcopy(env.store.get_record(event))
+    old_row = deepcopy(env.store.get_record(old))
+    poisoned = deepcopy(event_row)
+    foreign_farm, foreign_field = _id("farm"), _id("field")
+    if anchor_fault in {"foreign-field", "mixed-fields"}:
+        with env.store.tx() as cur:
+            env.store.insert_record(cur, {
+                "schemaVersion": "ofarm.identityrecord.v0.1",
+                "identityRecordId": foreign_farm, "identityType": "FARM",
+                "lifecycleState": "ACTIVE", "createdAt": now_iso(), "recordedAt": now_iso(),
+            })
+            env.store.insert_record(cur, {
+                "schemaVersion": "ofarm.identityrecord.v0.1",
+                "identityRecordId": foreign_field, "identityType": "FIELD",
+                "lifecycleState": "ACTIVE", "createdAt": now_iso(), "recordedAt": now_iso(),
+                "anchorScopes": [{"scopeType": "FARM", "scopeRef": foreign_farm}],
+            })
+    bad_scope = ({"scopeType": "FIELD", "scopeRef": foreign_field}
+                 if anchor_fault in {"foreign-field", "mixed-fields"}
+                 else {"scopeType": "FARM", "scopeRef": foreign_farm})
+    if anchor_fault == "missing-type":
+        bad_scope = {"scopeRef": demo.FIELD}
+    elif anchor_fault == "missing-ref":
+        bad_scope = {"scopeType": "FIELD"}
+    elif anchor_fault == "non-object-scope":
+        bad_scope = []
+    scopes = [] if anchor_fault == "empty-anchors" else [bad_scope]
+    if anchor_fault.startswith("mixed-"):
+        scopes.insert(0, {"scopeType": "FARM", "scopeRef": demo.FARM})
+    poisoned["payload"]["anchorScopes"] = scopes
+    read = env.store.get_record
+    before = _truth(env.store)
+    with monkeypatch.context() as fault:
+        fault.setattr(env.store, "get_record", lambda ref: poisoned if ref == event else read(ref))
+        refused = _review(env, assertion)
+    _refused(env, refused, before, old)
+    if anchor_fault.startswith(("foreign-", "mixed-")):
+        assert any(problem["reasonCode"] == "SCOPE_NOT_AUTHORIZED" for problem in refused["problems"])
+    trace = _assert_receipt(env.store, refused)
+    assert len([gate for gate in trace["gateSequence"]
+                if gate["gate"] == "VALIDATION" and gate["outcome"].startswith("FAIL_")]) == 1
+    assert env.store.edges_from(assertion, "REVIEW") == []
+    assert env.store.get_record(event) == event_row
+    assert env.store.get_record(old) == old_row
 
 
 @pytest.mark.parametrize("family", ("STRUCTURE_ASSERTION", "COMPLIANCE_ASSERTION"))

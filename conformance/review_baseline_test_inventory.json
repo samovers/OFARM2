@@ -576,6 +576,86 @@
       "sourcePath": "kernel/tests/test_correction_authorization.py"
     },
     {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[empty-anchors-accepted-origin]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[empty-anchors-queued-correction]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[foreign-farm-accepted-origin]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[foreign-farm-queued-correction]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[foreign-field-accepted-origin]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[foreign-field-queued-correction]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[missing-ref-accepted-origin]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[missing-ref-queued-correction]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[missing-type-accepted-origin]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[missing-type-queued-correction]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[mixed-farms-accepted-origin]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[mixed-farms-queued-correction]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[mixed-fields-accepted-origin]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[mixed-fields-queued-correction]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[non-object-scope-accepted-origin]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_correction_source_event_refuses_cross_farm_anchors[non-object-scope-queued-correction]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
       "nodeid": "kernel/tests/test_correction_authorization.py::test_current_reviewer_retirement_grant_is_required[expired]",
       "sourceModule": "kernel.tests.test_correction_authorization",
       "sourcePath": "kernel/tests/test_correction_authorization.py"
@@ -652,6 +732,46 @@
     },
     {
       "nodeid": "kernel/tests/test_correction_authorization.py::test_failed_successor_write_rolls_back_retirement_and_acceptance",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_field_only_event_scopes_preserve_acceptance_and_correction[correction-chain-COMPLIANCE_ASSERTION]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_field_only_event_scopes_preserve_acceptance_and_correction[correction-chain-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_field_only_event_scopes_preserve_acceptance_and_correction[correction-chain-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_field_only_event_scopes_preserve_acceptance_and_correction[correction-chain-STRUCTURE_ASSERTION]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_field_only_event_scopes_preserve_acceptance_and_correction[ordinary-acceptance-COMPLIANCE_ASSERTION]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_field_only_event_scopes_preserve_acceptance_and_correction[ordinary-acceptance-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_field_only_event_scopes_preserve_acceptance_and_correction[ordinary-acceptance-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_field_only_event_scopes_preserve_acceptance_and_correction[ordinary-acceptance-STRUCTURE_ASSERTION]",
       "sourceModule": "kernel.tests.test_correction_authorization",
       "sourcePath": "kernel/tests/test_correction_authorization.py"
     },
@@ -932,6 +1052,16 @@
     },
     {
       "nodeid": "kernel/tests/test_correction_authorization.py::test_retirement_permission_does_not_substitute_for_acceptance_permission",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_structural_correction_refuses_unhashable_schema_version[list]",
+      "sourceModule": "kernel.tests.test_correction_authorization",
+      "sourcePath": "kernel/tests/test_correction_authorization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_correction_authorization.py::test_structural_correction_refuses_unhashable_schema_version[object]",
       "sourceModule": "kernel.tests.test_correction_authorization",
       "sourcePath": "kernel/tests/test_correction_authorization.py"
     },
@@ -21896,8 +22026,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "c8d68ecc5da66c196ffe050bd9ba261e3353419f795ed9001ab4a5f6f3219222",
-  "entryCount": 4379,
+  "entriesSha256": "b1fbb1055f1531440f3ba4aff4ecc1e179f01692c7a35b1d40a29f9e8e9d23b0",
+  "entryCount": 4405,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
