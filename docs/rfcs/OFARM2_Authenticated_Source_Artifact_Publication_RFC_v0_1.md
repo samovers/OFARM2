@@ -1,3 +1,8 @@
+> Withdrawn after [review B1](https://github.com/samovers/OFARM2/pull/382#pullrequestreview-5168801319).
+> The version-1 approval card is withdrawn. See the proposed
+> [version-2 design](OFARM2_Authenticated_Source_Artifact_Publication_RFC_v0_2.md).
+> The original version-1 text below is preserved as history.
+
 # Authenticated source-artifact publication — RFC v0.1
 
 Status: proposed, awaiting same-task semantic approval before implementation.
