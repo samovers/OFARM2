@@ -38,9 +38,11 @@ PR #380 depends on this separate capability. It contributes no code to this PR.
 showed that the existing Contents response reader authenticates a bounded HTTP
 response but does not establish file kind. The Contents API can return metadata
 for non-file objects and can dereference symlinks. Hashing such a response is not
-proof of artifact-file content. The local Python 3.12.13 reader probe accepted
-three fictional directory/link/submodule metadata responses; this was not a live
-provider capture or an end-to-end publication exploit.
+proof of artifact-file content. Review B1's isolated copied-reader probe ran on
+Python 3.13.5, not the pinned Python 3.12.13 interpreter, and accepted three
+fictional directory/link/submodule metadata responses. This was supplemental
+probe evidence, not a live provider capture, an end-to-end publication exploit
+or a repository test run.
 
 Version 1 and its approval card are withdrawn. Version 2 keeps the same Delivery,
 PR, custody boundary and source authority, but adds an explicit supported-file
