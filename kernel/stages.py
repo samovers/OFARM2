@@ -130,6 +130,8 @@ class GateContext:
     requested_target: str | None = None
     acceptance_target: str | None = None
     acceptance_payload: dict | None = None   # the target assertion, fetched once
+    acceptance_event_ref: str | None = None  # validated original assertion event
+    correction_predecessor_ref: str | None = None  # validated retirement target
     # the normalized review-decision verb (M2 G5): reviewAction selects the
     # authority action, decisionOutcomeState selects the emission branch
     review_action: Any = "REVIEW_ACCEPT"     # kept verbatim from the submission
@@ -585,6 +587,35 @@ class EvidenceSufficiencyGate:
 # ---------------------------------------------------------------------------
 
 class ReviewPromotionGate:
+    def _authorize_retirement(self, ctx: GateContext) -> GatePass | GateRefusal:
+        """Acceptance retires a checked predecessor only with its own authority."""
+        if ctx.correction_predecessor_ref is None:
+            return GatePass()
+        decision = ctx.authority.evaluate(
+            acting_party_ref=ctx.acting_party,
+            action_class="REVIEW_SUPERSEDE",
+            action_stage="PROMOTION",
+            scope={"scopeType": "FARM", "scopeRef": ctx.farm_ref},
+            acting_agent_ref=ctx.sub.get("actingAgentRef"),
+            ai_assistance=ctx.sub.get("aiAssistance"),
+            revocation_check_required=True,
+        )
+        ctx.record_authority_decision(decision)
+        ctx.log(
+            "REVIEW_PROMOTION", decision.outcome,
+            reason_code=(decision.problems[0]["reasonCode"]
+                         if decision.problems else None),
+            rationale=decision.result_payload["reasonSummary"],
+            refs=[decision.request_payload["requestId"],
+                  decision.result_payload["resultId"],
+                  decision.trace_payload["traceId"]],
+        )
+        if decision.allowed:
+            return GatePass()
+        final = "DENY" if decision.outcome == "DENY" else "REQUIRE_REVIEW"
+        return GateRefusal("REVIEW_PROMOTION", decision.outcome, final,
+                           decision.problems)
+
     def run(self, ctx: GateContext) -> GatePass | GateRefusal:
         emitter = PromotionEmitter(ctx)
         sub = ctx.sub
@@ -641,6 +672,9 @@ class ReviewPromotionGate:
             elif ctx.review_branch == "CONTEST":
                 emitter.emit_queue_contest()
             else:
+                retirement = self._authorize_retirement(ctx)
+                if isinstance(retirement, GateRefusal):
+                    return retirement
                 emitter.emit_queue_acceptance()
             return GatePass()
 
@@ -686,6 +720,9 @@ class ReviewPromotionGate:
             return GateRefusal("REVIEW_PROMOTION", "REQUIRE_REVIEW",
                                "REQUIRE_REVIEW", review_auth.problems)
 
+        retirement = self._authorize_retirement(ctx)
+        if isinstance(retirement, GateRefusal):
+            return retirement
         emitter.emit_self_review_promotion()
         return GatePass()
 

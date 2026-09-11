@@ -161,7 +161,7 @@ class PromotionEmitter:
         # a queued CORRECTION remembers its supersession target so the eventual
         # reviewer acceptance can retire the prior consequence — supersession
         # takes effect on acceptance, never while the claim is only pending
-        superseded = self.ctx.sub.get("supersedesConsequenceRef")
+        superseded = self.ctx.correction_predecessor_ref
         if superseded:
             self.ctx.store.add_edge(self.ctx.cur, "LINEAGE_SUPERSEDES_INTENT",
                                     self.ctx.assertion_id, superseded)
@@ -213,7 +213,7 @@ class PromotionEmitter:
             consequence["effectiveFrom"] = ctx.event_time
         if ctx.erp_id:
             consequence["executionRecordPayloadRefs"] = [ctx.erp_id]
-        superseded = sub.get("supersedesConsequenceRef")
+        superseded = ctx.correction_predecessor_ref
         if superseded:
             consequence["notes"] = f"supersedes {superseded} (correction is supersession)"
         ctx.store.insert_record(ctx.cur, consequence)
@@ -242,6 +242,9 @@ class PromotionEmitter:
         carrying the reviewer's resolution rationale and evidence."""
         ctx, sub = self.ctx, self.ctx.sub
         target_payload = ctx.acceptance_payload
+        orig_event = ctx.acceptance_event_ref
+        if orig_event is None:
+            raise RuntimeError("queue acceptance requires its validated source event")
         review_id = mint("review")
         review = {
             "schemaVersion": "ofarm.reviewdecision.v0.1",
@@ -265,9 +268,6 @@ class PromotionEmitter:
         for ev in sub.get("reviewEvidenceRefs") or []:
             ctx.store.add_edge(ctx.cur, "EVIDENCE", review_id, ev)
 
-        event_edges = ctx.store.edges_from(ctx.acceptance_target, "EVENT_SOURCE")
-        orig_event = (event_edges[0]["dst_record_id"] if event_edges
-                      else ctx.event_id)
         category, ctype = policy.ACCEPTANCE_BY_ASSERTION_TYPE[
             target_payload["assertionType"]]
         consequence_id = mint("conseq")
@@ -291,8 +291,7 @@ class PromotionEmitter:
         # the prior consequence (LINEAGE_SUPERSEDES) so it leaves force, exactly
         # as the self-review path does — a queued correction must not become a
         # second in-force consequence (PR #9 review, blocker 3)
-        intent = ctx.store.edges_from(ctx.acceptance_target, "LINEAGE_SUPERSEDES_INTENT")
-        superseded = intent[0]["dst_record_id"] if intent else None
+        superseded = ctx.correction_predecessor_ref
 
         ctx.store.insert_record(ctx.cur, consequence)
         ctx.emitted["consequences"].append(consequence_id)

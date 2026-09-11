@@ -170,6 +170,194 @@ def _assert_parent_scope_contained(ctx: GateContext, ref: str,
     return None
 
 
+class _CorrectionProofError(ValueError):
+    def __init__(self, detail: str, reason: str = "CORRECTION_REQUIRED", *,
+                 refusal: GateRefusal | None = None):
+        super().__init__(detail)
+        self.reason = reason
+        self.refusal = refusal
+
+
+def _correction_record(ctx: GateContext, ref, kind: str | None = None, *,
+                       wrong_kind_reason: str = "EVIDENCE_REFERENCE_UNAVAILABLE") -> dict:
+    """Resolve one correction-proof record through the tenant-visible store."""
+    row = ctx.store.get_record(ref) if isinstance(ref, str) and ref.strip() else None
+    if row is None:
+        raise _CorrectionProofError("Correction provenance is unavailable",
+                                    "EVIDENCE_REFERENCE_UNAVAILABLE")
+    if kind is not None and row["record_kind"] != kind:
+        raise _CorrectionProofError("Correction provenance has the wrong kind", wrong_kind_reason)
+    payload = row["payload"]
+    try:
+        contract = ctx.store.registry.get(row["record_kind"])
+    except UnknownContract as exc:
+        raise _CorrectionProofError("Correction provenance has an unknown record kind") from exc
+    if (payload.get("schemaVersion") != row["record_kind"]
+            or payload.get(contract.id_field) != ref):
+        raise _CorrectionProofError("Correction record references disagree")
+    return payload
+
+
+def _correction_edge(ctx: GateContext, source: str, edge_type: str) -> str:
+    edges = ctx.store.edges_from(source, edge_type)
+    if len(edges) != 1 or edges[0]["src_record_id"] != source:
+        raise _CorrectionProofError(f"Correction proof requires exactly one {edge_type} edge")
+    return edges[0]["dst_record_id"]
+
+
+def _correction_farm(ctx: GateContext, payload: dict) -> None:
+    if {"scopeType": "FARM", "scopeRef": ctx.farm_ref} not in payload.get("anchorScopes", []):
+        raise _CorrectionProofError("Correction provenance is not anchored on this farm",
+                                    "SCOPE_NOT_AUTHORIZED")
+
+
+def _assertion_event(ctx: GateContext, assertion: dict) -> dict:
+    """The accepting emitter uses this exact source, including for queued history."""
+    _correction_farm(ctx, assertion)
+    event_ref = _correction_edge(ctx, assertion["assertionRecordId"], "EVENT_SOURCE")
+    event = _correction_record(ctx, event_ref, "ofarm.semanticeventenvelope.v0.1")
+    anchors = event.get("anchorScopes")
+    if not isinstance(anchors, list) or not anchors:
+        raise _CorrectionProofError("Source event requires governed anchor scopes",
+                                    "SCOPE_NOT_AUTHORIZED")
+    for anchor in anchors:
+        if (not isinstance(anchor, dict)
+                or not isinstance(anchor.get("scopeType"), str)
+                or not isinstance(anchor.get("scopeRef"), str)):
+            raise _CorrectionProofError("Source event anchor scope is malformed",
+                                        "SCOPE_NOT_AUTHORIZED")
+        refusal = _assert_contained(ctx, anchor["scopeType"], anchor["scopeRef"],
+                                    "Source event anchorScopes")
+        if refusal is not None:
+            # Containment already logged the governed refusal; preserve it once.
+            raise _CorrectionProofError("Source event scope is not contained", refusal=refusal)
+    commit_class = next((name for name, family in policy.COMMIT_CLASS_TO_ASSERTION_TYPE.items()
+                         if family == assertion.get("assertionType")), None)
+    if (commit_class is None
+            or event.get("primaryEventFamily") != policy.COMMIT_CLASS_TO_FAMILY[commit_class]
+            or event.get("subjectRefs") != [assertion.get("subject", {}).get("subjectRef")]):
+        raise _CorrectionProofError("Assertion and source event disagree")
+    return event
+
+
+def _structure_identity(ctx: GateContext, payload: dict) -> tuple[str, str]:
+    schema_version = payload.get("schemaVersion")
+    identity_type = (policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE.get(schema_version)
+                     if isinstance(schema_version, str) else None)
+    identity_ref = payload.get("identityRecordRef")
+    if identity_type is None or not isinstance(identity_ref, str) or not identity_ref.strip():
+        raise _CorrectionProofError("Correction requires an exact typed structural identity")
+    existing = ctx.store.get_record(identity_ref)
+    if existing is not None:
+        identity = _correction_record(ctx, identity_ref, "ofarm.identityrecord.v0.1")
+        if identity.get("identityType") != identity_type:
+            raise _CorrectionProofError("Structural identity types disagree")
+        if identity_type != "FARM":
+            _correction_farm(ctx, identity)
+    if identity_type == "FARM" and identity_ref != ctx.farm_ref:
+        raise _CorrectionProofError("Structural identity belongs to another farm",
+                                    "SCOPE_NOT_AUTHORIZED")
+    return identity_type, identity_ref
+
+
+def _correction_subject(ctx: GateContext, assertion: dict, event: dict | None,
+                        incoming_payload: dict | None = None) -> tuple[str, str]:
+    """Compare only the relationship the existing source family can establish."""
+    family = assertion.get("assertionType")
+    if family not in policy.ACCEPTANCE_BY_ASSERTION_TYPE:
+        raise _CorrectionProofError("This assertion family has no correction path")
+    subject = assertion.get("subject") or {}
+    subject_type, subject_ref = subject.get("subjectType"), subject.get("subjectRef")
+    if not isinstance(subject_type, str) or not isinstance(subject_ref, str) or not subject_ref:
+        raise _CorrectionProofError("Correction requires an exact subject")
+    if family == "STRUCTURE_ASSERTION":
+        payload = incoming_payload
+        if event is not None:
+            ref = _correction_edge(ctx, event["semanticEventId"], "STRUCTURE_PAYLOAD")
+            payload = _correction_record(ctx, ref)
+        if not isinstance(payload, dict):
+            raise _CorrectionProofError("Correction structure payload is unavailable")
+        return _structure_identity(ctx, payload)
+    if family == "OPERATION_CLAIM_ASSERTION":
+        payload = incoming_payload
+        if event is not None:
+            refs = assertion.get("executionRecordPayloadRefs")
+            if not isinstance(refs, list) or len(refs) != 1 \
+                    or event.get("executionRecordPayloadRefs") != refs:
+                raise _CorrectionProofError("Operation source and carrier references disagree")
+            payload = _correction_record(ctx, refs[0], "ofarm.executionrecordpayload.v0.1")
+        if not isinstance(payload, dict) or payload.get("subject") != subject:
+            raise _CorrectionProofError("Operation carrier and assertion subjects disagree")
+    elif family == "COMPLIANCE_ASSERTION":
+        claim = (incoming_payload.get("complianceClaim")
+                 if isinstance(incoming_payload, dict) else None)
+        if event is not None:
+            ref = _correction_edge(ctx, event["semanticEventId"], "COMPLIANCE_CLAIM")
+            claim = _correction_record(ctx, ref, "ofarm.complianceclaim.v0.1")
+            _correction_farm(ctx, claim)
+            if claim.get("sourceEventRef") != event["semanticEventId"]:
+                raise _CorrectionProofError("Compliance carrier and source event disagree")
+        if not isinstance(claim, dict) or claim.get("subjectScopeRef") != subject_ref:
+            raise _CorrectionProofError("Compliance carrier and assertion subjects disagree")
+        identity = _correction_record(ctx, subject_ref, "ofarm.identityrecord.v0.1")
+        if identity.get("identityType") != subject_type:
+            raise _CorrectionProofError("Compliance subject identity types disagree")
+        if subject_type != "FARM":
+            _correction_farm(ctx, identity)
+        elif subject_ref != ctx.farm_ref:
+            raise _CorrectionProofError("Compliance subject belongs to another farm")
+    return subject_type, subject_ref
+
+
+def _validate_correction(ctx: GateContext, predecessor, assertion: dict,
+                         event: dict | None = None) -> None:
+    """One proof for submitted intent and acceptance; only success publishes a target."""
+    old = _correction_record(ctx, predecessor, "ofarm.acceptedeventconsequence.v0.1",
+                             wrong_kind_reason="SUPERSEDED_RECORD_USED")
+    _correction_farm(ctx, old)
+    if old.get("inForceState") != "IN_FORCE" or ctx.store.is_superseded(predecessor):
+        raise _CorrectionProofError("Correction predecessor is no longer in force",
+                                    "SUPERSEDED_RECORD_USED")
+    review_ref = old.get("acceptedByReviewDecisionRef")
+    review = _correction_record(ctx, review_ref, "ofarm.reviewdecision.v0.1")
+    _correction_farm(ctx, review)
+    if (review.get("reviewedArtifactFamily"), review.get("reviewAction"),
+            review.get("decisionOutcomeState")) != ("ASSERTION_RECORD", "REVIEW_ACCEPT", "ACCEPTED"):
+        raise _CorrectionProofError("Correction predecessor has no accepting assertion review")
+    origin = _correction_record(ctx, review.get("reviewedArtifactRef"), "ofarm.assertionrecord.v0.1")
+    if (_correction_edge(ctx, predecessor, "REVIEW") != review_ref
+            or _correction_edge(ctx, origin["assertionRecordId"], "REVIEW") != review_ref):
+        raise _CorrectionProofError("Correction review edges and scalar references disagree")
+    original_event = _assertion_event(ctx, origin)
+    if (old.get("sourceEventRef") != original_event["semanticEventId"]
+            or _correction_edge(ctx, predecessor, "EVENT_SOURCE") != original_event["semanticEventId"]
+            or old.get("subject") != origin.get("subject")
+            or old.get("executionRecordPayloadRefs") != origin.get("executionRecordPayloadRefs")):
+        raise _CorrectionProofError("Correction consequence and accepted origin disagree")
+    family = origin.get("assertionType")
+    acceptance = policy.ACCEPTANCE_BY_ASSERTION_TYPE.get(family)
+    if (acceptance is None or old.get("consequenceType") != acceptance[1]
+            or assertion.get("assertionType") != family):
+        raise _CorrectionProofError("Correction must preserve the accepted source family and consequence type")
+    old_subject = _correction_subject(ctx, origin, original_event)
+    new_subject = _correction_subject(ctx, assertion, event, ctx.sub.get("payload"))
+    if old_subject != new_subject:
+        raise _CorrectionProofError(
+            "Correction must preserve the exact subject or typed structural identity",
+            "SUPERSEDED_RECORD_USED" if family == "STRUCTURE_ASSERTION" else "CORRECTION_REQUIRED")
+    if family == "STRUCTURE_ASSERTION":
+        _correction_record(ctx, old_subject[1], "ofarm.identityrecord.v0.1")
+        _check_structure_current(ctx, old_subject[1], predecessor)
+    ctx.correction_predecessor_ref = predecessor
+
+
+def _correction_refusal(ctx: GateContext, exc: _CorrectionProofError) -> GateRefusal:
+    if exc.refusal is not None:
+        return exc.refusal
+    return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+        exc.reason, "Correction relationship refused", str(exc)))
+
+
 def _in_force_structural_consequences_for(ctx: GateContext,
                                           identity_ref: str) -> list[str]:
     """In-force structural consequence ids whose carried identity payload
@@ -179,25 +367,23 @@ def _in_force_structural_consequences_for(ctx: GateContext,
     for row in ctx.store.in_force_consequences(ctx.farm_ref):
         c = row["payload"]
         edges = ctx.store.edges_from(c["sourceEventRef"], "STRUCTURE_PAYLOAD")
-        if not edges:
-            continue
-        p = ctx.store.get_payload(edges[0]["dst_record_id"])
-        if p and p.get("identityRecordRef") == identity_ref:
+        # Examine every candidate; malformed/duplicate proof is refused by the
+        # relationship validator, never hidden by choosing a first payload.
+        if any((p := ctx.store.get_payload(edge["dst_record_id"]))
+               and p.get("identityRecordRef") == identity_ref for edge in edges):
             out.append(c["acceptedEventConsequenceId"])
     return out
 
 
-def _structure_target_identity(ctx: GateContext, assertion_ref: str) -> str | None:
-    """The identity a queued STRUCTURE_ASSERTION targets, resolved from its
-    carrier: assertion -> EVENT_SOURCE -> event -> STRUCTURE_PAYLOAD -> payload."""
-    ev = ctx.store.edges_from(assertion_ref, "EVENT_SOURCE")
-    if not ev:
-        return None
-    sp = ctx.store.edges_from(ev[0]["dst_record_id"], "STRUCTURE_PAYLOAD")
-    if not sp:
-        return None
-    payload = ctx.store.get_payload(sp[0]["dst_record_id"])
-    return payload.get("identityRecordRef") if payload else None
+def _check_structure_current(ctx: GateContext, identity_ref: str, predecessor) -> None:
+    in_force = _in_force_structural_consequences_for(ctx, identity_ref)
+    if len(in_force) > 1:
+        raise _CorrectionProofError("Structural identity has ambiguous current consequences")
+    if in_force and predecessor is None:
+        raise _CorrectionProofError("Existing identity requires explicit supersession of its current state")
+    if predecessor is not None and in_force != [predecessor]:
+        raise _CorrectionProofError("Correction does not name the identity's sole current structural predecessor",
+                                    "SUPERSEDED_RECORD_USED")
 
 
 def _carrier_admits_bound(payload: dict) -> bool:
@@ -298,34 +484,22 @@ class ScopeContainmentValidator:
 
 
 class SupersessionValidator:
-    """A correction must name a real, in-force consequence on THIS farm —
-    an unvalidated ref could knock another farm's truth out of force."""
+    """Only a checked relationship may become inert intent or retirement."""
 
     def run(self, ctx: GateContext) -> GateRefusal | None:
-        supersedes = ctx.sub.get("supersedesConsequenceRef")
-        if not supersedes:
+        if "supersedesConsequenceRef" not in ctx.sub:
             return None
-        target_row = ctx.store.get_record(supersedes)
-        if target_row is None:
-            return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
-                "EVIDENCE_REFERENCE_UNAVAILABLE", "Supersession target missing",
-                f"supersedesConsequenceRef {supersedes} does not resolve"))
-        if target_row["record_kind"] != "ofarm.acceptedeventconsequence.v0.1":
-            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "SUPERSEDED_RECORD_USED", "Supersession target wrong kind",
-                f"{supersedes} is {target_row['record_kind']}, not an accepted "
-                "consequence"))
-        if {"scopeType": "FARM", "scopeRef": ctx.farm_ref} \
-                not in target_row["payload"]["anchorScopes"]:
-            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "SCOPE_NOT_AUTHORIZED", "Cross-farm supersession refused",
-                f"{supersedes} is not anchored on {ctx.farm_ref}; a correction may "
-                "only supersede this farm's own truth"))
-        if ctx.store.is_superseded(supersedes):
-            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "SUPERSEDED_RECORD_USED", "Target already superseded",
-                f"{supersedes} was already superseded; correct the current "
-                "in-force record instead"))
+        assertion = {
+            "assertionType": policy.COMMIT_CLASS_TO_ASSERTION_TYPE.get(ctx.commit_class),
+            "subject": {"subjectType": ctx.sub.get("subjectType", "FARM"),
+                        "subjectRef": ctx.sub.get("subjectRef", ctx.farm_ref)},
+        }
+        try:
+            if assertion["assertionType"] not in policy.ACCEPTANCE_BY_ASSERTION_TYPE:
+                raise _CorrectionProofError("This submission cannot supply a correction target")
+            _validate_correction(ctx, ctx.sub["supersedesConsequenceRef"], assertion)
+        except _CorrectionProofError as exc:
+            return _correction_refusal(ctx, exc)
         return None
 
 
@@ -411,45 +585,24 @@ class GovernanceAcceptanceValidator:
                 f"self-review covers routine operation claims only (D8); "
                 f"{target['assertionType']} asserted by the acting party requires a "
                 "DISTINCT reviewer principal — for either acceptance or rejection"))
-        # Acceptance-time re-validation (TOCTOU): the world can change between a
-        # claim being queued and a reviewer accepting it, so supersession/D18 is
-        # re-checked against CURRENT in-force state, not the state at submission
-        # (PR #9 re-review blockers). The queued correction's supersession target
-        # is the LINEAGE_SUPERSEDES_INTENT edge recorded at queue time. This is a
-        # PROMOTION guard: a reject retires nothing (the prior consequence stays
-        # in force, the supersession intent is abandoned — G5 §3.4), so REJECT
-        # skips it entirely.
+        # Rejection abandons inert intent. Only acceptance resolves its exact
+        # source and rechecks the relationship against current accepted state.
         if not is_reject:
-            intent_edges = ctx.store.edges_from(target_ref, "LINEAGE_SUPERSEDES_INTENT")
-            intent = intent_edges[0]["dst_record_id"] if intent_edges else None
-            if target["assertionType"] == "STRUCTURE_ASSERTION":
-                identity_ref = _structure_target_identity(ctx, target_ref)
-                in_force = (_in_force_structural_consequences_for(ctx, identity_ref)
-                            if identity_ref else [])
-                if len(in_force) > 1:
-                    return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                        "CORRECTION_REQUIRED", "Ambiguous structural state",
-                        f"{identity_ref} has multiple in-force structural consequences "
-                        f"{in_force}; refusing rather than silently choosing one"))
-                if in_force and not intent:
-                    return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                        "CORRECTION_REQUIRED", "Existing identity requires supersession",
-                        f"{identity_ref} now has current structural state ({in_force[0]}) that "
-                        "was not in force when this was queued; it must explicitly supersede "
-                        "that consequence (D18) — resubmit as a revision or a new identity"))
-                if intent and intent not in in_force:
-                    return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                        "SUPERSEDED_RECORD_USED", "Queued supersession target not current",
-                        f"the consequence this queued correction would supersede ({intent}) is "
-                        f"no longer {identity_ref}'s current structural state; resubmit against "
-                        "the current consequence"))
-            elif intent and ctx.store.is_superseded(intent):
-                # a non-structure queued correction whose target was superseded since
-                # it was queued must not silently re-supersede it
-                return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                    "SUPERSEDED_RECORD_USED", "Queued supersession target already superseded",
-                    f"the consequence this queued correction would supersede ({intent}) has "
-                    "itself been superseded since it was queued; resubmit against current state"))
+            try:
+                if target.get("assertionRecordId") != target_ref:
+                    raise _CorrectionProofError("Queued assertion reference disagrees with its record")
+                event = _assertion_event(ctx, target)
+                intent_edges = ctx.store.edges_from(target_ref, "LINEAGE_SUPERSEDES_INTENT")
+                if len(intent_edges) > 1:
+                    raise _CorrectionProofError("Queued correction has ambiguous predecessor intent")
+                if intent_edges:
+                    _validate_correction(ctx, intent_edges[0]["dst_record_id"], target, event)
+                elif target["assertionType"] == "STRUCTURE_ASSERTION":
+                    identity = _correction_subject(ctx, target, event)
+                    _check_structure_current(ctx, identity[1], None)
+                ctx.acceptance_event_ref = event["semanticEventId"]
+            except _CorrectionProofError as exc:
+                return _correction_refusal(ctx, exc)
         # a review decision (accept OR reject) is governed, never a bare pointer:
         # both must state a non-empty rationale (G5 §3.3; Kernel rule 7)
         rationale_text = ctx.sub.get("reviewRationale")
@@ -701,39 +854,13 @@ class StructureSemanticsValidator:
                                 f"{field} ref {ref} binds {bound!r}, not the committed identity "
                                 f"{identity_ref!r}; a binding must bind the identity it is attached to"))
 
-        # D18: explicit supersession for an identity that already has state.
-        # NOTE (PR #9 H1): this is read-before-write. In the single-writer pilot
-        # (D13) the serial path is fully governed; under TRUE concurrency two
-        # first assertions for one identityRecordRef could both pass here before
-        # either commits. G2's serialized write path closes that race (see the
-        # G2 ticket's folded-in hardening) — it is not a single-writer hole.
-        in_force = _in_force_structural_consequences_for(ctx, identity_ref)
-        supersedes = ctx.sub.get("supersedesConsequenceRef")
-        if len(in_force) > 1:
-            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "CORRECTION_REQUIRED", "Ambiguous structural state",
-                f"{identity_ref} has multiple in-force structural consequences "
-                f"{in_force}; refusing rather than silently choosing one"))
-        if in_force:
-            if not supersedes:
-                return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                    "CORRECTION_REQUIRED", "Existing identity requires supersession",
-                    f"{identity_ref} already has current structural state; submit this "
-                    "either as a revision that explicitly supersedes the current "
-                    f"structural consequence ({in_force[0]}) or as a new identity with "
-                    "a different identityRecordRef"))
-            if supersedes != in_force[0]:
-                return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                    "SUPERSEDED_RECORD_USED", "Supersession target mismatch",
-                    f"supersedesConsequenceRef {supersedes} does not name {identity_ref}'s "
-                    f"current structural consequence ({in_force[0]})"))
-        elif supersedes:
-            # superseding something, but THIS identity has no structural state:
-            # the ref belongs to another identity or a non-structural consequence
-            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "SUPERSEDED_RECORD_USED", "Supersession target not this identity",
-                f"supersedesConsequenceRef {supersedes} is not a current structural "
-                f"consequence of {identity_ref}"))
+        # Corrections already passed the shared relationship proof. D18 also
+        # forbids silent replacement when a new assertion omits a predecessor.
+        if ctx.correction_predecessor_ref is None:
+            try:
+                _check_structure_current(ctx, identity_ref, None)
+            except _CorrectionProofError as exc:
+                return _correction_refusal(ctx, exc)
 
         ctx.log("VALIDATION", "PASS")
         return None

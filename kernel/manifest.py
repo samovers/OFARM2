@@ -1,8 +1,8 @@
 """Capability Manifest generation (M1 brief task 7).
 
-The manifest is generated FROM the actual runtime surfaces — the registry,
-the gate pipeline's commit-class map, the action classes the authority gate
-evaluates, and the artifacts that actually exist — never hand-claimed.
+The manifest is generated from the registry, the gate pipeline's commit-class
+map, its declared action inventory, and existing artifacts. Inventory equality
+proves declaration consistency; behavioral evidence proves actual mediation.
 
 Claim discipline: the runtime-evidence level for explainable current state is
 CONFORMANCE_FIXTURE_PASSING at most (explainable-evidence RFC §11.3/§11.4):
@@ -161,8 +161,8 @@ def build_manifest(store) -> dict:
                     "observe/report", "assert/submit", "govern/decide",
                     "attest/sign", "share/revoke", "receive/use",
                 ],
-                # accepted Action Matrix vocabulary only — the exact classes
-                # the authority gate evaluates (no parallel runtime dialect)
+                # Declared actions in accepted Action Matrix vocabulary.
+                # Behavioral tests separately prove their authority evaluation.
                 "supportedActionClasses": sorted(
                     set(COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS.values())
                     | NON_COMMIT_ACTION_CLASSES),
@@ -288,10 +288,10 @@ def verify_grounding(store, manifest: dict, artifact_set: dict) -> list[str]:
     # no canonical-baseline evidence exists -> the only grounded level is NONE
     if manifest["conformance"]["minimumConformanceLevel"] != "NONE":
         failures.append("over-claimed conformance level without evidence (RFC §11.4)")
-    # action-class claims must match the policy tables (the persisted JSON
-    # is checked against the code, catching disk-vs-code drift; the four
-    # non-commit classes ground in their evaluate() call sites via the
-    # law-binding stage test, not here); portable attestation stays unclaimed
+    # Action-class claims must match the policy declaration tables, catching
+    # disk-vs-code drift. This and the law-binding vocabulary test do not prove
+    # runtime mediation; behavioral tests and authority receipts do that.
+    # Portable attestation stays unclaimed.
     claimed_actions = set(manifest["capabilitySections"]["authoritySupport"]
                           ["supportedActionClasses"])
     evaluated = (set(COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS.values())

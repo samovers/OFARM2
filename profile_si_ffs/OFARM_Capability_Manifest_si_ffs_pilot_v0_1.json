@@ -4,7 +4,7 @@
   "status": "ACTIVE",
   "ofarmVersion": "RC2.1",
   "platformVersion": "ofarm2-kernel-m1.0",
-  "publishedAt": "2026-06-20T19:44:26.234364Z",
+  "publishedAt": "2026-09-07T17:16:24.814554Z",
   "deploymentScope": {
     "scopeType": "TENANT",
     "scopeRef": "tenant:si.ffs.pilot.demo"
@@ -136,7 +136,8 @@
         "OUTPUT_FILE_SUBMISSION_ASSEMBLY",
         "RECEIVE_READ_DATA",
         "REVIEW_ACCEPT",
-        "REVIEW_REJECT_OR_CONTEST"
+        "REVIEW_REJECT_OR_CONTEST",
+        "REVIEW_SUPERSEDE"
       ],
       "supportsHumanOnlyRestrictions": true
     },
