@@ -14,9 +14,11 @@ import unittest
 import warnings
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from conformance import run_review_baseline as review_policy
 from conformance.evidence_publication_policy import (
+    MAX_SOURCE_INPUT_BYTES,
     NATIVE_AUTHORITATIVE_FILES,
     NATIVE_EVIDENCE_FILES,
     PLATFORM_PUBLICATION_FILE,
@@ -25,6 +27,7 @@ from conformance.evidence_publication_policy import (
     TRUSTED_METADATA_FILES,
     PublicationPolicyError,
     _HttpsOnlyRedirectHandler,
+    _SourceRedirectHandler,
     _canonical_json_bytes,
     _download_authenticated_source_file,
     _expected_review_steps,
@@ -110,6 +113,76 @@ class FakeSourceResponse(io.BytesIO):
     def geturl(self) -> str:
         return self._url
 
+
+class SourceFileGraph:
+    """Fictional Git responses for the current two-component source paths."""
+
+    def __init__(self, files: dict[str, bytes]) -> None:
+        self.files = files
+        self.requests = []
+        self.documents = {}
+        self.blobs = {}
+        self.entries = {}
+        self.path_urls = {}
+        self.payload_overrides = {}
+        base = f"https://api.github.com/repos/{REPOSITORY}/git"
+        root_sha = hashlib.sha1(b"fictional root tree").hexdigest()
+        self.commit_url = f"{base}/commits/{HEAD_SHA}"
+        self.root_url = f"{base}/trees/{root_sha}"
+        self.documents[self.commit_url] = {"sha": HEAD_SHA, "tree": {"sha": root_sha}}
+        self.documents[self.root_url] = {
+            "sha": root_sha,
+            "truncated": False,
+            "tree": [],
+        }
+        directories = {}
+        for path, payload in files.items():
+            directory, name = path.split("/")
+            if directory not in directories:
+                tree_sha = hashlib.sha1(directory.encode()).hexdigest()
+                tree_url = f"{base}/trees/{tree_sha}"
+                directories[directory] = tree_url
+                self.documents[self.root_url]["tree"].append(
+                    {
+                        "path": directory,
+                        "mode": "040000",
+                        "type": "tree",
+                        "sha": tree_sha,
+                    }
+                )
+                self.documents[tree_url] = {
+                    "sha": tree_sha,
+                    "truncated": False,
+                    "tree": [],
+                }
+            tree_url = directories[directory]
+            blob_sha = hashlib.sha1(
+                b"blob " + str(len(payload)).encode("ascii") + b"\0" + payload
+            ).hexdigest()
+            blob_url = f"{base}/blobs/{blob_sha}"
+            entry = {
+                "path": name,
+                "mode": "100644",
+                "type": "blob",
+                "sha": blob_sha,
+                "size": len(payload),
+                "url": "https://substituted.example.test/object",
+            }
+            self.entries[path] = entry
+            self.documents[tree_url]["tree"].append(entry)
+            self.blobs[blob_url] = payload
+            self.path_urls[path] = [self.commit_url, self.root_url, tree_url, blob_url]
+
+    def response(self, request):
+        self.requests.append(request)
+        url = request.full_url
+        if url in self.payload_overrides:
+            payload = self.payload_overrides[url]
+        elif url in self.documents:
+            payload = json.dumps(self.documents[url]).encode()
+        else:
+            payload = self.blobs[url]  # An unexpected request fails the test.
+        return FakeSourceResponse(payload, url)
 
 def artifact_zip(
     entries: dict[str, bytes],
@@ -1340,9 +1413,7 @@ class PublicationAdmissionTests(unittest.TestCase):
 
 
 class EvidencePublicationPolicyTests(unittest.TestCase):
-    def test_trusted_conformance_stage_rebuilds_comparison_and_platform_claims(
-        self,
-    ) -> None:
+    def _complete_conformance_fixture(self, temporary, artifact_payloads=None):
         config = review_policy._read_json(review_policy.CONFIG_PATH)
         policy_inventory = review_policy._load_test_inventory(config)
         inventory = review_policy._inventory_document(
@@ -1385,180 +1456,199 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
             "dirtyEntryCount": 0,
             "statusDigest": hashlib.sha256(b"\n").hexdigest(),
         }
-        with tempfile.TemporaryDirectory() as directory:
-            temporary = Path(directory)
-            input_root = temporary / "input"
-            for index, run in enumerate(("run-1", "run-2"), start=1):
-                run_root = input_root / "review-baseline" / run
-                run_root.mkdir(parents=True)
-                results_path = run_root / "kernel-test-results.json"
-                results_path.write_text(
-                    json.dumps(results, indent=2, sort_keys=True) + "\n",
-                    encoding="utf-8",
-                )
-                evidence = {
-                    "schemaVersion": review_policy.EVIDENCE_SCHEMA,
-                    "normalizationPolicy": review_policy._normalization_policy(),
-                    "run": {
-                        "startedAt": f"2026-08-26T17:00:0{index}Z",
-                        "finishedAt": f"2026-08-26T17:01:0{index}Z",
-                        "canonicalCommand": config["canonicalCommand"],
-                        "outcome": "passed",
-                    },
-                    "git": {
-                        "start": clean_state,
-                        "end": clean_state,
-                        "unchanged": True,
-                    },
-                    "inputs": {
-                        "config": {
-                            "path": "conformance/review_baseline_config.json",
-                            "sha256": review_policy._sha256_file(
-                                review_policy.CONFIG_PATH
-                            ),
-                        },
-                        "dependencyLock": {
-                            "path": paths["dependencyLock"],
-                            "sha256": review_policy._sha256_file(
-                                review_policy.ROOT / paths["dependencyLock"]
-                            ),
-                        },
-                        "packageManagerLock": {
-                            "path": paths["packageManagerLock"],
-                            "sha256": review_policy._sha256_file(
-                                review_policy.ROOT / paths["packageManagerLock"]
-                            ),
-                        },
-                        "testInventory": {
-                            "path": paths["testInventory"],
-                            "sha256": hashlib.sha256(
-                                source_inventory_payload
-                            ).hexdigest(),
-                            "entriesSha256": inventory["entriesSha256"],
-                            "entryCount": inventory["entryCount"],
-                        },
-                        "schema": {
-                            "path": paths["schema"],
-                            "sha256": review_policy._sha256_file(
-                                review_policy.ROOT / paths["schema"]
-                            ),
-                        },
-                    },
-                    "environment": complete_environment_fixture(config),
-                    "tests": results,
-                    "testAcceptance": {
-                        "inventory": inventory_check,
-                        "warnings": warning_check,
-                    },
-                    "steps": _expected_review_steps(config),
-                    "producedArtifacts": [
-                        {
-                            "path": results_path.name,
-                            "sha256": hashlib.sha256(
-                                results_path.read_bytes()
-                            ).hexdigest(),
-                            "bytes": results_path.stat().st_size,
-                        }
-                    ],
-                    "producedArtifactsNote": (
-                        "The evidence envelope excludes its own digest to avoid "
-                        "recursive self-reference. Its raw digest is recorded by "
-                        "the comparison proof."
-                    ),
-                    "verifiedArtifacts": [
-                        {
-                            "path": path,
-                            "sha256": review_policy._sha256_file(
-                                review_policy.ROOT / path
-                            ),
-                        }
-                        for path in config["verifiedArtifacts"]
-                    ],
-                }
-                (run_root / "review-baseline-evidence.json").write_text(
-                    json.dumps(evidence, indent=2, sort_keys=True) + "\n",
-                    encoding="utf-8",
-                )
-            comparison = input_root / "review-baseline/equivalence.json"
-            self.assertEqual(
-                review_policy.compare_evidence(
-                    str(
-                        input_root
-                        / "review-baseline/run-1/review-baseline-evidence.json"
-                    ),
-                    str(
-                        input_root
-                        / "review-baseline/run-2/review-baseline-evidence.json"
-                    ),
-                    str(comparison),
-                ),
-                0,
-            )
-            platform_results = [
-                {
-                    "test": entry["nodeid"],
-                    "outcome": "passed",
-                    "durationSeconds": 0.0,
-                }
-                for entry in inventory["entries"]
-                if entry["sourcePath"] == "kernel/tests/test_conformance.py"
-            ]
-            platform_root = input_root / "platform-evidence"
-            platform_root.mkdir()
-            (platform_root / "platform_mvp_results_2026-08-26T170000Z.json").write_text(
-                json.dumps(
-                    {
-                        "suite": (
-                            "conformance:ofarm2.platform-mvp."
-                            "tests-1-15-plus-regressions.v0_2"
-                        ),
-                        "executed": True,
-                        "executedAt": "2026-08-26T17:00:00Z",
-                        "runtimeVersion": "fixture",
-                        "exitStatus": 0,
-                        "allPassed": True,
-                        "results": platform_results,
-                        "details": {"producerOnly": True},
-                        "honestyNote": "fixture",
-                    }
-                ),
+        if artifact_payloads is None:
+            artifact_payloads = {
+                path: (review_policy.ROOT / path).read_bytes()
+                for path in config["verifiedArtifacts"]
+            }
+        input_root = temporary / "input"
+        for index, run in enumerate(("run-1", "run-2"), start=1):
+            run_root = input_root / "review-baseline" / run
+            run_root.mkdir(parents=True)
+            results_path = run_root / "kernel-test-results.json"
+            results_path.write_text(
+                json.dumps(results, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
+            evidence = {
+                "schemaVersion": review_policy.EVIDENCE_SCHEMA,
+                "normalizationPolicy": review_policy._normalization_policy(),
+                "run": {
+                    "startedAt": f"2026-08-26T17:00:0{index}Z",
+                    "finishedAt": f"2026-08-26T17:01:0{index}Z",
+                    "canonicalCommand": config["canonicalCommand"],
+                    "outcome": "passed",
+                },
+                "git": {
+                    "start": clean_state,
+                    "end": clean_state,
+                    "unchanged": True,
+                },
+                "inputs": {
+                    "config": {
+                        "path": "conformance/review_baseline_config.json",
+                        "sha256": review_policy._sha256_file(review_policy.CONFIG_PATH),
+                    },
+                    "dependencyLock": {
+                        "path": paths["dependencyLock"],
+                        "sha256": review_policy._sha256_file(
+                            review_policy.ROOT / paths["dependencyLock"]
+                        ),
+                    },
+                    "packageManagerLock": {
+                        "path": paths["packageManagerLock"],
+                        "sha256": review_policy._sha256_file(
+                            review_policy.ROOT / paths["packageManagerLock"]
+                        ),
+                    },
+                    "testInventory": {
+                        "path": paths["testInventory"],
+                        "sha256": hashlib.sha256(source_inventory_payload).hexdigest(),
+                        "entriesSha256": inventory["entriesSha256"],
+                        "entryCount": inventory["entryCount"],
+                    },
+                    "schema": {
+                        "path": paths["schema"],
+                        "sha256": review_policy._sha256_file(
+                            review_policy.ROOT / paths["schema"]
+                        ),
+                    },
+                },
+                "environment": complete_environment_fixture(config),
+                "tests": results,
+                "testAcceptance": {
+                    "inventory": inventory_check,
+                    "warnings": warning_check,
+                },
+                "steps": _expected_review_steps(config),
+                "producedArtifacts": [
+                    {
+                        "path": results_path.name,
+                        "sha256": hashlib.sha256(results_path.read_bytes()).hexdigest(),
+                        "bytes": results_path.stat().st_size,
+                    }
+                ],
+                "producedArtifactsNote": (
+                    "The evidence envelope excludes its own digest to avoid "
+                    "recursive self-reference. Its raw digest is recorded by "
+                    "the comparison proof."
+                ),
+                "verifiedArtifacts": [
+                    {
+                        "path": path,
+                        "sha256": hashlib.sha256(artifact_payloads[path]).hexdigest(),
+                    }
+                    for path in config["verifiedArtifacts"]
+                ],
+            }
+            (run_root / "review-baseline-evidence.json").write_text(
+                json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+        comparison = input_root / "review-baseline/equivalence.json"
+        self.assertEqual(
+            review_policy.compare_evidence(
+                str(input_root / "review-baseline/run-1/review-baseline-evidence.json"),
+                str(input_root / "review-baseline/run-2/review-baseline-evidence.json"),
+                str(comparison),
+            ),
+            0,
+        )
+        platform_results = [
+            {
+                "test": entry["nodeid"],
+                "outcome": "passed",
+                "durationSeconds": 0.0,
+            }
+            for entry in inventory["entries"]
+            if entry["sourcePath"] == "kernel/tests/test_conformance.py"
+        ]
+        platform_root = input_root / "platform-evidence"
+        platform_root.mkdir()
+        (platform_root / "platform_mvp_results_2026-08-26T170000Z.json").write_text(
+            json.dumps(
+                {
+                    "suite": (
+                        "conformance:ofarm2.platform-mvp."
+                        "tests-1-15-plus-regressions.v0_2"
+                    ),
+                    "executed": True,
+                    "executedAt": "2026-08-26T17:00:00Z",
+                    "runtimeVersion": "fixture",
+                    "exitStatus": 0,
+                    "allPassed": True,
+                    "results": platform_results,
+                    "details": {"producerOnly": True},
+                    "honestyNote": "fixture",
+                }
+            ),
+            encoding="utf-8",
+        )
 
+        graph = SourceFileGraph(
+            {paths["testInventory"]: source_inventory_payload, **artifact_payloads}
+        )
+        return config, input_root, graph
+
+    def _stage_fixture(self, input_root, output_root, graph):
+        stage_conformance_evidence(
+            input_root=input_root,
+            output_root=output_root,
+            source_api_url="https://api.github.com",
+            source_repository=REPOSITORY,
+            source_token="test-source-token",
+            source_commit=HEAD_SHA,
+            source_run_id=SOURCE_RUN_ID,
+            source_run_attempt=SOURCE_RUN_ATTEMPT,
+            source_response_factory=graph.response,
+        )
+
+    def _recompare_fixture(self, input_root, *, expected=0):
+        (input_root / "review-baseline/equivalence.json").unlink()
+        self.assertEqual(
+            review_policy.compare_evidence(
+                str(input_root / "review-baseline/run-1/review-baseline-evidence.json"),
+                str(input_root / "review-baseline/run-2/review-baseline-evidence.json"),
+                str(input_root / "review-baseline/equivalence.json"),
+            ),
+            expected,
+        )
+
+    def _assert_source_requests(self, graph, paths):
+        self.assertEqual(
+            [request.full_url for request in graph.requests],
+            [url for path in paths for url in graph.path_urls[path]],
+        )
+        for request in graph.requests:
+            self.assertEqual(
+                request.get_header("Authorization"), "Bearer test-source-token"
+            )
+            self.assertEqual(request.get_header("Accept-encoding"), "identity")
+            self.assertEqual(request.get_header("X-github-api-version"), "2026-03-10")
+            self.assertEqual(
+                request.get_header("Accept"),
+                "application/vnd.github.raw+json"
+                if "/blobs/" in request.full_url
+                else "application/vnd.github+json",
+            )
+            self.assertNotIn("?", request.full_url)
+
+    def test_trusted_conformance_stage_rebuilds_comparison_and_platform_claims(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            config, input_root, graph = self._complete_conformance_fixture(temporary)
             output_root = temporary / "authoritative"
-            source_requests = []
-
-            def source_response_factory(request):
-                source_requests.append(request)
-                return FakeSourceResponse(source_inventory_payload, request.full_url)
-
-            stage_conformance_evidence(
-                input_root=input_root,
-                output_root=output_root,
-                source_api_url="https://api.github.com",
-                source_repository=REPOSITORY,
-                source_token="test-source-token",
-                source_commit=HEAD_SHA,
-                source_run_id=SOURCE_RUN_ID,
-                source_run_attempt=SOURCE_RUN_ATTEMPT,
-                source_response_factory=source_response_factory,
+            self._stage_fixture(input_root, output_root, graph)
+            self._assert_source_requests(
+                graph, [config["paths"]["testInventory"], *config["verifiedArtifacts"]]
             )
-            self.assertEqual(len(source_requests), 1)
-            self.assertEqual(
-                source_requests[0].full_url,
-                "https://api.github.com/repos/samovers/OFARM2/contents/"
-                "conformance/review_baseline_test_inventory.json?ref=" + HEAD_SHA,
-            )
-            self.assertEqual(
-                source_requests[0].get_header("Authorization"),
-                "Bearer test-source-token",
-            )
+            self.assertEqual(len(graph.requests), 12)
 
             published_platform = json.loads(
                 (
-                    output_root
-                    / "platform-evidence"
-                    / PLATFORM_PUBLICATION_FILE
+                    output_root / "platform-evidence" / PLATFORM_PUBLICATION_FILE
                 ).read_text(encoding="utf-8")
             )
             self.assertNotIn("details", published_platform)
@@ -1594,9 +1684,17 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
                     evidence_document["producedArtifacts"],
                     _produced_artifact_binding(staged_results),
                 )
-            staged_comparison = (
-                output_root / "review-baseline/equivalence.json"
-            )
+                self.assertEqual(
+                    evidence_document["verifiedArtifacts"],
+                    [
+                        {
+                            "path": path,
+                            "sha256": hashlib.sha256(graph.files[path]).hexdigest(),
+                        }
+                        for path in config["verifiedArtifacts"]
+                    ],
+                )
+            staged_comparison = output_root / "review-baseline/equivalence.json"
             comparison_document = _read_json_object(
                 staged_comparison,
                 "staged review comparison",
@@ -1607,8 +1705,7 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
             )
 
             source_evidence = (
-                input_root
-                / "review-baseline/run-1/review-baseline-evidence.json"
+                input_root / "review-baseline/run-1/review-baseline-evidence.json"
             )
             original_evidence = source_evidence.read_bytes()
             fabricated = json.loads(original_evidence)
@@ -1627,7 +1724,7 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
                     source_commit=HEAD_SHA,
                     source_run_id=SOURCE_RUN_ID,
                     source_run_attempt=SOURCE_RUN_ATTEMPT,
-                    source_response_factory=source_response_factory,
+                    source_response_factory=graph.response,
                 )
             source_evidence.write_bytes(original_evidence)
 
@@ -1650,7 +1747,294 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
                     source_commit=HEAD_SHA,
                     source_run_id=SOURCE_RUN_ID,
                     source_run_attempt=SOURCE_RUN_ATTEMPT,
-                    source_response_factory=source_response_factory,
+                    source_response_factory=graph.response,
+                )
+
+    def test_stage_accepts_changed_inert_regular_artifacts(self) -> None:
+        paths = review_policy._read_json(review_policy.CONFIG_PATH)["verifiedArtifacts"]
+        cases = (
+            ("changed", b"fictional changed artifact\n", "100644"),
+            (
+                "executable",
+                b"raise AssertionError('source bytes were executed')\n",
+                "100755",
+            ),
+            (
+                "metadata-json",
+                b'{"type":"dir","entries":[{"type":"symlink"}]}\n',
+                "100644",
+            ),
+        )
+        for name, payload, mode in cases:
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                temporary = Path(directory)
+                source_files = {
+                    path: payload + b" " * index for index, path in enumerate(paths)
+                }
+                config, input_root, graph = self._complete_conformance_fixture(
+                    temporary, source_files
+                )
+                expected = [
+                    {
+                        "path": path,
+                        "sha256": hashlib.sha256(source_files[path]).hexdigest(),
+                    }
+                    for path in paths
+                ]
+                for path in paths:
+                    graph.entries[path]["mode"] = mode
+                    self.assertNotEqual(
+                        expected[paths.index(path)]["sha256"],
+                        review_policy._sha256_file(review_policy.ROOT / path),
+                    )
+                # An unrelated link and response-provided URL are never followed.
+                graph.documents[graph.root_url]["tree"].append(
+                    {
+                        "path": "unselected-link",
+                        "type": "blob",
+                        "mode": "120000",
+                        "sha": NEXT_SHA,
+                    }
+                )
+                output_root = temporary / "authoritative"
+                self._stage_fixture(input_root, output_root, graph)
+                self._assert_source_requests(
+                    graph, [config["paths"]["testInventory"], *paths]
+                )
+                for run in ("run-1", "run-2"):
+                    evidence = _read_json_object(
+                        output_root
+                        / "review-baseline"
+                        / run
+                        / "review-baseline-evidence.json",
+                        "staged evidence",
+                    )
+                    self.assertEqual(evidence["verifiedArtifacts"], expected)
+                comparison = _read_json_object(
+                    output_root / "review-baseline/equivalence.json",
+                    "staged comparison",
+                )
+                self.assertTrue(comparison["equivalent"])
+
+    def test_stage_refuses_false_artifact_hashes_from_either_or_both_runs(self) -> None:
+        paths = review_policy._read_json(review_policy.CONFIG_PATH)["verifiedArtifacts"]
+        source_files = {
+            path: f"fictional changed artifact {index}\n".encode()
+            for index, path in enumerate(paths)
+        }
+        for claim in ("stale-policy", "invented-other-revision"):
+            for runs in (("run-1",), ("run-2",), ("run-1", "run-2")):
+                with (
+                    self.subTest(claim=claim, runs=runs),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    temporary = Path(directory)
+                    config, input_root, graph = self._complete_conformance_fixture(
+                        temporary, source_files
+                    )
+                    claimed_hash = (
+                        review_policy._sha256_file(review_policy.ROOT / paths[0])
+                        if claim == "stale-policy"
+                        else hashlib.sha256(b"fictional other revision").hexdigest()
+                    )
+                    self.assertNotEqual(
+                        claimed_hash, hashlib.sha256(source_files[paths[0]]).hexdigest()
+                    )
+                    for run in runs:
+                        path = (
+                            input_root
+                            / "review-baseline"
+                            / run
+                            / "review-baseline-evidence.json"
+                        )
+                        evidence = _read_json_object(path, "fixture evidence")
+                        evidence["verifiedArtifacts"][0]["sha256"] = claimed_hash
+                        path.write_bytes(_canonical_json_bytes(evidence))
+                    self._recompare_fixture(
+                        input_root, expected=0 if len(runs) == 2 else 1
+                    )
+                    output_root = temporary / "refused"
+                    with self.assertRaisesRegex(
+                        PublicationPolicyError, "verified artifacts differ"
+                    ):
+                        self._stage_fixture(input_root, output_root, graph)
+                    self.assertFalse(output_root.exists())
+                    self._assert_source_requests(
+                        graph, [config["paths"]["testInventory"], *paths]
+                    )
+
+    def test_stage_refuses_changed_artifact_list_with_equivalent_producer_claims(
+        self,
+    ) -> None:
+        mutations = {
+            "added": lambda entries: entries.append(
+                {"path": "fictional/producer-selected.json", "sha256": "0" * 64}
+            ),
+            "omitted": lambda entries: entries.pop(),
+            "duplicated": lambda entries: entries.append(dict(entries[0])),
+            "changed-path": lambda entries: entries[0].update(
+                path="fictional/producer-selected.json"
+            ),
+            "reordered": lambda entries: entries.reverse(),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                temporary = Path(directory)
+                config, input_root, graph = self._complete_conformance_fixture(
+                    temporary
+                )
+                for run in ("run-1", "run-2"):
+                    path = (
+                        input_root
+                        / "review-baseline"
+                        / run
+                        / "review-baseline-evidence.json"
+                    )
+                    evidence = _read_json_object(path, "fixture evidence")
+                    mutate(evidence["verifiedArtifacts"])
+                    path.write_bytes(_canonical_json_bytes(evidence))
+                self._recompare_fixture(input_root)
+                output_root = temporary / "refused"
+                with self.assertRaisesRegex(
+                    PublicationPolicyError, "verified artifacts differ"
+                ):
+                    self._stage_fixture(input_root, output_root, graph)
+                self.assertFalse(output_root.exists())
+                self._assert_source_requests(
+                    graph,
+                    [config["paths"]["testInventory"], *config["verifiedArtifacts"]],
+                )
+
+    def test_stage_preserves_policy_owned_inputs_and_result_validation(self) -> None:
+        cases = (
+            ("config", "inputs differ from trusted policy"),
+            ("dependencyLock", "inputs differ from trusted policy"),
+            ("packageManagerLock", "inputs differ from trusted policy"),
+            ("schema", "inputs differ from trusted policy"),
+            ("environment", "Python version differs from its pin"),
+            ("embedded-results", "embedded results differ from their file"),
+        )
+        for name, message in cases:
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                temporary = Path(directory)
+                _, input_root, graph = self._complete_conformance_fixture(temporary)
+                for run in ("run-1", "run-2"):
+                    path = (
+                        input_root
+                        / "review-baseline"
+                        / run
+                        / "review-baseline-evidence.json"
+                    )
+                    evidence = _read_json_object(path, "fixture evidence")
+                    if name == "environment":
+                        evidence["environment"]["python"]["version"]["actual"] = "0.0.0"
+                    elif name == "embedded-results":
+                        evidence["tests"]["summary"]["passed"] = 0
+                    else:
+                        evidence["inputs"][name]["sha256"] = "0" * 64
+                    path.write_bytes(_canonical_json_bytes(evidence))
+                self._recompare_fixture(input_root)
+                output_root = temporary / "refused"
+                with self.assertRaisesRegex(PublicationPolicyError, message):
+                    self._stage_fixture(input_root, output_root, graph)
+                self.assertFalse(output_root.exists())
+
+    def test_stage_refuses_nonfile_proof_despite_matching_metadata_hash_claims(
+        self,
+    ) -> None:
+        cases = (
+            ("directory", "tree", "040000"),
+            ("submodule", "commit", "160000"),
+            ("resolved-link", "blob", "120000"),
+            ("unresolved-link", "blob", "120000"),
+            ("parent-link", "blob", "120000"),
+            ("inventory-directory", "tree", "040000"),
+        )
+        for name, kind, mode in cases:
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                temporary = Path(directory)
+                config, input_root, graph = self._complete_conformance_fixture(
+                    temporary
+                )
+                selected_path = config["verifiedArtifacts"][0]
+                if name == "inventory-directory":
+                    selected_path = config["paths"]["testInventory"]
+                selected = graph.entries[selected_path]
+                if name == "parent-link":
+                    selected = next(
+                        entry
+                        for entry in graph.documents[graph.root_url]["tree"]
+                        if entry["path"] == selected_path.split("/")[0]
+                    )
+                selected.update(type=kind, mode=mode)
+                if name in ("resolved-link", "unresolved-link"):
+                    target = (
+                        "ordinary-target.json"
+                        if name == "resolved-link"
+                        else "missing-target.json"
+                    )
+                    target_bytes = target.encode()
+                    selected["sha"] = hashlib.sha1(
+                        b"blob "
+                        + str(len(target_bytes)).encode()
+                        + b"\0"
+                        + target_bytes
+                    ).hexdigest()
+                    selected["size"] = len(target_bytes)
+                    link_url = (
+                        graph.path_urls[selected_path][-1].rsplit("/", 1)[0]
+                        + "/"
+                        + selected["sha"]
+                    )
+                    graph.blobs[link_url] = target_bytes
+                    if name == "resolved-link":
+                        target_entry = dict(
+                            graph.entries[config["verifiedArtifacts"][1]], path=target
+                        )
+                        graph.documents[graph.path_urls[selected_path][2]][
+                            "tree"
+                        ].append(target_entry)
+                metadata_url = (
+                    graph.root_url
+                    if name == "parent-link"
+                    else graph.path_urls[selected_path][2]
+                )
+                metadata = json.dumps(graph.documents[metadata_url]).encode()
+                metadata_hash = hashlib.sha256(metadata).hexdigest()
+                for run in ("run-1", "run-2"):
+                    path = (
+                        input_root
+                        / "review-baseline"
+                        / run
+                        / "review-baseline-evidence.json"
+                    )
+                    evidence = _read_json_object(path, "fixture evidence")
+                    if name == "inventory-directory":
+                        evidence["inputs"]["testInventory"]["sha256"] = metadata_hash
+                    else:
+                        evidence["verifiedArtifacts"][0]["sha256"] = metadata_hash
+                    path.write_bytes(_canonical_json_bytes(evidence))
+                self._recompare_fixture(input_root)
+                output_root = temporary / "refused"
+                message = (
+                    "source parent is not a supported tree"
+                    if name == "parent-link"
+                    else "source terminal is not a supported regular file"
+                )
+                with self.assertRaisesRegex(PublicationPolicyError, message):
+                    self._stage_fixture(input_root, output_root, graph)
+                self.assertFalse(output_root.exists())
+                prior = (
+                    []
+                    if name == "inventory-directory"
+                    else graph.path_urls[config["paths"]["testInventory"]]
+                )
+                selected_reads = graph.path_urls[selected_path][
+                    : 2 if name == "parent-link" else 3
+                ]
+                self.assertEqual(
+                    [request.full_url for request in graph.requests],
+                    prior + selected_reads,
                 )
 
     def test_strict_json_refuses_duplicate_keys_and_non_finite_numbers(
@@ -1776,60 +2160,294 @@ class EvidencePublicationPolicyTests(unittest.TestCase):
                         warning_policy=warning_policy,
                     )
 
-    def test_source_input_read_is_bound_to_exact_commit_without_redirects(self) -> None:
-        payload = b'{"source":"exact"}\n'
-        captured = []
-
-        def response_factory(request):
-            captured.append(request)
-            return FakeSourceResponse(payload, request.full_url)
-
-        observed = _download_authenticated_source_file(
+    def _read_source_graph(
+        self,
+        graph,
+        *,
+        response_factory=None,
+        source_path="conformance/review_baseline_test_inventory.json",
+    ):
+        return _download_authenticated_source_file(
             api_url="https://api.github.com",
             repository=REPOSITORY,
             source_commit=HEAD_SHA,
-            source_path="conformance/review_baseline_test_inventory.json",
+            source_path=source_path,
             token="test-source-token",
-            response_factory=response_factory,
-        )
-        self.assertEqual(observed, payload)
-        self.assertEqual(len(captured), 1)
-        self.assertEqual(
-            captured[0].full_url,
-            "https://api.github.com/repos/samovers/OFARM2/contents/"
-            "conformance/review_baseline_test_inventory.json?ref=" + HEAD_SHA,
-        )
-        self.assertEqual(
-            captured[0].get_header("Accept"),
-            "application/vnd.github.raw+json",
+            response_factory=response_factory or graph.response,
         )
 
-        with self.assertRaisesRegex(PublicationPolicyError, "was redirected"):
-            _download_authenticated_source_file(
-                api_url="https://api.github.com",
-                repository=REPOSITORY,
-                source_commit=HEAD_SHA,
-                source_path="conformance/review_baseline_test_inventory.json",
-                token="test-source-token",
-                response_factory=lambda _request: FakeSourceResponse(
-                    payload,
-                    "https://redirected.example.test/source.json",
-                ),
-            )
-        for commit, path, token in (
-            ("A" * 40, "conformance/review_baseline_test_inventory.json", "token"),
+    def test_source_input_read_is_bound_to_exact_commit_without_redirects(self) -> None:
+        path = "conformance/review_baseline_test_inventory.json"
+        payload = b'{"source":"exact"}\n'
+        graph = SourceFileGraph({path: payload})
+        self.assertEqual(self._read_source_graph(graph), payload)
+        self._assert_source_requests(graph, [path])
+        for commit, source_path, token in (
+            ("A" * 40, path, "token"),
             (HEAD_SHA, "../review_baseline_test_inventory.json", "token"),
-            (HEAD_SHA, "conformance/review_baseline_test_inventory.json", ""),
+            (HEAD_SHA, path, ""),
+            (HEAD_SHA, path, "token\nforged"),
         ):
-            with self.subTest(commit=commit, path=path, token=bool(token)):
+            with self.subTest(commit=commit, path=source_path, token=bool(token)):
+                graph.requests.clear()
                 with self.assertRaises(PublicationPolicyError):
                     _download_authenticated_source_file(
                         api_url="https://api.github.com",
                         repository=REPOSITORY,
                         source_commit=commit,
-                        source_path=path,
+                        source_path=source_path,
                         token=token,
-                        response_factory=response_factory,
+                        response_factory=graph.response,
+                    )
+                self.assertEqual(graph.requests, [])
+
+    def test_source_redirect_handler_refuses_followup_requests(self) -> None:
+        for target in (
+            "https://api.github.com/another-object",
+            "https://other.example.test/object",
+            "http://api.github.com/object",
+        ):
+            with self.subTest(target=target):
+                with self.assertRaisesRegex(
+                    PublicationPolicyError, "source input read was redirected"
+                ):
+                    _SourceRedirectHandler().redirect_request(
+                        None, None, 302, "Found", {}, target
+                    )
+
+    def test_source_reader_builds_no_follow_transport_with_bounded_timeout(
+        self,
+    ) -> None:
+        path = "conformance/review_baseline_test_inventory.json"
+        graph = SourceFileGraph({path: b"fictional inventory\n"})
+        observed_timeouts = []
+        handlers = []
+
+        class FixtureOpener:
+            def open(self, request, timeout):
+                observed_timeouts.append(timeout)
+                return graph.response(request)
+
+        def build_opener(handler):
+            handlers.append(handler)
+            return FixtureOpener()
+
+        with patch(
+            "conformance.evidence_publication_policy.urllib.request.build_opener",
+            side_effect=build_opener,
+        ):
+            observed = _download_authenticated_source_file(
+                api_url="https://api.github.com",
+                repository=REPOSITORY,
+                source_commit=HEAD_SHA,
+                source_path=path,
+                token="test-source-token",
+            )
+        self.assertEqual(observed, graph.files[path])
+        self._assert_source_requests(graph, [path])
+        self.assertEqual(observed_timeouts, [30] * 4)
+        self.assertTrue(
+            all(isinstance(handler, _SourceRedirectHandler) for handler in handlers)
+        )
+
+    def test_source_reader_walks_only_selected_path_depth(self) -> None:
+        original_path = "conformance/review_baseline_test_inventory.json"
+        for path in (
+            "review_baseline_test_inventory.json",
+            "conformance/nested/review_baseline_test_inventory.json",
+        ):
+            with self.subTest(path=path):
+                graph = SourceFileGraph({original_path: b"fictional inventory\n"})
+                urls = graph.path_urls[original_path]
+                if "/" not in path:
+                    graph.documents[graph.root_url]["tree"] = [
+                        graph.entries[original_path]
+                    ]
+                    graph.path_urls[path] = [*urls[:2], urls[-1]]
+                else:
+                    nested_sha = hashlib.sha1(b"fictional nested tree").hexdigest()
+                    nested_url = urls[2].rsplit("/", 1)[0] + "/" + nested_sha
+                    graph.documents[nested_url] = {
+                        "sha": nested_sha,
+                        "truncated": False,
+                        "tree": [graph.entries[original_path]],
+                    }
+                    graph.documents[urls[2]]["tree"] = [
+                        {
+                            "path": "nested",
+                            "type": "tree",
+                            "mode": "040000",
+                            "sha": nested_sha,
+                        }
+                    ]
+                    graph.path_urls[path] = [*urls[:3], nested_url, urls[-1]]
+                self.assertEqual(
+                    self._read_source_graph(graph, source_path=path),
+                    graph.files[original_path],
+                )
+                self._assert_source_requests(graph, [path])
+                self.assertEqual(len(graph.requests), len(path.split("/")) + 2)
+
+    def test_source_file_proof_refuses_malformed_metadata(self) -> None:
+        path = "conformance/review_baseline_test_inventory.json"
+        # name, selected document/entry, mutation, reads before refusal
+        cases = (
+            ("wrong-commit", "commit", lambda item: item.update(sha=NEXT_SHA), 1),
+            (
+                "invalid-root-sha",
+                "commit",
+                lambda item: item["tree"].update(sha="F" * 40),
+                1,
+            ),
+            ("invalid-root-type", "commit", lambda item: item.update(tree=[]), 1),
+            ("wrong-root-tree", "root", lambda item: item.update(sha=NEXT_SHA), 2),
+            ("wrong-selected-tree", "tree", lambda item: item.update(sha=NEXT_SHA), 3),
+            ("truncated-root", "root", lambda item: item.update(truncated=True), 2),
+            ("truncated-tree", "tree", lambda item: item.update(truncated=True), 3),
+            ("nonboolean-truncation", "tree", lambda item: item.update(truncated=0), 3),
+            ("missing-truncation", "tree", lambda item: item.pop("truncated"), 3),
+            ("missing-entry", "tree", lambda item: item["tree"].clear(), 3),
+            (
+                "duplicate-entry",
+                "tree",
+                lambda item: item["tree"].append(dict(item["tree"][0])),
+                3,
+            ),
+            ("nonarray-entries", "tree", lambda item: item.update(tree={}), 3),
+            ("nonobject-entry", "tree", lambda item: item["tree"].append(None), 3),
+            (
+                "invalid-entry-path",
+                "entry",
+                lambda item: item.update(path="nested/file.json"),
+                3,
+            ),
+            (
+                "wrong-basename",
+                "entry",
+                lambda item: item.update(path="not-the-inventory.json"),
+                3,
+            ),
+            (
+                "invalid-parent-id",
+                "parent",
+                lambda item: item.update(sha="not-a-sha"),
+                2,
+            ),
+            (
+                "parent-file",
+                "parent",
+                lambda item: item.update(type="blob", mode="100644"),
+                2,
+            ),
+            ("parent-mode", "parent", lambda item: item.update(mode="100755"), 2),
+            ("invalid-blob-id", "entry", lambda item: item.update(sha="A" * 40), 3),
+            ("numeric-blob-id", "entry", lambda item: item.update(sha=7), 3),
+            ("wrong-terminal-type", "entry", lambda item: item.update(type="tree"), 3),
+            (
+                "unsupported-terminal-mode",
+                "entry",
+                lambda item: item.update(mode="100600"),
+                3,
+            ),
+            ("numeric-mode", "entry", lambda item: item.update(mode=100644), 3),
+            ("missing-size", "entry", lambda item: item.pop("size"), 3),
+            ("boolean-size", "entry", lambda item: item.update(size=True), 3),
+            ("float-size", "entry", lambda item: item.update(size=1.0), 3),
+            ("negative-size", "entry", lambda item: item.update(size=-1), 3),
+            ("empty-size", "entry", lambda item: item.update(size=0), 3),
+            (
+                "oversize",
+                "entry",
+                lambda item: item.update(size=MAX_SOURCE_INPUT_BYTES + 1),
+                3,
+            ),
+            ("mismatched-size", "entry", lambda item: item.update(size=1), 4),
+        )
+        for name, target, mutate, reads in cases:
+            with self.subTest(case=name):
+                graph = SourceFileGraph({path: b"fictional inventory\n"})
+                targets = {
+                    "commit": graph.documents[graph.commit_url],
+                    "root": graph.documents[graph.root_url],
+                    "tree": graph.documents[graph.path_urls[path][2]],
+                    "entry": graph.entries[path],
+                    "parent": graph.documents[graph.root_url]["tree"][0],
+                }
+                mutate(targets[target])
+                with self.assertRaises(PublicationPolicyError):
+                    self._read_source_graph(graph)
+                self.assertEqual(
+                    [request.full_url for request in graph.requests],
+                    graph.path_urls[path][:reads],
+                )
+
+    def test_source_file_proof_refuses_invalid_json_and_blob_substitution(self) -> None:
+        path = "conformance/review_baseline_test_inventory.json"
+        malformed = (
+            ("malformed", b"{"),
+            ("array", b"[]"),
+            ("duplicate-key", b'{"sha":"first","sha":"second"}'),
+            ("nonfinite", b'{"size":NaN}'),
+            ("overflow", b'{"size":1e9999}'),
+            ("invalid-utf8", b"\xff"),
+        )
+        for position in (0, 1, 2):
+            for name, payload in malformed:
+                with self.subTest(position=position, case=name):
+                    graph = SourceFileGraph({path: b"fictional inventory\n"})
+                    graph.payload_overrides[graph.path_urls[path][position]] = payload
+                    with self.assertRaises(PublicationPolicyError):
+                        self._read_source_graph(graph)
+                    self.assertEqual(len(graph.requests), position + 1)
+        graph = SourceFileGraph({path: b"fictional inventory\n"})
+        graph.payload_overrides[graph.path_urls[path][-1]] = b"substitute-content!\n"
+        self.assertEqual(
+            len(graph.files[path]),
+            len(graph.payload_overrides[graph.path_urls[path][-1]]),
+        )
+        with self.assertRaisesRegex(
+            PublicationPolicyError, "source blob identity differs"
+        ):
+            self._read_source_graph(graph)
+        self.assertEqual(len(graph.requests), 4)
+
+    def test_source_transport_refuses_failures_at_each_proof_response(self) -> None:
+        path = "conformance/review_baseline_test_inventory.json"
+        for position in (0, 1, 2, 3):
+            for failure in ("status", "redirect", "read", "empty", "oversize"):
+                with self.subTest(position=position, failure=failure):
+                    graph = SourceFileGraph({path: b"fictional inventory\n"})
+                    target_url = graph.path_urls[path][position]
+
+                    def response_factory(request):
+                        response = graph.response(request)
+                        if request.full_url != target_url:
+                            return response
+                        if failure == "status":
+                            response.status = 404
+                        elif failure == "redirect":
+                            response._url = "https://substituted.example.test/object"
+                        elif failure == "read":
+
+                            def failed_read(_size):
+                                raise OSError("fictional failed read")
+
+                            response.read = failed_read
+                        elif failure == "empty":
+                            response = FakeSourceResponse(b"", request.full_url)
+                        elif failure == "oversize":
+                            response = FakeSourceResponse(
+                                b"x" * (MAX_SOURCE_INPUT_BYTES + 1), request.full_url
+                            )
+                        return response
+
+                    with self.assertRaises(PublicationPolicyError):
+                        self._read_source_graph(
+                            graph, response_factory=response_factory
+                        )
+                    self.assertEqual(
+                        [request.full_url for request in graph.requests],
+                        graph.path_urls[path][: position + 1],
                     )
 
     def test_secure_download_verifies_digest_and_extracts_inside_fresh_root(
