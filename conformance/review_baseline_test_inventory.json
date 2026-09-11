@@ -1576,6 +1576,106 @@
       "sourcePath": "kernel/tests/test_ingress_normalization.py"
     },
     {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-array]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-class-ADVISORY_OUTPUT]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-class-COMPLIANCE_ASSERTION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-class-EVIDENCE_RECORD]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-class-GOVERNANCE_DECISION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-class-HYPOTHESIS_ASSERTION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-class-NOTE]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-class-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-class-STRUCTURE_ASSERTION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-empty-array]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-empty-object]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-empty-string]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-false-string]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-float-one]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-float-zero]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-integer-one]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-integer-zero]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-null]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-object]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[confirmation-true-string]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_maps_transport_violation_to_one_fixed_safe_422[empty-commit-class]",
       "sourceModule": "kernel.tests.test_ingress_normalization",
       "sourcePath": "kernel/tests/test_ingress_normalization.py"
@@ -1676,6 +1776,106 @@
       "sourcePath": "kernel/tests/test_ingress_normalization.py"
     },
     {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-array]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-class-ADVISORY_OUTPUT]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-class-COMPLIANCE_ASSERTION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-class-EVIDENCE_RECORD]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-class-GOVERNANCE_DECISION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-class-HYPOTHESIS_ASSERTION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-class-NOTE]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-class-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-class-STRUCTURE_ASSERTION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-empty-array]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-empty-object]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-empty-string]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-false-string]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-float-one]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-float-zero]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-integer-one]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-integer-zero]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-null]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-object]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[confirmation-true-string]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[farmRef-boolean]",
       "sourceModule": "kernel.tests.test_ingress_normalization",
       "sourcePath": "kernel/tests/test_ingress_normalization.py"
@@ -1752,6 +1952,51 @@
     },
     {
       "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[missing-idempotencyKey]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_valid_confirmation_preserves_raw_submission_and_digest[ADVISORY_OUTPUT]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_valid_confirmation_preserves_raw_submission_and_digest[COMPLIANCE_ASSERTION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_valid_confirmation_preserves_raw_submission_and_digest[EVIDENCE_RECORD]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_valid_confirmation_preserves_raw_submission_and_digest[GOVERNANCE_DECISION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_valid_confirmation_preserves_raw_submission_and_digest[HYPOTHESIS_ASSERTION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_valid_confirmation_preserves_raw_submission_and_digest[NOTE]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_valid_confirmation_preserves_raw_submission_and_digest[OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_valid_confirmation_preserves_raw_submission_and_digest[OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_valid_confirmation_preserves_raw_submission_and_digest[STRUCTURE_ASSERTION]",
       "sourceModule": "kernel.tests.test_ingress_normalization",
       "sourcePath": "kernel/tests/test_ingress_normalization.py"
     },
@@ -11529,6 +11774,111 @@
       "nodeid": "kernel/tests/test_review_baseline_outcome_reporting.py::test_strict_xpass_remains_failed_and_rejected",
       "sourceModule": "kernel.tests.test_review_baseline_outcome_reporting",
       "sourcePath": "kernel/tests/test_review_baseline_outcome_reporting.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_actor_binding_precedes_malformed_confirmation",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[empty-array]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[empty-object]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[empty-string]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[false-string]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[false]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[float-one]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[float-zero]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[integer-one]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[integer-zero]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[nonempty-array]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[nonempty-object]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[null]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[omitted]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[true-string]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_confirmation_value_matrix_preserves_history[true]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_true_keeps_bounded_structure_self_acceptance",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_true_preserves_existing_acceptance_requirements[evidence-floor]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_true_preserves_existing_acceptance_requirements[review-authority]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_http_true_preserves_existing_acceptance_requirements[reviewer-own-act]",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_review_confirmation.py::test_omission_false_and_true_keep_distinct_raw_replay_identity",
+      "sourceModule": "kernel.tests.test_review_confirmation",
+      "sourcePath": "kernel/tests/test_review_confirmation.py"
     },
     {
       "nodeid": "kernel/tests/test_review_fixes.py::test_h1_as_of_reconstruction_is_coherent_across_supersession",
@@ -22026,8 +22376,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "b1fbb1055f1531440f3ba4aff4ecc1e179f01692c7a35b1d40a29f9e8e9d23b0",
-  "entryCount": 4405,
+  "entriesSha256": "160c1ac7ce1991ecfb80f13ce089fcce74f03cc1e62f53b82264bf384a33db8c",
+  "entryCount": 4475,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import FrozenInstanceError
 import json
+from unittest.mock import Mock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -11,7 +13,8 @@ import psycopg
 import pytest
 
 import kernel.gates as gates_module
-from kernel.contracts import ContractViolation
+from kernel import policy
+from kernel.contracts import ContractViolation, sha256_of
 from kernel.gates import GatePipeline
 from kernel.legacy_m1.api import _install_commit_route
 from kernel.stages import (
@@ -72,19 +75,53 @@ for _field_name in (
         )
 
 
+_MALFORMED_CONFIRMATION_SUBMISSIONS = [
+    pytest.param(_with("confirmAccept", value), id=f"confirmation-{label}")
+    for label, value in (
+        ("null", None),
+        ("false-string", "false"),
+        ("true-string", "true"),
+        ("empty-string", ""),
+        ("integer-zero", 0),
+        ("integer-one", 1),
+        ("float-zero", 0.0),
+        ("float-one", 1.0),
+        ("empty-array", []),
+        ("array", ["raw-secret-marker"]),
+        ("empty-object", {}),
+        ("object", {"raw": "raw-secret-marker"}),
+    )
+]
+# Type coverage above and class coverage here avoid a redundant full product.
+_MALFORMED_CONFIRMATION_SUBMISSIONS.extend(
+    pytest.param(
+        {**_with("confirmAccept", "false"), "commitClass": commit_class},
+        id=f"confirmation-class-{commit_class}",
+    )
+    for commit_class in policy.COMMIT_CLASS_TO_FAMILY
+    if commit_class != "OPERATION_CLAIM"
+)
+_MALFORMED_DIRECT_SUBMISSIONS.extend(_MALFORMED_CONFIRMATION_SUBMISSIONS)
+
+
 class _NoTransactionStore:
     def __init__(self):
         self.transaction_calls = 0
+        self.lookup_calls = []
 
     def serialized_tx(self):
         self.transaction_calls += 1
         raise AssertionError("malformed ingress must not open a transaction")
 
+    def idempotency_lookup(self, cur, key):
+        self.lookup_calls.append((cur, key))
+        raise AssertionError("malformed ingress must not look up a replay")
+
 
 def _pipeline_with_store(store) -> GatePipeline:
     pipeline = GatePipeline.__new__(GatePipeline)
     pipeline.store = store
-    pipeline.authority = object()
+    pipeline.authority = Mock(spec=gates_module.AuthorityEvaluator)
     pipeline.runtime_services = object()
     return pipeline
 
@@ -104,6 +141,8 @@ def test_malformed_direct_header_raises_only_typed_transport_violation(
     assert raised.value.__dict__ == {}
     assert str(raised.value) == ""
     assert store.transaction_calls == 0
+    assert store.lookup_calls == []
+    assert pipeline.authority.mock_calls == []
 
 
 def test_ingress_header_is_frozen_and_preserves_exact_strings():
@@ -156,6 +195,7 @@ def _commit_client(store, principal: str) -> TestClient:
             _with("idempotencyKey", {"raw": "raw-secret-marker"}),
             id="wrong-idempotency-type",
         ),
+        *_MALFORMED_CONFIRMATION_SUBMISSIONS,
     ),
 )
 def test_legacy_http_maps_transport_violation_to_one_fixed_safe_422(
@@ -176,6 +216,7 @@ def test_legacy_http_maps_transport_violation_to_one_fixed_safe_422(
     assert "schemaVersion" not in encoded
     assert "raw-secret-marker" not in encoded
     assert store.transaction_calls == 0
+    assert store.lookup_calls == []
 
 
 def test_legacy_http_preserves_downstream_key_error_mapping():
@@ -217,6 +258,7 @@ def test_existing_http_actor_binding_outcome_takes_precedence(actor):
     store = _NoTransactionStore()
     principal = "party:transport-test"
     submission = _valid_submission()
+    submission["confirmAccept"] = {"raw": "raw-secret-marker"}
     if actor is None:
         submission.pop("actingPartyRef")
     else:
@@ -230,6 +272,7 @@ def test_existing_http_actor_binding_outcome_takes_precedence(actor):
         "ACTOR_BINDING_UNRESOLVED"
     assert "raw-secret-marker" not in json.dumps(response.json())
     assert store.transaction_calls == 0
+    assert store.lookup_calls == []
 
 
 class _RecoveryStore:
@@ -246,6 +289,43 @@ class _RecoveryStore:
     def idempotency_lookup(self, cur, key):
         self.lookup_calls.append((cur, key))
         return self.prior
+
+
+@pytest.mark.parametrize("commit_class", policy.COMMIT_CLASS_TO_FAMILY)
+def test_valid_confirmation_preserves_raw_submission_and_digest(
+    commit_class, monkeypatch,
+):
+    store = _RecoveryStore(prior=None)
+    pipeline = _pipeline_with_store(store)
+    contexts = []
+
+    def capture_context(cur, submission, header):
+        contexts.append(pipeline._new_context(cur, submission, header))
+        return {"status": "captured-test-context"}
+
+    monkeypatch.setattr(pipeline, "_commit_in_tx", capture_context)
+    digests = []
+    for confirmation in ({}, {"confirmAccept": False}, {"confirmAccept": True}):
+        submission = {
+            **_valid_submission(),
+            "commitClass": commit_class,
+            "payload": {"text": " untrimmed ü ", "values": [False, None]},
+            **confirmation,
+        }
+        original = deepcopy(submission)
+
+        assert pipeline.commit(submission) == {"status": "captured-test-context"}
+
+        context = contexts[-1]
+        assert context.sub is submission
+        assert context.sub == original
+        assert context.commit_class == commit_class
+        assert context.source_digest == sha256_of(original)
+        digests.append(context.source_digest)
+    assert len(set(digests)) == 3
+    assert store.transaction_calls == 3
+    assert store.lookup_calls == []
+    assert pipeline.authority.mock_calls == []
 
 
 def test_concurrency_recovery_reuses_one_parsed_header(monkeypatch):

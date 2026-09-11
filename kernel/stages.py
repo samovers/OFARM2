@@ -58,6 +58,9 @@ def parse_ingress_header(submission: object) -> IngressHeader:
     if not isinstance(submission, dict):
         raise IngressHeaderViolation
 
+    if "confirmAccept" in submission and type(submission["confirmAccept"]) is not bool:
+        raise IngressHeaderViolation
+
     values = {}
     for field_name in (
         "commitClass",
@@ -619,11 +622,12 @@ class ReviewPromotionGate:
     def run(self, ctx: GateContext) -> GatePass | GateRefusal:
         emitter = PromotionEmitter(ctx)
         sub = ctx.sub
+        confirmed = sub.get("confirmAccept") is True
 
         # D8 scopes self-review to ROUTINE OPERATION CLAIMS. A compliance
         # assertion reviewed by its own asserter is outside that scope and
         # outside the pilot's claim limits — it routes to the advisor queue.
-        if (ctx.commit_class == "COMPLIANCE_ASSERTION" and sub.get("confirmAccept")
+        if (ctx.commit_class == "COMPLIANCE_ASSERTION" and confirmed
                 and sub.get("reviewerPartyRef", ctx.acting_party) == ctx.acting_party):
             ctx.review_route_reasons.append(runtime_problem(
                 "HUMAN_APPROVAL_REQUIRED", "Self-review out of scope",
@@ -638,7 +642,7 @@ class ReviewPromotionGate:
         # self-review". The actor's ASSERT_STRUCTURE (AuthorityGate) +
         # REVIEW_ACCEPT (below) authority and semantic validation (ValidationGate)
         # are the other D17 conditions, enforced by those gates.
-        if (ctx.commit_class == "STRUCTURE_ASSERTION" and sub.get("confirmAccept")
+        if (ctx.commit_class == "STRUCTURE_ASSERTION" and confirmed
                 and sub.get("reviewerPartyRef", ctx.acting_party) == ctx.acting_party
                 and not policy.structure_self_acceptable(
                     (sub.get("payload") or {}).get("schemaVersion", ""))):
@@ -651,7 +655,7 @@ class ReviewPromotionGate:
         # A body-named DISTINCT reviewer is a forgeable review act: the claim
         # lands in the queue; the reviewer accepts under their OWN principal
         # via a GOVERNANCE_DECISION commit.
-        if (sub.get("confirmAccept")
+        if (confirmed
                 and sub.get("reviewerPartyRef") not in (None, ctx.acting_party)):
             ctx.review_route_reasons.append(runtime_problem(
                 "HUMAN_APPROVAL_REQUIRED", "Distinct reviewer requires own act",
@@ -696,7 +700,7 @@ class ReviewPromotionGate:
             ctx.final_outcome = "REQUIRE_REVIEW"
             return GatePass()
 
-        if not sub.get("confirmAccept"):
+        if not confirmed:
             emitter.emit_pending_assertion(amend_case_for_routing=False)
             ctx.log("REVIEW_PROMOTION", "RETAIN_DRAFT",
                     rationale="no review act: capture is not commitment (Kernel rule 3)")

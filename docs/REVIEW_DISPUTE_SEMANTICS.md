@@ -96,6 +96,18 @@ the authoritative, contract-bound governance record is the emitted
 `ReviewDecision`. Adding review-decision input fields is therefore **not a
 contract change**, exactly as the existing review fields are not.
 
+**Explicit confirmation.** A present `confirmAccept` must be an actual boolean
+on every legacy submission class. Omission and literal `false` preserve the
+existing non-confirming capture path; literal `true` supplies confirmation only
+after the existing authority, evidence and review-eligibility checks. Null,
+strings, numbers, arrays and objects, including empty or zero values, are
+malformed ingress. The shared parser rejects them before the pipeline opens a
+transaction or looks up an idempotency key, using the existing payload-free
+violation and fixed safe HTTP 422 response after transport actor binding.
+There is no coercion, raw-submission normalization or new queued-review flag.
+Valid draft capture and replay retain their existing records and digests.
+See [the review-confirmation decision](rfcs/OFARM_Legacy_Review_Confirmation_RFC_v0_1.md).
+
 **The normalized review-decision input is a *pair*, because REJECT and CONTEST
 share the `REVIEW_REJECT_OR_CONTEST` action and split on the outcome.** G5-2 adds
 two kernel-internal fields, each a value of the same enum it becomes on the

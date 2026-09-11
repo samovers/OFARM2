@@ -1,11 +1,17 @@
 # Legacy review confirmation, version 0.1
 
-Status: proposed Phase A; no runtime implementation or semantic approval yet.
+Status: approved version-1 implementation decision for
+[PR #384](https://github.com/samovers/OFARM2/pull/384).
 Delivery: [#383](https://github.com/samovers/OFARM2/issues/383), a bounded child
 of Tracking Epic #180 under #167. Decision:
 `OFARM2-LEGACY-REVIEW-CONFIRMATION-001`, version 1. The draft PR description
 records review and approval navigation; only the ordered same-task user message
-can supply approval under root `AGENTS.md`.
+can supply approval under root `AGENTS.md`. In task
+`01a07cc8-4157-7b33-a0ca-becb772e0e8b`, the complete card
+`msg_0d813f8071772f9a016aa3d86fad3487d283546b17f4ff3d58` precedes exact approval
+`msg_01a0900a-37f8-74c1-b1d9-53951b117473`. Both original items were directly
+retrieved in that order. These identifiers are navigation, not substitute
+approval or merge authority.
 
 ## Problem, capability and boundary
 
@@ -160,10 +166,21 @@ preserved. Local `reproduction.json` SHA-256:
 `9d2154658ecd1ffcd4af3b8c33f5db778e09be43167b7f5725fa64b4cedf3469`.
 This is supplemental evidence, not the prescribed Linux x86_64 baseline.
 
-Before implementation, review this Phase A to zero Blockers and obtain the
-complete same-task decision approval naming its existing draft PR. After
-approval, add focused tests, run mandatory package/architecture and applicable
-cheap checks, and regenerate the test inventory using the prescribed runner.
+The [Phase A review](https://github.com/samovers/OFARM2/pull/384#issuecomment-5633091839)
+reported zero design Blockers before the complete same-task card and approval.
+Implementation uses the existing parser and gate with four net runtime lines
+added and no new abstraction. Focused local execution passed 91 parser/transport
+cases, 21 real HTTP/Store cases and 50 existing compatibility cases: 162 distinct
+cases. The HTTP matrix proves malformed fresh requests and accepted-key replays
+leave all nine governed/derived/evidence tables unchanged. Valid controls retain
+drafts, exact raw digests, replay receipts, reviewer identity and server times;
+authority, evidence, correction, queue and production-closure controls pass.
+These runs use the same supplemental platform above and each reports the known
+Starlette/httpx warning. Generated capability artifacts match the committed
+files; no capability manifest or selected bundle component changed.
+
+Run mandatory package/architecture and applicable cheap checks before commit,
+and regenerate the test inventory using the prescribed runner.
 Collection is not execution. Obtain exact-head review before existing baseline
 admission, hosted baselines/native checks and trusted publication. Report the
 existing extraction diagnostic honestly under its applicable requirements.
@@ -186,5 +203,5 @@ approved within its own activation boundary. A change to capability, boundary,
 authority, effects/non-effects, R01-R06, named PR, irreversible behavior or
 deployment posture requires a new decision version and approval.
 
-Next: review Phase A and present the complete version-1 decision card for the
-existing draft PR before runtime implementation.
+Next: obtain exact-head implementation review and the existing admitted hosted
+evidence, then present the final packet for a separate user merge decision.
