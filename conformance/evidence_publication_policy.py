@@ -113,6 +113,11 @@ class _HttpsOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+class _SourceRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise PublicationPolicyError("source input read was redirected")
+
+
 def _checked_digest(value: str) -> str:
     if SHA256.fullmatch(value) is None:
         raise PublicationPolicyError("artifact digest is not canonical SHA-256")
@@ -339,28 +344,17 @@ def download_and_extract_artifact(
     _regular_file_inventory(root)
 
 
-def _download_authenticated_source_file(
+def _download_authenticated_source_response(
     *,
-    api_url: str,
-    repository: str,
-    source_commit: str,
-    source_path: object,
+    url: str,
     token: str,
-    response_factory: ResponseFactory | None = None,
+    accept: str,
+    response_factory: ResponseFactory | None,
 ) -> bytes:
-    if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
-        raise PublicationPolicyError("source commit is not a full lowercase SHA")
-    if not token or "\n" in token or "\r" in token:
-        raise PublicationPolicyError("source input token is absent or malformed")
-    api_url = _checked_api_url(api_url)
-    repository = _checked_repository(repository)
-    checked_path = _checked_source_path(source_path)
-    encoded_path = urllib.parse.quote(checked_path, safe="/")
-    query = urllib.parse.urlencode({"ref": source_commit})
     request = urllib.request.Request(
-        f"{api_url}/repos/{repository}/contents/{encoded_path}?{query}",
+        url,
         headers={
-            "Accept": "application/vnd.github.raw+json",
+            "Accept": accept,
             "Accept-Encoding": "identity",
             "User-Agent": "ofarm-evidence-publication",
             "X-GitHub-Api-Version": GITHUB_API_VERSION,
@@ -371,7 +365,7 @@ def _download_authenticated_source_file(
         response_context = (
             response_factory(request)
             if response_factory is not None
-            else urllib.request.build_opener(_HttpsOnlyRedirectHandler()).open(
+            else urllib.request.build_opener(_SourceRedirectHandler()).open(
                 request,
                 timeout=30,
             )
@@ -379,7 +373,9 @@ def _download_authenticated_source_file(
         payload = bytearray()
         with response_context as response:  # type: ignore[attr-defined]
             if getattr(response, "status", 200) != 200:
-                raise PublicationPolicyError("source input read did not return HTTP 200")
+                raise PublicationPolicyError(
+                    "source input read did not return HTTP 200"
+                )
             final_url = getattr(response, "geturl", lambda: request.full_url)()
             if final_url != request.full_url:
                 raise PublicationPolicyError("source input read was redirected")
@@ -395,6 +391,102 @@ def _download_authenticated_source_file(
     if not payload:
         raise PublicationPolicyError("source input is empty")
     return bytes(payload)
+
+
+def _download_authenticated_source_file(
+    *,
+    api_url: str,
+    repository: str,
+    source_commit: str,
+    source_path: object,
+    token: str,
+    response_factory: ResponseFactory | None = None,
+) -> bytes:
+    if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+        raise PublicationPolicyError("source commit is not a full lowercase SHA")
+    if not token or "\n" in token or "\r" in token:
+        raise PublicationPolicyError("source input token is absent or malformed")
+    api_url = _checked_api_url(api_url)
+    repository = _checked_repository(repository)
+    components = _checked_source_path(source_path).split("/")
+    git_url = f"{api_url}/repos/{repository}/git"
+    commit = _decode_json_object(
+        _download_authenticated_source_response(
+            url=f"{git_url}/commits/{source_commit}",
+            token=token,
+            accept="application/vnd.github+json",
+            response_factory=response_factory,
+        ),
+        "source commit",
+    )
+    if commit.get("sha") != source_commit:
+        raise PublicationPolicyError("source execution commit identity differs")
+    tree_sha = _object(commit.get("tree"), "source commit tree").get("sha")
+    if not isinstance(tree_sha, str) or re.fullmatch(r"[0-9a-f]{40}", tree_sha) is None:
+        raise PublicationPolicyError("source tree SHA is not full lowercase")
+
+    for index, component in enumerate(components):
+        tree = _decode_json_object(
+            _download_authenticated_source_response(
+                url=f"{git_url}/trees/{tree_sha}",
+                token=token,
+                accept="application/vnd.github+json",
+                response_factory=response_factory,
+            ),
+            "source tree",
+        )
+        if tree.get("sha") != tree_sha or tree.get("truncated") is not False:
+            raise PublicationPolicyError("source tree identity differs or is truncated")
+        selected = []
+        for item in _array(tree.get("tree"), "source tree entries"):
+            entry = _object(item, "source tree entry")
+            name = entry.get("path")
+            if (
+                not isinstance(name, str)
+                or not name
+                or name in (".", "..")
+                or "/" in name
+                or "\0" in name
+            ):
+                raise PublicationPolicyError(
+                    "source tree entry path is not a component"
+                )
+            if name == component:
+                selected.append(entry)
+        if len(selected) != 1:
+            raise PublicationPolicyError("source tree entry is missing or duplicated")
+        entry = selected[0]
+        object_sha = entry.get("sha")
+        if (
+            not isinstance(object_sha, str)
+            or re.fullmatch(r"[0-9a-f]{40}", object_sha) is None
+        ):
+            raise PublicationPolicyError("source entry SHA is not full lowercase")
+        if index < len(components) - 1:
+            if entry.get("type") != "tree" or entry.get("mode") != "040000":
+                raise PublicationPolicyError("source parent is not a supported tree")
+            tree_sha = object_sha
+            continue
+        if entry.get("type") != "blob" or entry.get("mode") not in ("100644", "100755"):
+            raise PublicationPolicyError(
+                "source terminal is not a supported regular file"
+            )
+        size = entry.get("size")
+        if type(size) is not int or not 0 < size <= MAX_SOURCE_INPUT_BYTES:
+            raise PublicationPolicyError("source file size is not a bounded integer")
+        payload = _download_authenticated_source_response(
+            url=f"{git_url}/blobs/{object_sha}",
+            token=token,
+            accept="application/vnd.github.raw+json",
+            response_factory=response_factory,
+        )
+        if len(payload) != size:
+            raise PublicationPolicyError("source blob size differs from tree entry")
+        header = b"blob " + str(len(payload)).encode("ascii") + b"\0"
+        if hashlib.sha1(header + payload).hexdigest() != object_sha:
+            raise PublicationPolicyError("source blob identity differs from tree entry")
+        return payload
+    raise PublicationPolicyError("source path has no terminal file")
 
 
 def _regular_file_inventory(root: Path) -> frozenset[str]:
@@ -997,6 +1089,7 @@ def _validate_baseline_evidence(
     config: dict[str, Any],
     expected_inventory: dict[str, Any],
     source_inventory_sha256: str,
+    expected_verified_artifacts: list[dict[str, str]],
     source_commit: str,
     source_run_id: int,
     source_run_attempt: int,
@@ -1124,11 +1217,7 @@ def _validate_baseline_evidence(
         "self-reference. Its raw digest is recorded by the comparison proof."
     ):
         raise PublicationPolicyError("review baseline produced-artifact note differs")
-    expected_verified = [
-        {"path": path, "sha256": _sha256_hex_file(POLICY_ROOT / path)}
-        for path in config["verifiedArtifacts"]
-    ]
-    if evidence.get("verifiedArtifacts") != expected_verified:
+    if evidence.get("verifiedArtifacts") != expected_verified_artifacts:
         raise PublicationPolicyError("review baseline verified artifacts differ")
 
 
@@ -1218,6 +1307,19 @@ def stage_conformance_evidence(
         config=config,
     )
     source_inventory_sha256 = hashlib.sha256(source_inventory_payload).hexdigest()
+    expected_verified_artifacts = []
+    for path in _array(config.get("verifiedArtifacts"), "trusted verified artifacts"):
+        payload = _download_authenticated_source_file(
+            api_url=source_api_url,
+            repository=source_repository,
+            source_commit=source_commit,
+            source_path=path,
+            token=source_token,
+            response_factory=source_response_factory,
+        )
+        expected_verified_artifacts.append(
+            {"path": path, "sha256": hashlib.sha256(payload).hexdigest()}
+        )
     loaded: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
     for run in ("run-1", "run-2"):
         run_root = input_root / "review-baseline" / run
@@ -1232,6 +1334,7 @@ def stage_conformance_evidence(
             config=config,
             expected_inventory=expected_inventory,
             source_inventory_sha256=source_inventory_sha256,
+            expected_verified_artifacts=expected_verified_artifacts,
             source_commit=source_commit,
             source_run_id=source_run_id,
             source_run_attempt=source_run_attempt,
@@ -1267,6 +1370,7 @@ def stage_conformance_evidence(
             config=config,
             expected_inventory=expected_inventory,
             source_inventory_sha256=source_inventory_sha256,
+            expected_verified_artifacts=expected_verified_artifacts,
             source_commit=source_commit,
             source_run_id=source_run_id,
             source_run_attempt=source_run_attempt,

@@ -118,6 +118,24 @@ outcomes, warnings, Git state, versions, schema and lock digests, installed-set
 digest, and produced artifact digests all remain comparison inputs. The proof
 records raw and normalized envelope SHA-256 digests.
 
+## Authenticated source artifacts at publication
+
+Trusted publisher configuration chooses the verified-artifact paths and order.
+For each artifact and the source test inventory, the publisher resolves the
+authenticated execution commit through nonrecursive Git trees to a regular-file
+blob. Selected parent or terminal symlinks, submodules and directory terminals
+refuse. Each raw blob must match its declared size and Git object identity before
+its SHA-256 becomes an evidence expectation. Requests remain authenticated and
+bounded, source redirects refuse, and source bytes are never executed.
+
+One ordered artifact-hash list is required by both producer validations and both
+staged revalidations. Accurately reported changed-source artifacts can pass;
+stale or invented hashes refuse. Configuration, dependency locks and schema stay
+pinned to the trusted policy checkout because they define verification inputs.
+Their ownership and all admission, comparison, native and receipt gates remain
+unchanged. The supported-file contract is recorded in
+[RFC v0.2](../docs/rfcs/OFARM2_Authenticated_Source_Artifact_Publication_RFC_v0_2.md).
+
 ## Existing platform evidence lane
 
 The historical platform-MVP writer remains narrower and duration-bearing: it
