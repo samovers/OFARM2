@@ -2,9 +2,10 @@
 
 Date: 2026-09-12
 
-Design revision: 8 — bounded read-qualification evidence correction. This retains
-revision 7's complete two-action scope and makes the provider's rule-bound
-evidence check distinct from the consumer's result qualification. It consumes
+Design revision: 9 — bounded evidence-reference and policy-failure correction.
+This retains revision 7's complete two-action scope and revision 8's provider/
+consumer evidence-ownership split. Required evidence is resolved, not accepted
+as proof values from an attempt frame. It consumes
 renewed canonical Phase A approval at PR #11 head
 `4494924998183fe3fa7bc1b63b76a85893335044` and the aligned #353 scope. It proposes
 complete evaluation of ASSERT_OPERATION_CLAIM and RECEIVE_READ_DATA through
@@ -23,10 +24,12 @@ law changes.
 
 Revision 7 at `feffb585ec569c6aaa8b5d085e94583d1eb9aeca` has two exact-head
 reviews; the later review identified B1's read-evidence ownership ambiguity.
-Section 11 records this correction and both non-blocking follow-ups. Prior
-reviews do not approve this new head.
+Revision 8 at `f97fe8f73d956d2dd6c0f82f133d6800b71055fe` corrected that ownership;
+its focused review identified B2's proof-carrier gap and F3's policy-failure
+ambiguity. Section 11 records the bounded corrections and prior follow-up
+dispositions. Prior reviews do not approve this new head.
 
-Status: revision 8 is REVIEW_PENDING; G1 first-release scope alignment applied;
+Status: revision 9 is REVIEW_PENDING; G1 first-release scope alignment applied;
 G2 canonical readiness, including source-history closure, and G3 implementation
 prerequisites remain open. The sufficiency of two executable actions is unproved.
 No OFARM2 semantic approval, runtime implementation, baseline
@@ -400,12 +403,15 @@ remain G2/G3 work.
 
 The proposed carrier for read-qualification proof is the closed governed-read
 `attempt` role, supplied by its separately owned read/evidence producer before
-final authorization evaluation. It carries immutable proof values or exact
+final authorization evaluation. It carries exact immutable
 revision/digest references and truthful missing/invalid observations, not a
-caller-set `qualified` flag or an asserted prior ALLOW. Referenced governed
-records are resolved through the provider's typed tenant reader. The provider
-verifies every supplied fact under the selected evidence policy, its exact
-effect-intent binding and the same governed snapshot/protection context.
+caller-set `qualified` flag or an asserted prior ALLOW. Every required evidence
+reference must resolve through the provider's typed tenant reader in the bound
+snapshot to the exact revision/digest recorded by the decision and satisfy
+canonical section 12.5's full eligibility checks under the selected policy.
+No evidence fact is accepted from the frame itself. The provider verifies the
+resolved evidence's exact effect-intent binding and the same governed
+snapshot/protection context.
 
 This is a local input-role proposal, not a new canonical schema, evidence kind
 or producer implementation. G2 must supply the exact active/current policy,
@@ -426,7 +432,7 @@ proof observation does not itself grant read authority or permission to release.
 | Write or read attempt, deadline, snapshot and protection | Same bound connection supplies tenant/full-transaction identity; each owning protocol supplies its admitted time/guard context | Current UoW has no complete write/read attempt/deadline/guard factories. Tenant challenge time, token lifetime, batch allocation and `bound_at` are not substitutes. Settle #178's write interface and the separately owned governed-read interface before their respective use. |
 | Command/action and authorization policy | Consume exact verified selections and content-addressed admitted bytes | Current fixed selector selects the incompatible old command in section 9, not a general v0.2 policy. Its owner must supply a compatible reviewed selection; this PR cannot reinterpret it. |
 | Canonical authority snapshot/currentness and source visibility | Provider verifies canonical proof against coherent tenant reads and exact source/batch provenance | G2 must supply exact bindings; G3 must identify how existing sources prove every required watermark/visibility fact. A SQL snapshot label does not fill this gap. |
-| Rule-selected CP2 read-qualification evidence | The read owner's closed attempt supplies immutable proof values/refs or explicit missing/invalid observations; the typed reader resolves referenced governed evidence in the bound snapshot. The provider evaluates `EP_CP2_READ_QUALIFICATION_V0_2` and records individual evidence dispositions before ALLOW. | The separately owned read/evidence producer owes real, same-context inputs before evaluation. Its exact schema/source eligibility and policy bytes remain G2; factory/transport/order are G3. No existing table, CP2 public-result implementation or PR #34 writer is presumed to supply them. |
+| Rule-selected CP2 read-qualification evidence | The read owner's closed attempt supplies exact immutable revision/digest references or explicit missing/invalid observations, never authoritative proof values. The typed reader resolves every required evidence reference in the bound snapshot; the provider applies canonical section 12.5 eligibility and `EP_CP2_READ_QUALIFICATION_V0_2`, recording individual evidence dispositions before ALLOW. | The separately owned read/evidence producer owes real, same-context inputs before evaluation. Its exact schema/source eligibility and policy bytes remain G2; factory/transport/order are G3. No existing table, CP2 public-result implementation or PR #34 writer is presumed to supply them. |
 | Public result/read qualification and source history | Consume exact admitted evidence/history semantics where the selected closure requires them; the provider does not classify public history or release traces | CP2A-DEP01 and #32's completeness/historical-admission proof remain open; #34's proposed writer is not admitted by this plan. Required retention and disclosure bindings also remain real owner dependencies. |
 
 For time, follow PR #11 section 18.2 precisely: principal-resolution/session
@@ -642,8 +648,13 @@ posture or later result qualification cannot bypass that requirement. Other
 invalid or unsupported evidence follows its exact canonical disposition, not
 a newly invented reason or an indiscriminate infrastructure exception.
 
-Missing package/profile bindings still block admission/readiness; malformed
-ingress does not become fabricated decision evidence. The read/evidence owner
+Missing or invalid executable-package bindings still block admission/readiness;
+malformed ingress does not become fabricated decision evidence. In an otherwise
+admitted evaluation, an evidence policy that is not active/current or whose
+exact revision is not retrievable has canonical `UNSUPPORTED_EVIDENCE_POLICY`
+(default `REQUIRE_REVIEW`, rank 240), with individual evidence dispositions and
+the canonical aggregation rules, not an ingress rejection. This distinction
+does not close the outstanding G2 readiness gate. The read/evidence owner
 produces the proof inputs described in section 6 and the read consumer owns
 result qualification/redaction/coverage and release. Neither produces authority
 merely by qualifying a result. No new producer, release order or canonical
@@ -947,7 +958,7 @@ must additionally cover revocation/set changes between evaluation and commit,
 exclusive deadlines, duplicate consumption, persistence failure, committed
 refusal with lost response, and separately unknown evidence commits.
 
-### Focused verification for the selected interface, with revision 8's B1 case
+### Focused verification for the selected interface, including B1/B2 and F3
 
 These are planned cases under existing invariants, not new canonical rules or
 claims of executed tests:
@@ -962,6 +973,14 @@ claims of executed tests:
   prepared ALLOW without owned persistence or release. `EP_NONE` on a claim
   must not bypass required source evidence. These cases require the actual
   G2/G3 producer/bindings; a mock qualified flag proves nothing.
+- AUTH-002/006/009/010/013: put proof values in an owner-issued read frame
+  without resolvable exact evidence references; they cannot satisfy the policy.
+  The positive case above must use evidence resolved in the bound snapshot.
+  Contrast invalid package admission (no decision) with an admitted evaluation
+  whose read evidence policy is inactive or its exact revision unretrievable:
+  with all other checks satisfied, require `UNSUPPORTED_EVIDENCE_POLICY` /
+  `REQUIRE_REVIEW` and individual evidence dispositions, not an ingress refusal.
+  Combined failures retain canonical aggregation, including global DENY precedence.
 - AUTH-002/003/011: through the real runtime/UoW, substitute a frame from
   another tenant/attempt, a handler-constructed selection, a caller deadline,
   or a JWT cache/challenge expiry for required session proof. None becomes a
@@ -1003,9 +1022,9 @@ claims of executed tests:
 
 ## 11. Disposition of the existing nine-blocker review
 
-This section preserves revisions 2–7 and their exact-head review history. Its
+This section preserves revisions 2–8 and their exact-head review history. Its
 older section references and human-handshake language describe those revisions,
-not first-release APIs or review of revision 8. The complete previous design is
+not first-release APIs or review of revision 9. The complete previous design is
 retained at `725df163ddcd4f93b4675a3041724b1f59ab8151`. The revision 7 entry
 below records the new scope; prior findings are not silently erased or promoted
 to approval of this changed design.
@@ -1132,11 +1151,28 @@ work is not added to this PR. The revision-4 human-handshake correction and
 review closure remain historical facts; the later scope defers that execution,
 not its safeguards or past evidence.
 
-Revision 8 is REVIEW_PENDING, not reviewer sign-off or an implementation card.
-Review only B1's ownership, input/evidence evaluation, affected failure/handoff
-invariants and the follow-up records absent new evidence of a broader defect.
-G2/G3 and later exact G4 approval remain open. No new canonical semantics,
-evidence producer, runtime method, budget or workflow gate is created here.
+The [focused revision 8 review](https://github.com/samovers/OFARM2/pull/359#pullrequestreview-5187572304)
+at `f97fe8f73d956d2dd6c0f82f133d6800b71055fe` accepted the ownership correction
+and F1/F2 records, while reporting B2 on the direct-value proof carrier and F3
+on the package-versus-evidence-policy failure wording. Accepting those records
+did not close the underlying G3 work or approve implementation.
+
+### Revision 9: B2 evidence resolution and F3 failure distinction
+
+The user directed these bounded design corrections after reading that review.
+Section 6 removes the direct-value carrier mode: required evidence references
+must resolve through the provider's typed tenant reader in the bound snapshot
+and satisfy canonical section 12.5. The attempt frame supplies no authoritative
+evidence fact. Section 7 distinguishes invalid package admission from an
+unavailable/inactive evidence policy during an admitted evaluation, preserving
+its canonical reason, default outcome, evidence disposition and aggregation.
+The focused verification above covers both distinctions under existing AUTH
+invariants; these are planned cases, not executed runtime evidence.
+
+Revision 9 is REVIEW_PENDING. Review only B2/F3 and affected invariants absent
+new evidence of a broader defect. G2/G3 and later exact G4 approval remain open.
+No canonical semantics, evidence producer, runtime method, budget or workflow
+gate is changed by this revision.
 
 ## 12. Expected implementation areas and code excellence
 
@@ -1326,10 +1362,10 @@ disaster/store-loss recovery. The old command successor is a compatibility
 gate for its consumer, not a reason to amend approved canonical PR #26.
 No new Delivery issue is created in this revision.
 
-Review disposition: revision 8 is REVIEW_PENDING. G1 is applied; G2/G3 and the
+Review disposition: revision 9 is REVIEW_PENDING. G1 is applied; G2/G3 and the
 later G4 card/approval remain outstanding. Previous reviews stay attached to
 their exact historical heads and are not transferred to this revision. Review
-the bounded B1 correction, affected interface/invariants and follow-up records;
+the bounded B2/F3 corrections and affected evidence/failure invariants;
 do not restart unaffected findings without new evidence. Exact private names and test-file
 partitioning are Preferences only after the
 substantive interface is settled.
@@ -1361,8 +1397,8 @@ transaction coordination, protected effects, selection authority and temporal
 persistence with their own owners. No cross-boundary implementation is hidden
 in this plan.
 
-What is next: review revision 8's read-qualification evidence ownership, closed
-input role, failure/handoff cases and F1/F2 records at its new head;
+What is next: focused review of revision 9's B2 evidence-reference resolution
+and F3 package-versus-policy failure distinction at its new head;
 close the listed G2/G3 prerequisites with their existing owners before presenting the fresh #359
 decision card. No runtime edits, new Delivery issue, baseline or merge are
 authorized by this design revision.
