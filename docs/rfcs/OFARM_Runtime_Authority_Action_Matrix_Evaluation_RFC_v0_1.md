@@ -1,9 +1,11 @@
 # OFARM Production Authorization Provider — Phase A RFC v0.1
 
-Date: 2026-09-11
+Date: 2026-09-12
 
-Design revision: 7 — first-release scope alignment. This consumes renewed
-canonical Phase A approval at PR #11 head
+Design revision: 8 — bounded read-qualification evidence correction. This retains
+revision 7's complete two-action scope and makes the provider's rule-bound
+evidence check distinct from the consumer's result qualification. It consumes
+renewed canonical Phase A approval at PR #11 head
 `4494924998183fe3fa7bc1b63b76a85893335044` and the aligned #353 scope. It proposes
 complete evaluation of ASSERT_OPERATION_CLAIM and RECEIVE_READ_DATA through
 one evaluation-only facade. Neither selected rule is weakened. The other
@@ -19,7 +21,12 @@ The unapproved legacy proposal at
 `178f150ce56f1bdad96330ba845d210ee0911f2a` remains superseded. No accepted OFARM
 law changes.
 
-Status: revision 7 is REVIEW_PENDING; G1 first-release scope alignment applied;
+Revision 7 at `feffb585ec569c6aaa8b5d085e94583d1eb9aeca` has two exact-head
+reviews; the later review identified B1's read-evidence ownership ambiguity.
+Section 11 records this correction and both non-blocking follow-ups. Prior
+reviews do not approve this new head.
+
+Status: revision 8 is REVIEW_PENDING; G1 first-release scope alignment applied;
 G2 canonical readiness, including source-history closure, and G3 implementation
 prerequisites remain open. The sufficiency of two executable actions is unproved.
 No OFARM2 semantic approval, runtime implementation, baseline
@@ -173,6 +180,7 @@ command-execution capability travels with it.
 | Policy/command selection and immutable runtime component identity | Existing separately reviewed selection/RuntimeBundle owners |
 | Database session, transaction identity/finalization, isolation, complete commit guard and uncertainty reconciliation | Existing transaction owners, later #178 write work and the separately owned governed-read protocol; no new owner here |
 | One current evaluation, selected sufficient path, complete prepared decision evidence and read obligations | This provider |
+| Evaluation of the selected action-level evidence policy, including CP2 read-qualification evidence | This provider verifies the exact rule-bound policy and its required proof before ALLOW. The separately owned read/evidence producer supplies proof inputs; result qualification, redaction, persistence and release remain consumer-owned. Neither ownership substitutes for the other. |
 | Execute every projection/comparison required by the selected rules and complete evidence closure | This provider, using its current typed authority observation; canonical OFARM owns projection and JSON Pointer semantics. Human challenge/final equality execution is deferred, not a first-release API. |
 | Human-act capture, display/retention, generation invalidation and challenge replacement | Separate human/transaction owners; their runtime workflows and the provider's corresponding future handshake remain deferred under #175, with revision 6 preserved as history. |
 | Protected-effect schema, mapping, gate PASS, assertion state and temporal mapping | Separately owned domain/temporal validators and command binding |
@@ -293,6 +301,7 @@ and manifest entries for every required component:
 | Selected protected-effect contracts, AssertionRecord result binding and Event Grammar classifications | Selected complete dependency closure still required; unselected effects may be deferred only with a reviewed closure disposition |
 | NOT_REQUIRED write and separately owned governed-read transaction profiles, deadline/guard mappings and result-complete lifecycle | PR #26 is a write-only semantic candidate, not a governed-read protocol; executable profiles and real production interfaces remain unproved |
 | CP2 result/reasons, retention, sovereignty, evidence and CP3 bindings | Exact selected bindings and current source checks remain required; approved designs are not promoted/extracted contracts |
+| Rule-bound `EP_CP2_READ_QUALIFICATION_V0_2` and its required evidence | Required by PR #11 sections 7.7–7.8, 12 and 18.5, separately from CP2 result qualification. The exact policy ref/digest, evidence schemas, eligible source/producer bindings and extraction remain G2; the real pre-evaluation input producer and same-snapshot interface remain G3. No executable profile or proof source is supplied here. |
 | CP2A-DEP01 source-history classification, completeness and historical-admission proof | Open under #32 and its actual source dependencies; inactive writing, empty lookup or an individually valid qualifier is not complete history |
 
 Existing v0.1 schemas are not substitutes. A missing digest is recorded as
@@ -353,7 +362,7 @@ These methods do not exist in the inspected production code.
 
 | Local member | Content and admission rule |
 |---|---|
-| `attempt` | Owner-issued write or governed-read attempt frame: exact operation where applicable, protocol/attempt/transaction binding, fixed deadline and trusted time, required principal/session validity and snapshot/guard inputs. It must match this bound UoW and selected action; no human-act or approval role is admitted here. |
+| `attempt` | Owner-issued write or governed-read attempt frame: exact operation where applicable, protocol/attempt/transaction binding, fixed deadline and trusted time, required principal/session validity and snapshot/guard inputs. The read form also carries the rule-bound qualification-evidence observation described below. It must match this bound UoW and selected action; no human-act or approval role is admitted here. |
 | `selection` | Owner-issued exact operation/action, policy/rule and binding-manifest selection. Verify its provenance, content and compatibility; a matching action string alone is insufficient. A write-command selection cannot substitute for a governed-read binding. |
 | `effect_intent` | Exact full intent bytes and their claimed identity/digest. The provider validates and derives its authorization view itself. Owner-completed fields must already be bound by the admitted write or governed-read protocol. |
 
@@ -389,6 +398,24 @@ These are local envelope roles, not newly invented canonical schemas or
 caller-selected approval modes. Exact machine fields and real factories
 remain G2/G3 work.
 
+The proposed carrier for read-qualification proof is the closed governed-read
+`attempt` role, supplied by its separately owned read/evidence producer before
+final authorization evaluation. It carries immutable proof values or exact
+revision/digest references and truthful missing/invalid observations, not a
+caller-set `qualified` flag or an asserted prior ALLOW. Referenced governed
+records are resolved through the provider's typed tenant reader. The provider
+verifies every supplied fact under the selected evidence policy, its exact
+effect-intent binding and the same governed snapshot/protection context.
+
+This is a local input-role proposal, not a new canonical schema, evidence kind
+or producer implementation. G2 must supply the exact active/current policy,
+schemas and source admission; G3 must settle the real producer, field mapping,
+pre-evaluation availability and truthful failure representation. If the proof
+cannot be produced in the required order/context, that gate remains open:
+no unbound payload supplied after evaluation, completed receipt from the same
+read, synthetic proof or premature disclosure can fill the gap. Producing a
+proof observation does not itself grant read authority or permission to release.
+
 ### Trusted-source map and missing producers
 
 | Required fact | Existing source and provider use | Remaining owner dependency |
@@ -399,6 +426,7 @@ remain G2/G3 work.
 | Write or read attempt, deadline, snapshot and protection | Same bound connection supplies tenant/full-transaction identity; each owning protocol supplies its admitted time/guard context | Current UoW has no complete write/read attempt/deadline/guard factories. Tenant challenge time, token lifetime, batch allocation and `bound_at` are not substitutes. Settle #178's write interface and the separately owned governed-read interface before their respective use. |
 | Command/action and authorization policy | Consume exact verified selections and content-addressed admitted bytes | Current fixed selector selects the incompatible old command in section 9, not a general v0.2 policy. Its owner must supply a compatible reviewed selection; this PR cannot reinterpret it. |
 | Canonical authority snapshot/currentness and source visibility | Provider verifies canonical proof against coherent tenant reads and exact source/batch provenance | G2 must supply exact bindings; G3 must identify how existing sources prove every required watermark/visibility fact. A SQL snapshot label does not fill this gap. |
+| Rule-selected CP2 read-qualification evidence | The read owner's closed attempt supplies immutable proof values/refs or explicit missing/invalid observations; the typed reader resolves referenced governed evidence in the bound snapshot. The provider evaluates `EP_CP2_READ_QUALIFICATION_V0_2` and records individual evidence dispositions before ALLOW. | The separately owned read/evidence producer owes real, same-context inputs before evaluation. Its exact schema/source eligibility and policy bytes remain G2; factory/transport/order are G3. No existing table, CP2 public-result implementation or PR #34 writer is presumed to supply them. |
 | Public result/read qualification and source history | Consume exact admitted evidence/history semantics where the selected closure requires them; the provider does not classify public history or release traces | CP2A-DEP01 and #32's completeness/historical-admission proof remain open; #34's proposed writer is not admitted by this plan. Required retention and disclosure bindings also remain real owner dependencies. |
 
 For time, follow PR #11 section 18.2 precisely: principal-resolution/session
@@ -441,7 +469,10 @@ simple plan avoids depending on an unproven authority search index:
    removed to make a set look complete.
 5. From this coherent capture derive the complete rule-selected resource,
    principal/representation/CP3, role/grant/delegation/sharing, revocation,
-   condition/evidence/purpose and sovereignty inputs. Include all facts
+   condition/evidence/purpose and sovereignty inputs, including the referenced
+   evidence for the selected action-level read-qualification profile. For
+   RECEIVE_READ_DATA, bind those evidence reads to its closed read-attempt
+   observation; neither source replaces policy verification. Include all facts
    required by rejected-path diagnostics and the relevant-state projection,
    plus exact absence and complete-set claims, not just the winning path.
 6. Verify every source's required snapshot visibility/currentness proof.
@@ -499,8 +530,10 @@ authority observation and protected effect or buffered retrieval/coverage
 share the required snapshot/protection context. Merely running the SELECT
 twice cannot prove continuity. Loss of that proof prevents consumption or
 disclosure. The provider reports its complete authority footprint; the read
-consumer owns payload coverage, qualification, receipt/evidence persistence
-and release, including the additional obligations introduced by its retrieval.
+consumer owns payload coverage, result qualification, receipt/evidence
+persistence and release, including the additional obligations introduced by
+its retrieval. That does not move evaluation of rule-bound qualification
+evidence out of this provider or let result qualification repair missing authority.
 
 ### Deferred human-interface history
 
@@ -587,6 +620,34 @@ inside the final authorization algorithm. There is no later hidden sharing
 overlay that can turn an incomplete authorization trace into a final decision.
 Output planning, redaction, retention custody and transport remain with their
 own boundaries; ALLOW does not itself disclose data.
+
+### Rule-bound action-level evidence
+
+The verified selected rule supplies `evidenceRequirementPolicyRefs`; code does
+not choose an evidence policy. PR #11 sections 7.7–7.8 bind
+`ASSERT_OPERATION_CLAIM` to `EP_NONE` and `RECEIVE_READ_DATA` to
+`EP_CP2_READ_QUALIFICATION_V0_2`. `EP_NONE` is an explicit empty action-level
+requirement, not missing policy and not a waiver of source evidence groups.
+Every selected action-level policy and every source-path evidence requirement
+must pass cumulatively under canonical section 12, including delegated and
+SharingGrant paths. One sufficient grant cannot replace the read evidence.
+
+This provider evaluates the read profile before preparing ALLOW. It verifies
+the exact eligible evidence, intent/target/scope/tenant/sovereignty/purpose
+bindings, time and state, records individual evidence dispositions, and carries
+the necessary snapshot/guard obligations into its handoff. An otherwise valid
+admitted actual read with the required qualification evidence absent yields
+canonical DENY, including the agent-read case in PR #11 section 22; preflight
+posture or later result qualification cannot bypass that requirement. Other
+invalid or unsupported evidence follows its exact canonical disposition, not
+a newly invented reason or an indiscriminate infrastructure exception.
+
+Missing package/profile bindings still block admission/readiness; malformed
+ingress does not become fabricated decision evidence. The read/evidence owner
+produces the proof inputs described in section 6 and the read consumer owns
+result qualification/redaction/coverage and release. Neither produces authority
+merely by qualifying a result. No new producer, release order or canonical
+contract is implemented or approved by this clarification.
 
 ### Deterministic outcome and evidence
 
@@ -749,12 +810,17 @@ For the future NOT_REQUIRED operation-claim consumer:
    disclosure policy. Full internal traces are not exposed by this provider.
 
 The governed-read consumer uses its own complete buffered-read protocol:
-coherent authorization and retrieval, full result-coverage/redaction/qualification,
-exact buffered payload and proof posture, atomic decision/consumption/read-evidence
+coherent authorization and retrieval, full result coverage, redaction and
+result qualification, exact buffered payload and proof posture, atomic decision/consumption/read-evidence
 and receipt persistence, then permitted release. PR #26 is explicitly write-only
 and cannot stand in for that protocol. This provider neither retrieves a public
 payload nor persists its receipt or authorizes release on the strength of a
 prepared ALLOW alone.
+
+That result-qualification ownership does not include this provider's check of
+the rule-bound qualification evidence in section 7. Required proof must be
+available to final evaluation in the admitted same-snapshot protocol; a later
+consumer check cannot retrospectively make an incomplete ALLOW valid.
 
 Human-finalization runtime flows and the provider's corresponding handshake
 remain deferred under #175. Their canonical obligations and revision 6 design
@@ -832,7 +898,7 @@ are retained design obligations, not current executable cases or passing tests.
 | AUTH-003: identity, representation and CP3 are independently proven | Actor/path resolver | Organization without natural-person proof, sponsor without authority, missing CP3 snapshot, and AI-metadata omission/retry never manufacture an eligible path. |
 | AUTH-004: target, typed input, effect subject and scope are distinct | Tenant resource reader and rule interpreter | Use a wrong-kind/foreign/missing target with a valid local scope, stale revision, or unproven prospective absence; no unproved eligibility. |
 | AUTH-005: one independently sufficient source path | Role/grant/delegation evaluator | Role anchored to Farm A plus grant for Farm B, revoked delegation source, or two individually insufficient grants cannot authorize Farm B. |
-| AUTH-006: every applicable closed constraint is evaluated | Rule/path constraint evaluation | Unsupported non-empty condition, wrong exact purpose/family token or unresolved required evidence cannot be ignored. |
+| AUTH-006: every applicable closed constraint is evaluated | Rule/path and action-level evidence-policy evaluation | Unsupported non-empty condition, wrong exact purpose/family token or unresolved required evidence cannot be ignored. With valid ingress, current globals and an otherwise sufficient read path, omit the rule-selected CP2 qualification evidence: canonical DENY, never prepared ALLOW. A later result qualification, preflight posture or caller flag cannot repair it. Wrong-context or ineligible proof follows the exact canonical failure disposition. |
 | AUTH-007: complete current facts, revocation and rule ceilings | Typed snapshot/read footprint | Omit a revocation, truncate a grant set, widen inheritance to lineage, or present an incomplete watermark; no complete-proof claim. |
 | AUTH-008: sharing is composed before final authorization | Same evaluator's read-sharing branch | A scoped grant without the required sharing basis cannot ALLOW RECEIVE_READ_DATA; a later overlay is not a substitute. |
 | AUTH-009: deterministic canonical aggregation and selected evidence | Outcome/path/reason selection | Reverse database order; combine global failures, unrelated revoked paths and sufficient paths; result, chosen basis and reason order follow the canonical lattice. |
@@ -881,11 +947,21 @@ must additionally cover revocation/set changes between evaluation and commit,
 exclusive deadlines, duplicate consumption, persistence failure, committed
 refusal with lost response, and separately unknown evidence commits.
 
-### Focused verification for the revision 7 selected interface
+### Focused verification for the selected interface, with revision 8's B1 case
 
 These are planned cases under existing invariants, not new canonical rules or
 claims of executed tests:
 
+- AUTH-006/008/010/013: through the real bound read attempt, use an otherwise
+  sufficient direct, role-targeted, delegated or SharingGrant path but omit
+  `EP_CP2_READ_QUALIFICATION_V0_2` evidence; each actual read is DENY, including
+  the software-agent case. Substitute wrong-tenant/intent/snapshot or ineligible
+  evidence, or an unbound later payload/consumer `qualified` flag: no ALLOW
+  bypass; inspect canonical dispositions, exact refs/digests and the footprint.
+  With the full eligible profile proof and every other requirement met, obtain
+  prepared ALLOW without owned persistence or release. `EP_NONE` on a claim
+  must not bypass required source evidence. These cases require the actual
+  G2/G3 producer/bindings; a mock qualified flag proves nothing.
 - AUTH-002/003/011: through the real runtime/UoW, substitute a frame from
   another tenant/attempt, a handler-constructed selection, a caller deadline,
   or a JWT cache/challenge expiry for required session proof. None becomes a
@@ -916,7 +992,8 @@ claims of executed tests:
   write/read handoff; completeness verification fails. Missing proof of
   continuity between the authority observation and protected write or buffered
   read cannot be replaced by a context label. Actual race prevention, read
-  coverage, qualification, receipt and release still need their owners' tests.
+  coverage, result qualification, receipt and release still need their owners'
+  tests; rule-bound qualification-evidence verification remains provider-tested.
 - AUTH-001/018: cover every selected rule branch and read target/path, reject
   excluded actions and cross-role write/read frames, and isolate attempts.
   Consumer integration proves that an exact committed-write retry preserves
@@ -926,9 +1003,9 @@ claims of executed tests:
 
 ## 11. Disposition of the existing nine-blocker review
 
-This section preserves revisions 2–6 and their exact-head review history. Its
+This section preserves revisions 2–7 and their exact-head review history. Its
 older section references and human-handshake language describe those revisions,
-not first-release APIs or review of revision 7. The complete previous design is
+not first-release APIs or review of revision 8. The complete previous design is
 retained at `725df163ddcd4f93b4675a3041724b1f59ab8151`. The revision 7 entry
 below records the new scope; prior findings are not silently erased or promoted
 to approval of this changed design.
@@ -1033,11 +1110,33 @@ executable policy. This revision applies that scope to the existing #359 design:
 - account for all AUTH-001–019 and EXC-001–007 obligations without treating
   deferred execution as passed or weakening source-history completeness.
 
-Revision 7 is REVIEW_PENDING. Review the changed scope, selected interface,
-write/read handoff and applicability ledger at its exact head; earlier review
-dispositions do not transfer. G2 canonical readiness, G3 real interfaces/size
-and G4 fresh OFARM2 decision-card approval remain open. This is not an issued
-decision card, reviewer sign-off or authorization to implement.
+Revision 7 at `feffb585ec569c6aaa8b5d085e94583d1eb9aeca` received
+[an initial zero-Blocker review](https://github.com/samovers/OFARM2/pull/359#pullrequestreview-5187397905)
+and [a later B1 finding with F1/F2 follow-ups](https://github.com/samovers/OFARM2/pull/359#pullrequestreview-5187464763).
+Both retained the two-action scope and open G2/G3/G4 gates. The later finding
+requires the bounded correction below; the earlier disposition does not
+override it or approve this new head.
+
+### Revision 8: B1 read-evidence ownership correction
+
+The user directed the bounded correction after reading both reviews. Sections
+4–7 now identify the read rule's exact evidence profile, distinguish provider
+evaluation from consumer result qualification, propose its closed input role
+and retain the missing machine-binding/producer gates. Section 8 preserves
+that split through handoff; AUTH-006 and its focused positive/negative cases
+make missing or substituted proof testable without inventing an evidence source.
+
+F1's existing `AUTHORIZATION_TRACE` read-target coverage remains under G3-READ;
+F2's reported facade experiments inform G3-SHAPE. Their unresolved implementation
+work is not added to this PR. The revision-4 human-handshake correction and
+review closure remain historical facts; the later scope defers that execution,
+not its safeguards or past evidence.
+
+Revision 8 is REVIEW_PENDING, not reviewer sign-off or an implementation card.
+Review only B1's ownership, input/evidence evaluation, affected failure/handoff
+invariants and the follow-up records absent new evidence of a broader defect.
+G2/G3 and later exact G4 approval remain open. No new canonical semantics,
+evidence producer, runtime method, budget or workflow gate is created here.
 
 ## 12. Expected implementation areas and code excellence
 
@@ -1092,9 +1191,15 @@ The same checker's physical-line counts and budgets are:
 | `kernel/application_runtime.py` | 221 / 230 | 9 |
 | application runtime group (runtime_config + application_runtime + deployment_identity) | 179 + 221 + 20 = 420 / 500 | 80 |
 
-Adding eight lines to the UoW without removing others would mean 528/520 and
-940/940 for its group; nine would also exceed the group. This arithmetic is
-not a size estimate for a fully typed implementation. Moving work to another
+F2 in the [later revision-7 review](https://github.com/samovers/OFARM2/pull/359#pullrequestreview-5187464763)
+reports two untyped facade probes: 20 added lines in a straightforward version
+and 17 in a compressed version. The latter reached 537/520 UoW lines and
+949/940 group lines; the existing checker also rejected its public surface,
+slots and non-facade dependency. These are the reviewer's specific experiments,
+not a universal minimum, a typed implementation estimate or an approved budget.
+This revision does not reproduce or adopt the probe code. G3-SHAPE must measure
+the actual typed partition and review both shape and size; no automatic budget
+increase or relocation to hide growth is authorized. Moving work to another
 module does not alone solve the facade's exact shape or its zero headroom.
 
 Before Phase B, G3 must settle the exact typed provider entry, injected
@@ -1181,9 +1286,18 @@ The remaining G3 work is bounded, not a request to restart canonical design:
 | Item | Required closure evidence | Boundary and sequencing |
 |---|---|---|
 | G3-INPUT | Exact mappings and real producers for principal/representation/CP3, required principal/session validity, closed write/read attempts and deadlines, and compatible selection; reject forged/mixed frames through production composition | Consume existing accepted producers where sufficient. Human-act capture is deferred, not a substitute for required current validity. Any new authentication/session, selection or transaction authority needs separately scoped work and user direction before edits; do not mint proof here. |
-| G3-READ | Exact admitted schema/hash/extractor mapping, coherent SQL, complete source visibility/history/currentness and canonical snapshot proof, truthful global/path/infrastructure failure encoding, bounded representative workload, and continuity from authority observation to protected write or buffered read | Reader/projection implementation belongs here after G2. Missing storage, permission, source-history/snapshot authority or transaction protection belongs to its owner, not a database change hidden in the reader. |
-| G3-HANDOFF | Actual write and governed-read interfaces covering every record/set/absence/external/time obligation and attempt-bound evidence, with independently usable provider completion tests | Settle with #178 and the separately owned governed-read design before approving provider code. Durable write coordination and read coverage/qualification/receipts/release stay with their owners. Required real producers must precede their use; later consumer delivery cannot excuse invented fixtures or a type-only prerequisite. |
+| G3-READ | Exact admitted schema/hash/extractor mapping, coherent SQL, complete source visibility/history/currentness and canonical snapshot proof, truthful global/path/infrastructure failure encoding, bounded representative workload, and continuity from authority observation to protected write or buffered read; include the exact rule-bound qualification-evidence source/producer and F1's full read-target coverage below | Reader/projection and evidence evaluation belong here after G2. Missing storage, permission, source-history/snapshot authority, qualification-evidence producer or transaction protection belongs to its owner, not a hidden provider capability. |
+| G3-HANDOFF | Actual write and governed-read interfaces covering every record/set/absence/external/time obligation and attempt-bound evidence, with independently usable provider completion tests; prove read-qualification inputs reach final evaluation in the required context/order | Settle with #178 and the separately owned governed-read design before approving provider code. Durable write coordination and read coverage/result qualification/receipts/release stay with their owners; rule-bound qualification-evidence evaluation stays with this provider. Required real producers must precede their use; later consumer delivery cannot excuse invented fixtures or a type-only prerequisite. |
 | G3-SHAPE | Review the exact facade proposal and architecture edges in section 12, then a measured final partition/size and focused production-path test plan against the admitted bindings | One authorization boundary. Existing zero headroom is explicit; no automatic checker relaxation or budget increase. |
+
+F1 is recorded under G3-READ, not a narrowed release scope: full
+`RP_READ_TARGET_ONE` coverage includes an existing `AUTHORIZATION_TRACE` target
+and a separate `RECEIVE_READ_DATA` decision for that read. An eligible trace-read
+case and a missing-authority/evidence refusal belong in the eventual AUTH-001/006
+coverage. This does not expose the provider's own internal output, activate a
+trace endpoint or waive redaction/qualification/release controls. F2 remains
+under G3-SHAPE with the qualified probe measurements in section 12; no runtime
+or checker change is made to close either follow-up in this design correction.
 
 The #353 -> #178 -> #176 sequence describes capability completion, not the
 separate governed-read protocol's ownership. It cannot postpone an indispensable
@@ -1212,11 +1326,11 @@ disaster/store-loss recovery. The old command successor is a compatibility
 gate for its consumer, not a reason to amend approved canonical PR #26.
 No new Delivery issue is created in this revision.
 
-Review disposition: revision 7 is REVIEW_PENDING. G1 is applied; G2/G3 and the
+Review disposition: revision 8 is REVIEW_PENDING. G1 is applied; G2/G3 and the
 later G4 card/approval remain outstanding. Previous reviews stay attached to
 their exact historical heads and are not transferred to this revision. Review
-the changed release scope and affected interface/invariants; do not restart
-unaffected findings without new evidence. Exact private names and test-file
+the bounded B1 correction, affected interface/invariants and follow-up records;
+do not restart unaffected findings without new evidence. Exact private names and test-file
 partitioning are Preferences only after the
 substantive interface is settled.
 
@@ -1247,8 +1361,8 @@ transaction coordination, protected effects, selection authority and temporal
 persistence with their own owners. No cross-boundary implementation is hidden
 in this plan.
 
-What is next: review revision 7's first-release scope, single evaluation
-interface, write/read handoff and AUTH/EXC applicability ledger at its new head;
+What is next: review revision 8's read-qualification evidence ownership, closed
+input role, failure/handoff cases and F1/F2 records at its new head;
 close the listed G2/G3 prerequisites with their existing owners before presenting the fresh #359
 decision card. No runtime edits, new Delivery issue, baseline or merge are
 authorized by this design revision.
