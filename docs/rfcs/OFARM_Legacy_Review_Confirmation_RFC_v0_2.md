@@ -1,16 +1,16 @@
 # Legacy review confirmation, version 0.2
 
-Status: **proposed decision version 2; not approved** for existing draft
+Status: **decision version 2 approved for repository development** for
 [PR #384](https://github.com/samovers/OFARM2/pull/384), Delivery
 [#383](https://github.com/samovers/OFARM2/issues/383), under Tracking Epic #180.
 Decision identity: `OFARM2-LEGACY-REVIEW-CONFIRMATION-001`.
 
-This amendment proposes replacing the version-1 R04 guarantee and its proof
-claims. It does not supply approval or merge authority. The original
+This amendment replaces the version-1 R04 guarantee and its proof claims under
+the exact task-user approval recorded below. It does not supply merge authority. The original
 [version-0.1 record](OFARM_Legacy_Review_Confirmation_RFC_v0_1.md), its user
 approval and historical evidence remain unchanged. Its unqualified R04 is
-refuted; PR384 remains blocked until a complete version-2 card is reviewed and
-approved in a later exact task-user message, then implemented and verified.
+refuted; the narrowed version-2 guarantee now governs PR384. Fresh exact-head
+review, verification and final user merge authorization remain required.
 
 ## Problem and decision
 
@@ -24,15 +24,15 @@ compliance assertion with `confirmAccept: true` and `reviewerPartyRef: null`
 can be accepted by its own asserter. The approved statement that true cannot
 bypass disallowed existing self-review is therefore false at that head.
 
-Recommend an explicit narrower guarantee for PR384 and separate reviewer
+The approved decision is an explicit narrower guarantee for PR384 and separate reviewer
 eligibility work, recorded in [Delivery #385](https://github.com/samovers/OFARM2/issues/385). PR384 remains one complete
 capability: **strict optional boolean confirmation before governed legacy
 ingress**. The primary trust boundary remains **legacy review-confirmation
-admission**. This version proposes no additional runtime or test changes to
+admission**. This version adds no additional runtime or test changes to
 the existing K-03 implementation. It corrects the active design, explanatory
 documentation and proof attribution without changing eligibility enforcement.
 
-The proposed sequencing is explicit: after version-2 approval and fresh review,
+The approved sequencing is explicit: after version-2 approval and fresh review,
 admission, hosted evidence and final user acceptance, PR384 may merge before
 the separate eligibility Delivery is complete. The nullable-reviewer defect
 would remain in that repository state. This is the material tradeoff requiring
@@ -40,7 +40,7 @@ new semantic approval. A user who requires its removal before PR384 merges can
 instead require the separately approved eligibility fix as a prerequisite;
 that alternative must not be inferred from approval of this proposal.
 
-This proposal does not permit compliance self-review, amend D8/D17 or accepted
+This decision does not permit compliance self-review, amend D8/D17 or accepted
 OFARM review law, certify the legacy path as safe, authorize production access,
 or waive a deployment requirement. It narrows the guarantee of this repository
 change and makes the known implementation failure explicit. Existing production
@@ -128,7 +128,7 @@ its own Delivery is not a regression of PR384's guarantee.
 
 ## Smallest complete change and verification
 
-Expected version-2 areas are this amendment and, after approval, the active
+Version-2 changes are this amendment and the active
 confirmation paragraph/link in `docs/REVIEW_DISPUTE_SEMANTICS.md`, PR/Delivery
 metadata and the final evidence packet. Retain the original version-1 record
 as history. Preserve runtime, tests and the 4475-entry inventory byte for byte
@@ -140,10 +140,10 @@ EXC-001: existing parser and gate remain the sole confirmation path.
 EXC-002: no duplicate validation, state or authority is introduced.
 EXC-003: the corrected invariant set names its actual proof and known limit.
 EXC-004: the earlier four truthiness reads remain removed; superseded public
-readiness and universal safety claims must not remain active after approval.
-EXC-005: no new runtime or test abstraction is proposed.
+readiness and universal safety claims are withdrawn from active descriptions.
+EXC-005: no new runtime or test abstraction is added.
 EXC-006: the simplest credible alternative is a separate eligibility prerequisite
-while retaining unqualified R04. This proposal keeps the confirmed K-03 remedy
+while retaining unqualified R04. This decision keeps the confirmed K-03 remedy
 independently reviewable and exposes the residual explicitly. Combining the
 eligibility fix adds an independently owned allow/deny decision and is not
 necessary. No cross-boundary exception is requested.
@@ -155,7 +155,7 @@ Do not invoke a private transaction method with parser-invalid input as proof
 of a supported entry-point guarantee. P2 is non-blocking: the stub's zero-lookup
 and zero-authority assertions are consequences of no transaction entry, not
 independent exercised controls. The real Store matrix supplies effect/replay
-proof. Correct that attribution in active descriptions after approval.
+proof. Active descriptions use that attribution.
 
 Before each commit, run the mandatory package/architecture check and appropriate
 cheap whitespace/changed-document checks. A proposed-design-only head receives
@@ -187,11 +187,11 @@ this amendment does not waive it or modify extraction inventory/status records.
 No canonical/reference/frozen-contract, credential/principal, grant/action,
 signing/custody, database-role, transaction-ownership, audit/publication mechanism,
 production activation, deployment, release or historical repair change is
-proposed. No new reviewer shape contract, self-review eligibility fix, broad K-04,
+made. No new reviewer shape contract, self-review eligibility fix, broad K-04,
 plain subject validation, or #180/#184 lifecycle/graph work is implemented here.
 
 The boolean input rule is intended to endure. The legacy development/conformance
-surface and this proposed sequencing remain provisional before deployment. A
+surface and this approved sequencing remain provisional before deployment. A
 new confirmation contract, unsupported entry-path discovery, capability or
 boundary expansion, changed owner/effect/non-effect/invariant, irreversible
 behavior, different named PR or production posture needs a new decision version.
@@ -199,14 +199,27 @@ New evidence that contradicts the narrowed guarantee reopens the affected
 invariant; preferences do not. Eliminating the separately recorded defect under
 its own approval does not require preserving the defective behavior.
 
-Only the entire visible text of a later task-user message in the same task may
-approve the complete live card for this existing PR:
+The complete version-2 card and the later exact user approval were retrieved
+directly in task `01a07cc8-4157-7b33-a0ca-becb772e0e8b`, in this order:
+
+- Card: `msg_0d813f8071772f9a016aa3f642869487d28746b5cfca3cbf5b`,
+  2026-09-11T12:38:40.914Z, SHA256
+  `c745fa61b94ae0cd1450087ec41a276bdf06ac2ab332876e59f5c793a18ba721`.
+- Approval: `msg_01a095c2-83cb-72c0-87d6-10ff38a65c80`,
+  2026-09-12T13:15:48.043Z, SHA256
+  `5e34c75ce71975a7e7b17289dc7bd0cf46c72455cc8bca326cb82abdaa13d34d`.
+
+The exact approval text was:
 
 ```text
 I approve OFARM2 decision OFARM2-LEGACY-REVIEW-CONFIRMATION-001 version 2.
 ```
 
-Next: review this proposed amendment to zero design Blockers, present the
-complete version-2 card and obtain that later exact approval before activating
-its changed guarantee. Version1 approval and a generic continuation do not
-approve version2, and semantic approval never authorizes merge.
+These references are navigation evidence; the original task-user message is
+authority. The card has no terminal newline; the approval's transcript text has
+one, included in its hash. This approval covers only PR384 and its version-2
+scope, including the explicit sequence that may leave #385 unresolved at merge.
+It does not approve #385 implementation or authorize merge.
+
+Next: complete fresh exact-head review and verification, then present the final
+packet for the separate, later exact-head task-user merge decision.
