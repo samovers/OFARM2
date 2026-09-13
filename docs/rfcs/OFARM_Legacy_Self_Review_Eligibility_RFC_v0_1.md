@@ -1,10 +1,19 @@
 # Legacy compliance self-review eligibility
 
-Status: **proposed Phase A; implementation is not approved**.
+Status: **approved implementation; local verification recorded below;
+exact-head content review and hosted evidence are separate gates**.
 Decision: `OFARM2-LEGACY-SELF-REVIEW-ELIGIBILITY-001`, version 1.
 Delivery: [#385](https://github.com/samovers/OFARM2/issues/385), under Tracking
-Epic #180. The later live decision card must name the already-created draft PR.
-This document supplies neither semantic approval nor merge authority.
+Epic #180, in named [PR #386](https://github.com/samovers/OFARM2/pull/386).
+
+Approval navigation: in task `01a07cc8-4157-7b33-a0ca-becb772e0e8b`, the live
+card `msg_0d813f8071772f9a016aa59fc72b5487d293c170fb684a3b55` at
+2026-09-12T18:54:24.109Z names PR #386. The later original task-user message
+`msg_01a09a37-50c0-7991-acaa-b175fe812417` at 2026-09-13T10:01:51.552Z says
+`I approve OFARM2 decision OFARM2-LEGACY-SELF-REVIEW-ELIGIBILITY-001 version 1.`
+That original user message supplies semantic authority; these references are
+navigation only. The original card and E01–E07 remain unchanged. Approval does
+not authorize merge, deployment or another Delivery.
 
 Design base: `e50ae95f43d0e73b12113463d0e4ea85eebdc14b`, after merged PR #384.
 Its reviewed runtime tree is `17b134856f75391df50cf2dc298dc3bcef6c6208`.
@@ -28,10 +37,21 @@ with the existing authority and evidence can accept that same pending claim.
 
 The primary trust boundary is **self-review eligibility enforcement** before
 new accepted-force emission. This is high-risk because it changes a reachable
-accepted-force decision. It enforces the existing D8 restriction; it creates
-no new review rights, reviewer identity, contract or production capability.
+accepted-force decision. It enforces the existing D8 restriction for confirmed
+compliance assertions; it creates no new review rights, reviewer identity,
+contract or production capability.
 General reviewer-field typing and wider direct-versus-queued consistency are
 separate work. The bounded D17 structure policy stays unchanged.
+
+**Known K04 residual, outside this correction:** with otherwise sufficient
+authority and evidence, a confirmed `OBSERVATION_ASSERTION` can directly
+self-accept on the legacy route with omitted, null or self-named reviewer
+metadata, while its asserter's queued acceptance is refused. This existing
+discrepancy is not permitted D8 behavior or repaired by this compliance change.
+[Delivery #387](https://github.com/samovers/OFARM2/issues/387) owns the separate
+observation correction; its implementation is not approved here. E04 preserves
+the named permitted positive controls, not an exhaustive account or guarantee
+of every other class's behavior. This PR does not close K04.
 
 ## Existing authority and containment
 
@@ -62,10 +82,10 @@ exercised through supported `GatePipeline.commit`; callers retain its
 existing actor-context obligations. Public production governed routes remain
 closed. No authentication or principal-resolution change is included.
 
-## Smallest proposed correction and ordering
+## Smallest approved correction and ordering
 
 In the existing compliance condition in `ReviewPromotionGate.run`, remove the
-comparison to `reviewerPartyRef`. The proposed eligibility condition is simply
+comparison to `reviewerPartyRef`. The approved eligibility condition is simply
 `ctx.commit_class == "COMPLIANCE_ASSERTION" and confirmed`. The direct emitter
 always names `ctx.acting_party` as both asserter and reviewer, so the claim
 class and confirmation already identify the disallowed self-review attempt.
@@ -77,6 +97,16 @@ structure condition, queue validator and every emitter unchanged. For a
 distinct-body-named compliance request, both existing routing explanations may
 now appear; the decision remains review-required. This diagnostic addition is
 permitted, not a second authority decision.
+
+The similar structure comparison remains at the design base's
+`kernel/stages.py:645–648`. `StructureCarrierValidator` and
+`policy.structure_self_acceptable` both use `STRUCTURE_PAYLOAD_IDENTITY_TYPE`
+(`kernel/validators.py:766`, `kernel/policy.py:202–211`). Supplementary review
+F1 reports seven hostile structure shapes refused and a recognized bounded
+positive accepted. This is latent follow-up context for later structure/K04
+work, not proof that every possible hostile input is unreachable. If carrier
+admission and that eligibility set diverge, the retained comparison needs
+review in its own scope; this PR neither deletes it nor certifies it safe.
 
 The existing order remains:
 
@@ -147,6 +177,11 @@ Extend the existing HTTP/Store review tests and supported direct-pipeline
 tests. Prefer the same-assertion queue sequence over an unrelated acceptance
 positive. Inspect new record kinds, review/consequence counts and relevant
 edges, the immutable pending assertion, queue disposition and reviewer identity.
+After queue acceptance, that original assertion still stores
+`claimState: PENDING_REVIEW`; acceptance and removal from the pending queue are
+derived from its `REVIEW` edge, accepted decision and consequence. Compare the
+original assertion bytes unchanged; do not expect or introduce an `IN_FORCE`
+mutation to satisfy E03.
 Store snapshots establish durable effects; they do not prove read-only lookup
 counts or pre-transaction ordering. This repair is intentionally after ingress,
 so it introduces no transaction-free failure contract.
@@ -174,10 +209,25 @@ synthetic acceptance writer. Exact replay uses a stable full submission through
 `/commit`; `/review/accept` itself generates a new `decisionTime` on each call.
 Name which controls were executed and which remain source-inspection claims.
 
+Supplementary review evidence is separate from implementation proof. The full
+review supplied in task-user message
+`msg_01a0971d-c6fa-7ca3-8f6a-bb14ef0b4a4f` (SHA-256
+`f568d9740295a1c9b45511e4963adeb810cd54eecdc37f6047c28a3fa5249e4a`)
+reports a transcribed predicate in the reviewer's clone, CPython 3.11.15,
+PostgreSQL 16.13 and unpinned wheels: 229 passed and 2 failed on each side,
+plus separate 23/23 and 42/42 runs. Its attribution of the two failures to
+harness pollution is the reviewer's diagnosis, not an independently verified
+result. Its legacy test transport, supplied fixture grants and sequential
+isolated probes do not establish production authentication, concurrency,
+transaction, custody or publication guarantees. Those measurements, including
+F1, are supplementary design evidence and do not replace fresh parent and
+implementation-head verification. The local results below are separately
+executed implementation evidence.
+
 Expected areas are `kernel/stages.py`, focused files under `kernel/tests/`,
 `docs/REVIEW_DISPUTE_SEMANTICS.md`, this RFC and the prescribed generated test
-inventory if collection changes. After approval, the active semantics will
-state the bounded repair and historical limit; the original PR #384 decision
+inventory if collection changes. The active semantics state the approved
+bounded repair and historical limit; the original PR #384 decision
 records remain unchanged as history. The implemented capability, tests and
 necessary inventory/documentation belong in this one PR. No independent
 evidence-only or approval-only companion PR is needed.
@@ -209,7 +259,10 @@ keep still-used distinct-reviewer and structure controls. EXC-005: add no
 kernel abstraction. EXC-006: a blanket null rejection would change ingress and
 capture semantics unnecessarily; metadata coercion would leave eligibility
 dependent on a caller hint. A shared eligibility framework would broaden this
-small correction into independent class and queue policy decisions.
+small correction into independent class and queue policy decisions. Reusing
+the queue's allowlist for direct promotion is the simpler broad alternative,
+but it would change observation behavior and require an explicit D17 exception;
+those additional eligibility decisions belong to separate work.
 
 No confirmation-parser change, general reviewer-field schema, wrong-typed
 subject repair, observation semantics, broad K-04 consistency, evidence matrix,
@@ -227,6 +280,32 @@ implementation proceeds; another authority boundary requires separate work.
 Changes to capability, effects/non-effects, authority, E01–E07, named PR or
 production posture require a new decision version and exact approval.
 
-Next: review this proposal in its existing draft PR, resolve demonstrated
-design Blockers, then present the complete same-task decision card for exact
-user approval before any implementation.
+Next: finish the remaining verification gates, obtain exact-head content
+review, and follow the existing evidence and separate final merge-authorization
+sequence for PR #386.
+
+## Local implementation verification — 2026-09-13
+
+The runtime change removes only the compliance reviewer-hint comparison
+(one insertion, two deletions). Six focused regressions were added and the
+prescribed inventory grew from 4,475 to 4,481 entries, with no removals.
+The unchanged design-head runtime produced three null-related failures and
+three passing reviewer controls; the corrected runtime passed all six. The
+existing conformance module passed 23/23 in its own database/session.
+
+The sequential E06 probe created an actual fictional bad acceptance using the
+unchanged base runtime, then used candidate code against that retained
+isolated database. Matching replay returned the same assertion/review/
+consequence references, adding only three request/trace/result records and
+one gate-log row. All prior records and other governed tables were unchanged.
+A fresh key required review without a new accepted review or consequence.
+No history rewrite or synthetic acceptance emitter was used.
+
+These are supplemental local runs on CPython 3.12.13, macOS ARM64, with
+installed versions matching the lock, and a uniquely labelled disposable
+PostgreSQL 17.10 container pinned by the baseline image digest. Linux wheel
+hash authentication and the complete hosted baseline remain separate gates.
+Function-isolated tests use fresh databases; the history probe deliberately
+retains one database across its two sequential phases. Fictional demo grants
+and legacy actor binding do not establish production authentication or a full
+security audit. PR #386 records the complete execution and review evidence.

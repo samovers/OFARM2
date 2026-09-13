@@ -627,8 +627,7 @@ class ReviewPromotionGate:
         # D8 scopes self-review to ROUTINE OPERATION CLAIMS. A compliance
         # assertion reviewed by its own asserter is outside that scope and
         # outside the pilot's claim limits — it routes to the advisor queue.
-        if (ctx.commit_class == "COMPLIANCE_ASSERTION" and confirmed
-                and sub.get("reviewerPartyRef", ctx.acting_party) == ctx.acting_party):
+        if ctx.commit_class == "COMPLIANCE_ASSERTION" and confirmed:
             ctx.review_route_reasons.append(runtime_problem(
                 "HUMAN_APPROVAL_REQUIRED", "Self-review out of scope",
                 "self-review covers routine operation claims only (D8); a "
