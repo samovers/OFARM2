@@ -95,12 +95,18 @@ One explicit observation condition controls both outcomes. A direct observation
 that passed earlier gates uses the existing pending-assertion emitter and
 returns `RETAIN_DRAFT`. Omitted/false confirmation retains the ordinary
 capture diagnostic; literal true reports registered `HIGH_CONSEQUENCE_BLOCKED`
-with text explaining that acceptance awaits approved typed semantics and
+with the exact title `Observation acceptance disabled` and text explaining
+that acceptance awaits approved typed semantics and
 cannot be enabled by a distinct reviewer. A queued observation ACCEPT that
 reaches this gate returns `RETAIN_DRAFT` with the same eligibility explanation,
 without a new assertion, ReviewDecision, REVIEW edge, consequence or retirement.
-No new constant set, helper, policy service, contract value or persistent flag
+No new runtime constant set, helper, policy service, contract value or persistent flag
 is needed for this single condition with two actual emission paths.
+
+For the O02 diagnostic checks, assert the pair `(HIGH_CONSEQUENCE_BLOCKED,
+Observation acceptance disabled)` on the new direct/queued eligibility result;
+earlier refusals keep their existing code/title. This pins an implementation
+diagnostic without changing O02 or introducing a new reason-code enum.
 
 Existing earlier refusals retain their precedence. In particular, the
 asserter's queued self-acceptance still fails the existing D8 validator with
@@ -115,6 +121,9 @@ validation, evidence floors and correction provenance. Removing observation
 entries would skip capture checks or change historical interpretation.
 Those maps are representational, not sufficient current acceptance authority;
 the existing governed pipeline remains the only supported acceptance entry.
+In particular, accepting `ACCEPTED_OBSERVATION_OCCURRENCE_STATE` as a matching
+requested-target value establishes type compatibility only: a well-shaped
+request still reaches the new acceptance-disabled outcome.
 
 Direct captures retain `claimState: PENDING_REVIEW` because that is the existing
 inert assertion vocabulary, not a promise that acceptance is enabled. They may
@@ -123,6 +132,17 @@ reject them under D20; the asserter may not self-reject. Rejection remains
 terminal and append-only. A blocked acceptance must not consume the claim or
 prevent a later lawful rejection. No queue UI, new state or invented decline
 is added. User-facing diagnostics must not promise that an advisor can accept.
+
+Evidence sufficiency remains distinct from acceptance eligibility. Direct
+observation capture does not create `case_payload`, so `_store_case` returns
+without inserting an EvidenceSufficiencyCase; use the existing pending emitter
+with `amend_case_for_routing=False`. A validated queued ACCEPT may already have
+persisted a satisfied evidence case before this guard. Its evidence decision
+is not acceptance permission and is not retroactively amended. The new
+eligibility explanation belongs to the result problems and promotion gate log.
+[Delivery #389](https://github.com/samovers/OFARM2/issues/389), under #179, owns
+any separate improvement to retained case/final-outcome reporting for consumers;
+this PR neither invents a direct observation case nor changes case semantics.
 
 ## History, correction and non-effects
 
@@ -176,12 +196,52 @@ emitters or inserting hand-claimed accepted results.
 Expected areas are `kernel/stages.py`, a focused observation eligibility test
 module, observation expectations/fixtures in `test_review_fixes.py` and
 `test_correction_authorization.py`, affected conformance/review tests,
+one small test-local retained-history fixture/base-phase driver (expected
+`kernel/tests/observation_history.py`, shared with O06),
 `docs/REVIEW_DISPUTE_SEMANTICS.md`, this RFC and the generated test inventory.
 The current H3 positive observation control must become a durable-evidence
 capture control. Observation members of correction matrices must not simply
 be removed: retain historical-target/cross-family negatives and assert the
 new refusal while preserving other families' positive paths. Additions within
 this boundary are explained in final scope; semantic expansion needs approval.
+
+**Concrete mechanism for those retained negatives:** reuse O06's two-process
+retained-database procedure for all six observation-predecessor rows, rather
+than asking candidate `_original` to create a newly accepted observation.
+The test-local fixture runs unmodified pinned base
+`9d7541d96bc708e9270b986927d7f4b8a035454f` (tree
+`63d532112ed7c705997d0d71f5f6d0fec12928f7`) in a separate process to create real
+accepted predecessors through the legacy HTTP path, closes that process, then
+opens the candidate on the same function-isolated disposable database. For
+the stale-target C05 row, base also queues both corrections and accepts the
+competing correction before candidate revalidation. The candidate must retain
+the earlier `SUPERSEDED_RECORD_USED` refusal for the loser, not merely fail at
+the new guard. The three cross-family rows and separate same-family/different-
+subject row preserve their relationship refusal and absence of a new assertion;
+the latter specifically keeps `CORRECTION_REQUIRED`. The rejection row retains
+its lawful terminal rejection and unchanged predecessor. Other families keep
+their existing candidate fixtures and positive paths. No row is dropped and
+no raw accepted-record seeding or guard exception is granted.
+
+The helper materializes the complete fixed base from local Git objects into
+one owned temporary source tree per pytest session, authenticating its
+commit/tree and executed source bytes. Hosted conformance already supplies
+full history (`.github/workflows/conformance.yml`, checkout `fetch-depth: 0`);
+missing local objects fail clearly, without a network fetch, skip or fallback.
+Each affected case adds one base process and one owned isolated database,
+using the pinned interpreter/dependencies and explicit per-database DSN.
+The base process imports only that base runtime; its JSON output carries
+scenario/actor/result references and snapshots, not a replacement writer.
+Candidate connections open after base exits. Finally close all connections,
+drop only the owned database and remove owned temporary outputs. This is
+bounded test infrastructure shared with O06, not a checked-in old-runtime copy,
+production service, workflow change or new publication boundary.
+
+For historical queued-acceptance replay, preserve the complete normalized
+governance submission through `POST /commit`, including its original generated
+decision-time field. Calling `/review/accept` again generates a new time and
+therefore a different source digest. Tenant, runtime-bundle and source-digest
+matching remain mandatory; never weaken replay checks to reuse a key.
 
 Before each commit run the mandatory package check with CPython 3.12.13, then
 whitespace and relevant cheap checks. After approval, run the focused real
@@ -201,8 +261,9 @@ new implementation evidence. No expensive baseline is requested for Phase A.
   omitted/false, independent reviewer, correction and retained-history controls.
 - **EXC-004:** retire the positive claim that current observation acceptance is
   permitted; retain historical/type maps that still serve validation and reads.
-- **EXC-005:** no abstraction is proposed; two guarded emissions justify one
-  direct condition, not a new framework.
+- **EXC-005:** no runtime abstraction is proposed; two guarded emissions justify
+  one direct condition. The bounded test fixture has existing consumers in
+  O06 and the retained correction negatives, not a hypothetical future use.
 - **EXC-006:** routing only self-review to a distinct actor is fewer changed
   paths but conflicts with #179. Deleting map entries skips material evidence/
   subject checks; a full allowlist/matrix redesign belongs to #179. Blocking
