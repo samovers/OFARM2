@@ -107,14 +107,43 @@ transaction or looks up an idempotency key, using the existing payload-free
 violation and fixed safe HTTP 422 response after transport actor binding.
 There is no coercion, raw-submission normalization or new queued-review flag.
 Valid draft capture and replay retain their existing records and digests.
-**Known unresolved defect:** an otherwise authorized and evidenced compliance
-asserter can still self-accept with `confirmAccept: true` and
-`reviewerPartyRef: null`. [Delivery #385](https://github.com/samovers/OFARM2/issues/385)
-owns the separate eligibility correction. This is incorrect behavior under the
-existing review rules, not permission for compliance self-review. The approved
-sequence allows this confirmation correction to merge before #385 is fixed;
-production governed routes remain closed. See the scoped R04 guarantee and
-evidence limits in [the version-2 review-confirmation decision](rfcs/OFARM_Legacy_Review_Confirmation_RFC_v0_2.md).
+
+**Approved compliance eligibility correction:** [Delivery #385 / PR #386](https://github.com/samovers/OFARM2/pull/386)
+requires a fresh otherwise-valid compliance submission with literal
+`confirmAccept: true` to take `REQUIRE_REVIEW` / `HUMAN_APPROVAL_REQUIRED`,
+whether reviewer metadata is omitted, null, self-named or distinct-body-named.
+The direct review actor is the transport-bound asserter; a body hint cannot
+supply independent review. Routing emits a pending assertion without a newly
+accepted review, consequence or retirement. The same pending claim remains
+available for a distinct acting reviewer's own governed acceptance with the
+existing authority, evidence and correction-retirement checks. The asserter's
+queue acceptance still refuses. A distinct-body-named compliance request may
+carry both existing routing explanations. The implementation and focused
+verification are recorded in PR #386; exact-head review and hosted evidence
+remain separate gates. The approved
+[eligibility decision](rfcs/OFARM_Legacy_Self_Review_Eligibility_RFC_v0_1.md)
+records E01–E07 and original task-user approval navigation.
+
+This guarantee concerns new evaluation. An accepted historical key with the
+same raw submission digest and tenant/runtime-bundle coordinates can still
+return `REPLAY_REUSED_RESULT` and its original accepted references. Replay
+appends its existing request, trace, result and log without creating another
+acceptance or retirement or rewriting prior records. Changed payload or runtime
+coordinates retain their existing conflict handling. No historical repair or
+replay-policy change is included. Queue acceptance itself leaves the original
+assertion's `claimState: PENDING_REVIEW` bytes unchanged; accepted disposition
+and removal from the pending queue are derived as described in §1.
+
+**Known K04 residual:** an otherwise authorized and evidenced observation
+asserter can directly self-accept a confirmed `OBSERVATION_ASSERTION` on the
+legacy route with omitted, null or self-named reviewer metadata, while its
+own queued acceptance is refused. This unresolved discrepancy is not permitted
+D8 behavior. [Delivery #387](https://github.com/samovers/OFARM2/issues/387)
+owns that separate correction; PR #386 does not approve or implement it, and
+does not certify the wider self-review matrix. Production governed routes
+remain closed. The original scoped R04 and historical decision in
+[the version-2 review-confirmation RFC](rfcs/OFARM_Legacy_Review_Confirmation_RFC_v0_2.md)
+remain unchanged.
 
 **The normalized review-decision input is a *pair*, because REJECT and CONTEST
 share the `REVIEW_REJECT_OR_CONTEST` action and split on the outcome.** G5-2 adds
