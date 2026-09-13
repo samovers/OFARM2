@@ -19521,6 +19521,16 @@
       "sourcePath": "kernel/tests/test_self_review_eligibility.py"
     },
     {
+      "nodeid": "kernel/tests/test_self_review_eligibility.py::test_http_unconfirmed_compliance_keeps_capture_only[false]",
+      "sourceModule": "kernel.tests.test_self_review_eligibility",
+      "sourcePath": "kernel/tests/test_self_review_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_self_review_eligibility.py::test_http_unconfirmed_compliance_keeps_capture_only[omitted]",
+      "sourceModule": "kernel.tests.test_self_review_eligibility",
+      "sourcePath": "kernel/tests/test_self_review_eligibility.py"
+    },
+    {
       "nodeid": "kernel/tests/test_signing_authority.py::test_database_authority_absence_or_malformed_shape_is_closed[rows0]",
       "sourceModule": "kernel.tests.test_signing_authority",
       "sourcePath": "kernel/tests/test_signing_authority.py"
@@ -22406,8 +22416,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "4228e2c4677100264847b1de78dd195b756e1162121ab08861795883e923e839",
-  "entryCount": 4481,
+  "entriesSha256": "737e688267c914da5d829097004d7ea9f94726f80e0d02b9136478574573b384",
+  "entryCount": 4483,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -197,6 +197,44 @@ def test_direct_compliance_reviewer_metadata_cannot_supply_review(env, reviewer)
     _assert_prior_records_unchanged(before, _snapshot(env.store))
 
 
+@pytest.mark.parametrize("confirmation", [
+    pytest.param(OMITTED, id="omitted"),
+    pytest.param(False, id="false"),
+])
+def test_http_unconfirmed_compliance_keeps_capture_only(env, confirmation):
+    """E02: omitted and false confirmation retain ordinary compliance capture."""
+    submission = _compliance()
+    if confirmation is OMITTED:
+        del submission["confirmAccept"]
+    else:
+        submission["confirmAccept"] = confirmation
+    original = deepcopy(submission)
+    before = _snapshot(env.store)
+    truth = _truth(env.store)
+    result = _commit(env, submission)
+
+    assert result["decisionOutcome"] == "RETAIN_DRAFT", result
+    assert result["problems"] == []
+    _assert_no_acceptance(env.store, result, truth)
+    assert len(result["emittedAssertionRecordRefs"]) == 1
+    assertion_ref = result["emittedAssertionRecordRefs"][0]
+    assertion = env.store.get_payload(assertion_ref)
+    assert assertion["claimState"] == "PENDING_REVIEW"
+    assert assertion["assertionType"] == "COMPLIANCE_ASSERTION"
+    assert assertion["assertedByPartyRef"] == demo.FARMER
+    assert env.store.edges_from(assertion_ref, "REVIEW") == []
+    assert submission == original
+    assert env.store.get_payload(result["requestId"])["sourcePayloadDigest"] == \
+        sha256_of(original)
+    after = _snapshot(env.store)
+    promotion_logs = [row for row in after["kernel_gate_log"]
+                      if row["request_id"] == result["requestId"]
+                      and row["gate"] == "REVIEW_PROMOTION"]
+    assert [(row["outcome"], row["reason_code"]) for row in promotion_logs] == \
+        [("RETAIN_DRAFT", None)]
+    _assert_prior_records_unchanged(before, after)
+
+
 def test_http_pending_null_replay_preserves_raw_identity_and_history(env):
     """E06: matching pending replay adds receipts; null-to-omitted conflicts."""
     submission = _compliance()

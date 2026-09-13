@@ -186,12 +186,17 @@ Store snapshots establish durable effects; they do not prove read-only lookup
 counts or pre-transaction ordering. This repair is intentionally after ingress,
 so it introduces no transaction-free failure contract.
 
-Start with six new collected cases: one HTTP null-origin queue lifecycle,
-four public-pipeline reviewer controls, and one pending-null replay/digest
-conflict case. This is a scope prediction, not a fixed test-count requirement.
-Reuse `test_review_confirmation.py` for ordinary confirmation, operation,
-bounded-structure and authority/evidence controls; `test_m2_review.py` for
-reject/contest; and `test_correction_authorization.py` and
+The focused module has eight collected cases: one HTTP null-origin queue
+lifecycle, four public-pipeline reviewer controls, one pending-null replay/digest
+conflict case, and two HTTP compliance capture controls. For E02, omitted and
+literal-false `confirmAccept` on valid compliance submissions must retain
+`RETAIN_DRAFT`, no problems, one pending assertion, and no review or consequence.
+The original six-case prediction missed this compliance-specific confirmation
+axis; review B2 adds evidence for the unchanged invariant, not new semantics.
+Reuse `test_review_confirmation.py` for operation-claim confirmation and shared
+parser/transport controls; those operation claims do not execute the compliance
+predicate. Keep its bounded-structure and authority/evidence controls;
+`test_m2_review.py` covers reject/contest; and `test_correction_authorization.py` and
 `test_correction_transactions.py` for retirement, history and atomicity.
 The existing conformance tests 93/94 provide valid compliance/queue fixture
 patterns. The HTTP fixture binds the legacy test transport principal; it does
@@ -213,6 +218,10 @@ Supplementary review evidence is separate from implementation proof. The full
 review supplied in task-user message
 `msg_01a0971d-c6fa-7ca3-8f6a-bb14ef0b4a4f` (SHA-256
 `f568d9740295a1c9b45511e4963adeb810cd54eecdc37f6047c28a3fa5249e4a`)
+is also published as [review 5191268560](https://github.com/samovers/OFARM2/pull/386#pullrequestreview-5191268560),
+body SHA-256 `e90217cb974bef9c9e5c4ece5a997489193bb2d322b03a94775304837bb14960`.
+The public body differs only by one terminal newline; its text reviews the old
+design head even though GitHub attaches it to the implementation head. It
 reports a transcribed predicate in the reviewer's clone, CPython 3.11.15,
 PostgreSQL 16.13 and unpinned wheels: 229 passed and 2 failed on each side,
 plus separate 23/23 and 42/42 runs. Its attribution of the two failures to
@@ -284,7 +293,7 @@ Next: finish the remaining verification gates, obtain exact-head content
 review, and follow the existing evidence and separate final merge-authorization
 sequence for PR #386.
 
-## Local implementation verification — 2026-09-13
+## Initial local implementation verification — 2026-09-13, head `81f1ce1`
 
 The runtime change removes only the compliance reviewer-hint comparison
 (one insertion, two deletions). Six focused regressions were added and the
@@ -309,3 +318,28 @@ Function-isolated tests use fresh databases; the history probe deliberately
 retains one database across its two sequential phases. Fictional demo grants
 and legacy actor binding do not establish production authentication or a full
 security audit. PR #386 records the complete execution and review evidence.
+
+## E02 evidence correction — 2026-09-13
+
+[Implementation review 5191463884](https://github.com/samovers/OFARM2/pull/386#pullrequestreview-5191463884)
+closed its prior B1/F1/P1/P2 requests and identified B2: the six initial tests
+did not detect removal of `and confirmed`, while the cited confirmation tests
+exercise operation claims. The runtime predicate was correct; the compliance
+capture guarantee lacked direct evidence. Two added HTTP cases now show that
+omitted and literal-false confirmation retain ordinary capture, with empty
+problems, one pending assertion, no review/consequence or REVIEW edge, unchanged
+raw-input digest and prior records, and no routing reason in the stored gate log.
+
+All eight focused cases passed on the unchanged runtime. In a disposable copy
+with only `and confirmed` removed, both new cases failed on `REQUIRE_REVIEW`
+versus `RETAIN_DRAFT` (six other cases deliberately deselected). This is focused
+mutation calibration, not an exhaustive test-adequacy or security claim. The
+prescribed inventory gained exactly those two entries, 4,481 to 4,483, without
+removal or reattribution. This correction changes tests and attribution only;
+the runtime and approved E01–E07 are unchanged. Local evidence uses the same
+interpreter/package limits above and a newly owned isolated PostgreSQL 17.10
+fixture. Fresh exact-head review and hosted publication remain required.
+
+The reviewer's closure of the disclosure requests does not repair observations
+owned by #387, remove the structure comparison, change historical replay, or
+turn the separately disclosed extraction diagnostic into a passing check.
