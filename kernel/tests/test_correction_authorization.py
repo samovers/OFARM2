@@ -20,6 +20,7 @@ from kernel.authority import AuthorityEvaluator
 from kernel.context import now_iso
 from kernel.contracts import canonical_json
 from kernel.legacy_m1.api import create_test_app
+from kernel.tests.observation_history import observation_history  # noqa: F401
 
 
 FAMILIES = (
@@ -67,8 +68,16 @@ def _actor(store, actions, *, party_class="NATURAL_PERSON"):
 
 
 @pytest.fixture
-def env(fresh_env):
-    store, pipeline, outputs = fresh_env
+def env(request):
+    params = getattr(request.node, "callspec", SimpleNamespace(params={})).params
+    if params.get("old_family", params.get("family")) == "OBSERVATION_ASSERTION":
+        # Real fixed-base history preserves the observation members of these
+        # matrices after new observation acceptance is disabled.
+        scenario = ("stale" if "rechecks_target" in request.node.name else
+                    "field" if "field_only" in request.node.name else "original")
+        yield request.getfixturevalue("observation_history")(scenario)
+        return
+    store, pipeline, outputs = request.getfixturevalue("fresh_env")
     with TestClient(create_test_app(store, oidc=None)) as client:
         yield SimpleNamespace(
             store=store, pipeline=pipeline, outputs=outputs, client=client,
@@ -166,6 +175,9 @@ def _queue(env, sub):
 
 
 def _original(env, family, *, direct=False):
+    if family == "OBSERVATION_ASSERTION" and hasattr(env, "history"):
+        assert not direct
+        return deepcopy(env.history["original"]), env.history["predecessor"]
     sub = _submission(family, env.reviewer if direct else env.author)
     if direct:
         sub["confirmAccept"] = True
@@ -232,7 +244,7 @@ def _retirement_receipt(store, result, actor, *, allowed):
 
 @pytest.mark.parametrize("family", FAMILIES)
 def test_each_family_retains_contest_then_authorized_correction(env, family):
-    """C03/C05–C07/C10: the dispute consumer works for all four source families."""
+    """C03/C05–C07/C10: observation history stays contestable, new acceptance closes."""
     original, old = _original(env, family)
     old_bytes = deepcopy(env.store.get_record(old))
     contest = _post(env, "/review/contest", {
@@ -253,11 +265,23 @@ def test_each_family_retains_contest_then_authorized_correction(env, family):
     before = _truth(env.store)
     denied = _review(env, assertion, actor=env.accept_only)
     _refused(env, denied, before, old)
-    _retirement_receipt(env.store, denied, env.accept_only, allowed=False)
+    if family != "OBSERVATION_ASSERTION":
+        _retirement_receipt(env.store, denied, env.accept_only, allowed=False)
+    else:
+        assert denied["problems"][0]["reasonCode"] == "HIGH_CONSEQUENCE_BLOCKED"
     assert env.store.edges_from(assertion, "REVIEW") == []
 
     acceptance = _acceptance_submission(assertion, env.reviewer)
     accepted = _commit(env, acceptance)
+    if family == "OBSERVATION_ASSERTION":
+        _refused(env, accepted, before, old)
+        assert accepted["problems"][0]["reasonCode"] == "HIGH_CONSEQUENCE_BLOCKED"
+        assert not accepted.get("emittedReviewDecisionRefs")
+        assert env.store.edges_from(assertion, "REVIEW") == []
+        assert env.store.get_record(old) == old_bytes
+        assert env.store.get_payload(assertion)["claimState"] == "PENDING_REVIEW"
+        assert [edge["dst_record_id"] for edge in env.store.edges_from(old, "DISPUTE")] == [dispute]
+        return
     assert accepted["decisionOutcome"] == "PROMOTE_ACCEPTED", accepted
     assert len(accepted["emittedAcceptedConsequenceRefs"]) == 1
     successor = accepted["emittedAcceptedConsequenceRefs"][0]
@@ -322,7 +346,7 @@ def test_structural_correction_refuses_unhashable_schema_version(env, schema_ver
 @pytest.mark.parametrize("family", FAMILIES)
 @pytest.mark.parametrize("correct", (False, True), ids=("ordinary-acceptance", "correction-chain"))
 def test_field_only_event_scopes_preserve_acceptance_and_correction(env, family, correct):
-    """Contained field anchors remain immutable through both lawful queue paths."""
+    """Field anchors remain immutable, including restricted observation intent."""
     original = _submission(family, env.author)
     original["targetScopes"] = [{"scopeType": "FIELD", "scopeRef": demo.FIELD}]
     assertion = _queue(env, original)
@@ -330,14 +354,25 @@ def test_field_only_event_scopes_preserve_acceptance_and_correction(env, family,
     event_payload = env.store.get_payload(event)
     assert event_payload["anchorScopes"] == original["targetScopes"]
     event_bytes = canonical_json(event_payload).encode()
+    before = _truth(env.store)
     accepted = _review(env, assertion)
-    assert accepted["decisionOutcome"] == "PROMOTE_ACCEPTED", accepted
-    old = accepted["emittedAcceptedConsequenceRefs"][0]
-    assert env.store.get_payload(old)["sourceEventRef"] == event
+    if family == "OBSERVATION_ASSERTION":
+        old = env.history["predecessor"]
+        _refused(env, accepted, before, old)
+        assert accepted["problems"][0]["reasonCode"] == "HIGH_CONSEQUENCE_BLOCKED"
+        assert not accepted.get("emittedReviewDecisionRefs")
+        assert env.store.edges_from(assertion, "REVIEW") == []
+    else:
+        assert accepted["decisionOutcome"] == "PROMOTE_ACCEPTED", accepted
+        old = accepted["emittedAcceptedConsequenceRefs"][0]
+        assert env.store.get_payload(old)["sourceEventRef"] == event
     assert canonical_json(env.store.get_payload(event)).encode() == event_bytes
     _assert_receipt(env.store, accepted)
     if not correct:
         return
+
+    if family == "OBSERVATION_ASSERTION":
+        original = env.history["original"]
 
     old_row = deepcopy(env.store.get_record(old))
     contest = _post(env, "/review/contest", {
@@ -352,7 +387,18 @@ def test_field_only_event_scopes_preserve_acceptance_and_correction(env, family,
     queued_bytes = canonical_json(env.store.get_payload(queued_event)).encode()
     assert env.store.get_payload(queued_event)["anchorScopes"] == original["targetScopes"]
     assert not env.store.is_superseded(old)
+    before = _truth(env.store)
     corrected = _review(env, queued)
+    if family == "OBSERVATION_ASSERTION":
+        _refused(env, corrected, before, old)
+        assert corrected["problems"][0]["reasonCode"] == "HIGH_CONSEQUENCE_BLOCKED"
+        assert not corrected.get("emittedReviewDecisionRefs")
+        assert env.store.edges_from(queued, "REVIEW") == []
+        assert env.store.get_record(old) == old_row
+        assert canonical_json(env.store.get_payload(event)).encode() == event_bytes
+        assert canonical_json(env.store.get_payload(queued_event)).encode() == queued_bytes
+        assert [edge["dst_record_id"] for edge in env.store.edges_from(old, "DISPUTE")] == [dispute]
+        return
     assert corrected["decisionOutcome"] == "PROMOTE_ACCEPTED", corrected
     successor = corrected["emittedAcceptedConsequenceRefs"][0]
     assert env.store.get_payload(successor)["sourceEventRef"] == queued_event
@@ -414,6 +460,8 @@ def test_full_authority_does_not_allow_cross_family_intent(env, old_family, new_
     result = _commit(env, correction)
     _refused(env, result, before, old)
     assert not result.get("emittedAssertionRecordRefs"), result
+    if old_family == "OBSERVATION_ASSERTION":
+        assert result["problems"][0]["reasonCode"] == "CORRECTION_REQUIRED"
 
 
 @pytest.mark.parametrize("family", FAMILIES)
@@ -432,21 +480,29 @@ def test_full_authority_does_not_allow_different_subject_or_identity(env, family
     refused = _commit(env, correction)
     _refused(env, refused, before, old)
     assert not refused.get("emittedAssertionRecordRefs"), refused
+    if family == "OBSERVATION_ASSERTION":
+        assert refused["problems"][0]["reasonCode"] == "CORRECTION_REQUIRED"
 
 
 @pytest.mark.parametrize("family", FAMILIES)
 def test_queued_correction_rechecks_target_after_another_correction(env, family):
     original, old = _original(env, family)
-    first = _queue(env, _correction(original, old))
-    second = _queue(env, _correction(original, old))
-    accepted = _review(env, first)
-    assert accepted["decisionOutcome"] == "PROMOTE_ACCEPTED", accepted
+    if family == "OBSERVATION_ASSERTION":
+        # Both pending claims and the winning acceptance precede the restriction.
+        second = env.history["loser"]
+    else:
+        first = _queue(env, _correction(original, old))
+        second = _queue(env, _correction(original, old))
+        accepted = _review(env, first)
+        assert accepted["decisionOutcome"] == "PROMOTE_ACCEPTED", accepted
     before = _truth(env.store)
     stale = _review(env, second)
     assert stale["decisionOutcome"] != "PROMOTE_ACCEPTED", stale
     assert _truth(env.store) == before
     assert env.store.edges_from(second, "REVIEW") == []
     assert len(env.store.edges_to(old, "LINEAGE_SUPERSEDES")) == 1
+    if family == "OBSERVATION_ASSERTION":
+        assert stale["problems"][0]["reasonCode"] == "SUPERSEDED_RECORD_USED"
 
 
 @pytest.mark.parametrize("location", ("origin-source", "queued-source", "queued-intent",
@@ -868,6 +924,12 @@ def test_rejection_still_closes_a_correction_without_retiring_truth(env, family)
     assert env.store.get_payload(assertion)["claimState"] == "PENDING_REVIEW"
     assert [edge["dst_record_id"] for edge in env.store.edges_from(
         assertion, "LINEAGE_SUPERSEDES_INTENT")] == [old]
+    if family == "OBSERVATION_ASSERTION":
+        assert len(env.store.edges_from(assertion, "REVIEW")) == 1
+        repeated = _review(env, assertion)
+        _refused(env, repeated, before, old)
+        assert repeated["problems"][0]["reasonCode"] == "SUPERSEDED_RECORD_USED"
+        assert len(env.store.edges_from(assertion, "REVIEW")) == 1
 
 
 @pytest.mark.parametrize("commit_class", ("NOTE", "HYPOTHESIS_ASSERTION", "ADVISORY_OUTPUT"))

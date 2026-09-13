@@ -1,11 +1,25 @@
 # Legacy observation acceptance eligibility
 
-Status: **Phase A proposal; runtime implementation is not approved**.
+Status: **Approved decision; implemented, with review and hosted evidence pending**.
 Decision: `OFARM2-LEGACY-OBSERVATION-ELIGIBILITY-001`, version 1.
 Delivery: [#387](https://github.com/samovers/OFARM2/issues/387), under #180;
-related promotion-matrix programme: #179. The existing draft PR must be named
-in the live task-user decision card before approval. This record is design
-evidence, not user approval or OFARM law.
+implementation: [PR #388](https://github.com/samovers/OFARM2/pull/388);
+related promotion-matrix programme: #179. This record is design evidence,
+not user approval or OFARM law.
+
+Approval navigation: in Codex task `01a07cc8-4157-7b33-a0ca-becb772e0e8b`,
+the original card is message
+`msg_0d813f8071772f9a016aa6ef908cdc87d2b3edbcf339956013`
+(2026-09-13T18:46:59.909Z, session line 11819), naming existing draft PR #388.
+The later task-user message
+`msg_01a09c78-89b3-75b3-91fa-c8e6d25863b8`
+(2026-09-13T20:32:20.403Z, session line 12080) states exactly:
+`I approve OFARM2 decision OFARM2-LEGACY-OBSERVATION-ELIGIBILITY-001 version 1.`
+The original messages were directly retrieved in that order. The design
+clarifications at `0931e47a2f03c5ff10eeeaac12108e2add175544` preserved O01–O07
+and the live card's semantic scope. This reference supplies navigation only;
+the task-user message supplies approval. Merge requires a later exact-head
+packet and authorization under `AGENTS.md`.
 
 Design base: `9d7541d96bc708e9270b986927d7f4b8a035454f`, after merged PR #386;
 runtime tree: `63d532112ed7c705997d0d71f5f6d0fec12928f7`.
@@ -13,9 +27,9 @@ PRs #380, #382, #384 and #386 remain completed historical work.
 
 ## Problem, selected outcome and exact boundary
 
-An authorized actor with observation-creation and review-accept grants can
-self-accept a confirmed legacy `OBSERVATION_ASSERTION` with omitted, null or
-self-named reviewer metadata. The same actor's queued acceptance is refused
+At the design base, an authorized actor with observation-creation and
+review-accept grants can self-accept a confirmed legacy `OBSERVATION_ASSERTION`
+with omitted, null or self-named reviewer metadata. The same actor's queued acceptance is refused
 under D8, while a distinct authorized reviewer can accept it. Audit K04 and
 PR #386's executed review already demonstrate that discrepancy. The complete
 review is now public as [review 5191268560](https://github.com/samovers/OFARM2/pull/386#pullrequestreview-5191268560),
@@ -27,7 +41,7 @@ D8 permits routine-operation self-review; D17 adds only bounded farm-owned
 structure. Neither grants observation self-review. [Issue #179](https://github.com/samovers/OFARM2/issues/179)
 also requires observation promotion to remain disabled until typed semantics
 exist. Merely sending observations to a distinct reviewer would leave that
-recorded requirement unmet. The proposed independently useful outcome is:
+recorded requirement unmet. The approved independently useful outcome is:
 **retain otherwise-valid observation captures, but permit no new observation
 acceptance through either the direct or queued legacy path, for any actor**.
 This implements only that eligibility limit from #179, not its broader matrix
@@ -43,14 +57,14 @@ compatibility/retirement authority, custody or production activation.
 **Explicit change to an earlier approved capability:** correction decision
 `OFARM2-LEGACY-CORRECTION-AUTHORIZATION-001` version 2, RFC v0.2 C03/C10,
 previously preserved observation acceptance and same-family correction.
-Approval of this new decision narrows only their observation acceptance
+This approved decision narrows only their observation acceptance
 availability: no new accepted observation or observation correction successor
 can be emitted, even with valid `REVIEW_ACCEPT` and `REVIEW_SUPERSEDE`.
 Their relationship/provenance checks and retirement permissions are not
 weakened. Other assertion families retain their decided correction paths.
 The historical RFC and completed decision are not rewritten. This explicit
 restriction, rather than treating a former positive test as disposable, is
-why a fresh semantic approval is required.
+why this restriction required its own semantic approval.
 
 ## Authority, threat and containment
 
@@ -79,7 +93,7 @@ Public production governed routes remain closed (`kernel/api.py:74–83`).
 This is a legacy development/conformance correction, not a production
 reachability, readiness or authentication claim.
 
-## Smallest proposed correction and ordering
+## Smallest correction and ordering
 
 Keep every existing type/target map and all earlier gates. At the start of
 `ReviewPromotionGate.run`, before reviewer-hint routing, retirement authority
@@ -160,7 +174,7 @@ predecessor. A previously queued correction is similarly blocked before the
 retirement check/emitter. Existing provenance/compatibility validation can
 still refuse it earlier. An old disputed observation may therefore remain
 unresolved by correction until a future explicit typed-semantics decision.
-This material limit is accepted only if the user approves this decision.
+This material limit is part of the approved decision.
 
 Operation/structure/compliance acceptance, correction and review decisions,
 strict confirmation parsing, raw request digest, actor binding, grant ownership,
@@ -171,7 +185,8 @@ repair travels here. #179 and #180 retain their wider programme scope.
 
 ## Decision-level invariants and falsifiable verification
 
-All candidate results below are **planned**, not executed Phase A evidence.
+The table defines required candidate results, not a claim that checks passed.
+Executed results belong to PR #388's implementation evidence.
 Use fictional fixtures, real HTTP and durable Store records in function-isolated
 disposable PostgreSQL databases. Preserve earlier refusal reasons and check
 whole accepted-record/lineage snapshots, not response enums alone.
@@ -244,7 +259,7 @@ therefore a different source digest. Tenant, runtime-bundle and source-digest
 matching remain mandatory; never weaken replay checks to reuse a key.
 
 Before each commit run the mandatory package check with CPython 3.12.13, then
-whitespace and relevant cheap checks. After approval, run the focused real
+whitespace and relevant cheap checks. Run the focused real
 PostgreSQL 17.10 tests and history probe, update inventory through the prescribed
 maintenance command, and obtain an exact-head content review with zero Blockers.
 Only then admit fresh hosted baselines and separate publication. Existing
@@ -276,12 +291,10 @@ the path. Phase A is acceptable because it reduces unsupported accepted force
 while preserving captures and history. An invariant failure or unavoidable
 change to another authority boundary requires redesign before implementation.
 
-The live card must name the created draft PR and carry the exact approval form:
-`I approve OFARM2 decision OFARM2-LEGACY-OBSERVATION-ELIGIBILITY-001 version 1.`
 Capability, effects/non-effects, authority, O01–O07, historical treatment or
 named-PR changes require a new version and exact same-task approval. Generic
 “go,” earlier approvals, review findings and GitHub activity do not authorize
 this runtime change. Final merge remains a separate later exact-head stop.
 
-Next: review this Phase A at its exact draft head, resolve demonstrated design
-Blockers, and present the complete same-task semantic decision card.
+Next: obtain exact-head content review, then fresh hosted evidence and
+publication before presenting the separate final merge packet.

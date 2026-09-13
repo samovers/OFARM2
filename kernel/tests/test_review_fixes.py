@@ -49,7 +49,7 @@ def test_h2_bogus_ucum_dose_unit_blocks_promotion(pipeline):
 # ---------------------------------------------------------------------------
 
 def test_h3_promoting_observation_without_evidence_stays_draft(pipeline):
-    # OBSERVATION_ASSERTION promotes; with no evidence it must RETAIN_DRAFT
+    # Observation capture still requires evidence; with none it must RETAIN_DRAFT
     # rather than backfill evidenceRefs with the captured event id.
     r = pipeline.commit({
         "commitClass": "OBSERVATION_ASSERTION",
@@ -87,9 +87,9 @@ def test_h3_promoting_observation_with_unresolvable_evidence_stays_draft(
     assert not r.get("emittedAcceptedConsequenceRefs"), why
 
 
-def test_h3_promoting_observation_with_evidence_promotes(pipeline):
-    # positive control: the same observation WITH a real, resolving durable
-    # EvidenceRecord promotes (evidenceRefs are the submitted evidence).
+def test_h3_observation_with_durable_evidence_is_captured(pipeline):
+    # A real EvidenceRecord passes the evidence floor, allowing capture. New
+    # observation acceptance remains disabled pending typed semantics.
     r = pipeline.commit({
         "commitClass": "OBSERVATION_ASSERTION",
         "actingPartyRef": demo.FARMER, "farmRef": demo.FARM,
@@ -97,7 +97,12 @@ def test_h3_promoting_observation_with_evidence_promotes(pipeline):
         "eventTime": "2026-06-10T09:00:00Z",
         "evidenceRefs": [demo.PHOTO_EVIDENCE],
         "confirmAccept": True})
-    assert r["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    assert len(r["emittedAssertionRecordRefs"]) == 1
+    assert not r.get("emittedReviewDecisionRefs")
+    assert not r.get("emittedAcceptedConsequenceRefs")
+    assert [(p["reasonCode"], p["title"]) for p in r["problems"]] == [
+        ("HIGH_CONSEQUENCE_BLOCKED", "Observation acceptance disabled")]
 
 
 # ---------------------------------------------------------------------------

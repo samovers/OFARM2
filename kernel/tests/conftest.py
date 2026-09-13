@@ -23,6 +23,7 @@ from kernel.gates import GatePipeline  # noqa: E402
 from kernel.runtime_activation import complete_store_startup  # noqa: E402
 from kernel.runtime_bundle import RuntimeBundleBuilder  # noqa: E402
 from kernel.store import Store  # noqa: E402
+from kernel.tests.observation_history import observation_base_tree  # noqa: E402,F401
 
 EVIDENCE_DIR = config.PACKAGE_ROOT / "conformance" / "evidence"
 PLATFORM_MVP_EVIDENCE_SUITE = manifest.PLATFORM_MVP_TEST_SUITE_REF

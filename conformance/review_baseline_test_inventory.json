@@ -3466,6 +3466,156 @@
       "sourcePath": "kernel/tests/test_migration_sets.py"
     },
     {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_capture_matrix_http_and_direct[reviewer-distinct-false]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_capture_matrix_http_and_direct[reviewer-distinct-omitted]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_capture_matrix_http_and_direct[reviewer-distinct-true]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_capture_matrix_http_and_direct[reviewer-null-false]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_capture_matrix_http_and_direct[reviewer-null-omitted]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_capture_matrix_http_and_direct[reviewer-null-true]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_capture_matrix_http_and_direct[reviewer-omitted-false]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_capture_matrix_http_and_direct[reviewer-omitted-omitted]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_capture_matrix_http_and_direct[reviewer-omitted-true]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_capture_matrix_http_and_direct[reviewer-self-false]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_capture_matrix_http_and_direct[reviewer-self-omitted]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_capture_matrix_http_and_direct[reviewer-self-true]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_capture_needs_creation_grant_but_accept_grant_cannot_enable_it",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_cross_bundle_acceptance_keeps_prior_refusal",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_keeps_earlier_direct_refusals[no-authority-AUTHORITY_DENIED-AUTHORITY]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_keeps_earlier_direct_refusals[no-durable-evidence-EVIDENCE_INSUFFICIENT-EVIDENCE_SUFFICIENCY]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_keeps_earlier_direct_refusals[wrong-farm-subject-SCOPE_NOT_AUTHORIZED-VALIDATION]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_keeps_earlier_direct_refusals[wrong-subject-type-IDENTITY_UNRESOLVED-VALIDATION]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_keeps_earlier_direct_refusals[wrong-target-HIGH_CONSEQUENCE_BLOCKED-VALIDATION]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_keeps_earlier_queue_refusals[no-authority-AUTHORITY_DENIED]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_keeps_earlier_queue_refusals[no-rationale-EVIDENCE_INSUFFICIENT]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_keeps_earlier_queue_refusals[wrong-evidence-EVIDENCE_REFERENCE_UNAVAILABLE]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_keeps_earlier_queue_refusals[wrong-target-EVIDENCE_REFERENCE_UNAVAILABLE]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_late_failure_rolls_back_capture_and_retry_stays_inert",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_transport_refusals_precede_all_durable_effects[1]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_transport_refusals_precede_all_durable_effects[None]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_transport_refusals_precede_all_durable_effects[confirmation3]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_observation_transport_refusals_precede_all_durable_effects[true]",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_real_base_history_replays_but_fresh_observation_acceptance_stays_disabled",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_observation_eligibility.py::test_same_observation_survives_acceptance_refusals_then_terminal_rejection",
+      "sourceModule": "kernel.tests.test_observation_eligibility",
+      "sourcePath": "kernel/tests/test_observation_eligibility.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ofarm_pkg_contract_check.py::test_boolean_additional_properties_forms_are_explicit",
       "sourceModule": "kernel.tests.test_ofarm_pkg_contract_check",
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
@@ -11896,7 +12046,7 @@
       "sourcePath": "kernel/tests/test_review_fixes.py"
     },
     {
-      "nodeid": "kernel/tests/test_review_fixes.py::test_h3_promoting_observation_with_evidence_promotes",
+      "nodeid": "kernel/tests/test_review_fixes.py::test_h3_observation_with_durable_evidence_is_captured",
       "sourceModule": "kernel.tests.test_review_fixes",
       "sourcePath": "kernel/tests/test_review_fixes.py"
     },
@@ -22416,8 +22566,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "737e688267c914da5d829097004d7ea9f94726f80e0d02b9136478574573b384",
-  "entryCount": 4483,
+  "entriesSha256": "b0d3a235ac23c01dc9e82c3ce1e2bfd5cce9b3952854e68fd426a033f65b8370",
+  "entryCount": 4513,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -1,9 +1,10 @@
 # Review / dispute state-transition semantics
 
 **Status:** G5-1 (REJECT) settled · G5-3 (CONTEST) settled — see §6.
-The approved PR #380 correction authorization amendment is recorded in §6.7
+The merged PR #380 correction authorization amendment is recorded in §6.7
 and the [version-2 design](rfcs/OFARM_Legacy_Correction_Authorization_RFC_v0_2.md);
-its implementation is written, with verification and content review pending.
+the approved [PR #388 observation eligibility restriction](rfcs/OFARM_Legacy_Observation_Eligibility_RFC_v0_1.md)
+narrows its observation acceptance and correction availability as described below.
 **Scope:** generic Core/Platform review-verb semantics only. No Slovenia
 specifics (those ride a profile through the generic mechanism — M2 brief
 mechanism-boundary rule). **This is a candidate package decision (DECISIONS.md
@@ -22,9 +23,10 @@ not an "obvious default." Every effect — on the queued assertion, its
 
 A queued claim is an `AssertionRecord` (`ofarm.assertionrecord.v0.1`) emitted
 with `claimState = "PENDING_REVIEW"` (`kernel/emission.py:157-159`,
-`emit_pending_assertion`). Acceptance is the reviewer's **own** governed
-`GOVERNANCE_DECISION` commit. It **never edits the queued assertion**; it
-**appends** new records (`kernel/emission.py:238-313`, `emit_queue_acceptance`):
+`emit_pending_assertion`). Where acceptance is enabled, it is the reviewer's
+**own** governed `GOVERNANCE_DECISION` commit. It **never edits the queued
+assertion**; it **appends** new records (`kernel/emission.py:238-313`,
+`emit_queue_acceptance`):
 
 - a `ReviewDecision` (`ofarm.reviewdecision.v0.1`) — `reviewAction =
   "REVIEW_ACCEPT"`, `decisionOutcomeState = "ACCEPTED"`, `reviewedArtifactRef`
@@ -134,14 +136,46 @@ replay-policy change is included. Queue acceptance itself leaves the original
 assertion's `claimState: PENDING_REVIEW` bytes unchanged; accepted disposition
 and removal from the pending queue are derived as described in §1.
 
-**Known K04 residual:** an otherwise authorized and evidenced observation
-asserter can directly self-accept a confirmed `OBSERVATION_ASSERTION` on the
-legacy route with omitted, null or self-named reviewer metadata, while its
-own queued acceptance is refused. This unresolved discrepancy is not permitted
-D8 behavior. [Delivery #387](https://github.com/samovers/OFARM2/issues/387)
-owns that separate correction; PR #386 does not approve or implement it, and
-does not certify the wider self-review matrix. Production governed routes
-remain closed. The original scoped R04 and historical decision in
+**Approved observation eligibility restriction:** [Delivery #387 / PR #388](https://github.com/samovers/OFARM2/pull/388)
+keeps otherwise-valid legacy `OBSERVATION_ASSERTION` submissions as captures
+and disables every new direct or queued observation acceptance until approved
+typed semantics exist. This closes the K04 direct/queued self-review discrepancy
+and implements that eligibility limit from #179; a distinct reviewer or stronger
+review grants cannot enable acceptance. Earlier authority, validation and
+evidence refusals keep their existing precedence and explanations.
+
+A direct observation that passes those earlier gates retains one assertion
+with immutable `claimState: PENDING_REVIEW` and returns `RETAIN_DRAFT`.
+Omitted or false confirmation keeps ordinary capture diagnostics. Literal true,
+and a queued ACCEPT that reaches the common promotion guard, report
+`HIGH_CONSEQUENCE_BLOCKED` with title `Observation acceptance disabled`.
+Neither path emits a new accepted ReviewDecision, consequence or retirement.
+Queue acceptance leaves its target unconsumed; self-acceptance can still refuse
+earlier under D8. Pending visibility does not promise acceptance availability.
+A distinct authorized reviewer can still reject the claim, with terminal
+disposition derived from the new REVIEW edge rather than a claimState edit;
+self-rejection and duplicate review retain their existing refusals.
+
+This restriction also covers otherwise-valid new and previously queued
+observation corrections: inert intent can remain, but no successor is accepted
+and no predecessor is retired. It expressly narrows observation availability
+under correction decision `OFARM2-LEGACY-CORRECTION-AUTHORIZATION-001`
+version 2, C03/C10 (§6.7), without changing its relationship or retirement
+authority checks. Existing accepted observations remain readable and
+contestable. Matching historical accepted keys still replay their original
+references under the unchanged digest, tenant and runtime-bundle checks;
+fresh keys face the restriction. No historical bytes are repaired or relabelled.
+An old disputed observation can therefore remain unresolved by correction.
+Other assertion families keep their decided acceptance and correction paths.
+
+Evidence sufficiency and acceptance eligibility remain separate. Direct
+observation capture does not create an EvidenceSufficiencyCase; a queued ACCEPT
+may already have persisted a satisfied case before the eligibility refusal.
+That case is not acceptance permission. The result problems and promotion gate
+log carry the final eligibility explanation. Separate [Delivery #389](https://github.com/samovers/OFARM2/issues/389)
+owns retained-case/final-outcome reporting improvements; PR #388 changes no case
+semantics. Production governed routes remain closed. The original scoped R04
+and historical decision in
 [the version-2 review-confirmation RFC](rfcs/OFARM_Legacy_Review_Confirmation_RFC_v0_2.md)
 remain unchanged.
 
@@ -689,11 +723,17 @@ amendment separates validating that relationship from authorizing retirement:
   emission. Its request, result and trace are persisted and referenced by the
   `PromotionTrace` gate's `relatedArtifactRefs`.
 
-This preserves all four acceptance → contest → compatible correction paths and
-the existing evidence, self-review, CONTEST and REJECT rules. Refusal and rejection
-retire nothing. Accepted history may originate under an older RuntimeBundle;
-a queued assertion being accepted must still satisfy the existing current-bundle
-gate. Standalone `REVIEW_SUPERSEDE` requests and `recordClass = "CORRECTION"`
+PR #380 preserved all four acceptance → contest → compatible correction paths.
+The later approved observation eligibility decision in §3.1 narrows only new
+observation acceptance and correction: valid intent can be captured, but no new
+observation successor or retirement can be emitted. The historical correction
+decision's C03/C10 remain unchanged records of its original scope. Operation,
+bounded structure and independently reviewed compliance retain their acceptance
+and compatible correction paths. Existing evidence, relationship, CONTEST and
+REJECT rules remain; refusal and rejection retire nothing. Accepted history may
+originate under an older RuntimeBundle; a queued assertion being accepted must
+still satisfy the existing current-bundle gate. Standalone `REVIEW_SUPERSEDE`
+requests and `recordClass = "CORRECTION"`
 carriers remain closed. The primary trust boundary is semantic promotion and
 supersession authorization; production activation and transaction ownership are
 outside this amendment.
