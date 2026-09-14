@@ -149,6 +149,9 @@ with immutable `claimState: PENDING_REVIEW` and returns `RETAIN_DRAFT`.
 Omitted or false confirmation keeps ordinary capture diagnostics. Literal true,
 and a queued ACCEPT that reaches the common promotion guard, report
 `HIGH_CONSEQUENCE_BLOCKED` with title `Observation acceptance disabled`.
+A direct capture outside the event-time plausibility window retains its earlier
+`EVIDENCE_INSUFFICIENT` warning in the stored result and promotion gate reason,
+before any acceptance-disabled diagnostic, while still returning `RETAIN_DRAFT`.
 Neither path emits a new accepted ReviewDecision, consequence or retirement.
 Queue acceptance leaves its target unconsumed; self-acceptance can still refuse
 earlier under D8. Pending visibility does not promise acceptance availability.

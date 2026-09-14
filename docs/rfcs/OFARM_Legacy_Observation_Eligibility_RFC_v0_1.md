@@ -122,6 +122,12 @@ Observation acceptance disabled)` on the new direct/queued eligibility result;
 earlier refusals keep their existing code/title. This pins an implementation
 diagnostic without changing O02 or introducing a new reason-code enum.
 
+A direct observation outside the event-time plausibility window still returns
+`RETAIN_DRAFT`, preserving its earlier `EVIDENCE_INSUFFICIENT` / `Event time
+outside plausibility window` warning in result problems and as the promotion
+gate's reason code, before the eligibility diagnostic when confirmation is true.
+This preserves O02's ordinary diagnostics without promising available acceptance.
+
 Existing earlier refusals retain their precedence. In particular, the
 asserter's queued self-acceptance still fails the existing D8 validator with
 `HUMAN_APPROVAL_REQUIRED`; a distinct reviewer passes that relationship check

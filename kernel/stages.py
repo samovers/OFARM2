@@ -638,6 +638,8 @@ class ReviewPromotionGate:
                 "observation acceptance requires typed semantics that are not "
                 "available; a distinct reviewer cannot enable acceptance",
                 severity="WARNING")] if confirmed or ctx.acceptance_target else []
+            if not ctx.acceptance_target:
+                problems = ctx.review_route_reasons + problems
             ctx.log("REVIEW_PROMOTION", "RETAIN_DRAFT",
                     reason_code=problems[0]["reasonCode"] if problems else None,
                     rationale=problems[0]["detail"] if problems else

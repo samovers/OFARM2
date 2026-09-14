@@ -14,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kernel import demo
+from kernel.context import now_iso
 from kernel.contracts import sha256_of
 from kernel.gates import GatePipeline
 from kernel.legacy_m1.api import create_test_app
@@ -41,6 +42,7 @@ from kernel.tests.test_runtime_bundle_receipts import _second_store
 
 
 DISABLED = ("HIGH_CONSEQUENCE_BLOCKED", "Observation acceptance disabled")
+TEMPORAL = ("EVIDENCE_INSUFFICIENT", "Event time outside plausibility window")
 
 
 def _id(prefix):
@@ -86,9 +88,11 @@ def _diagnostic(result):
     return [(p["reasonCode"], p["title"]) for p in result["problems"]]
 
 
-def _pending(env, result, truth, *, confirmed=True, actor=demo.FARMER):
+def _pending(env, result, truth, *, confirmed=True, actor=demo.FARMER,
+             temporal_warning=False):
     assert result["decisionOutcome"] == "RETAIN_DRAFT", result
-    assert _diagnostic(result) == ([DISABLED] if confirmed else [])
+    assert _diagnostic(result) == (([TEMPORAL] if temporal_warning else [])
+                                   + ([DISABLED] if confirmed else []))
     _no_acceptance(env.store, result, truth)
     assert len(result["emittedAssertionRecordRefs"]) == 1
     target = result["emittedAssertionRecordRefs"][0]
@@ -127,25 +131,49 @@ def _review(env, target, *, actor=demo.ADVISOR, kind="accept", **extra):
     pytest.param(demo.FARMER, id="reviewer-self"),
     pytest.param(demo.ADVISOR, id="reviewer-distinct"),
 ])
-def test_observation_capture_matrix_http_and_direct(env, confirmation, reviewer):
-    """O01/O02: both public entries retain capture and exact raw identity."""
+@pytest.mark.parametrize("out_of_window", [
+    pytest.param(False, id="in-window"), pytest.param(True, id="out-of-window"),
+])
+def test_observation_capture_matrix_http_and_direct(
+        env, confirmation, reviewer, out_of_window):
+    """O01/O02: preserve temporal diagnostics, capture and exact raw identity."""
     for commit in (lambda sub: _commit(env, sub), env.pipeline.commit):
         submission = _observation(confirmation=confirmation, reviewer=reviewer)
+        submission["eventTime"] = "2999-01-01T00:00:00Z" if out_of_window else now_iso()
         original = deepcopy(submission)
         before, truth = _snapshot(env.store), _truth(env.store)
         result = commit(submission)
-        target = _pending(env, result, truth, confirmed=confirmation is True)
+        target = _pending(env, result, truth, confirmed=confirmation is True,
+                          temporal_warning=out_of_window)
+        assert env.store.get_payload(result["resultId"]) == result
+        assert all(problem["severity"] == "WARNING" for problem in result["problems"])
         assert env.store.edges_from(target, "LINEAGE_SUPERSEDES_INTENT") == []
         assert submission == original
         assert env.store.get_payload(result["requestId"])["sourcePayloadDigest"] == \
             sha256_of(original)
         after = _snapshot(env.store)
+        prior_ids = {row["record_id"] for row in before["kernel_record"]}
+        assert [row["record_id"] for row in after["kernel_record"]
+                if row["record_kind"] == "ofarm.assertionrecord.v0.1"
+                and row["record_id"] not in prior_ids] == [target]
+        assert [row for row in after["kernel_edge"]
+                if row["edge_type"] == "LINEAGE_SUPERSEDES"] == [
+                    row for row in before["kernel_edge"]
+                    if row["edge_type"] == "LINEAGE_SUPERSEDES"]
         logs = [row for row in after["kernel_gate_log"]
                 if row["request_id"] == result["requestId"]
                 and row["gate"] == "REVIEW_PROMOTION"]
-        reason = DISABLED[0] if confirmation is True else None
-        assert [(row["outcome"], row["reason_code"]) for row in logs] == \
-            [("RETAIN_DRAFT", reason)]
+        first_problem = result["problems"][0] if result["problems"] else None
+        reason = first_problem["reasonCode"] if first_problem else None
+        rationale = first_problem["detail"] if first_problem else \
+            "no review act: capture is not commitment (Kernel rule 3)"
+        assert [(row["outcome"], row["reason_code"], row["rationale"]) for row in logs] == \
+            [("RETAIN_DRAFT", reason, rationale)]
+        trace = env.store.get_payload(result["promotionTraceRef"])
+        assert trace["finalOutcome"] == "RETAIN_DRAFT"
+        assert trace["gateSequence"][-1] == {
+            "gate": "REVIEW_PROMOTION", "outcome": "RETAIN_DRAFT", "rationale": rationale,
+        }
         _assert_prior_records_unchanged(before, after)
         assert env.store.unreachable_authoritative_records() == []
 
