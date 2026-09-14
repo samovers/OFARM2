@@ -527,9 +527,29 @@ def test_overflow_observation_returns_one_oldest_closeable_bucket(
             """,
             (newer,),
         ).fetchone()
-        assert control.execute(
+        observed_before = control.execute(
+            "SELECT pg_catalog.clock_timestamp()"
+        ).fetchone()[0]
+        remaining = control.execute(
             """
             SELECT * FROM
                 ofarm_security.observe_next_closeable_overflow_bucket()
             """
-        ).fetchall() == []
+        ).fetchall()
+        observed_after = control.execute(
+            "SELECT pg_catalog.clock_timestamp()"
+        ).fetchone()[0]
+        timing = (current_bucket, observed_before, observed_after)
+        assert observed_before <= observed_after, timing
+        expires_at = current_bucket + timedelta(minutes=1)
+        expected_remaining = [
+            ("REQUEST_ROUTER_BOUNDARY_V1", "REQUEST_ROUTER", current_bucket)
+        ]
+        # The setup bucket can expire while the earlier buckets are closed.
+        if observed_after < expires_at:
+            assert remaining == [], timing
+        elif observed_before >= expires_at:
+            assert remaining == expected_remaining, timing
+        else:
+            # Expiry fell inside the call; either exact result is legitimate.
+            assert remaining in ([], expected_remaining), timing
