@@ -1,12 +1,19 @@
 # Legacy result and trace read scope
 
 Status: **Phase A proposal; implementation is not approved**.
-Decision identity: `OFARM2-LEGACY-RESULT-READ-SCOPE-001`, version 1.
+Decision identity: `OFARM2-LEGACY-RESULT-READ-SCOPE-001`, version 2.
 Delivery: [#394](https://github.com/samovers/OFARM2/issues/394), under #179.
+Draft implementation PR: [#395](https://github.com/samovers/OFARM2/pull/395).
 Related broader authorization work: [#177](https://github.com/samovers/OFARM2/issues/177).
 Base: `47610badaf171bee7ac83c3430bad561073c7e14`, tree
 `b7e94ea19ad56fe8db9320cadea044263dc37997` (merged PR #393).
 This is design evidence, not approval, OFARM law, or executed candidate evidence.
+
+Version 2 corrects [B1](https://github.com/samovers/OFARM2/pull/395#pullrequestreview-5214770925):
+both replay branches must prove an index-bound original `NEW_REQUEST`.
+A conflicting receipt with a missing original index now explicitly remains
+unreadable, including historical receipts that version 1 could have admitted
+through request/event links alone. No version-1 implementation approval exists.
 
 ## Problem, capability and boundary
 
@@ -70,7 +77,7 @@ association used for the new FIELD-only path; neither decides a later read.
 commit transaction. `ReplayWriter` stores fresh result/request/trace records
 but no new promotion authority decision. The existing tenant/key idempotency
 entry is append-only and points directly to the original result, even after
-many replays. Reuse that one index lookup for matching replays; add no reverse
+many replays. Reuse that one index lookup for both replay branches; add no reverse
 search, new record, field-ownership lookup, schema or durable cache.
 
 The prior six fictional HTTP probes passed on CPython 3.12.13/PostgreSQL 17.10
@@ -117,29 +124,40 @@ logic easier to inspect; no resolver registry, framework or new policy service.
    or repeat containment policy: the immutable recorded validation is the
    accepted historical evidence, and the initial authority target is the
    single farm for this attempt.
-4. For a matching replay, first bind its own result/trace/request and original
-   event. Use its stored key once with `Store.idempotency_lookup` and validate
-   the index's original request/result against `replayOfRequestId`. Load that
-   original result and ordinary trace through steps 1–3. Require original
-   `NEW_REQUEST`, matching key, event, class/family and nonempty server-generated
-   request digests; replay, original request and index digests must agree.
-   Reused output references must agree where carried. Compare current request
-   scopes with the original request as part of matching identity. No second
-   replay hop is allowed. Missing index or mismatched links means 403.
-5. A conflicting replay is not a matching replay with fewer checks. It gains
-   no FIELD-only resolution. It can retain a read only through one consistent
-   explicit FARM on the original event and its own request, with typed original
-   request/event linkage through `replayOfRequestId`, matching original key and
-   class, and no differing FARM association. A foreign FARM, absent original
-   FARM, or malformed link denies. Its different body digest is expected and
-   is never used to claim matching identity. This preserves an ordinary
-   same-farm explicit-FARM conflict receipt without treating it as acceptance.
+4. For **both matching and conflicting replays**, first bind the attempt's
+   result/trace/request and original event. Use its stored key once with
+   `Store.idempotency_lookup`. The index must bind `replayOfRequestId` to the
+   original request and its `result_record_id` to the typed original result.
+   Load that result's trace and request through step 1. Require both original
+   result and trace to say `NEW_REQUEST`; an ingress request alone has no
+   replay disposition and cannot prove this. Bind index, original request,
+   result and trace IDs, key, event and class/family where carried. The original
+   request's nonempty server-generated digest must equal the index digest.
+   Missing index, inconsistent proof or an original that is itself a replay
+   means 403; no second replay hop or reverse search is allowed.
+
+   For a **matching** replay, additionally require the attempt's nonempty
+   digest to equal the original/index digest, producing-bundle equality as
+   below, identical request scopes and agreement of reused output references
+   where carried. Resolve the bound original using steps 2–3.
+5. A **conflicting** replay uses the same original-index proof in step 4 but
+   gains no FIELD-only resolution. Resolve only one consistent explicit FARM
+   through the bound original's request/event (step 2) and the attempt's own
+   request. A foreign FARM, absent original FARM or malformed link denies.
+   Do not impose matching-replay digest or producing-bundle equality on this
+   branch, or require the digests to differ: an identical body in a different
+   bundle is a valid conflict. This preserves a correctly linked same-farm
+   explicit-FARM conflict receipt without treating it as acceptance. Historical
+   conflicting receipts missing the index are denied, not rescued by scopes.
 6. All lookups use the existing tenant-bound Store. Records written together
    must agree on their stored tenant/bundle receipt; matching replay and the
    original/index also agree on producing bundle. Historical producing bundles
    need not equal the active Store bundle: same-tenant history remains readable.
-   Conflicting replays caused by a bundle change can have different attempt and
-   original bundles; the explicit-FARM-only rule still applies.
+   Bind the original request/result/trace, original event, any used authority
+   records and index to the original producing receipt. Bind the replay
+   request/result/trace to its attempt receipt. The shared event belongs to the
+   original group, not the attempt group. Conflicting replays can have different
+   attempt and original bundles; their explicit-FARM-only rule still applies.
 7. Return one resolved FARM or unresolved. The existing route then makes and
    persists the fresh read decision and returns the original record only on
    permission. Do not cache it or reuse promotion authority as access authority.
@@ -166,7 +184,8 @@ existing 403 `PERMISSION_REDACTED`, without protected payload in the response.
 | FIELD-only original with conflicting replay, including a newly supplied FARM hint | No accepted conflicting-attempt FIELD-only source | 403 |
 | Consistent explicit FARM / FARM+FIELD, including omitted/empty raw scopes that default to FARM | Typed event/request explicit FARM; validate any named authority link | Existing read permission outcome retained |
 | Matching replay of the preceding explicit-FARM row | Bound original/index and matching request identity | 200 if currently permitted; incomplete historical replay proof stays denied |
-| Explicit-FARM original, same-farm explicit-FARM payload or bundle conflict | Typed original event/request plus consistent attempt FARM | 200 if currently permitted; commit outcome remains DENY |
+| Explicit-FARM original, same-farm explicit-FARM payload or bundle conflict, including identical body in another bundle | One index-bound original NEW_REQUEST plus consistent original/attempt FARM | 200 if currently permitted; commit outcome remains DENY |
+| Conflicting receipt points to a replay request as its supposed original, or lacks its original index | No proved original NEW_REQUEST | 403 even when request/event/key/class/FARM values agree |
 | Conflicting replay with different original/attempt farms, or inconsistent ordinary associations | No unambiguous source | 403 even with both farms' grants |
 | Pre-existing same-tenant records with the complete selected proof | Same rules; no backfill or current-bundle equality requirement | Same outcome as new records |
 | Old FIELD-only records missing links, validation proof or required replay index | No invented relationship or inferred current field ownership | 403 |
@@ -204,11 +223,11 @@ general provenance capability is delivered; do not maintain parallel policies.
 | --- | --- |
 | R01 | Both ordinary qualified FIELD-only classes return exact original result/trace payloads to a permitted reader; operation acceptance and observation capture remain unchanged. Base reproduces 403, candidate returns 200. |
 | R02 | Typed, consistent server-authored provenance is required. Wrong kind/id, missing links, mixed farms, absent PASS and mismatched authority decision fail closed; another farm's granted reader cannot obtain the payload. |
-| R03 | Both classes' matching replay wrappers use exactly one index-bound original. Corrupt/missing index, digest/key/request/event mismatch and replay chains deny. Conflicting replay never gains FIELD-only access; same-farm explicit-FARM conflicts remain readable with permission. |
+| R03 | Both replay branches use exactly one index-bound original NEW_REQUEST result/trace. Missing/corrupt index, inconsistent original identity/digest and replay chains deny. Matching additionally requires attempt/original digest and bundle equality. Conflicting gains no FIELD-only access; correctly bound same-farm explicit-FARM conflicts remain readable, including equal-body/different-bundle attempts. Missing-index historical conflicts deny. |
 | R04 | Consistent FARM/FARM+FIELD/default-scope reads with the selected complete proof and other record-kind paths keep their permission outcomes. Ambiguous result/trace associations and incomplete historical replay proof intentionally become denied, even if the old first-link helper returned a farm. |
 | R05 | Every resolved read uses fresh existing permission and receipts. A dedicated reader with no alternative permission reads successfully, then loses a direct grant or SharingGrant by completed revocation and receives 403 on the next GET. Old ALLOW cannot override this. |
 | R06 | Existing same-tenant history with sufficient proof remains readable across active bundle changes. Foreign-tenant links are unavailable; incomplete historical proof stays denied. All stored payloads/edges/idempotency entries remain unchanged apart from existing fresh read-decision receipts. |
-| R07 | Traversal is bounded to the named kinds and one original attempt. Self-links, two-node cycles and wrong-kind reference redirection terminate as unresolved/403 without a 500 or arbitrary graph search. |
+| R07 | Traversal is bounded to the named kinds and one proved original attempt for both replay branches. Self-links, two-node cycles, a replay request substituted for the original, and wrong-kind reference redirection terminate as unresolved/403 without a 500 or arbitrary graph search. |
 | R08 | No new authority evaluator, durable state, transaction owner or activated production endpoint. Production GET stays closed; package/architecture, focused tests, reviewed implementation head and required hosted evidence pass. |
 
 Run real legacy HTTP cases using fictional `kernel.demo` records and existing
@@ -219,6 +238,15 @@ Use separate fictional actors for successful read, wrong-farm read, no grant,
 and sequential revocation with no alternative grant/delegation/sharing path.
 Malformed graph shapes may use clearly labelled defensive test doubles;
 they do not replace real HTTP/Store positive and denial cases.
+
+B1's defensive fixture has an original O and matching-replay request R with the
+same key, event, class and explicit FARM. A conflicting result/trace C both name
+R as `replayOfRequestId`. Require 403 for each C root: R's request shape cannot
+replace index proof of O. Also test a missing-index historical conflict as 403.
+Positive real-writer controls must include a correctly linked same-farm payload
+conflict and an identical-body/different-bundle conflict with equal digests;
+both remain readable with current permission and retain their DENY outcome.
+These are planned tests, not executed Phase A evidence.
 
 For history, create real original attempts/replays using unmodified base bytes
 in an owned disposable database, then run the candidate against the retained
@@ -250,9 +278,11 @@ to scope, closure and existing checks. EXC-004: remove result/trace use of the
 generic recursive route; no fallback remains for these roots. EXC-005: a small
 shared resolver serves these two actual roots; no speculative framework.
 EXC-006: a single added recursive reference is smaller in text but lacks kind,
-identity, conflict and replay guarantees. Denying every FIELD-only retry avoids
-the index hop but leaves the ordinary client retry unusable; the one existing
-append-only lookup is the smaller complete alternative to new records or search.
+identity, conflict and replay guarantees. Denying every FIELD-only retry leaves
+the ordinary client retry unusable. Both replay branches share one existing
+append-only lookup to prove the original; no duplicate resolver or new state is
+needed. Direct request/event checks alone cannot distinguish a replay request
+from the original and cannot meet R03/R07.
 
 The task card must name the already-created draft PR after Phase A review has
 zero Blockers. A change to capability, R01–R08, authority, effects/non-effects,
