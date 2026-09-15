@@ -175,9 +175,9 @@ Evidence sufficiency and acceptance eligibility remain separate. Direct
 observation capture does not create an EvidenceSufficiencyCase; a queued ACCEPT
 may already have persisted a satisfied case before the eligibility refusal.
 That case is not acceptance permission. The result problems and promotion gate
-log carry the final eligibility explanation. Separate [Delivery #389](https://github.com/samovers/OFARM2/issues/389)
-owns retained-case/final-outcome reporting improvements; PR #388 changes no case
-semantics. Production governed routes remain closed. The original scoped R04
+log carry the final eligibility explanation. The [reader guide below](#8-reading-retained-evidence-existing-legacy-behavior)
+documents the existing field traversal for [Delivery #389](https://github.com/samovers/OFARM2/issues/389);
+PR #388 changes no case semantics. Production governed routes remain closed. The original scoped R04
 and historical decision in
 [the version-2 review-confirmation RFC](rfcs/OFARM_Legacy_Review_Confirmation_RFC_v0_2.md)
 remain unchanged.
@@ -900,3 +900,69 @@ procedural branch, no scheme/profile literal):
    reject→reject, accept→reject; a new capture is reviewable afresh.
 8. No materialization is staled or invalidated by a REJECT.
 9. The M1 suite stays green and `ofarm_pkg_contract_check.py` PASSes.
+
+## 8. Reading retained evidence (existing legacy behavior)
+
+This is reading guidance for the existing development/conformance API, not a
+new rule, contract or acceptance authority. Its reader is a caller retaining a
+`CommitIngressResult` returned by `POST /commit` or `POST /review/accept`, then
+using the existing authorized `GET /records/{record_id}` route. Production
+governed routes remain closed; these reads retain their existing farm-read
+authorization checks.
+
+For a new request, read the existing records in this order:
+
+1. Keep the returned result, including `resultId`. A later authorized GET of
+   that ID returns the stored result in the response's `payload` field.
+   `decisionOutcome` is the final outcome of this commit attempt. Read all of
+   `problems[]`, in order, for reason codes, titles, details and severities.
+2. Follow `promotionTraceRef` through the same record route and unwrap
+   `payload`. Check its `requestId` against the result. Its `finalOutcome`
+   describes the same attempt; ordered `gateSequence` entries show the evidence
+   and promotion gates separately. Gates can continue after successful
+   promotion, for example into materialization. Gate entries carry outcomes
+   and rationale, not reason codes; exact codes are in the result's problems.
+3. If the trace contains `evidenceSufficiencyCaseRef`, fetch that record and
+   unwrap `payload`. Label its `outcome.decision` and `outcome.rationale` as
+   the **evidence-floor evaluation**, alongside the final commit outcome.
+   Neither case `ALLOW` nor its `attestationAllowed` flag substitutes for
+   acceptance. If no case reference is present, report **no case retained for
+   this attempt**. Absence alone does not mean evidence failed.
+
+These four examples use valid fictional pilot submissions with current event
+times. The earlier-refusal example supplies a Party reference where a durable
+EvidenceRecord is required. The successful control uses an otherwise-valid
+routine operation and a distinct authorized reviewer.
+
+| Attempt | Retained evidence case | Final result | Reader interpretation |
+| --- | --- | --- | --- |
+| Confirmed direct observation | None; evidence gate logs `NOT_REQUIRED` for case generation | `RETAIN_DRAFT`, `HIGH_CONSEQUENCE_BLOCKED` | Durable evidence was checked; observation acceptance is disabled. |
+| Distinct-reviewer acceptance of a pending observation | `ALLOW`; evidence gate logs `SATISFIED` | `RETAIN_DRAFT`, `HIGH_CONSEQUENCE_BLOCKED` | The evidence floor passed, then eligibility refused acceptance. |
+| Direct observation with wrong-kind evidence | None; evidence gate logs `INSUFFICIENT` | `RETAIN_DRAFT`, `EVIDENCE_INSUFFICIENT` | The evidence gate refused before promotion. |
+| Distinct-reviewer acceptance of a pending routine operation | `ALLOW`; evidence gate logs `SATISFIED` | `PROMOTE_ACCEPTED`, with emitted review and consequence references | This attempt accepted the operation under the existing rules. |
+
+The two `ALLOW` rows have different final results. Present both columns rather
+than deriving acceptance from the case. Likewise, the two no-case rows have
+different evidence-gate outcomes. A direct observation's `NOT_REQUIRED` means
+no sufficiency case is generated on that path; its durable-evidence check
+still applies.
+
+An attempt outcome is not the claim's complete current disposition. A lawful
+rejection also returns `RETAIN_DRAFT` and emits a `REJECTED` ReviewDecision;
+terminal disposition is derived as described in §§3.5–3.6. An old
+`PROMOTE_ACCEPTED` result is not proof that the claim remains current after
+later contest or correction.
+
+Matching replay returns `REPLAY_REUSED_RESULT` and identifies
+`replayOfRequestId`; it reuses prior problems and emitted references without a
+fresh evidence evaluation. Its new trace does not provide the original case
+link. Keep the original result and trace references when collecting records:
+`replayOfRequestId` names a request, not a result ID. A case alone has no
+result/trace backlink, and the legacy HTTP reader provides no reverse lookup.
+Do not infer a missing final decision or rewrite a case to supply one.
+
+The existing sources are the [result and trace writers](../kernel/emission.py),
+[evidence and promotion gates](../kernel/stages.py), and
+[legacy record reader](../kernel/legacy_m1/api.py). This guide adds no stored
+field, link, endpoint or derived state and changes no evidence-floor meaning,
+promotion decision, replay behavior or historical record.
