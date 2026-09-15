@@ -924,7 +924,11 @@ For a new request, read the existing records in this order:
    and rationale, not reason codes; exact codes are in the result's problems.
 3. If the trace contains `evidenceSufficiencyCaseRef`, fetch that record and
    unwrap `payload`. Label its `outcome.decision` and `outcome.rationale` as
-   the **evidence-floor evaluation**, alongside the final commit outcome.
+   the **retained sufficiency-case outcome**, alongside the final commit outcome.
+   For routed submissions, the retained case may incorporate review-routing
+   reasons added after the evidence gate. Its `REQUIRE_REVIEW` outcome alone
+   does not establish that evidence was missing. Read it alongside the
+   evidence-gate outcome and the final result's problems.
    Neither case `ALLOW` nor its `attestationAllowed` flag substitutes for
    acceptance. If no case reference is present, report **no case retained for
    this attempt**. Absence alone does not mean evidence failed.
@@ -962,7 +966,8 @@ result/trace backlink, and the legacy HTTP reader provides no reverse lookup.
 Do not infer a missing final decision or rewrite a case to supply one.
 
 The existing sources are the [result and trace writers](../kernel/emission.py),
-[evidence and promotion gates](../kernel/stages.py), and
+[evidence and promotion gates](../kernel/stages.py),
+[case builders and routing amendment](../kernel/sufficiency.py), and
 [legacy record reader](../kernel/legacy_m1/api.py). This guide adds no stored
 field, link, endpoint or derived state and changes no evidence-floor meaning,
 promotion decision, replay behavior or historical record.
