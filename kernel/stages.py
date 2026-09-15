@@ -624,6 +624,34 @@ class ReviewPromotionGate:
         sub = ctx.sub
         confirmed = sub.get("confirmAccept") is True
 
+        # Observation capture remains available; new acceptance awaits typed
+        # semantics (OFARM2-LEGACY-OBSERVATION-ELIGIBILITY-001). Queued ACCEPT
+        # uses the validated stored target, never a caller's assertion-type hint.
+        assertion_type = (
+            ctx.acceptance_payload.get("assertionType")
+            if ctx.acceptance_target and ctx.review_branch == "ACCEPT"
+            else policy.COMMIT_CLASS_TO_ASSERTION_TYPE.get(ctx.commit_class)
+        )
+        if assertion_type == "OBSERVATION_ASSERTION":
+            problems = [runtime_problem(
+                "HIGH_CONSEQUENCE_BLOCKED", "Observation acceptance disabled",
+                "observation acceptance requires typed semantics that are not "
+                "available; a distinct reviewer cannot enable acceptance",
+                severity="WARNING")] if confirmed or ctx.acceptance_target else []
+            if not ctx.acceptance_target:
+                problems = ctx.review_route_reasons + problems
+            ctx.log("REVIEW_PROMOTION", "RETAIN_DRAFT",
+                    reason_code=problems[0]["reasonCode"] if problems else None,
+                    rationale=problems[0]["detail"] if problems else
+                    "no review act: capture is not commitment (Kernel rule 3)")
+            if ctx.acceptance_target:
+                return GateRefusal("REVIEW_PROMOTION", "RETAIN_DRAFT",
+                                   "RETAIN_DRAFT", problems)
+            emitter.emit_pending_assertion(amend_case_for_routing=False)
+            ctx.problems.extend(problems)
+            ctx.final_outcome = "RETAIN_DRAFT"
+            return GatePass()
+
         # D8 scopes self-review to ROUTINE OPERATION CLAIMS. A compliance
         # assertion reviewed by its own asserter is outside that scope and
         # outside the pilot's claim limits — it routes to the advisor queue.
