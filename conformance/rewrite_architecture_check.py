@@ -83,6 +83,7 @@ MODULE_BUDGETS = {
     "kernel/application_runtime.py": 230,
     "kernel/legacy_m1/api.py": 370,
     "kernel/legacy_m1/runtime.py": 100,
+    "kernel/legacy_m1/receipt_scope.py": 220,
     "kernel/security_audit.py": 130,
     "kernel/security_audit_client.py": 220,
     "kernel/authentication_audit.py": 140,
@@ -151,10 +152,13 @@ GROUP_BUDGETS = {
         ),
     ),
     "legacy M1 composition": (
-        450,
+        # Delivery #394 adds one budgeted receipt resolver (220) and dispatch
+        # allowance (5); existing API/runtime module limits remain unchanged.
+        675,
         (
             "kernel/legacy_m1/api.py",
             "kernel/legacy_m1/runtime.py",
+            "kernel/legacy_m1/receipt_scope.py",
         ),
     ),
     "tenant transaction": (

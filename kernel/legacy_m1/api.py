@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from ..contracts import ContractViolation
 from ..problems import runtime_problem
 from ..stages import IngressHeaderViolation
+from .receipt_scope import RECEIPT_KINDS, receipt_farm_scopes
 
 if TYPE_CHECKING:
     from ..auth_oidc import TestOidcVerifier
@@ -289,7 +290,8 @@ def _install_read_routes(app, store, outputs, principal) -> None:
             if payload["partyId"] != party_ref:
                 deny()
         elif row["record_kind"] not in PUBLIC_ARTIFACT_KINDS:
-            farms = _read_farm_scopes(store, row)
+            farms = (receipt_farm_scopes(store, row) if row["record_kind"] in RECEIPT_KINDS
+                     else _read_farm_scopes(store, row))
             if not farms:
                 deny()
             for farm_ref in farms:

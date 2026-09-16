@@ -2041,6 +2041,1186 @@
       "sourcePath": "kernel/tests/test_key_control.py"
     },
     {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_completed_revocation_denies_next_original_and_replay_read[direct-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_completed_revocation_denies_next_original_and_replay_read[direct-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_completed_revocation_denies_next_original_and_replay_read[sharing-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_completed_revocation_denies_next_original_and_replay_read[sharing-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_explicit_and_default_farm_original_replay_and_early_refusal_controls[omitted]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_explicit_and_default_farm_original_replay_and_early_refusal_controls[scopes1]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_explicit_and_default_farm_original_replay_and_early_refusal_controls[scopes2]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_explicit_and_default_farm_original_replay_and_early_refusal_controls[scopes3]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_explicit_farm_conflicts_require_consistent_farms_on_both_attempts[field-only]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_explicit_farm_conflicts_require_consistent_farms_on_both_attempts[other-farm]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_explicit_farm_conflicts_require_consistent_farms_on_both_attempts[same-farm]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_field_carrier_conflict_after_validation_pass_remains_readable",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_field_conflict_cannot_gain_access_by_adding_a_farm_hint[False-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_field_conflict_cannot_gain_access_by_adding_a_farm_hint[False-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_field_conflict_cannot_gain_access_by_adding_a_farm_hint[True-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_field_conflict_cannot_gain_access_by_adding_a_farm_hint[True-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_field_receipts_and_matching_retries_require_current_farm_permission[OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_field_receipts_and_matching_retries_require_current_farm_permission[OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_field_refusal_reads_depend_on_recorded_validation_pass[authority-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_field_refusal_reads_depend_on_recorded_validation_pass[authority-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_field_refusal_reads_depend_on_recorded_validation_pass[evidence-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_field_refusal_reads_depend_on_recorded_validation_pass[evidence-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_field_refusal_reads_depend_on_recorded_validation_pass[validation-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_field_refusal_reads_depend_on_recorded_validation_pass[validation-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_ordinary_mixed_farm_receipts_deny_even_with_both_read_grants[OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_ordinary_mixed_farm_receipts_deny_even_with_both_read_grants[OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_other_classes_and_review_verbs_keep_farm_read_permissions[accept]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_other_classes_and_review_verbs_keep_farm_read_permissions[advisory]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_other_classes_and_review_verbs_keep_farm_read_permissions[compliance]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_other_classes_and_review_verbs_keep_farm_read_permissions[contest]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_other_classes_and_review_verbs_keep_farm_read_permissions[evidence]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_other_classes_and_review_verbs_keep_farm_read_permissions[hypothesis]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_other_classes_and_review_verbs_keep_farm_read_permissions[note]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_other_classes_and_review_verbs_keep_farm_read_permissions[queued-operation]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_other_classes_and_review_verbs_keep_farm_read_permissions[reject]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_other_classes_and_review_verbs_keep_farm_read_permissions[structure]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_registry_reverified_field_receipts_and_matching_retries_remain_readable",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_history.py::test_base_history_and_equal_body_bundle_conflicts[farm-and-field-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_history",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_history.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_history.py::test_base_history_and_equal_body_bundle_conflicts[farm-and-field-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_history",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_history.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_history.py::test_base_history_and_equal_body_bundle_conflicts[field-only-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_history",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_history.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_history.py::test_base_history_and_equal_body_bundle_conflicts[field-only-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_history",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_history.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_b1_matching_retry_request_cannot_replace_original[result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_b1_matching_retry_request_cannot_replace_original[trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[bundle-authority-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[bundle-authority-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[bundle-authority-result-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[bundle-authority-result-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[bundle-event-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[bundle-event-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[bundle-original-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[bundle-original-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[bundle-original-trace-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[bundle-original-trace-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[kind-authority-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[kind-authority-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[kind-authority-result-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[kind-authority-result-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[kind-event-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[kind-event-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[kind-original-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[kind-original-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[kind-original-trace-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[kind-original-trace-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[missing-authority-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[missing-authority-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[missing-authority-result-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[missing-authority-result-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[missing-event-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[missing-event-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[missing-original-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[missing-original-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[missing-original-trace-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[missing-original-trace-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[payload-id-authority-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[payload-id-authority-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[payload-id-authority-result-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[payload-id-authority-result-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[payload-id-event-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[payload-id-event-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[payload-id-original-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[payload-id-original-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[payload-id-original-trace-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[payload-id-original-trace-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[row-id-authority-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[row-id-authority-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[row-id-authority-result-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[row-id-authority-result-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[row-id-event-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[row-id-event-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[row-id-original-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[row-id-original-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[row-id-original-trace-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[row-id-original-trace-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[schema-authority-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[schema-authority-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[schema-authority-result-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[schema-authority-result-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[schema-event-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[schema-event-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[schema-original-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[schema-original-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[schema-original-trace-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[schema-original-trace-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[tenant-authority-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[tenant-authority-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[tenant-authority-result-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[tenant-authority-result-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[tenant-event-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[tenant-event-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[tenant-original-request-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[tenant-original-request-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[tenant-original-trace-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_broken_typed_links_deny[tenant-original-trace-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_matching_attempt_must_agree_with_original[bundle-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_matching_attempt_must_agree_with_original[bundle-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_matching_attempt_must_agree_with_original[digest-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_matching_attempt_must_agree_with_original[digest-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_matching_attempt_must_agree_with_original[scopes-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_matching_attempt_must_agree_with_original[scopes-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_matching_result_checks_reused_emissions_without_requiring_trace_copies",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[denied-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[denied-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[different-scopes-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[different-scopes-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[duplicate-authority-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[duplicate-authority-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[farm-authority-disagrees-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[farm-authority-disagrees-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[mixed-farms-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[mixed-farms-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[no-authority-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[no-authority-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[no-pass-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[no-pass-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[not-permitted-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[not-permitted-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[reversed-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[reversed-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[wrong-action-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[wrong-action-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[wrong-actor-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[wrong-actor-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[wrong-refs-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[wrong-refs-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[wrong-stage-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[wrong-stage-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[wrong-target-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_inconsistent_association_evidence_denies[wrong-target-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[None-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[None-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes0-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes0-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes2-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes2-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes3-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes3-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes4-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes4-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes5-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes5-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes6-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes6-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes7-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes7-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes8-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_missing_or_malformed_field_scopes_deny[scopes8-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_cycles_terminate_without_second_index_hop[self-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_cycles_terminate_without_second_index_hop[self-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_cycles_terminate_without_second_index_hop[two-node-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_cycles_terminate_without_second_index_hop[two-node-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[bundle-CONFLICTING_REPLAY_BLOCKED-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[bundle-CONFLICTING_REPLAY_BLOCKED-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[bundle-REPLAY_MATCH_REUSED_RESULT-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[bundle-REPLAY_MATCH_REUSED_RESULT-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[digest-CONFLICTING_REPLAY_BLOCKED-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[digest-CONFLICTING_REPLAY_BLOCKED-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[digest-REPLAY_MATCH_REUSED_RESULT-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[digest-REPLAY_MATCH_REUSED_RESULT-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[key-CONFLICTING_REPLAY_BLOCKED-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[key-CONFLICTING_REPLAY_BLOCKED-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[key-REPLAY_MATCH_REUSED_RESULT-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[key-REPLAY_MATCH_REUSED_RESULT-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[missing-CONFLICTING_REPLAY_BLOCKED-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[missing-CONFLICTING_REPLAY_BLOCKED-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[missing-REPLAY_MATCH_REUSED_RESULT-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[missing-REPLAY_MATCH_REUSED_RESULT-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[original-is-replay-CONFLICTING_REPLAY_BLOCKED-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[original-is-replay-CONFLICTING_REPLAY_BLOCKED-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[original-is-replay-REPLAY_MATCH_REUSED_RESULT-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[original-is-replay-REPLAY_MATCH_REUSED_RESULT-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[request-CONFLICTING_REPLAY_BLOCKED-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[request-CONFLICTING_REPLAY_BLOCKED-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[request-REPLAY_MATCH_REUSED_RESULT-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[request-REPLAY_MATCH_REUSED_RESULT-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[result-CONFLICTING_REPLAY_BLOCKED-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[result-CONFLICTING_REPLAY_BLOCKED-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[result-REPLAY_MATCH_REUSED_RESULT-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[result-REPLAY_MATCH_REUSED_RESULT-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[tenant-CONFLICTING_REPLAY_BLOCKED-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[tenant-CONFLICTING_REPLAY_BLOCKED-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[tenant-REPLAY_MATCH_REUSED_RESULT-result]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_replay_requires_one_index_bound_original[tenant-REPLAY_MATCH_REUSED_RESULT-trace]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_reverification_does_not_relax_authority_order[duplicate-authority]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_reverification_does_not_relax_authority_order[validation-before-authority]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[CONFLICTING_REPLAY_BLOCKED-result-farm-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[CONFLICTING_REPLAY_BLOCKED-result-farm-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[CONFLICTING_REPLAY_BLOCKED-result-field-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[CONFLICTING_REPLAY_BLOCKED-result-field-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[CONFLICTING_REPLAY_BLOCKED-trace-farm-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[CONFLICTING_REPLAY_BLOCKED-trace-farm-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[CONFLICTING_REPLAY_BLOCKED-trace-field-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[CONFLICTING_REPLAY_BLOCKED-trace-field-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[NEW_REQUEST-result-farm-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[NEW_REQUEST-result-farm-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[NEW_REQUEST-result-field-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[NEW_REQUEST-result-field-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[NEW_REQUEST-trace-farm-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[NEW_REQUEST-trace-farm-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[NEW_REQUEST-trace-field-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[NEW_REQUEST-trace-field-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[REPLAY_MATCH_REUSED_RESULT-result-farm-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[REPLAY_MATCH_REUSED_RESULT-result-farm-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[REPLAY_MATCH_REUSED_RESULT-result-field-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[REPLAY_MATCH_REUSED_RESULT-result-field-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[REPLAY_MATCH_REUSED_RESULT-trace-farm-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[REPLAY_MATCH_REUSED_RESULT-trace-farm-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[REPLAY_MATCH_REUSED_RESULT-trace-field-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[REPLAY_MATCH_REUSED_RESULT-trace-field-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence0-True]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence1-True]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence2-True]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence3-False]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence4-False]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence5-False]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence6-False]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence7-False]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_adapters.py::test_g2_concurrent_first_structure_assertions_one_governed_winner",
       "sourceModule": "kernel.tests.test_m2_adapters",
       "sourcePath": "kernel/tests/test_m2_adapters.py"
@@ -22626,8 +23806,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "63b4151b7187ccbae704dbfc36843812527650a69868874354a04d0b7c47a363",
-  "entryCount": 4525,
+  "entriesSha256": "aff28da8d2a22bd94cf82d26a8decadc73ba588a84c9fc1cac31f1cb4d4bbfaf",
+  "entryCount": 4761,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
