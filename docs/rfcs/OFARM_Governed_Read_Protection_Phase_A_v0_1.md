@@ -1,6 +1,6 @@
 # Governed-read protection: Phase A assessment and open blockers
 
-Version 0.1, 2026-09-16. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
+Version 0.2, 2026-09-16. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
 **Draft for design review. The assessment is complete; the implementation design
 is blocked. No protection mechanism is selected or ready for approval.**
 
@@ -96,8 +96,30 @@ issuer. These are source observations; no tests were rerun for this claim.
 | [Tenant write lock](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/migrations/0001_initial.sql#L6382) and [knowledge allocator](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/migrations/0008_tenant_command_runtime_bundle_selection.sql#L179) | Tenant derives from BOUND context; batch allocation serializes through transaction end. | Acquired after binding. A gate after allocation can inherit already-held write resources. |
 
 The source retains a backend, pool lease, XID and uncommitted context work while
-the issuer is pending. This does not prove either harmlessness or deadline failure.
+the issuer is pending. During its current-authority lookup, the issuer also opens
+a separate unpooled connection through the [runtime factory](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/application_runtime.py#L134).
+That connection's context exits before signing-evidence verification and KMS
+signing; an issuer stalled specifically at KMS does not normally retain it.
+Pending connection establishment and lookup are separate capacity/progress cases.
+This does not prove either harmlessness or deadline failure.
 The challenge cut is not automatically PR #26's canonical eligible source stage.
+
+The [pool](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tenant_uow.py#L28)
+has maximum size 8 per manager, checkout timeout 5 seconds and maximum 32 waiters.
+If eight parked writers retain all its connections, a future read sharing that
+pool cannot obtain another checkout until capacity is released. Separate pools
+do not alone reserve shared role/database slots: the provisioning specification
+sets [ofarm_app's limit to 24](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/deployment/postgresql/provisioning_specs.py#L1984)
+and the [tenant database's limit to 48](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/deployment/postgresql/provisioning_specs.py#L1937).
+The production composition uses the same configured DSN for pool and unpooled
+lookups. Actual deployed connection identity and the future read's placement are
+not attested here. Physical A/S-C/O stages do not themselves require a fresh
+checkout per stage; the eventual ownership plan must name retained and reacquired
+resources. Pool exhaustion remains outside Scope B's permitted waits.
+Returning a checkout lease normally leaves its backend open for pool reuse;
+it does not necessarily free role/database capacity for an unpooled lookup.
+Account for already-open pool backends, pending connection establishment, lookup
+execution and transaction exit separately.
 
 ## 4. Evaluated approaches and why they remain insufficient
 
@@ -105,7 +127,12 @@ The challenge cut is not automatically PR #26's canonical eligible source stage.
 
 Separating issuer execution from the source connection owner could remove one
 signer-completion dependency. It requires the issuer to receive only existing
-immutable inputs, with no source connection or advancing callback. It does not
+immutable inputs, with no source connection or advancing callback. The current
+`mint` arguments already have this shape; the issuer retains its separate
+authority-reader dependency and database I/O. Moving its execution does not make
+it a pure computation or remove that dependency. Actual concurrency and lifetime
+compatibility still need proof. Parking after checkout also retains the source
+pool lease until lawful cleanup and return. This ownership separation does not
 by itself settle `claim permit -> pause -> read closes gate -> resume send`.
 A final flag check leaves a check-to-send interval; waiting for the permit holder
 retains its scheduling dependency. This symbolic case assumes no independently
@@ -147,7 +174,7 @@ commit against final S, provided all paths participate and read protection survi
 C through L. That conditional safety property is different from resource isolation.
 
 The [recorded #392 correction](https://github.com/samovers/OFARM2/issues/392#issuecomment-5694678785)
-already supplies the decisive counterexample:
+identifies this source-backed interference path:
 
 ```text
 reader: actual C -> PostgreSQL lock cleanup -> acknowledgement -> L
@@ -156,15 +183,26 @@ new writer: binder/gate acquisition touches shared resources -> waits/refuses
 ```
 
 The binder admission tag identifies a common lock-manager partition. Compatible
-high-level locks do not eliminate internal exclusive partition activity. Moving
-the gate earlier in SQL still enters shared server machinery. Denying a late
-binder therefore establishes neither no database work nor the RD-C20 positive
-pair. This is reused source-backed design analysis, not a new timing test.
+high-level locks do not eliminate internal exclusive partition activity during
+acquisition/cleanup. An idle client holding the compatible advisory lock does
+not continuously hold that internal partition lock. This path identifies a
+dependency, not its measured duration or the sole or dominant source of delay.
+CPU scheduling, other database activity, memory and I/O may add other paths.
 
-The earlier-SQL-gate direction is closed as a proposed remedy for this finding.
-It is not a proof against every PostgreSQL design or every use of database locks
-inside a complete solution. Repeating this gate or the driver-close investigation
-would not advance the current design.
+The later [executed review](https://github.com/samovers/OFARM2/pull/396#pullrequestreview-5226679109)
+reports commit round-trip perturbation under both binder-tag and unrelated/CPU-only
+loads. Its PostgreSQL 16 measurements are useful diagnostics, but the workers
+already run before COMMIT is sent; actual C, post-C offer, L and the same writer's
+later commit are not observed. The asynchronous-commit variant also changes
+durability/acknowledgement behavior. These measurements neither isolate the
+partition contribution nor bound execution noise, refute that dependency, or
+prove that every provider must fail RD-C20.
+
+An earlier SQL gate remains unselected as a complete solution: refusing a late
+command establishes neither no server work nor causal independence of required
+read progress. The partition path alone does not rank SQL gates against other
+placements or establish the necessity of physical separation. A new candidate
+must supply its actual resource argument; another lock name alone is no progress.
 
 ## 5. Retained cases, falsifiable evidence and blocker disposition
 
@@ -172,8 +210,9 @@ would not advance the current design.
 |---|---|---|
 | Withdrawal/controller scheduling | Real source attempt and lawful stop order; no escaped continuation or unlisted control wait. | Open. A database disposition could order effects but does not automatically stop the client or settle its obligations. |
 | Database preparation already running | Exact command, resource, reached stage, outcome and causal interval; no simultaneous rollback or guessed cancellation. | Open. A genuine required protection-release wait may qualify under Scope B; BEGIN or a stalled task alone does not establish it. |
+| Parked writers and connection capacity; RD-C21 | Hold all eight source-pool leases; require the selected read's needed checkout/lookup to remain usable under its actual placement. Separately exhaust shared role/database capacity with pending unpooled lookups. Cover capacity retained or reacquired at each stage. | Open conditional negative case. A future reader sharing exhausted capacity fails; no live governed-reader reproduction or selected separate pool/role is claimed. |
 | Cleanup complete, report delayed | Distinguish storage release/acknowledgement, owner observation and onward delivery; protection must not depend on an unrelated delayed report. | Open. A completed cause cannot justify later callback delay; outcome uncertainty remains separately owned. |
-| New source or late completion after actual C; RD-C20 | Both admitted limited reads reach L under matched independent conditions; observe C, acknowledgement and the same writer's actual valid commit after L. | B1 remains open. Commit exclusion does not supply resource isolation. |
+| New source or late completion after actual C; RD-C20 | Both admitted limited reads reach L under matched independent conditions; independently observe C, then offer the candidate, observe acknowledgement/L and the same writer's actual later valid commit. Use the causal-evidence distinction below. | B1 remains open. Commit exclusion does not supply resource isolation; latency distributions alone do not decide this pair. |
 | Full membership and continuous protection; RD-C21 | Include every relevant source/import/commit path, malformed/unresolved enclosing partitions and pre-cut commits with late notifications; reject forged/lost protection. | Required. No inventory-completeness or provider-admission claim is made here. |
 | Actual finalization entry and original-owner lifetime | Original live owner and full D ordered against I without a check-to-start gap; no new initiation after actual owner loss. | Existing finalization-entry obligation remains open; this assessment does not clear it. |
 
@@ -181,6 +220,22 @@ Scope B permits only its closed, precisely established causal storage waits
 through unchanged D. It does not turn arbitrary control/pool/callback delay into
 storage finalization, nor excuse a newly offered writer's interference after
 actual C. Genuine independent loss of C acknowledgement still suppresses L.
+
+Separate two kinds of evidence. For retained resources, park the writer while it
+holds a pool slot, conflicting lock or relevant queue position, and identify the
+read's exact dependency and release. For shared execution interference, observe
+actual C independently of the client COMMIT round trip and explain how the
+candidate's effect is distinguished from independent environmental variation.
+Control experiments and distributions help diagnose paths; they are not an
+automatic conformance verdict. Mark deliberately instrumented delays as imposed
+schedules rather than naturally measured latencies. If the observation/control
+method cannot attribute a failure, report it as inconclusive, not a pass or proof
+of universal impossibility. A finite observed maximum is not a bound on noise.
+Neither compatible-lock parking nor a short benchmark proves its exclusion.
+
+The approved requirement is the retained outcome under the stated causal pair,
+not identical successful wall-clock durations. No statistical pass threshold,
+deadline guard band or exemption for candidate-induced delay is introduced here.
 Required future runtime evidence uses fictional fixtures and isolated disposable
 databases through real participating entry paths, not a model that assumes the
 missing ordering or physical isolation.
@@ -191,10 +246,26 @@ are not claims of a live governed-reader vulnerability or executed conformance.
 
 ## 6. Smallest next scope and review request
 
+Before investing in another placement, ask the existing PR #37/#36 owner this
+evidence-binding question: **What provider/environment evidence and observation
+method can establish RD-C20's existing causal requirement, including actual C
+and matched independent conditions, without exempting candidate-induced failure
+or changing D?** The existing text remains controlling. If an owner instead
+proposes a noise tolerance or different outcome rule, it needs a concrete,
+separately reviewed semantic amendment; this draft supplies no such permission
+and requests no repeat approval of the existing semantics.
+
 The existing restricted runtime/deployment proposal would keep new source offers
 outside the protected execution domain until L. Its costs include reduced source
 concurrency, restricted connectivity, original read-owner placement and output
-integration. Its later correction still leaves already-started database
+integration. Queuing before checkout avoids additional checkout leases from those
+requests; excluding their authority connections also requires admission before
+those lookups start. It does not free already-open pooled or unpooled backends.
+Nor is an external queue proved the only
+way to preserve an original request: a lawfully stopped attempt can release its
+lease while the request survives under PR #26's complete outcome/evidence rules.
+No working stop/release mechanism is supplied by that possibility.
+The placement's later correction still leaves already-started database
 preparation unresolved. Reviewing that arrangement would investigate a candidate,
 not adopt a proven solution. The FPGA/device-memory bridge stays parked.
 
@@ -205,8 +276,19 @@ advance the existing arrangement within its owners. In particular:
 1. Does any claimed database guarantee exceed what the pinned code supplies?
 2. Can a concrete existing mechanism close both actual ordering and retained
    resource progress without assuming a stalled participant will cooperate?
-3. Is further work on the published restricted arrangement justified by its
-   scope/cost, including its unresolved preparation and output dependencies?
+3. After the evidence-binding question above is addressed, is further work on
+   the restricted arrangement justified by its scope/cost, capacity benefit and
+   unresolved preparation/output dependencies?
+
+The connection-factory timeout is a separate runtime follow-up, not a missing
+timeout proven from an omitted keyword. It passes the configured DSN to Psycopg.
+The exact pinned pure-Python 3.3.4 wheel (`b6bbc25ccf05c8fad3b061d9db2ef0909a555171b84b07f29458a447253d679a`)
+sets a default of 130 seconds per connection attempt in `psycopg/conninfo.py`
+lines 20–23 and 123–151; DSN/environment values participate. `connection.py`
+lines 97–109 compute it before resolving and trying connection targets.
+That default is not an end-to-end bound on DNS, multiple attempts, lookup or D.
+Any change to deadline propagation/connection policy requires separately bounded
+runtime work; no timeout, DSN, pool size or role limit changes in this PR.
 
 No implementation decision card is ready. Keep the current draft open while
 reviewing Phase A; do not merge this assessment as a substitute for #392's complete
