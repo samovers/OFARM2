@@ -2221,6 +2221,11 @@
       "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
     },
     {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope.py::test_registry_reverified_field_receipts_and_matching_retries_remain_readable",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope.py"
+    },
+    {
       "nodeid": "kernel/tests/test_legacy_receipt_scope_history.py::test_base_history_and_equal_body_bundle_conflicts[farm-and-field-OBSERVATION_ASSERTION]",
       "sourceModule": "kernel.tests.test_legacy_receipt_scope_history",
       "sourcePath": "kernel/tests/test_legacy_receipt_scope_history.py"
@@ -3046,6 +3051,16 @@
       "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
     },
     {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_reverification_does_not_relax_authority_order[duplicate-authority]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_reverification_does_not_relax_authority_order[validation-before-authority]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
       "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[CONFLICTING_REPLAY_BLOCKED-result-farm-OBSERVATION_ASSERTION]",
       "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
       "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
@@ -3162,6 +3177,46 @@
     },
     {
       "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_typed_proof_controls[REPLAY_MATCH_REUSED_RESULT-trace-field-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence0-True]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence1-True]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence2-True]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence3-False]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence4-False]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence5-False]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence6-False]",
+      "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
+      "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_legacy_receipt_scope_proof.py::test_validation_completion_for_original_and_matching_receipts[sequence7-False]",
       "sourceModule": "kernel.tests.test_legacy_receipt_scope_proof",
       "sourcePath": "kernel/tests/test_legacy_receipt_scope_proof.py"
     },
@@ -23751,8 +23806,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "23f6309e632d8d58e0b31f4afc8769daf6f7b8c7f054ff2e0457e9fd0cf739ce",
-  "entryCount": 4750,
+  "entriesSha256": "aff28da8d2a22bd94cf82d26a8decadc73ba588a84c9fc1cac31f1cb4d4bbfaf",
+  "entryCount": 4761,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

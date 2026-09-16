@@ -144,8 +144,11 @@ def _ordinary_farm(store, attempt):
     validation = [(i, g) for i, g in enumerate(gates) if g.get("gate") == "VALIDATION"]
     _require(len(authority) == 1 and bool(validation))
     index, gate = authority[0]
+    # Successful registry rechecks precede validation completion, not refusal.
+    completion = next((g for _, g in validation
+                       if g.get("outcome") != "REGISTRY_REVERIFIED"), {})
     _require(gate["outcome"] == "ALLOW" and validation[0][0] > index
-             and validation[0][1]["outcome"] == "PASS")
+             and completion.get("outcome") == "PASS")
     refs = gate["relatedArtifactRefs"]
     _require(isinstance(refs, list) and auth_result["resultId"] in refs
              and auth_request["requestId"] in refs)

@@ -105,6 +105,30 @@ def test_field_receipts_and_matching_retries_require_current_farm_permission(
         _read(env, result, 403, wrong_farm_reader)
 
 
+def test_registry_reverified_field_receipts_and_matching_retries_remain_readable(env):
+    submission = _submission("OPERATION_CLAIM")
+    family = env.pipeline.runtime_services.registry_reference_family
+    # The real selected provider rechecks the seeded binding against its current
+    # bundle. No replacement provider, snapshot or stored trace is installed.
+    submission["capturedAgainstSnapshotRef"] = family.snapshot_prefix + ".fictional-previous"
+    original = _commit(env, submission)
+    assert original["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    gates = _gates(env, original)
+    assert gates.index(("AUTHORITY", "ALLOW")) < gates.index(
+        ("VALIDATION", "REGISTRY_REVERIFIED")) < gates.index(("VALIDATION", "PASS"))
+    replay = _commit(env, submission)
+    assert replay["idempotencyDisposition"] == "REPLAY_MATCH_REUSED_RESULT"
+    assert replay["replayOfRequestId"] == original["requestId"]
+    assert set(_roots(replay)).isdisjoint(_roots(original))
+    wrong_farm_reader = _party(env.store)
+    _grant(env.store, wrong_farm_reader, ["RECEIVE_READ_DATA"], targetScope={
+        "scopeType": "FARM", "scopeRef": "farm:receipt-scope.other"})
+    for result in (original, replay):
+        _read(env, result)
+        _read(env, result, 403, demo.AGENT)
+        _read(env, result, 403, wrong_farm_reader)
+
+
 @pytest.mark.parametrize("commit_class", CLASSES)
 @pytest.mark.parametrize("failure", ("authority", "validation", "evidence"))
 def test_field_refusal_reads_depend_on_recorded_validation_pass(env, commit_class, failure):

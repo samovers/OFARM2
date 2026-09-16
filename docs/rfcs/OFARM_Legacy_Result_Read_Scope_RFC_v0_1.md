@@ -282,6 +282,13 @@ aggregate cap. Existing API/runtime caps remain 370/100. This additional checker
 path makes the new code visible to the budget; it changes no runtime authority,
 receipt semantics, function limit or other architecture rule.
 
+Validation completion may follow the existing successful `REGISTRY_REVERIFIED`
+entry. The resolver permits that prefix, still requires initial authority before
+all validation, and requires PASS before any unknown or refusing validation
+outcome. Reverification without PASS remains insufficient. The real selected
+provider regression covers original and matching-replay result/trace reads;
+defensive sequence cases cover missing completion and invalid ordering.
+
 Before each commit run the mandatory package/architecture/temporal check under
 CPython 3.12.13. Implementation evidence uses PostgreSQL 17.10 and the pinned
 review baseline environment. After focused checks, require exact-head content

@@ -214,6 +214,40 @@ def test_missing_or_inconsistent_association_evidence_denies(graph, root, defect
     assert graph.resolve("original-" + root) is None
 
 
+@pytest.mark.parametrize("sequence,permitted", (
+    (("REGISTRY_REVERIFIED", "PASS"), True),
+    (("REGISTRY_REVERIFIED", "PASS", "FAIL_CARRIER"), True),
+    (("PASS", "FAIL_CARRIER"), True),
+    (("REGISTRY_REVERIFIED",), False),
+    (("REGISTRY_REVERIFIED", "FAIL_REFERENCE_RESOLUTION", "PASS"), False),
+    (("FAIL_REFERENCE_RESOLUTION", "REGISTRY_REVERIFIED", "PASS"), False),
+    (("UNKNOWN", "PASS"), False),
+    ((None, "PASS"), False),
+))
+def test_validation_completion_for_original_and_matching_receipts(graph, sequence, permitted):
+    gates = graph.payload("original-trace")["gateSequence"]
+    gates[1:] = [{"gate": "VALIDATION", "outcome": outcome} for outcome in sequence]
+    graph.attempt("retry", "REPLAY_MATCH_REUSED_RESULT")
+    expected = [FARM["scopeRef"]] if permitted else None
+    for attempt in ("original", "retry"):
+        for root in ("result", "trace"):
+            assert graph.resolve(attempt + "-" + root) == expected, (attempt, root)
+
+
+@pytest.mark.parametrize("defect", ("validation-before-authority", "duplicate-authority"))
+def test_reverification_does_not_relax_authority_order(graph, defect):
+    gates = graph.payload("original-trace")["gateSequence"]
+    gates.insert(1, {"gate": "VALIDATION", "outcome": "REGISTRY_REVERIFIED"})
+    if defect == "validation-before-authority":
+        gates[0], gates[1] = gates[1], gates[0]
+    else:
+        gates.insert(1, deepcopy(gates[0]))
+    graph.attempt("retry", "REPLAY_MATCH_REUSED_RESULT")
+    for attempt in ("original", "retry"):
+        for root in ("result", "trace"):
+            assert graph.resolve(attempt + "-" + root) is None, (attempt, root)
+
+
 @pytest.mark.parametrize("root", ("result", "trace"))
 @pytest.mark.parametrize("disposition", ("REPLAY_MATCH_REUSED_RESULT", "CONFLICTING_REPLAY_BLOCKED"))
 @pytest.mark.parametrize("defect", (
