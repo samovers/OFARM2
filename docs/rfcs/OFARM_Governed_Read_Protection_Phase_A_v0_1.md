@@ -1,6 +1,6 @@
 # Governed-read protection: Phase A assessment and open blockers
 
-Version 0.2, 2026-09-16. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
+Version 0.3, 2026-09-16. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
 **Draft for design review. The assessment is complete; the implementation design
 is blocked. No protection mechanism is selected or ready for approval.**
 
@@ -244,13 +244,98 @@ Production governed routes remain closed at the inspected head. These schedules
 describe required future production-composition negative/positive cases; they
 are not claims of a live governed-reader vulnerability or executed conformance.
 
+### 5.1 Proposed evidence method for the existing read-owner question
+
+Use two distinct judgments: whether an executed case meets its stated outcome,
+and whether the selected provider supplies the complete guarantee. Passing cases
+support the latter judgment but cannot replace its source-participation, resource
+and lifetime argument. This is a proposed verification method under the existing
+rules, not a new admission rule or an answer that certifies an unselected provider.
+
+The [corrected-head review's imposed schedule](https://github.com/samovers/OFARM2/pull/396#pullrequestreview-5227162401)
+provides a starting point. On PostgreSQL 16.13 the reviewer paused the reader at
+`LockReleaseAll` entry, observed committed transaction status from another session,
+then committed a compatible-lock writer before releasing the reader. It separates
+database commit from client acknowledgement. It does not supply the complete
+read-evidence set C, L, the protected progress pair or a candidate-held partition
+wait. Its pause is imposed, not a measured candidate-induced latency. We read
+the supplied probe/output; we did not reproduce that experiment.
+
+For a future selected provider, keep a small execution record in its existing
+test evidence, not a new runtime ledger or public response field:
+
+- Pin the implementation, database/driver versions, effective durability and
+  connection settings, roles, resource placement, fixture and instrumented source
+  points. Use fictional records in a fresh disposable database with unique run,
+  transaction and attempt identities; never reuse debugger signal files.
+- Bind the original live attempt, final protected S, exact buffered/public bytes,
+  complete C set and its transaction. Establish commitment
+  under the selected storage/durability contract independently of the original
+  client's acknowledgement. Status, a commit timestamp or one visible row alone
+  does not prove complete durable C. A raw fixture remains mechanism evidence.
+- Record the order of commit observation, candidate offer, acknowledgement,
+  actual L and that same candidate's later valid commit. Distinguish actual
+  events from when they are observed: observing C before offering the candidate
+  establishes that ordering, not C's exact wall-clock instant. Include clock
+  provenance/uncertainty for deadline claims; ambiguous ordering is inconclusive.
+- Fix the original full D, authority/session/retention, policy branch and
+  independent fault schedule before each pair. Vary only the hidden candidate.
+  Keep observers and instrumentation equivalent and account for their resource
+  effects. Do not reset D after a pause, pick a passing margin from results or
+  turn measurement uncertainty into a permitted timing tolerance.
+
+The causal sequence for the before-acknowledgement variant is:
+
+```text
+complete durable C -> independent observation -> candidate offer
+ -> original owner's acknowledgement -> actual L -> same candidate's valid commit
+```
+
+Instrumented schedules must also check that the expected interception actually
+occurred, match the full backend/transaction/lock identity being observed, and
+release/detach/clean up on failure. Release the imposed reader pause independently
+of candidate completion; otherwise the harness can manufacture the dependency.
+A pause that itself consumes D cannot establish candidate-induced failure.
+Test observers supply evidence, not the
+original owner's acknowledgement, continued lifetime or disclosure authority.
+
+| Case using the existing requirements | Decisive observation |
+|---|---|
+| Observation-method calibration | A database transaction is committed while its client has no acknowledgement; candidate introduction is ordered afterward. This validates the ordering technique only. Revalidate any instrumented location on the pinned runtime before using it. |
+| Defective-mechanism control | Permit an actual intervening candidate commit before L, or demonstrate its concrete resource dependency causing required acknowledgement/L to miss D while the matched no-candidate execution succeeds. The method must report failure; sanitized suppression is not a pass. An imposed pause without that causal dependency establishes only a test schedule. |
+| RD-C20 positive pair | Through real participating paths, both permitted limited replies reach actual L exactly once before unchanged D; all handoff guards hold and the same deferred candidate actually commits later under valid authority. Exercise offers after C before acknowledgement and after acknowledgement before L. A dropped or permanently blocked writer fails this case. |
+| Independent acknowledgement loss | Apply the same independent loss in both runs. Neither may disclose without acknowledged complete C; reconciliation does not revive either attempt. This is a fault case, not a substitute for the positive pair. |
+| Public-policy comparator | Compare the exact permitted public content and omissions in each pair. A policy-excluded pair stays identically excluded without inventing C/L for a successful read. Disclosable-history refresh/suppression retains its separate existing case. |
+| RD-C21 coverage, capacity and allowed wait | Use the existing section 5 cases. Record the exact resource holder and release dependency, pool lease versus backend capacity, and every participating source path. Only the existing enumerated storage wait evidenced through full D qualifies for Scope B; arbitrary exhaustion or missing coverage does not. |
+| Actual owner loss versus I | Observe original-owner termination and actual finalization entry through their owning mechanisms. Loss or reaching D before I prevents entry; eligible I before loss/expiry may settle only under its independent persistence authority and never restores L. Delaying a notification is not evidence that actual owner loss has been ordered. Keep this separate from the C/acknowledgement calibration. |
+
+For each named case, report the observed outcome and scope: **pass** requires all
+its positive obligations; **failure** requires the violated obligation and
+supported causal trace; **inconclusive** means identity, order, completeness,
+deadline or attribution could not be established. Independently observed wrong
+commit order is a failure even if a timing explanation is uncertain. Finite load
+samples can expose a failure but cannot establish a noise bound or guarantee.
+Instrumented success must not be presented as an uninstrumented production result.
+
+Before further placement work, the candidate must map every relevant writer
+entry, already-running preparation, pending authority lookup and late completion
+to the read's required resources through acknowledgement and L. For each shared
+dependency, show how candidate activity preserves the existing outcome rule;
+merely preventing its commit is insufficient. Missing control/evidence leaves
+the candidate unproved, not proof that every architecture is impossible. This
+source-backed argument and focused runtime cases are complementary. No pool,
+isolation device, new service or source-withdrawal mechanism is selected here.
+
 ## 6. Smallest next scope and review request
 
-Before investing in another placement, ask the existing PR #37/#36 owner this
-evidence-binding question: **What provider/environment evidence and observation
-method can establish RD-C20's existing causal requirement, including actual C
-and matched independent conditions, without exempting candidate-induced failure
-or changing D?** The existing text remains controlling. If an owner instead
+Section 5.1 is the proposed answer for the existing PR #37/#36 evidence-binding
+question. Before investing in another placement, obtain focused owner review:
+**Does this combination of independently observed order, controlled causal cases
+and a complete provider resource/lifetime argument establish the required kind
+of evidence without exempting candidate-induced failure or changing D; which
+concrete proof obligation, if any, is missing?** The existing text remains
+controlling. Method review does not approve a provider or clear the other open
+bindings. If an owner instead
 proposes a noise tolerance or different outcome rule, it needs a concrete,
 separately reviewed semantic amendment; this draft supplies no such permission
 and requests no repeat approval of the existing semantics.
@@ -276,7 +361,7 @@ advance the existing arrangement within its owners. In particular:
 1. Does any claimed database guarantee exceed what the pinned code supplies?
 2. Can a concrete existing mechanism close both actual ordering and retained
    resource progress without assuming a stalled participant will cooperate?
-3. After the evidence-binding question above is addressed, is further work on
+3. After the evidence-method proposal above is reviewed, is further work on
    the restricted arrangement justified by its scope/cost, capacity benefit and
    unresolved preparation/output dependencies?
 
@@ -317,5 +402,5 @@ benchmark, crash or hosted expensive baseline ran for this design. No isolation
 topology was built. Prior implementation test results are not reused as evidence
 for this candidate.
 
-Next: review the concrete findings and scope choice on this draft; retain open
-blockers and existing approvals until a complete mechanism can be assessed.
+Next: review section 5.1 against the existing read-owner requirements, then use
+that method to assess a concrete mechanism; retain open blockers and approvals.
