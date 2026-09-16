@@ -1,13 +1,18 @@
 # Legacy result and trace read scope
 
-Status: **Phase A proposal; implementation is not approved**.
+Status: **Version 2 approved; implementation in PR #395, merge not authorized**.
 Decision identity: `OFARM2-LEGACY-RESULT-READ-SCOPE-001`, version 2.
 Delivery: [#394](https://github.com/samovers/OFARM2/issues/394), under #179.
 Draft implementation PR: [#395](https://github.com/samovers/OFARM2/pull/395).
 Related broader authorization work: [#177](https://github.com/samovers/OFARM2/issues/177).
 Base: `47610badaf171bee7ac83c3430bad561073c7e14`, tree
 `b7e94ea19ad56fe8db9320cadea044263dc37997` (merged PR #393).
-This is design evidence, not approval, OFARM law, or executed candidate evidence.
+This record is design and implementation guidance, not approval or OFARM law.
+The original version-2 card and later exact approval are directly retrievable in
+Codex task `01a07cc8-4157-7b33-a0ca-becb772e0e8b`: card message
+`msg_0d813f8071772f9a016aa9a891097c87d2986a2f2805083368` followed by user message
+`msg_01a0a95b-624a-7560-ab62-af90182a921f` on 2026-09-16. These references are
+navigation only; the task-user message supplies semantic authority, not merge.
 
 Version 2 corrects [B1](https://github.com/samovers/OFARM2/pull/395#pullrequestreview-5214770925):
 both replay branches must prove an index-bound original `NEW_REQUEST`.
@@ -139,11 +144,15 @@ logic easier to inspect; no resolver registry, framework or new policy service.
    For a **matching** replay, additionally require the attempt's nonempty
    digest to equal the original/index digest, producing-bundle equality as
    below, identical request scopes and agreement of reused output references
-   where carried. Resolve the bound original using steps 2–3.
+   where carried. The existing replay writer carries reused output references
+   on the result, not the trace. A trace root needs no reverse result lookup.
+   Resolve the bound original using steps 2–3.
 5. A **conflicting** replay uses the same original-index proof in step 4 but
    gains no FIELD-only resolution. Resolve only one consistent explicit FARM
    through the bound original's request/event (step 2) and the attempt's own
-   request. A foreign FARM, absent original FARM or malformed link denies.
+   request. A foreign FARM, absent FARM on either side or malformed link denies.
+   In particular, an explicit-FARM original followed by a FIELD-only conflicting
+   attempt stays denied; version 2 does not infer the attempt's FARM.
    Do not impose matching-replay digest or producing-bundle equality on this
    branch, or require the digests to differ: an identical body in a different
    bundle is a valid conflict. This preserves a correctly linked same-farm
@@ -246,7 +255,7 @@ replace index proof of O. Also test a missing-index historical conflict as 403.
 Positive real-writer controls must include a correctly linked same-farm payload
 conflict and an identical-body/different-bundle conflict with equal digests;
 both remain readable with current permission and retain their DENY outcome.
-These are planned tests, not executed Phase A evidence.
+These were planned Phase A tests; candidate execution is reported separately.
 
 For history, create real original attempts/replays using unmodified base bytes
 in an owned disposable database, then run the candidate against the retained
@@ -260,6 +269,18 @@ the reader limitation in `docs/REVIEW_DISPUTE_SEMANTICS.md`, and generated test
 inventory when tests are added. Store, authority and emitters are consumers of
 existing interfaces, not planned edits. These are scope predictions, not path
 approval tokens. Runtime scope expansion requires a new semantic decision.
+
+Implementation keeps the resolver in `kernel/legacy_m1/receipt_scope.py` and
+dispatches both owned roots before the generic reader. A validation PASS still
+qualifies an attempt if a later carrier gate records `FAIL_CARRIER`. Explicit
+FARM controls include other commit classes and all three review verbs; their
+authority actions are not subjected to the new FIELD-only action mapping.
+The architecture checker also owns mechanical size accounting: its existing
+legacy composition limit was fully occupied at 450 lines. Add the resolver to
+that group with a 220-line module cap and five dispatch lines, for a 675-line
+aggregate cap. Existing API/runtime caps remain 370/100. This additional checker
+path makes the new code visible to the budget; it changes no runtime authority,
+receipt semantics, function limit or other architecture rule.
 
 Before each commit run the mandatory package/architecture/temporal check under
 CPython 3.12.13. Implementation evidence uses PostgreSQL 17.10 and the pinned
@@ -288,4 +309,6 @@ The task card must name the already-created draft PR after Phase A review has
 zero Blockers. A change to capability, R01–R08, authority, effects/non-effects,
 boundary, named PR or production posture requires a new decision version and
 exact later same-task approval. Reviewer comments and prior PR approvals do not
-authorize implementation. Next: review this design, then present that card.
+authorize implementation. Version 2 was approved through the ordered task
+messages above. Next: finish candidate verification, exact-head review and hosted
+evidence, then present the final packet for separate exact-head merge authority.

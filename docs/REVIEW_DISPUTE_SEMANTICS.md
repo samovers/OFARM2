@@ -910,12 +910,30 @@ using the existing authorized `GET /records/{record_id}` route. Production
 governed routes remain closed; these reads retain their existing farm-read
 authorization checks.
 
-The reader resolves FARM-typed scopes, not a FIELD scope's parent farm. A
-submission with nonempty explicit `targetScopes` containing no FARM entry can
-return 403 for its result and trace even to an otherwise authorized farm
-reader; omitted or empty scopes default to the request farm. Retain the
-returned result when these reads fail. Repairing that scope resolution is
-separate runtime work; this guide does not change read authorization.
+For result and trace records, a bounded reader resolves consistent explicit
+FARM scopes. It can also resolve FIELD-only operation and observation attempts
+whose stored initial authority decision is ALLOW and whose validation reached
+PASS. Their later evidence or acceptance refusal does not remove that read
+association. The reader uses the recorded evaluated FARM and validation history,
+not a FIELD's current parent or historical promotion permission as read authority.
+Every resolved read still needs the existing fresh permission decision.
+
+A matching replay needs one index-bound original NEW_REQUEST with consistent
+links, digest and producing bundle. Conflicting replay receipts have no FIELD-only
+expansion: both the original and the new request must explicitly name the same
+FARM. Valid same-farm conflicts may have changed bodies or producing bundles;
+their commit outcome stays DENY. Early FIELD-only refusals, missing proof, mixed
+farms and replay chains remain 403 even for a farm reader. Omitted or empty raw
+scopes still default to the request farm. Retain the returned result when GET
+is denied; this repair does not backfill or modify historical records.
+
+[Delivery #394](https://github.com/samovers/OFARM2/issues/394) owns this narrow
+association repair. [#177](https://github.com/samovers/OFARM2/issues/177) still
+owns general provenance, complete sharing restrictions and atomic protected
+reads. Completed revocation denies the next read; concurrent revocation safety
+and complete sharing semantics are not claimed here. Other record kinds retain
+their existing paths. The [version-2 design](rfcs/OFARM_Legacy_Result_Read_Scope_RFC_v0_1.md)
+records the exact limits and approval boundary.
 
 For a new request, read the existing records in this order:
 
