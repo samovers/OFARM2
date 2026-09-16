@@ -1,6 +1,6 @@
 # Governed-read protection: Phase A assessment and open blockers
 
-Version 0.4, 2026-09-16. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
+Version 0.5, 2026-09-16. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
 **Draft for design review. The assessment is complete; the implementation design
 is blocked. No protection mechanism is selected or ready for approval.**
 
@@ -330,44 +330,93 @@ the candidate unproved, not proof that every architecture is impossible. This
 source-backed argument and focused runtime cases are complementary. No pool,
 isolation device, new service or source-withdrawal mechanism is selected here.
 
-## 6. Smallest next scope and review request
+## 6. Restricted-provider assessment and next work
 
-Section 5.1 is the proposed answer for the existing PR #37/#36 evidence-binding
-question. Before investing in another placement, obtain focused owner review:
-**Does this combination of independently observed order, controlled causal cases
-and a complete provider resource/lifetime argument establish the required kind
-of evidence without exempting candidate-induced failure or changing D; which
-concrete proof obligation, if any, is missing?** The existing text remains
-controlling. Method review does not approve a provider or clear the other open
-bindings. If an owner instead
-proposes a noise tolerance or different outcome rule, it needs a concrete,
-separately reviewed semantic amendment; this draft supplies no such permission
-and requests no repeat approval of the existing semantics.
+Applying section 5.1 to the existing restricted arrangement yields **not ready
+to select**. This is a bounded assessment of the published candidate and its
+corrections, not a new general method or a finding that every provider fails.
+The governing outcome rules remain unchanged; method review supplies no provider
+admission, deadline tolerance or renewed semantic approval.
 
-The existing restricted runtime/deployment proposal would keep new source offers
-outside the protected execution domain until L. Its costs include reduced source
-concurrency, restricted connectivity, original read-owner placement and output
-integration. Queuing before checkout avoids additional checkout leases from those
-requests; excluding their authority connections also requires admission before
-those lookups start. It does not free already-open pooled or unpooled backends.
-Nor is an external queue proved the only
-way to preserve an original request: a lawfully stopped attempt can release its
-lease while the request survives under PR #26's complete outcome/evidence rules.
-No working stop/release mechanism is supplied by that possibility.
-The placement's later correction still leaves already-started database
-preparation unresolved. Reviewing that arrangement would investigate a candidate,
-not adopt a proven solution. The FPGA/device-memory bridge stays parked.
+The candidate in the [placement proposal](https://github.com/samovers/OFARM2/issues/392#issuecomment-5695599206)
+has concrete content: establish the original read owner in one native PostgreSQL
+invocation before A; synchronously execute its evidence finalization there;
+and hold new source offers on a separate ingress machine before any request-driven
+database/host work. A pull-only dispatcher would remain quiet through L.
+The [preparation correction](https://github.com/samovers/OFARM2/issues/392#issuecomment-5697404147)
+withdraws waiting for every entered invocation and parks the hardware bridge.
 
-Review this draft for concrete errors in the source/authority mapping, omitted
-causal cases, an incorrectly rejected smaller mechanism, or a justified way to
-advance the existing arrangement within its owners. In particular:
+**Conditional benefit.** Same-invocation ownership removes the old sequence
+`application owner dies -> surviving backend starts I` if the backend invocation
+really was the original owner from before A and no alternate finalizer exists.
+It is not merely a liveness flag. PostgreSQL provides
+[nonatomic SPI transaction control](https://www.postgresql.org/docs/17/spi-spi-connect.html),
+but [SPI commit also starts another transaction](https://www.postgresql.org/docs/17/spi-spi-commit.html);
+post-C cleanup/startup remains inside the protected resource argument.
+The exact sealed-set entry witness, full-D enforcement and irreversible
+invocation cleanup remain unimplemented. Error unwinding while the backend
+survives must make a later SQL COMMIT unable to finalize the old invocation.
+Eligible I before later owner loss may still settle truthfully; no L follows.
+I need not equal WAL insertion, and no new counterexample to this prospective
+owner placement is claimed here.
 
-1. Does any claimed database guarantee exceed what the pinned code supplies?
-2. Can a concrete existing mechanism close both actual ordering and retained
-   resource progress without assuming a stalled participant will cooperate?
-3. After the evidence-method proposal above is reviewed, is further work on
-   the restricted arrangement justified by its scope/cost, capacity benefit and
-   unresolved preparation/output dependencies?
+**First unresolved source case.** The already-inspected current path supplies
+this specific schedule, without inventing a new runtime experiment:
+
+```text
+W: pool checkout -> BEGIN -> challenge -> synchronous mint
+   -> separate current-authority connection/query (still outstanding)
+R: original A and D -> request quiet source execution
+W: lookup exits -> receipt verification -> signing -> capability-bind SQL
+```
+
+Holding new requests outside the machine does not settle W's existing source
+transaction/lease or its possible authority backend. Waiting only because W is
+outstanding proves no covered storage cause; changing a preparation generation
+neither rolls it back nor supplies a stop ordered against the later bind call.
+If R proceeds, completion, connection cleanup and onward work still require an
+actual resource argument through acknowledgement and L. Any genuine required
+storage dependency must instead be identified precisely under Scope B. This is
+the previously disclosed preparation gap, now tied to the exact current path.
+
+KMS-only pending is narrower: the normal authority lookup has exited before KMS,
+although the source transaction remains open. The [existing source proposal](https://github.com/samovers/OFARM2/issues/392#issuecomment-5697735355)
+already suggests source-owned exclusive dispatch and lawful cleanup without
+waiting for that signer. It is not a new solution here: section 4's held-permit
+race, pending authority SQL, delayed cleanup reports and late resource activity
+remain to be resolved. The issuer already takes immutable arguments and no
+source connection; rewriting that argument shape would not close these gaps.
+
+**Scope and cost.** The [existing boundary allocation](https://github.com/samovers/OFARM2/issues/392#issuecomment-5695962121)
+is substantial; locating components together does not combine their authorities.
+
+| Owner | Concrete work this candidate still requires |
+|---|---|
+| #392 database binding | Native invocation/entry/cleanup mapping, complete S/C membership, actual acknowledgement and protection surviving C. |
+| #178 source owner | Real attempt/eligibility bindings, stop versus actual dispatch, separate operation outcomes and complete withdrawal/settlement evidence. PR #26's conditional approval supplies no implementation of these. |
+| Runtime/deployment owner under #167 | Enforced earliest-entry and late-completion isolation, capacity and queue ownership, restricted connectivity and reduced concurrency; no suitable implementation Delivery is assigned by this assessment. |
+| #177 output owner | A concrete irreversible acceptance primitive with current guards and strict D. The proposed response-port contract has not implemented it; preflight followed by an unguarded transfer is insufficient. |
+
+Independent identity, signing and custody authority stays with its owners.
+Queuing before acquisition avoids new leases; it does not free old backends.
+Source cleanup may preserve the original request under PR #26's complete rules,
+but no universal lease-free-successor topology or working stop follows from that
+permission. Shared post-C compute, storage or output activity cannot be excluded
+by calling the machines separate; the actual paths require the reviewed proof.
+
+**Assessment decision.** Retain native original-owner placement as a conditional
+candidate, but do not start its database implementation or invest in the proposed
+isolation topology on the assumption that source preparation will be solved later.
+The next missing mechanism is the source owner's actual stop/dispatch and
+outstanding-operation binding at the cut above, including pending authority
+lookup rather than only an idle connection with KMS pending. It must address the
+existing four cases in section 5 without waiting for a stalled controller or
+reclassifying its delay. This is work within the existing owner discussion, not
+another flag/registry, generic method document or newly invented prerequisite.
+The original-owner entry and output primitives remain separate open bindings.
+No new Delivery, hardware, authority-interface change or semantic decision is
+selected. A concrete change in those boundaries must be scoped by its owner
+before implementation; the kernel gains no cross-boundary workaround.
 
 The connection-factory timeout is a separate runtime follow-up, not a missing
 timeout proven from an omitted keyword. It passes the configured DSN to Psycopg.
@@ -406,5 +455,5 @@ benchmark, crash or hosted expensive baseline ran for this design. No isolation
 topology was built. Prior implementation test results are not reused as evidence
 for this candidate.
 
-Next: review section 5.1 against the existing read-owner requirements, then use
-that method to assess a concrete mechanism; retain open blockers and approvals.
+Next: review the section 6 candidate assessment, then resolve the specific
+source-owner mechanism it identifies; retain open blockers and existing approvals.
