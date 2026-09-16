@@ -1,0 +1,239 @@
+# Governed-read protection: Phase A assessment and open blockers
+
+Version 0.1, 2026-09-16. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
+**Draft for design review. The assessment is complete; the implementation design
+is blocked. No protection mechanism is selected or ready for approval.**
+
+This document consolidates the current source investigation and rejected
+alternatives into the existing Delivery's review surface. This draft PR is the
+Phase A workspace for #392, not a separately mergeable contract or approval
+prerequisite. It does not close the issue. No runtime, role, schema, canonical
+candidate, production route or dependency changes accompany it.
+
+## 1. Problem, scope and governing inputs
+
+A permitted limited historical read must preserve complete source observation
+and protection until its first irreversible disclosure. A hidden competing writer
+must not invalidate that protection or defeat the retained post-commit progress
+guarantee. The current transaction foundation supplies tenant binding and write
+serialization, but not this complete read capability.
+
+Primary boundary: **governed-read database observation, evidence membership and
+protection lifetime**, including participating source advancement. Runtime
+placement, source withdrawal, identity/key authority and output handoff are
+dependencies with existing owners; describing them here does not change them.
+
+| Input | Exact basis and authority limit |
+|---|---|
+| Implementation | OFARM2 `1b4d52e2d6387d486110465973ad822089bd9583`, tree `14d4d61d9410251aafdf8f6e559be3fdd24d23ef`. Live main matched this pin on 2026-09-16. |
+| Read semantics | [OFARM PR #37 candidate at 33abbe3](https://github.com/samovers/OFARM/blob/33abbe3c413a33ae38ba5ce189850c1d8556c4bd/package_meta/history/clean_baseline_migration/phase_reports/governed_read_transaction_coverage_and_disclosure_protocol_rfc_candidate_v0_1.md), especially sections 8.3–8.3.1 and RD-C20/C21. Approved candidate semantics, not an admitted PostgreSQL provider. |
+| Source withdrawal | [OFARM PR #26 candidate at 38af747](https://github.com/samovers/OFARM/blob/38af7475d8cbd41b158e50ba77b60f140cbef4ba/package_meta/history/clean_baseline_migration/phase_reports/not_required_transaction_and_consumption_protocol_rfc_candidate_v0_1.md), section 11.5. The task user approved this exact head in the publication task; implementation is not approved by that message. |
+| Existing design correction | [#392 comment 5694678785](https://github.com/samovers/OFARM2/issues/392#issuecomment-5694678785). Its database resource finding is reused, not presented as a new runtime reproduction. |
+| Remaining owner decisions | [Restricted placement proposal](https://github.com/samovers/OFARM2/issues/392#issuecomment-5695599206), [preparation correction and hardware hold](https://github.com/samovers/OFARM2/issues/392#issuecomment-5697404147), and [source-withdrawal review](https://github.com/samovers/OFARM2/issues/392#issuecomment-5698376629). Historical proposals remain subject to their recorded corrections. |
+
+Use the existing protocol terms: A is durable read admission; S is the final
+complete observation; P is frozen preparation; I is actual entry into the one
+evidence-finalization operation; C is actual atomic evidence commit; L is the
+first irreversible disclosure handoff; O records later truthful observations.
+D is the unchanged full deadline. C is distinct from its acknowledgement.
+
+Protection precedes final S and survives C through L or proved irrevocable
+termination. For the RD-C20 positive pair, hold independent authority, retention,
+session, deadline and fault conditions fixed. Offer a hidden candidate after
+actual C, including before acknowledgement. Both permitted limited replies must
+reach L, and the same deferred writer must actually commit afterward under valid
+authority. Dropping the writer or suppressing the read is not that result.
+
+## 2. Authority, trust and non-effects
+
+| Owner | Retained responsibility |
+|---|---|
+| #392 database binding | Complete observation/membership, source participation, actual protection, evidence-finalization and storage-side completion facts. |
+| #178 / PR #26 source owner | Real attempt identity, lawful withdrawal, outstanding operations, truthful outcome, complete evidence and retry eligibility. A read gains no rollback power. |
+| Existing tenant, principal and signing owners | Challenge and current authority verification; key custody and admission/revocation decisions. |
+| Runtime/deployment owner | Execution placement, connection ownership, ingress enforcement and actual resource isolation. |
+| #177 and existing output owner | Original live read ownership, current handoff guards, immutable bytes and actual L. |
+| Existing policy/projection/retention owners | Reader eligibility, public fields, admitted persistence and custody. Missing bindings are not supplied by SQL capability. |
+
+Protected assets are tenant authority, source and evidence integrity, truthful
+outcomes, complete read coverage, and the retained disclosure/progress contract.
+Trusted components may stall or complete in adverse order. Caller flags, stale
+results, connection IDs, phase labels and queued requests are not authority.
+Arbitrary compromise of trusted native process memory is outside this assessment;
+no new isolation claim against such compromise is made.
+
+The primary risk is claiming an established stop/protection from an earlier check
+while source work can still advance or interfere. Containment is to leave the
+mechanism unselected until actual ordering, participation and resource paths are
+shown. No temporary reader, deadline relaxation, authority bypass, new public
+failure code, hidden-selected fallback or permanent-refusal substitute is proposed.
+Conditional PR #26 semantics remain approved; withdrawal is not enabled without
+its reader, actual-attempt, history, public-projection and retention bindings.
+
+## 3. Current source path and concrete limits
+
+The [tenant manager](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tenant_uow.py#L422)
+executes:
+
+```text
+pool checkout -> BEGIN READ COMMITTED -> challenge -> observation
+ -> synchronous issuer -> bind_tenant_capability -> bound-context read
+ -> yield UnitOfWork -> caller work -> commit or rollback -> pool return
+```
+
+The [issuer](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tenant_capability_issuer.py#L111)
+includes a [separate current-authority database lookup](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/signing_authority.py#L180)
+and signing evidence verification before external signing. Whole issuer execution is not
+database-free or proof of a KMS-only stage. The [existing cancellation test](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tests/test_tenant_uow.py#L356) raises
+inside the post-binding caller body; it does not verify interruption of a stalled
+issuer. These are source observations; no tests were rerun for this claim.
+
+| Mechanism at the pinned source | Actual guarantee | Limit for #392 |
+|---|---|---|
+| [UNLOGGED CHALLENGE/BOUND context](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/migrations/0001_initial.sql#L1026) and [challenge creation](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/migrations/0001_initial.sql#L5801) | Backend-incarnation/transaction binding. CHALLENGE is inserted inside the source transaction before issuer invocation. | Another ordinary connection cannot see that new uncommitted row as a stop record. It is neither durable withdrawal history nor a canonical attempt identity. |
+| [Binder admission lock](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/migrations/0001_initial.sql#L6007) | Fixed shared transaction lock before current key/principal reconstruction; designated authority transitions acquire the exclusive pair. | Key/principal authority protection, not per-attempt read cancellation. [Ownership is separately specified](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/deployment/postgresql/provisioning_specs.py#L1698). |
+| [Global CLOSE_ADMISSION](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/migrations/0001_initial.sql#L4599) | Key-control login and closed key-management reasons record a global key-lifecycle act. | This routine does not itself acquire the exclusive advisory pair. It is not a reader-owned stop API. |
+| [Tenant write lock](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/migrations/0001_initial.sql#L6382) and [knowledge allocator](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/migrations/0008_tenant_command_runtime_bundle_selection.sql#L179) | Tenant derives from BOUND context; batch allocation serializes through transaction end. | Acquired after binding. A gate after allocation can inherit already-held write resources. |
+
+The source retains a backend, pool lease, XID and uncommitted context work while
+the issuer is pending. This does not prove either harmlessness or deadline failure.
+The challenge cut is not automatically PR #26's canonical eligible source stage.
+
+## 4. Evaluated approaches and why they remain insufficient
+
+### Application dispatch permit
+
+Separating issuer execution from the source connection owner could remove one
+signer-completion dependency. It requires the issuer to receive only existing
+immutable inputs, with no source connection or advancing callback. It does not
+by itself settle `claim permit -> pause -> read closes gate -> resume send`.
+A final flag check leaves a check-to-send interval; waiting for the permit holder
+retains its scheduling dependency. This symbolic case assumes no independently
+established covered storage cause. No replacement runtime interface is selected
+in this database PR.
+
+### Concurrent connection close
+
+The exact [review lock](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/requirements-review-baseline.lock)
+pins Psycopg/binary 3.3.4 and pool 3.3.1 for CPython 3.12 Linux x86_64.
+The inspected binary wheel SHA-256 is
+`e7510c37550f91a187e3660a8cc50d4b760f8c3b8b2f89ebc5698cd2c7f2c85d`.
+Static ZIP/generated-C/ELF inspection found that ordinary close takes no
+`Connection.lock`; wrapper finish frees and clears its handle. On this build,
+the generated critical-section macros add no mutex. Parameterized send releases
+the GIL and copies the handle before calling libpq.
+
+Reviewers can reproduce the narrow static observation from that hash-pinned
+wheel: `psycopg_binary/pq.c` lines 1581–1600, 4933–5008 and 9739–9818;
+`pq.cpython-312-x86_64-linux-gnu.so` offsets `0x1796d–0x1797b` and
+`0x38ab8–0x38afd`. The bundled client's static version constant is libpq 18.0;
+the configured PostgreSQL server remains 17.10. No live library selection was
+attested and no downloaded code was loaded or executed.
+
+Therefore raw concurrent close/finish is not selected as an irreversible stop
+against a racing send. This is consistent with [libpq's same-connection threading
+restriction](https://www.postgresql.org/docs/18/libpq-threading.html). It is not a
+reproduced crash or driver-defect claim. Exclusive idle close remains ordinary
+cleanup; local close proves neither prior command outcome nor backend rollback.
+No driver fork, upgrade or unsafe concurrent-call experiment is proposed.
+
+### Earlier SQL admission
+
+A plain stop-row check admits `writer checks open -> reader closes -> writer
+commits`. A later check still needs serialization through commit; a deferred
+trigger alone provides no such order, and [SET CONSTRAINTS](https://www.postgresql.org/docs/17/sql-set-constraints.html)
+can force deferred checks earlier. A complete conflicting gate could order source
+commit against final S, provided all paths participate and read protection survives
+C through L. That conditional safety property is different from resource isolation.
+
+The [recorded #392 correction](https://github.com/samovers/OFARM2/issues/392#issuecomment-5694678785)
+already supplies the decisive counterexample:
+
+```text
+reader: actual C -> PostgreSQL lock cleanup -> acknowledgement -> L
+                         ^
+new writer: binder/gate acquisition touches shared resources -> waits/refuses
+```
+
+The binder admission tag identifies a common lock-manager partition. Compatible
+high-level locks do not eliminate internal exclusive partition activity. Moving
+the gate earlier in SQL still enters shared server machinery. Denying a late
+binder therefore establishes neither no database work nor the RD-C20 positive
+pair. This is reused source-backed design analysis, not a new timing test.
+
+The earlier-SQL-gate direction is closed as a proposed remedy for this finding.
+It is not a proof against every PostgreSQL design or every use of database locks
+inside a complete solution. Repeating this gate or the driver-close investigation
+would not advance the current design.
+
+## 5. Retained cases, falsifiable evidence and blocker disposition
+
+| Existing case / invariant | Required evidence | Current status |
+|---|---|---|
+| Withdrawal/controller scheduling | Real source attempt and lawful stop order; no escaped continuation or unlisted control wait. | Open. A database disposition could order effects but does not automatically stop the client or settle its obligations. |
+| Database preparation already running | Exact command, resource, reached stage, outcome and causal interval; no simultaneous rollback or guessed cancellation. | Open. A genuine required protection-release wait may qualify under Scope B; BEGIN or a stalled task alone does not establish it. |
+| Cleanup complete, report delayed | Distinguish storage release/acknowledgement, owner observation and onward delivery; protection must not depend on an unrelated delayed report. | Open. A completed cause cannot justify later callback delay; outcome uncertainty remains separately owned. |
+| New source or late completion after actual C; RD-C20 | Both admitted limited reads reach L under matched independent conditions; observe C, acknowledgement and the same writer's actual valid commit after L. | B1 remains open. Commit exclusion does not supply resource isolation. |
+| Full membership and continuous protection; RD-C21 | Include every relevant source/import/commit path, malformed/unresolved enclosing partitions and pre-cut commits with late notifications; reject forged/lost protection. | Required. No inventory-completeness or provider-admission claim is made here. |
+| Actual finalization entry and original-owner lifetime | Original live owner and full D ordered against I without a check-to-start gap; no new initiation after actual owner loss. | Existing finalization-entry obligation remains open; this assessment does not clear it. |
+
+Scope B permits only its closed, precisely established causal storage waits
+through unchanged D. It does not turn arbitrary control/pool/callback delay into
+storage finalization, nor excuse a newly offered writer's interference after
+actual C. Genuine independent loss of C acknowledgement still suppresses L.
+Required future runtime evidence uses fictional fixtures and isolated disposable
+databases through real participating entry paths, not a model that assumes the
+missing ordering or physical isolation.
+
+Production governed routes remain closed at the inspected head. These schedules
+describe required future production-composition negative/positive cases; they
+are not claims of a live governed-reader vulnerability or executed conformance.
+
+## 6. Smallest next scope and review request
+
+The existing restricted runtime/deployment proposal would keep new source offers
+outside the protected execution domain until L. Its costs include reduced source
+concurrency, restricted connectivity, original read-owner placement and output
+integration. Its later correction still leaves already-started database
+preparation unresolved. Reviewing that arrangement would investigate a candidate,
+not adopt a proven solution. The FPGA/device-memory bridge stays parked.
+
+Review this draft for concrete errors in the source/authority mapping, omitted
+causal cases, an incorrectly rejected smaller mechanism, or a justified way to
+advance the existing arrangement within its owners. In particular:
+
+1. Does any claimed database guarantee exceed what the pinned code supplies?
+2. Can a concrete existing mechanism close both actual ordering and retained
+   resource progress without assuming a stalled participant will cooperate?
+3. Is further work on the published restricted arrangement justified by its
+   scope/cost, including its unresolved preparation and output dependencies?
+
+No implementation decision card is ready. Keep the current draft open while
+reviewing Phase A; do not merge this assessment as a substitute for #392's complete
+capability. An independent runtime, key, deployment or output authority change
+must be handled in its own bounded Delivery rather than appended to this PR.
+
+Expected eventual #392 areas remain typed database operations near
+`kernel/tenant_uow.py`, an additive migration if justified, matching narrow
+provisioning/readiness checks and focused evidence. They are predictions, not
+approval or a selected design. Existing migrations and canonical references stay
+immutable. No executable abstraction, duplicate authority store or compatibility
+path is added. The simplest gate/close alternatives and their concrete failures
+are above; small diff size does not override the missing guarantees.
+
+## 7. Verification and claim limits
+
+Completed before publication: live main/#392/PR inventory reads; pinned source
+and canonical input checks; primary driver/PostgreSQL contract reads; inert
+inspection of three lock-matching wheels (139 RECORD entries and ten extracted
+members verified); bounded local peer assessments. These are static evidence,
+not independent approval or #392 blocker clearance.
+
+The draft PR body records the fresh mandatory package check, whitespace/link
+checks and exact publication head. No runtime, PostgreSQL, KMS, concurrency,
+benchmark, crash or hosted expensive baseline ran for this design. No isolation
+topology was built. Prior implementation test results are not reused as evidence
+for this candidate.
+
+Next: review the concrete findings and scope choice on this draft; retain open
+blockers and existing approvals until a complete mechanism can be assessed.
