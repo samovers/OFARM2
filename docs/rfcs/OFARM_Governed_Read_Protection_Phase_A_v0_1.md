@@ -1,6 +1,6 @@
 # Governed-read protection: Phase A assessment and open blockers
 
-Version 0.3, 2026-09-16. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
+Version 0.4, 2026-09-16. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
 **Draft for design review. The assessment is complete; the implementation design
 is blocked. No protection mechanism is selected or ready for approval.**
 
@@ -213,7 +213,7 @@ must supply its actual resource argument; another lock name alone is no progress
 | Parked writers and connection capacity; RD-C21 | Hold all eight source-pool leases; require the selected read's needed checkout/lookup to remain usable under its actual placement. Separately exhaust shared role/database capacity with pending unpooled lookups. Cover capacity retained or reacquired at each stage. | Open conditional negative case. A future reader sharing exhausted capacity fails; no live governed-reader reproduction or selected separate pool/role is claimed. |
 | Cleanup complete, report delayed | Distinguish storage release/acknowledgement, owner observation and onward delivery; protection must not depend on an unrelated delayed report. | Open. A completed cause cannot justify later callback delay; outcome uncertainty remains separately owned. |
 | New source or late completion after actual C; RD-C20 | Both admitted limited reads reach L under matched independent conditions; independently observe C, then offer the candidate, observe acknowledgement/L and the same writer's actual later valid commit. Use the causal-evidence distinction below. | B1 remains open. Commit exclusion does not supply resource isolation; latency distributions alone do not decide this pair. |
-| Full membership and continuous protection; RD-C21 | Include every relevant source/import/commit path, malformed/unresolved enclosing partitions and pre-cut commits with late notifications; reject forged/lost protection. | Required. No inventory-completeness or provider-admission claim is made here. |
+| Full membership and continuous protection; RD-C21 | Include every relevant admission/import/migration/commit path, malformed/unresolved-root candidates through their enclosing partition, qualifications of qualifiers, writers outside today's executable writer set and pre-acquisition commits notified after C. Exercise omitted partitions/paths, forged/released protection, optimistic conflict abort and hidden-dependent waits; reject notification blindness or empty-history fallback. | Required. Protection cannot be filtered by successful admission, valid form, qualifier depth, current writer set, known IDs or predicted public label. No inventory-completeness or provider-admission claim is made here. |
 | Actual finalization entry and original-owner lifetime | Original live owner and full D ordered against I without a check-to-start gap; no new initiation after actual owner loss. | Existing finalization-entry obligation remains open; this assessment does not clear it. |
 
 Scope B permits only its closed, precisely established causal storage waits
@@ -299,11 +299,15 @@ A pause that itself consumes D cannot establish candidate-induced failure.
 Test observers supply evidence, not the
 original owner's acknowledgement, continued lifetime or disclosure authority.
 
+Every adversary enumerated in the pinned RD-C20/RD-C21 is a required named case;
+these tables do not narrow that enumeration. Candidate admission/classification
+may remain unresolved; that does not waive source-writer authority or read guards.
+
 | Case using the existing requirements | Decisive observation |
 |---|---|
 | Observation-method calibration | A database transaction is committed while its client has no acknowledgement; candidate introduction is ordered afterward. This validates the ordering technique only. Revalidate any instrumented location on the pinned runtime before using it. |
 | Defective-mechanism control | Permit an actual intervening candidate commit before L, or demonstrate its concrete resource dependency causing required acknowledgement/L to miss D while the matched no-candidate execution succeeds. The method must report failure; sanitized suppression is not a pass. An imposed pause without that causal dependency establishes only a test schedule. |
-| RD-C20 positive pair | Through real participating paths, both permitted limited replies reach actual L exactly once before unchanged D; all handoff guards hold and the same deferred candidate actually commits later under valid authority. Exercise offers after C before acknowledgement and after acknowledgement before L. A dropped or permanently blocked writer fails this case. |
+| RD-C20 positive pair | Through real participating paths, both permitted limited replies reach actual L exactly once before unchanged D; all handoff guards hold and the same deferred candidate actually commits later under valid authority. Exercise offers after C before acknowledgement and after acknowledgement before L, including unresolved candidate admission/classification and malformed-root candidates protected through their enclosing partition. A dropped or permanently blocked writer fails this case. |
 | Independent acknowledgement loss | Apply the same independent loss in both runs. Neither may disclose without acknowledged complete C; reconciliation does not revive either attempt. This is a fault case, not a substitute for the positive pair. |
 | Public-policy comparator | Compare the exact permitted public content and omissions in each pair. A policy-excluded pair stays identically excluded without inventing C/L for a successful read. Disclosable-history refresh/suppression retains its separate existing case. |
 | RD-C21 coverage, capacity and allowed wait | Use the existing section 5 cases. Record the exact resource holder and release dependency, pool lease versus backend capacity, and every participating source path. Only the existing enumerated storage wait evidenced through full D qualifies for Scope B; arbitrary exhaustion or missing coverage does not. |
