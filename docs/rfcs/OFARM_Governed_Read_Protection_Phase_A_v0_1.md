@@ -1,6 +1,6 @@
 # Governed-read protection: Phase A assessment and open blockers
 
-Version 0.8, 2026-09-17. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
+Version 0.9, 2026-09-17. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
 **Draft for design review. The assessment is complete; the implementation design
 is blocked. No protection mechanism is selected or ready for approval.**
 
@@ -386,7 +386,8 @@ orders commands rather than executing a reply command inside the running CALL.
 A second connection cannot bind the original backend/xid, and returning then
 calling again ends the proposed original invocation. A private request/reply
 exchange with the existing runtime minter is a concrete candidate, not a facility
-the repository currently supplies. Its transport is not selected here.
+the repository currently supplies. Section 6.1 proposes a receiver for review;
+neither it nor the complete provider is admitted for implementation.
 
 The database side of that exchange also needs an owner. The [review's PostgreSQL
 16.13 probe](https://github.com/samovers/OFARM2/pull/396#pullrequestreview-5233289051)
@@ -508,9 +509,9 @@ isolation topology on the assumption that rebinding or source preparation will b
 solved later. The existing binder and issuer can be retained at the value-contract
 level; the next concrete dependency is the private invocation-to-minter adapter,
 including live-request provenance, interruption and complete resource disposition.
-Define the database-side reply path with its database/provisioning owners before
-specifying the complementary runtime integration; include custody/retention owners
-if storage is proposed. Coordinate the design, but keep independently authoritative
+Section 6.1 now defines a database-side reply candidate and the request association
+its complementary runtime integration must supply. Coordinate that design with
+the database/provisioning owners, but keep independently authoritative
 changes in separate bounded Deliveries. Do not create a general broker or duplicate
 authority ledger. Any additional identity, signing or audit decision stays with
 its own owner. This can proceed before or alongside source-owner work. The source
@@ -550,6 +551,111 @@ duplicate authority store or compatibility
 path is added. The simplest gate/close alternatives and their concrete failures
 are above; small diff size does not override the missing guarantees.
 
+### 6.1. Receiver candidate for review
+
+**Propose one fixed, private pathname Unix-domain stream to the existing runtime
+minter process, received inside the already-proposed native read component.**
+This avoids a reply table, capability rows/WAL copies, an extra reply transaction
+and polling snapshots. It adds native I/O and a required local Linux deployment
+arrangement. No new daemon, generic broker, direct database-to-KMS access or
+cryptographic verifier is proposed. The existing runtime has no such listener;
+this is a candidate interface, not evidence that it works.
+
+**Associate the request before minting.** Runtime must exclusively retain the
+actual PostgreSQL connection and its authenticated read/principal context while
+dispatching the fixed top-level native CALL. The native entry derives its backend
+incarnation and a fresh per-invocation nonce, then emits a bounded, fixed-format
+NOTICE containing only protocol/correlation metadata: PID, backend start and
+nonce. A notice handler on that exact connection associates these values with
+the pending read. The native component presents the same tuple on its one socket;
+runtime admits it only after matching the connection-associated tuple and OS peer
+identity. The nonce is correlation, not a bearer credential; arbitrary SQL NOTICE
+content or possession of that tuple must never grant minting authority.
+
+This avoids assuming that application SQL may inspect backend start: the current
+[observer/binder grant](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/migrations/0001_initial.sql#L6434)
+does not grant that helper to the application. PID alone also cannot distinguish
+backend reuse, nor can backend incarnation distinguish successive invocations.
+Only the intended native entry on the exclusively owned connection may establish
+the association. Effective `client_min_messages` must permit NOTICE at entry;
+actual receipt and handling are required before socket admission. Suppressed or
+missing NOTICE means no mint and no A. A permissive setting alone proves no
+delivery. No global setting change or JWS in NOTICE, diagnostics or SQL results is
+proposed. This bootstrap remains unimplemented and needs the hostile cases below.
+
+The [Linux pathname/peer-credential contract](https://man7.org/linux/man-pages/man7/unix.7.html)
+requires a protected directory/socket and attested local placement with compatible
+PID/UID namespace mapping. Do not assume that PostgreSQL's PID equals the runtime's
+peer PID across arbitrary containers. `SO_PEERCRED` gives connection-time process
+credentials, not tenant identity, current liveness or invocation authority. Both
+ends must verify their expected peer under the deployment owner's process mapping;
+the runtime receiving the association must be the process retaining that request.
+No caller-selected endpoint or transport fallback is allowed. This co-location
+requirement is a real cost, not proof of isolation from source activity.
+
+**One connection, two serialized mint phases.** Each request/reply is tied to the
+admitted socket, invocation nonce, phase, full xid and fresh database-created
+challenge (including its existing audience/time values). Runtime takes identity
+and authority only from its retained trusted context, never from socket fields,
+and calls the existing issuer. Its reply carries the unchanged JWS and the
+expected binding fields from that trusted context. Native pins those expected
+fields from the first reply for both phases, passes only the JWS as a parameter
+to fixed schema-qualified binder SQL, then compares the returned tenant context
+under the [existing binding contract](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tenant_uow.py#L126).
+These are comparison values, not alternate binder arguments or a new principal
+decision; phase two must not silently replace them with another authority.
+Bound frames before allocation, including the existing
+[8192-byte capability limit](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/deployment/postgresql/tenant_contract.py#L37);
+do not add a second JWS verifier. The association admits one socket and exactly
+these phases: no reconnect, descriptor transfer, resumed invocation, replacement
+socket, duplicate phase or successor consumption. Retire it on success, error or
+abandonment. Finish the exchange and close the local socket after the second
+successful binding, before final protection/S; no adapter work is added to the
+positive C-to-L path. Existing refusal audit and remote-work disposition are still
+obligations, not consequences of closing a descriptor.
+
+**Native lifecycle.** The top-level procedure must be
+[`SECURITY INVOKER` without an attached `SET` clause](https://www.postgresql.org/docs/17/sql-createprocedure.html)
+to permit its transaction control. Keep invocation/socket state in the nonatomic
+SPI procedure context, which [survives internal commits](https://github.com/postgres/postgres/blob/REL_17_10/src/backend/executor/spi.c#L148),
+with fresh per-transaction challenge state. Use nonblocking I/O and bounded,
+interruptible [latch/socket waits](https://github.com/postgres/postgres/blob/REL_17_10/src/include/storage/latch.h)
+with PostgreSQL interrupt checks; do not retain transaction-owned wait state
+across A. Account for the descriptor through
+[`AcquireExternalFD`/`ReleaseExternalFD`](https://github.com/postgres/postgres/blob/REL_17_10/src/backend/storage/file/fd.c#L1158),
+which do not close it. Explicit success cleanup and idempotent, non-throwing
+[`PG_ENSURE_ERROR_CLEANUP`](https://github.com/postgres/postgres/blob/REL_17_10/src/include/storage/ipc.h#L24)
+handling cover local cleanup; hard process death relies on OS closure. None proves
+that dispatched authority lookup, KMS or transport work stopped. Connection,
+accept, framing and cleanup work, including rejected traffic, still belongs in
+section 5.1's resource argument. Wait limits never extend full D.
+
+Avoiding persisted reply rows does not eliminate custody: runtime/native memory,
+socket buffers and possible crash/swap copies remain. Custody owners must assess
+those surfaces and permitted diagnostics; no perfect erasure or zero-copy claim
+is made. Database/provisioning owners own receiver privileges, installation and
+catalog evidence; runtime/deployment owners own the listener, exclusive connection
+association, peer/namespace mapping and cleanup. Existing signing, binder and
+audit authorities retain their boundaries. Joint interface review supplies no
+combined implementation permission or inherited crypto-installer authority.
+
+**First falsifiers, before admission.** Use the pinned PostgreSQL 17.10 and actual
+roles/binder in isolated disposable databases with fictional requests: two binds
+across A; suppressed/delayed/spoofed NOTICE; another request/backend presenting the
+tuple; reused PID or backend with a stale registration; runtime restart; duplicate,
+oversized, partial or wrong-phase frames; authority change; interruption or late
+reply at each phase/commit. Verify no wrong-principal binding, successor use or
+credential-bearing diagnostics, and account for all outstanding remote work. These
+are proposed cases, not executed evidence. A failed trusted association or an
+unacceptable local-placement/custody cost requires reconsidering the receiver;
+neither justifies silently falling back to a table or widening authority.
+
+This is the smallest receiver candidate found within the native-owner proposal,
+not a complete protection design. Source stop/dispatch, S/I/C/L, full-D progress
+and output acceptance remain open. Next: review this receiver and its association
+contract, then resolve the complementary runtime binding with its owner before
+any implementation decision card.
+
 ## 7. Verification and claim limits
 
 Completed before publication: live main/#392/PR inventory reads; pinned source
@@ -564,6 +670,6 @@ benchmark, crash or hosted expensive baseline ran for this design. No isolation
 topology was built. Prior implementation test results are not reused as evidence
 for this candidate.
 
-Next: review the section 6 ownership correction, then define the database-side
-reply path and its owner boundaries before specifying complementary runtime
-integration. Retain open blockers and existing approvals.
+Next: review section 6.1's concrete receiver and request-association candidate,
+then resolve its complementary runtime binding. Retain open blockers and existing
+approvals; no implementation decision card is ready.
