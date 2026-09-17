@@ -1,6 +1,6 @@
 # Governed-read protection: Phase A assessment and open blockers
 
-Version 0.9, 2026-09-17. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
+Version 0.10, 2026-09-17. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
 **Draft for design review. The assessment is complete; the implementation design
 is blocked. No protection mechanism is selected or ready for approval.**
 
@@ -622,7 +622,7 @@ with fresh per-transaction challenge state. Use nonblocking I/O and bounded,
 interruptible [latch/socket waits](https://github.com/postgres/postgres/blob/REL_17_10/src/include/storage/latch.h)
 with PostgreSQL interrupt checks; do not retain transaction-owned wait state
 across A. Account for the descriptor through
-[`AcquireExternalFD`/`ReleaseExternalFD`](https://github.com/postgres/postgres/blob/REL_17_10/src/backend/storage/file/fd.c#L1158),
+[`AcquireExternalFD`/`ReleaseExternalFD`](https://github.com/postgres/postgres/blob/REL_17_10/src/backend/storage/file/fd.c#L1186),
 which do not close it. Explicit success cleanup and idempotent, non-throwing
 [`PG_ENSURE_ERROR_CLEANUP`](https://github.com/postgres/postgres/blob/REL_17_10/src/include/storage/ipc.h#L24)
 handling cover local cleanup; hard process death relies on OS closure. None proves
@@ -652,9 +652,130 @@ neither justifies silently falling back to a table or widening authority.
 
 This is the smallest receiver candidate found within the native-owner proposal,
 not a complete protection design. Source stop/dispatch, S/I/C/L, full-D progress
-and output acceptance remain open. Next: review this receiver and its association
-contract, then resolve the complementary runtime binding with its owner before
-any implementation decision card.
+and output acceptance remain open. Section 6.2 proposes the complementary runtime
+lifecycle; neither section supplies an implementation decision card.
+
+### 6.2. Complementary runtime candidate and unresolved integration
+
+**One exchange, two execution paths in the existing runtime process.** Propose
+one thread driving the fixed native CALL and one bounded socket/minter worker for
+its registered read. This is the smallest arrangement assessed against the current
+synchronous issuer; it is not a new daemon, broker, general worker pool or
+multi-read capacity claim. The native invocation remains the proposed original
+read owner. Neither runtime thread acquires its I/L authority.
+
+Start from the existing [audited authentication path](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/application_runtime.py#L88),
+retaining the authenticated principal and read context as immutable trusted values.
+Use an exclusive, per-invocation non-pooled connection in autocommit mode for the
+top-level CALL, without automatic preparation or an outer BEGIN. The current
+[pool/reset contract](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tenant_uow.py#L371)
+is different; do not lend this connection through that pool. Acquisition and
+backend capacity need explicit runtime/deployment admission. A dedicated connection
+avoids that pool's lease dependency, not shared database/role capacity exhaustion.
+No role, timeout or original lifetime bound is changed by this proposal.
+
+**Pair both ends without a process registry.** Narrow this candidate to a direct
+local PostgreSQL Unix socket as well as the private minter socket. The same runtime
+process must create and exclusively retain the SQL connection and minter listener;
+no proxy, process handoff or runtime descriptor inheritance/transfer is admitted.
+Runtime captures its connection's [protocol backend PID](https://www.postgresql.org/docs/17/libpq-status.html)
+before CALL. Under the attested namespace mapping, require socket peer PID =
+NOTICE PID = that captured PID, alongside expected credentials, backend incarnation
+and invocation nonce. Shared UID/GID alone cannot distinguish PostgreSQL backends.
+Native can compare the minter peer credentials with those on its actual
+[PostgreSQL frontend descriptor](https://github.com/postgres/postgres/blob/REL_17_10/src/include/libpq/libpq-be.h#L132);
+PostgreSQL's [existing peer-credential use](https://github.com/postgres/postgres/blob/REL_17_10/src/backend/libpq/auth.c#L1872)
+supports inspecting that socket. Native must not read, write or close the frontend
+descriptor. This binds connection-time processes, not current liveness or native
+code origin; the exclusive fixed CALL and full association remain necessary.
+Local SQL connectivity and its authentication policy need deployment/database
+owner review. Do not silently switch database authentication to `peer` or `trust`.
+This additional placement restriction is a cost, not an already admitted topology.
+
+**Register before CALL; accept either arrival order.** Retain one bounded request
+record attached to the actual connection and its captured PID, then install the
+notice callback and dispatch the fixed CALL. In pinned Psycopg 3.3.4,
+[`execute` holds the connection lock while waiting](https://github.com/psycopg/psycopg/blob/3.3.4/psycopg/psycopg/cursor.py#L112),
+and the [notice handler runs inline and catches callback exceptions](https://github.com/psycopg/psycopg/blob/3.3.4/psycopg/psycopg/_connection_base.py#L348).
+The callback copies only bounded validated correlation fields; it does no SQL,
+minting, socket I/O or worker join. Do not retain its temporary Diagnostic object
+or depend on raising an exception to abort CALL. Invalid protocol metadata sets
+an explicit refusal state without placing raw diagnostics or credentials in logs.
+
+Native NOTICE emission before connect does not ensure Python processes NOTICE
+before socket acceptance. The worker first checks the peer against the registered
+connection PID, retains at most the bounded unadmitted socket/hello for that peer,
+and waits for the matching copied NOTICE within the unchanged lifetime bounds.
+No registration lock is held across waits, issuer calls, socket I/O or cleanup.
+Only when both observations match may it atomically claim the single socket.
+Wrong or duplicate presenters cannot consume, replace, retire or extend the live
+registration or D. Missing NOTICE never authorizes minting; neither arrival order
+requires reconnect. Test with the nonce deliberately disclosed: it is correlation,
+not a secrecy assumption. The worker never operates the active PostgreSQL connection.
+
+**Bound phase work to that registration.** Use section 6.1's bounded frames and
+exact socket/nonce/phase/xid/challenge association; no client-selected method,
+identity, endpoint or signing key. Admit each of the two phases once, then call
+the existing issuer with the retained principal. Pin the existing first fourteen
+principal-authority comparison fields across phases; independently validate each
+binding's key/head, nonce and timestamp under the existing contract. Do not freeze
+all nineteen returned fields or refresh principal authority from the next frame.
+Retirement disables further phase admission. An already admitted issuer operation
+may continue, including later lookup/signing stages; late completion must not
+recreate a registration, move its reply to another socket or authorize a successor.
+Before starting reply publication, recheck that the same request/phase is active;
+discard the completed result if retirement is observed. Already admitted or
+in-flight reply bytes remain separately accounted for, not retractable by a flag.
+Finishing the mint exchange does not mean the CALL, A/C or L completed.
+
+**Cancellation and completion stay distinct.** Separate CALL processing permits
+native/server interruption to reach the SQL thread while the minter is blocked.
+It does not supply application-triggered cancellation: the SQL thread is inside
+execute and the worker may be inside synchronous minting. An independently
+available control path is still unbound; this proposal does not invent a watchdog
+or treat concurrent rollback/close as its substitute. The issuer exposes no stop
+handle. Its [KMS timeout and disabled RPC retry](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/google_kms_signer.py#L30)
+are not an end-to-end bound on lookup, receipt processing, cleanup or full D.
+
+Normal disposal follows terminal CALL/result processing, then removal of the
+callback and closure of the dedicated connection. Early close is abandonment,
+not observed native-owner loss: PostgreSQL may [finish and commit before observing
+disconnection](https://www.postgresql.org/docs/17/protocol-flow.html#PROTOCOL-FLOW-TERMINATION).
+A lost response cannot prove A/C rolled back, trigger automatic CALL replay, or
+restore I/L. Retire only this invocation's association; keep outstanding issuer
+work owned and accounted for. Neither a local retired flag nor a worker join
+establishes complete remote cessation or allowed waiting. The existing
+[runtime shutdown](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/application_runtime.py#L109)
+does not yet cover this listener, connection and mint lifecycle. Their startup,
+shutdown, rejected traffic and delayed cleanup remain in section 5.1's resource
+argument through acknowledgement/L; two threads establish no isolation guarantee.
+
+**Audit integration is a concrete remaining owner decision.** The existing
+[request-router wrapper](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/request_router_audit.py#L88)
+catches classified errors during UnitOfWork entry only; its
+[tests exclude post-binding failures and finalization uncertainty](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tests/test_request_router_audit.py#L232).
+Putting the entire two-transaction CALL inside a replacement context entry could
+misclassify a second-bind error after durable A as an initial pre-tenant denial.
+The audit/runtime owners must map initial entry, post-A binding and uncertain
+finalization separately while preserving existing reason, health and gap rules.
+No new audit reason or reinterpretation is selected here; calling mint_capability
+alone does not inherit that wrapper. SQL completion and phase labels also grant
+no output authority; the actual guarded L remains the output owner's open binding.
+
+**Focused evidence before implementation admission.** Add to section 6.1's cases:
+both socket/NOTICE arrival orders; rejected presenter followed by legitimate
+presentation; callback refusal without raw-data logging; attempted SQL re-entry;
+retirement during authority lookup/KMS with inert late results; server interruption
+while mint is stalled; failure after committed A; lost CALL response; shutdown with
+outstanding work. Use actual roles/binder, pinned PostgreSQL and driver, fictional
+requests and disposable databases after approval. These cases have not run.
+
+The next design decisions are phase-specific audit disposition, independently
+available cancellation and complete remote-work/capacity disposition. Runtime,
+audit and deployment owners must scope any authoritative change separately; this
+assessment adds no implementation permission. Source stop/dispatch and the original
+S/I/C/L/progress obligations remain open. Do not manufacture another registry,
+worker framework or timeout extension to conceal those missing bindings.
 
 ## 7. Verification and claim limits
 
@@ -670,6 +791,6 @@ benchmark, crash or hosted expensive baseline ran for this design. No isolation
 topology was built. Prior implementation test results are not reused as evidence
 for this candidate.
 
-Next: review section 6.1's concrete receiver and request-association candidate,
-then resolve its complementary runtime binding. Retain open blockers and existing
-approvals; no implementation decision card is ready.
+Next: review section 6.2's runtime lifecycle, local peer pairing and explicit
+audit/control gaps, then resolve those owner decisions before implementation.
+Retain open blockers and existing approvals; no decision card is ready.
