@@ -1,6 +1,6 @@
 # Governed-read protection: Phase A assessment and open blockers
 
-Version 0.10, 2026-09-17. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
+Version 0.11, 2026-09-17. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
 **Draft for design review. The assessment is complete; the implementation design
 is blocked. No protection mechanism is selected or ready for approval.**
 
@@ -456,8 +456,8 @@ a configured timeout or cancellation request alone does not prove actual owner
 termination. No timer is extended, disabled or reclassified here. Before-I loss
 prevents I; eligible I before loss retains only lawful settlement, never L.
 
-**First unresolved source case.** The already-inspected current path supplies
-this specific schedule, without inventing a new runtime experiment:
+**First source case: no demonstrated closure.** The current path supplies this
+schedule. The following is source/contract analysis, not an executed timing test:
 
 ```text
 W: pool checkout -> BEGIN -> challenge -> synchronous mint
@@ -466,22 +466,50 @@ R: original A and D -> request quiet source execution
 W: lookup exits -> receipt verification -> signing -> capability-bind SQL
 ```
 
-Holding new requests outside the machine does not settle W's existing source
-transaction/lease or its possible authority backend. Waiting only because W is
-outstanding proves no covered storage cause; changing a preparation generation
-neither rolls it back nor supplies a stop ordered against the later bind call.
-If R proceeds, completion, connection cleanup and onward work still require an
-actual resource argument through acknowledgement and L. Any genuine required
-storage dependency must instead be identified precisely under Scope B. This is
-the previously disclosed preparation gap, now tied to the exact current path.
+The [authority SQL](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/migrations/0002_authentication_read_api.sql#L260)
+reads the binder instance, keyring, complete lifecycle stream and verification
+key, checking their digests. It contains no explicit advisory/row lock, write or
+source-stop operation. It is not the later binder admission-lock acquisition;
+ordinary database reads and their transaction/connection cleanup still use shared
+resources. Mere sharing proves neither a missed deadline nor harmlessness.
 
-KMS-only pending is narrower: the normal authority lookup has exited before KMS,
-although the source transaction remains open. The [existing source proposal](https://github.com/samovers/OFARM2/issues/392#issuecomment-5697735355)
-already suggests source-owned exclusive dispatch and lawful cleanup without
-waiting for that signer. It is not a new solution here: section 4's held-permit
-race, pending authority SQL, delayed cleanup reports and late resource activity
-remain to be resolved. The issuer already takes immutable arguments and no
-source connection; rewriting that argument shape would not close these gaps.
+| Outstanding part | Actual ownership and remaining work |
+|---|---|
+| Source transaction | The source stack retains its pool lease, backend, full XID and uncommitted challenge. It is inside synchronous mint; the current code has no stop/dispatch arbitration. After mint returns successfully it sends bind SQL; its error cleanup runs only after control returns. |
+| Authority lookup | `SigningAuthorityReader.current` owns a separate unpooled connection using the same configured DSN. Its two fetches and connection-context exit precede receipt verification. Rolling back the source transaction does not finish this query or release this backend. |
+| Later issuer work | Receipt loading/verification, capability construction and external signing remain possible after lookup exit. The issuer already takes immutable values and no source connection; that does not fence the source stack's later bind. KMS-only pending is a narrower state after the authority context has exited. |
+| Cleanup and reuse | Source rollback, authoritative attempt evidence, authority-connection completion and pool return are different facts. Pool return can retain the backend and invokes reset work; it is not database-capacity release. Late callbacks, reports and reclamation still need disposition through C acknowledgement and L. |
+
+A proved source rollback removes the old challenge. The existing binder requires
+the matching backend incarnation, current full XID and CHALLENGE row, so an old
+capability does not thereby gain a valid new binding. The unresolved continuation
+can still dispatch SQL and consume resources even when binding is refused.
+
+There is no current stop point to select from these facts. The existing
+source-owned withdrawal proposal remains conditional: PR #26 section 11.5
+requires independently bound reader eligibility, operation-wide withdrawal
+history, exact attempt/stage and exclusive persistence ownership before the
+irreversible stop, plus the required public-projection and retention bindings.
+Those bindings remain absent; A is not permission. Command-idleness of the source
+connection does not account for the separate query. Nor does that separate query
+automatically forbid rollback of a different idle transaction: its ownership,
+status and continued effects must be accounted for without concurrent commands
+or pretending cancellation succeeded.
+
+| Proposed disposition of this schedule | Why it does not yet close the case |
+|---|---|
+| Hold new offers and wait for all existing mint work | This leaves W running and may wait on connection setup, application scheduling, receipt verification or signing. Scope B permits no generic drain. Identify an actual enumerated storage dependency and causal wait through full D; SQL execution alone does not qualify. |
+| Fence forward dispatch and roll back only W's source transaction | This is the [existing narrow source proposal](https://github.com/samovers/OFARM2/issues/392#issuecomment-5697735355), not an implemented hook or newly granted authority. Even with its prerequisites proved, the separate lookup and later work remain; source outcome evidence and resource disposition are still required. |
+| Cancel/close the authority operation as well | A cancellation delivery primitive is not an owned complete mechanism. The exact operation, control availability, terminal outcome, cleanup and surviving work need proof. No reader cancellation authority or latency bound follows, and raw concurrent connection manipulation is not selected. |
+| Proceed while the lookup or late result remains active | Discarding a result can prevent its use only at an effective dispatch fence; it proves no cessation or isolation. No mapping yet shows that the surviving work preserves the required acknowledgement/L outcome under unchanged D. |
+
+Natural completion before protected final S remains a legitimate ordering when
+the complete observation includes any resulting commit. It is not permission to
+wait for arbitrary preparation through D. After actual C, newly offered hidden
+work must not defeat acknowledgement or L; the positive pair also requires the
+same deferred writer's later valid commit. Neither suppression nor dropping W
+closes that obligation. The present evidence leaves this candidate **unproved**;
+it establishes neither a complete mechanism nor impossibility of other placements.
 
 **Scope and cost.** The [existing boundary allocation](https://github.com/samovers/OFARM2/issues/392#issuecomment-5695962121)
 is substantial; locating components together does not combine their authorities.
@@ -503,28 +531,25 @@ but no universal lease-free-successor topology or working stop follows from that
 permission. Shared post-C compute, storage or output activity cannot be excluded
 by calling the machines separate; the actual paths require the reviewed proof.
 
-**Assessment decision.** Retain native original-owner placement as a conditional
-candidate, but do not start its database implementation or invest in the proposed
-isolation topology on the assumption that rebinding or source preparation will be
-solved later. The existing binder and issuer can be retained at the value-contract
-level; the next concrete dependency is the private invocation-to-minter adapter,
-including live-request provenance, interruption and complete resource disposition.
-Section 6.1 now defines a database-side reply candidate and the request association
-its complementary runtime integration must supply. Coordinate that design with
-the database/provisioning owners, but keep independently authoritative
-changes in separate bounded Deliveries. Do not create a general broker or duplicate
-authority ledger. Any additional identity, signing or audit decision stays with
-its own owner. This can proceed before or alongside source-owner work. The source
-mechanism remains actual stop/dispatch and
-outstanding-operation binding at the cut above, including pending authority
-lookup rather than only an idle connection with KMS pending. It must address the
-existing four cases in section 5 without waiting for a stalled controller or
-reclassifying its delay. This is work within the existing owner discussion, not
-another flag/registry, generic method document or newly invented prerequisite.
-The original-owner entry and output primitives remain separate open bindings.
-No new Delivery, hardware, authority-interface change or semantic decision is
-selected. A concrete change in those boundaries must be scoped by its owner
-before implementation; the kernel gains no cross-boundary workaround.
+**Assessment decision: freeze adapter expansion.** Native original-owner
+placement remains conditional and unproved. Sections 6.1–6.2 retain useful
+feasibility work and association safeguards, but do not answer the source case
+above. Fresh transaction binding is required under that placement; socket/NOTICE
+transport, direct local SQL, a dedicated connection and the two runtime paths are
+candidate choices, not universal #392 requirements. Do not build out their audit,
+cancellation or isolation machinery before demonstrating source/progress viability.
+
+The next substantive design work stays with the existing source-owner discussion:
+bind the actual eligible attempt and exclusive stop versus dispatch; account for
+the separate lookup and every surviving continuation through acknowledgement/L;
+identify only real covered storage waits. Apply section 5's existing four cases,
+including delayed control/reporting and late completion. If this placement cannot
+supply that argument under unchanged D, reconsider it rather than add another
+flag, registry, controller or prerequisite. Do not infer global impossibility.
+Original-owner entry, complete S/C membership and guarded output remain open.
+Independent authority changes still require their own bounded owner work before
+implementation. No new Delivery, hardware, interface or semantic decision is
+selected, and no kernel workaround or implementation permission is supplied.
 
 The connection-factory timeout is a separate runtime follow-up, not a missing
 timeout proven from an omitted keyword. It passes the configured DSN to Psycopg.
@@ -770,12 +795,11 @@ while mint is stalled; failure after committed A; lost CALL response; shutdown w
 outstanding work. Use actual roles/binder, pinned PostgreSQL and driver, fictional
 requests and disposable databases after approval. These cases have not run.
 
-The next design decisions are phase-specific audit disposition, independently
-available cancellation and complete remote-work/capacity disposition. Runtime,
-audit and deployment owners must scope any authoritative change separately; this
-assessment adds no implementation permission. Source stop/dispatch and the original
-S/I/C/L/progress obligations remain open. Do not manufacture another registry,
-worker framework or timeout extension to conceal those missing bindings.
+Phase-specific audit disposition, independently available cancellation and full
+remote-work/capacity disposition remain conditional owner obligations. Preserve
+these findings and safeguards, but park further adapter design until section 6's
+source/progress case has a credible answer. This assessment grants no authority
+change or implementation permission; the original S/I/C/L obligations remain open.
 
 ## 7. Verification and claim limits
 
@@ -791,6 +815,7 @@ benchmark, crash or hosted expensive baseline ran for this design. No isolation
 topology was built. Prior implementation test results are not reused as evidence
 for this candidate.
 
-Next: review section 6.2's runtime lifecycle, local peer pairing and explicit
-audit/control gaps, then resolve those owner decisions before implementation.
-Retain open blockers and existing approvals; no decision card is ready.
+Next: review the bounded source-case assessment and corrected work priority, then
+resolve actual source ownership, stop/dispatch and surviving resources before
+resuming adapter design. Retain open blockers and existing approvals; no
+implementation decision card is ready.
