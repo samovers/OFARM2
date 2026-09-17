@@ -1,6 +1,6 @@
 # Governed-read protection: Phase A assessment and open blockers
 
-Version 0.7, 2026-09-17. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
+Version 0.8, 2026-09-17. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
 **Draft for design review. The assessment is complete; the implementation design
 is blocked. No protection mechanism is selected or ready for approval.**
 
@@ -374,7 +374,8 @@ externally signed capability and bind while the original invocation remains aliv
 with fresh per-transaction minting; an end-to-end binding is still absent.
 [`ApplicationRuntime.mint_capability`](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/application_runtime.py#L91)
 already delegates immutable identity, authority and challenge values to the
-existing issuer, which needs no tenant connection. This is an internal Python
+existing issuer, which takes no tenant connection as an argument but opens its
+own database connection for signing-authority lookup. This is an internal Python
 method, not a native callback or exposed endpoint. Reuse does not inherently
 require a capability-format, binder-lifetime or signing-custody amendment.
 
@@ -386,6 +387,27 @@ A second connection cannot bind the original backend/xid, and returning then
 calling again ends the proposed original invocation. A private request/reply
 exchange with the existing runtime minter is a concrete candidate, not a facility
 the repository currently supplies. Its transport is not selected here.
+
+The database side of that exchange also needs an owner. The [review's PostgreSQL
+16.13 probe](https://github.com/samovers/OFARM2/pull/396#pullrequestreview-5233289051)
+demonstrates a NOTICE request reaching the client during CALL and a reply row
+committed by another session being read in the still-running transaction. It uses
+a fake capability and superuser access, not the real binder or production grants.
+[NOTIFY waits for commit](https://www.postgresql.org/docs/17/sql-notify.html), and
+[SPI rejects client COPY](https://www.postgresql.org/docs/17/spi-spi-execute.html).
+These observations are not an exhaustive proof of every possible channel or
+selection of NOTICE/table transport.
+
+A reply-table route would require database-owned schema, grants and catalog
+attestation, plus approved custody/retention for the capability and its retained
+copies. Its additional write transaction, polling and cleanup join section 5.1's
+resource argument, including the pre-protection and quiet-execution boundaries.
+A native I/O route instead requires database-owned receiver code, privileges,
+build/provisioning and catalog evidence. The proposed native entry already needs
+database review; runtime ownership does not absorb that receiver. Neither route
+may widen the existing [verification-only crypto extension](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/docs/adr/0003-tenant-capability-trust-and-binder.md#L377)
+or inherit its installer authority. Its specific crypto requirements do not
+select the packaging or acceptance criteria for a future native receiver.
 
 The smallest candidate ordering to assess is:
 
@@ -465,10 +487,11 @@ is substantial; locating components together does not combine their authorities.
 
 | Owner | Concrete work this candidate still requires |
 |---|---|
-| #392 database binding | Native invocation/entry/cleanup mapping, complete S/C membership, actual acknowledgement and protection surviving C. |
+| #392 database binding, with the database/provisioning owners under ADR 0001/#174 | Native invocation/entry/cleanup and database-side reply consumption; any reply schema/grants/catalog changes or native receiver I/O/build/privilege surface need their own owner-scoped review. Complete S/C membership, actual acknowledgement and protection surviving C remain #392's capability. |
 | Tenant binder and signer owners under ADR 0003 (#174/#172), with #173 transaction ownership | A fresh challenge, external mint and bind for each tenant-bound transaction inside the native invocation; an eligible entry outside the current `BEGIN` wrapper. Changes to binding lifetime or signer placement belong to these owners, not #392. These closed issues identify existing ownership, not authorization to reopen or implement changes. |
 | #178 source owner | Real attempt/eligibility bindings, stop versus actual dispatch, separate operation outcomes and complete withdrawal/settlement evidence. PR #26's conditional approval supplies no implementation of these. |
-| Runtime/deployment owner under #167 | Private invocation-to-minter exchange and trusted request association, existing refusal/cleanup integration, earliest-entry and late-completion isolation, capacity and queue ownership, restricted connectivity and reduced concurrency; no suitable implementation Delivery is assigned by this assessment. |
+| Runtime/deployment owner under #167 | Runtime half of the private exchange, trusted request association and existing minter invocation, refusal/cleanup integration, earliest-entry and late-completion isolation, capacity and queue ownership, restricted connectivity and reduced concurrency; it does not own the database receiver. No suitable implementation Delivery is assigned by this assessment. |
+| Capability custody/retention owners, with #172/#174 under ADR 0003 | If the reply is stored, decide permitted storage, access, retained copies and cleanup before choosing that route. Single-use binding does not authorize capability persistence. |
 | #177 output owner | A concrete irreversible acceptance primitive with current guards and strict D. The proposed response-port contract has not implemented it; preflight followed by an unguarded transfer is insufficient. |
 
 Independent identity, signing and custody authority stays with its owners;
@@ -485,10 +508,12 @@ isolation topology on the assumption that rebinding or source preparation will b
 solved later. The existing binder and issuer can be retained at the value-contract
 level; the next concrete dependency is the private invocation-to-minter adapter,
 including live-request provenance, interruption and complete resource disposition.
-Specify that bounded runtime integration before or alongside source-owner work.
-Do not create a general broker or duplicate authority ledger. Its runtime owner
-must scope the complete adapter separately before implementation; any additional
-identity, signing, audit or custody decision stays with its own owner. The source
+Define the database-side reply path with its database/provisioning owners before
+specifying the complementary runtime integration; include custody/retention owners
+if storage is proposed. Coordinate the design, but keep independently authoritative
+changes in separate bounded Deliveries. Do not create a general broker or duplicate
+authority ledger. Any additional identity, signing or audit decision stays with
+its own owner. This can proceed before or alongside source-owner work. The source
 mechanism remains actual stop/dispatch and
 outstanding-operation binding at the cut above, including pending authority
 lookup rather than only an idle connection with KMS pending. It must address the
@@ -539,6 +564,6 @@ benchmark, crash or hosted expensive baseline ran for this design. No isolation
 topology was built. Prior implementation test results are not reused as evidence
 for this candidate.
 
-Next: review the section 6 feasibility result, then specify the private
-invocation-to-existing-minter adapter within its runtime owner boundary, before
-or alongside the source-owner mechanism. Retain open blockers and existing approvals.
+Next: review the section 6 ownership correction, then define the database-side
+reply path and its owner boundaries before specifying complementary runtime
+integration. Retain open blockers and existing approvals.
