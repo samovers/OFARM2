@@ -1,6 +1,6 @@
 # Governed-read protection: Phase A assessment and open blockers
 
-Version 0.5, 2026-09-16. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
+Version 0.6, 2026-09-17. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
 **Draft for design review. The assessment is complete; the implementation design
 is blocked. No protection mechanism is selected or ready for approval.**
 
@@ -360,6 +360,27 @@ Eligible I before later owner loss may still settle truthfully; no L follows.
 I need not equal WAL insertion, and no new counterexample to this prospective
 owner placement is claimed here.
 
+This cannot run inside the existing [`TenantUnitOfWorkManager._run`](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tenant_uow.py#L475),
+which opens `BEGIN` before binding. The candidate needs an eligible
+[top-level nonatomic entry](https://www.postgresql.org/docs/17/sql-call.html).
+Under [ADR 0003](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/docs/adr/0003-tenant-capability-trust-and-binder.md#L1102),
+tenant binding belongs to one backend incarnation and full `xid8`; the
+[binder/context lookup](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/migrations/0001_initial.sql#L6370)
+cannot carry it across A's commit. Each later tenant-bound transaction in that
+invocation, including the final protected transaction, needs its own challenge,
+externally signed capability and bind while the original invocation remains alive.
+
+The placement proposal requires these bindings, but its mid-invocation minter
+interaction is unimplemented. The current mint path requires a separate
+authority-lookup connection and external KMS signing; their
+connectivity, lifetime, cleanup and late completion join section 5.1's resource
+argument. The mapping must place rebinding explicitly relative to quiet execution
+and protection acquisition before final S. Merely occurring between A and S does
+not prove it occurs after protection acquisition or require direct backend-to-KMS
+access. These are unresolved placement questions, not permission to inherit a
+binding, move signing authority, or bypass tenant checks. The proposed positive
+C-to-L path still performs no rebind or protected SQL.
+
 **First unresolved source case.** The already-inspected current path supplies
 this specific schedule, without inventing a new runtime experiment:
 
@@ -393,11 +414,13 @@ is substantial; locating components together does not combine their authorities.
 | Owner | Concrete work this candidate still requires |
 |---|---|
 | #392 database binding | Native invocation/entry/cleanup mapping, complete S/C membership, actual acknowledgement and protection surviving C. |
+| Tenant binder and signer owners under ADR 0003 (#174/#172), with #173 transaction ownership | A fresh challenge, external mint and bind for each tenant-bound transaction inside the native invocation; an eligible entry outside the current `BEGIN` wrapper. Changes to binding lifetime or signer placement belong to these owners, not #392. These closed issues identify existing ownership, not authorization to reopen or implement changes. |
 | #178 source owner | Real attempt/eligibility bindings, stop versus actual dispatch, separate operation outcomes and complete withdrawal/settlement evidence. PR #26's conditional approval supplies no implementation of these. |
 | Runtime/deployment owner under #167 | Enforced earliest-entry and late-completion isolation, capacity and queue ownership, restricted connectivity and reduced concurrency; no suitable implementation Delivery is assigned by this assessment. |
 | #177 output owner | A concrete irreversible acceptance primitive with current guards and strict D. The proposed response-port contract has not implemented it; preflight followed by an unguarded transfer is insufficient. |
 
-Independent identity, signing and custody authority stays with its owners.
+Independent identity, signing and custody authority stays with its owners;
+native placement still needs their per-transaction binding and minting support.
 Queuing before acquisition avoids new leases; it does not free old backends.
 Source cleanup may preserve the original request under PR #26's complete rules,
 but no universal lease-free-successor topology or working stop follows from that
@@ -406,8 +429,11 @@ by calling the machines separate; the actual paths require the reviewed proof.
 
 **Assessment decision.** Retain native original-owner placement as a conditional
 candidate, but do not start its database implementation or invest in the proposed
-isolation topology on the assumption that source preparation will be solved later.
-The next missing mechanism is the source owner's actual stop/dispatch and
+isolation topology on the assumption that rebinding or source preparation will be
+solved later. Establish whether the existing tenant binding and external minting
+can support this invocation before or alongside the source-owner work. If that
+requires an authority change, its owner must scope separate work before editing
+that boundary. The source mechanism remains actual stop/dispatch and
 outstanding-operation binding at the cut above, including pending authority
 lookup rather than only an idle connection with KMS pending. It must address the
 existing four cases in section 5 without waiting for a stalled controller or
@@ -433,11 +459,13 @@ reviewing Phase A; do not merge this assessment as a substitute for #392's compl
 capability. An independent runtime, key, deployment or output authority change
 must be handled in its own bounded Delivery rather than appended to this PR.
 
-Expected eventual #392 areas remain typed database operations near
-`kernel/tenant_uow.py`, an additive migration if justified, matching narrow
-provisioning/readiness checks and focused evidence. They are predictions, not
-approval or a selected design. Existing migrations and canonical references stay
-immutable. No executable abstraction, duplicate authority store or compatibility
+Expected eventual #392 areas include typed database operations; native placement
+would need an eligible entry outside `kernel/tenant_uow.py`'s current `BEGIN`
+wrapper, not a drop-in call within it. Other expected areas are an additive
+migration if justified, matching narrow provisioning/readiness checks and focused
+evidence. These are predictions, not approval or a selected design. Existing
+migrations and canonical references stay immutable. No executable abstraction,
+duplicate authority store or compatibility
 path is added. The simplest gate/close alternatives and their concrete failures
 are above; small diff size does not override the missing guarantees.
 
@@ -455,5 +483,6 @@ benchmark, crash or hosted expensive baseline ran for this design. No isolation
 topology was built. Prior implementation test results are not reused as evidence
 for this candidate.
 
-Next: review the section 6 candidate assessment, then resolve the specific
-source-owner mechanism it identifies; retain open blockers and existing approvals.
+Next: review the section 6 rebinding correction, then assess native-entry/minting
+viability before or alongside the identified source-owner mechanism; retain open
+blockers and existing approvals.
