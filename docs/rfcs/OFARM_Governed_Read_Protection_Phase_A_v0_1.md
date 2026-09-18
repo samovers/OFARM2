@@ -1,8 +1,9 @@
 # Governed-read protection: Phase A assessment and open blockers
 
-Version 0.11, 2026-09-17. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
-**Draft for design review. The assessment is complete; the implementation design
-is blocked. No protection mechanism is selected or ready for approval.**
+Version 0.12, 2026-09-18. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
+**Draft for design review. The bounded assessment has resumed against the newly
+approved owner inputs; the implementation design remains blocked. No protection
+mechanism is selected or ready for approval.**
 
 This document consolidates the current source investigation and rejected
 alternatives into the existing Delivery's review surface. This draft PR is the
@@ -14,8 +15,8 @@ candidate, production route or dependency changes accompany it.
 
 A permitted limited historical read must preserve complete source observation
 and protection until its first irreversible disclosure. A hidden competing writer
-must not invalidate that protection or defeat the retained post-commit progress
-guarantee. The current transaction foundation supplies tenant binding and write
+must not invalidate that protection or defeat the retained progress guarantee
+outside the approved owner's closed wait exception. The current transaction foundation supplies tenant binding and write
 serialization, but not this complete read capability.
 
 Primary boundary: **governed-read database observation, evidence membership and
@@ -26,10 +27,16 @@ dependencies with existing owners; describing them here does not change them.
 | Input | Exact basis and authority limit |
 |---|---|
 | Implementation | OFARM2 `1b4d52e2d6387d486110465973ad822089bd9583`, tree `14d4d61d9410251aafdf8f6e559be3fdd24d23ef`. Live main matched this pin on 2026-09-16. |
-| Read semantics | [OFARM PR #37 candidate at 33abbe3](https://github.com/samovers/OFARM/blob/33abbe3c413a33ae38ba5ce189850c1d8556c4bd/package_meta/history/clean_baseline_migration/phase_reports/governed_read_transaction_coverage_and_disclosure_protocol_rfc_candidate_v0_1.md), especially sections 8.3–8.3.1 and RD-C20/C21. Approved candidate semantics, not an admitted PostgreSQL provider. |
+| Read semantics | [OFARM PR #37 candidate at 587cd5b](https://github.com/samovers/OFARM/blob/587cd5b9fccb374df0cb1030f0ad2b74ac1c9e48/package_meta/history/clean_baseline_migration/phase_reports/governed_read_transaction_coverage_and_disclosure_protocol_rfc_candidate_v0_1.md), especially sections 8.3–8.3.1, 11 and RD-C16/C20/C21. Approved Scope B version 2 alignment; no admitted PostgreSQL provider. |
+| Public outcome and timing costs | [OFARM PR #31 candidate at 579e8de](https://github.com/samovers/OFARM/blob/579e8def2dbd433500c53a30c5fc778353216694/package_meta/history/clean_baseline_migration/phase_reports/cp2_authorization_result_surface_and_public_reason_codes_rfc_candidate_v0_1.md), section 5.4.1 and C38. Approved Scope B version 2 supplies the closed wait exception and public projection; this assessment consumes, not amends, them. |
 | Source withdrawal | [OFARM PR #26 candidate at 38af747](https://github.com/samovers/OFARM/blob/38af7475d8cbd41b158e50ba77b60f140cbef4ba/package_meta/history/clean_baseline_migration/phase_reports/not_required_transaction_and_consumption_protocol_rfc_candidate_v0_1.md), section 11.5. The task user approved this exact head in the publication task; implementation is not approved by that message. |
 | Existing design correction | [#392 comment 5694678785](https://github.com/samovers/OFARM2/issues/392#issuecomment-5694678785). Its database resource finding is reused, not presented as a new runtime reproduction. |
 | Remaining owner decisions | [Restricted placement proposal](https://github.com/samovers/OFARM2/issues/392#issuecomment-5695599206), [preparation correction and hardware hold](https://github.com/samovers/OFARM2/issues/392#issuecomment-5697404147), and [source-withdrawal review](https://github.com/samovers/OFARM2/issues/392#issuecomment-5698376629). Historical proposals remain subject to their recorded corrections. |
+
+The task user approved these exact #31/#37 revisions on 2026-09-17 and resumed
+only this bounded assessment on 2026-09-18. They are planning inputs, not accepted
+law, extracted contracts or approval of a #392 implementation. Source, timing,
+public-projection and read-protocol ownership remain separate.
 
 Use the existing protocol terms: A is durable read admission; S is the final
 complete observation; P is frozen preparation; I is actual entry into the one
@@ -40,9 +47,31 @@ D is the unchanged full deadline. C is distinct from its acknowledgement.
 Protection precedes final S and survives C through L or proved irrevocable
 termination. For the RD-C20 positive pair, hold independent authority, retention,
 session, deadline and fault conditions fixed. Offer a hidden candidate after
-actual C, including before acknowledgement. Both permitted limited replies must
-reach L, and the same deferred writer must actually commit afterward under valid
-authority. Dropping the writer or suppressing the read is not that result.
+actual C, including before acknowledgement. When the same independent conditions
+permit L and no covered wait lasts through D, both permitted limited replies must
+reach L and the same deferred writer must actually commit afterward under valid
+authority. Covered expiry is a separate case; dropping the writer or suppressing
+the read is not the positive result.
+
+PR #31 alone owns the permitted waits: relevant already-running source
+finalization/visibility/protection release and direct protection storage; the
+single complete C operation and its acknowledgement; and identified database-
+internal contention on those operations, including completion/cleanup needed to
+issue acknowledgement after actual C. The operation, resource and causal wait
+must remain outstanding through full D. A newly offered hidden writer may cause
+that post-C wait. Pool, owner/controller/callback, network/output, observation-
+query and unrelated processing delays remain excluded, as does a storage wait
+ending before D followed by scheduling that misses D.
+
+A covered wait through D may prevent reaching an otherwise pre-D success or
+independent terminal failure. Its expiry may therefore differ in category,
+message and time. Listed waits ending earlier may also change pre-D latency when
+both executions finish before D with matching required content. These declared
+privacy costs have no quantitative leakage bound; they do not supply provider
+conformance. Earlier determined failures remain immediate under PR #37 section
+11. Every deadline failure within PR #31's selected WITHHELD path uses its uniform
+projection, independently of covered-wait proof or commitment knowledge; internal
+causes, unknown facts and conformance violations remain distinct.
 
 ## 2. Authority, trust and non-effects
 
@@ -198,11 +227,18 @@ durability/acknowledgement behavior. These measurements neither isolate the
 partition contribution nor bound execution noise, refute that dependency, or
 prove that every provider must fail RD-C20.
 
+Under the newly approved item 3, the identified partition path is no longer an
+automatic rejection of a shared-database arrangement after C. If it actually
+keeps the required completion/acknowledgement outstanding through D, it may
+qualify as covered expiry. The existing measurements do not prove that interval
+or classify the separate scheduling and other resource paths.
+
 An earlier SQL gate remains unselected as a complete solution: refusing a late
-command establishes neither no server work nor causal independence of required
-read progress. The partition path alone does not rank SQL gates against other
-placements or establish the necessity of physical separation. A new candidate
-must supply its actual resource argument; another lock name alone is no progress.
+command does not establish source commit ordering or the disposition of every
+remaining resource delay. The partition path alone neither rejects this simpler
+shared-database alternative nor establishes the necessity of physical separation.
+The next comparison must apply the closed exception to exact dependencies, not
+require complete resource non-interference or accept all co-located work.
 
 ## 5. Retained cases, falsifiable evidence and blocker disposition
 
@@ -212,14 +248,15 @@ must supply its actual resource argument; another lock name alone is no progress
 | Database preparation already running | Exact command, resource, reached stage, outcome and causal interval; no simultaneous rollback or guessed cancellation. | Open. A genuine required protection-release wait may qualify under Scope B; BEGIN or a stalled task alone does not establish it. |
 | Parked writers and connection capacity; RD-C21 | Hold all eight source-pool leases; require the selected read's needed checkout/lookup to remain usable under its actual placement. Separately exhaust shared role/database capacity with pending unpooled lookups. Cover capacity retained or reacquired at each stage. | Open conditional negative case. A future reader sharing exhausted capacity fails; no live governed-reader reproduction or selected separate pool/role is claimed. |
 | Cleanup complete, report delayed | Distinguish storage release/acknowledgement, owner observation and onward delivery; protection must not depend on an unrelated delayed report. | Open. A completed cause cannot justify later callback delay; outcome uncertainty remains separately owned. |
-| New source or late completion after actual C; RD-C20 | Both admitted limited reads reach L under matched independent conditions; independently observe C, then offer the candidate, observe acknowledgement/L and the same writer's actual later valid commit. Use the causal-evidence distinction below. | B1 remains open. Commit exclusion does not supply resource isolation; latency distributions alone do not decide this pair. |
+| New source or late completion after actual C; RD-C20 | Separate the timely positive pair from an identified item-3 wait through D. Observe actual C, candidate offer, acknowledgement, L or irrevocable termination, and the same writer's later valid commit. | B1 remains open. Commit exclusion and a covered wait do not account for unlisted delays; latency distributions alone do not classify the cause. |
 | Full membership and continuous protection; RD-C21 | Include every relevant admission/import/migration/commit path, malformed/unresolved-root candidates through their enclosing partition, qualifications of qualifiers, writers outside today's executable writer set and pre-acquisition commits notified after C. Exercise omitted partitions/paths, forged/released protection, optimistic conflict abort and hidden-dependent waits; reject notification blindness or empty-history fallback. | Required. Protection cannot be filtered by successful admission, valid form, qualifier depth, current writer set, known IDs or predicted public label. No inventory-completeness or provider-admission claim is made here. |
 | Actual finalization entry and original-owner lifetime | Original live owner and full D ordered against I without a check-to-start gap; no new initiation after actual owner loss. | Existing finalization-entry obligation remains open; this assessment does not clear it. |
 
 Scope B permits only its closed, precisely established causal storage waits
-through unchanged D. It does not turn arbitrary control/pool/callback delay into
-storage finalization, nor excuse a newly offered writer's interference after
-actual C. Genuine independent loss of C acknowledgement still suppresses L.
+through unchanged D, including its specified contention after actual C. It does
+not turn arbitrary control/pool/callback delay into storage finalization. Genuine
+independent loss of C acknowledgement still suppresses L. The public deadline
+message alone proves neither a covered cause nor provider conformance.
 
 Separate two kinds of evidence. For retained resources, park the writer while it
 holds a pool slot, conflicting lock or relevant queue position, and identify the
@@ -233,9 +270,10 @@ method cannot attribute a failure, report it as inconclusive, not a pass or proo
 of universal impossibility. A finite observed maximum is not a bound on noise.
 Neither compatible-lock parking nor a short benchmark proves its exclusion.
 
-The approved requirement is the retained outcome under the stated causal pair,
-not identical successful wall-clock durations. No statistical pass threshold,
-deadline guard band or exemption for candidate-induced delay is introduced here.
+The approved requirement distinguishes timely positive progress, covered expiry
+and the stated pre-D latency cost. It does not demand identical successful
+wall-clock durations. No statistical pass threshold, deadline guard band or
+additional exemption for candidate-induced delay is introduced here.
 Required future runtime evidence uses fictional fixtures and isolated disposable
 databases through real participating entry paths, not a model that assumes the
 missing ordering or physical isolation.
@@ -284,7 +322,7 @@ test evidence, not a new runtime ledger or public response field:
   effects. Do not reset D after a pause, pick a passing margin from results or
   turn measurement uncertainty into a permitted timing tolerance.
 
-The causal sequence for the before-acknowledgement variant is:
+The causal sequence for the timely positive before-acknowledgement variant is:
 
 ```text
 complete durable C -> independent observation -> candidate offer
@@ -306,10 +344,13 @@ may remain unresolved; that does not waive source-writer authority or read guard
 | Case using the existing requirements | Decisive observation |
 |---|---|
 | Observation-method calibration | A database transaction is committed while its client has no acknowledgement; candidate introduction is ordered afterward. This validates the ordering technique only. Revalidate any instrumented location on the pinned runtime before using it. |
-| Defective-mechanism control | Permit an actual intervening candidate commit before L, or demonstrate its concrete resource dependency causing required acknowledgement/L to miss D while the matched no-candidate execution succeeds. The method must report failure; sanitized suppression is not a pass. An imposed pause without that causal dependency establishes only a test schedule. |
-| RD-C20 positive pair | Through real participating paths, both permitted limited replies reach actual L exactly once before unchanged D; all handoff guards hold and the same deferred candidate actually commits later under valid authority. Exercise offers after C before acknowledgement and after acknowledgement before L, including unresolved candidate admission/classification and malformed-root candidates protected through their enclosing partition. A dropped or permanently blocked writer fails this case. |
-| Independent acknowledgement loss | Apply the same independent loss in both runs. Neither may disclose without acknowledged complete C; reconciliation does not revive either attempt. This is a fault case, not a substitute for the positive pair. |
-| Public-policy comparator | Compare the exact permitted public content and omissions in each pair. A policy-excluded pair stays identically excluded without inventing C/L for a successful read. Disclosable-history refresh/suppression retains its separate existing case. |
+| Defective-mechanism control | Permit an actual intervening candidate commit before L/irrevocable termination, or prove an unlisted candidate-induced dependency causing acknowledgement/L to miss D. The method must report provider failure even when the public deadline projection is uniform. A listed wait ending before D followed by late scheduling remains a negative case; an imposed pause alone establishes only a test schedule. |
+| RD-C20 positive pair | With the same independent conditions permitting L and no covered wait through D, both permitted limited replies reach actual L once before unchanged D; all handoff guards hold and the same deferred candidate actually commits later under valid authority. Exercise offers after C before acknowledgement and after acknowledgement before L, including unresolved admission and malformed roots within their protected partition. A dropped or permanently blocked writer fails this case. |
+| Covered post-C expiry | Identify the item-3 operation/internal resource and prove its completion/acknowledgement wait remains through D. Observe actual complete C separately from acknowledgement, no L, spent C, irreversible termination before protection release and the same candidate's valid commit afterward. Keep this separate from the positive pair; subsequent acknowledgement cannot revive L. |
+| Covered wait masks an early independent fault | Hold fault conditions fixed. Without the wait, reach definitive persistence, detectable acknowledgement or post-acknowledgement guard/egress failure before D and keep its immediate existing projection. With a listed wait through D, do not fabricate a fault never reached; use expiry. Prove PR #37 section 11's actual determination/fence ordering against D. |
+| Listed wait ends and both executions finish before D | Required content matches; response times may differ under the approved cost. No padding or delayed terminal error. If the wait ends before D but later scheduling misses D, record provider nonconformance to the covered-expiry rule rather than treating that wait as still outstanding. |
+| Independent acknowledgement loss | Neither run may disclose without acknowledged complete C; reconciliation revives neither. Silent loss through D uses the same public deadline projection with or without covered contention. Detectable loss before D retains its immediate failure and warning; delayed send time cannot reclassify it. This fault case cannot replace positive progress. |
+| Public-policy comparator | Compare exact permitted content and omissions under PR #31's declared outcome/timing costs. Two deadline failures within its selector match even with different internal causes/C knowledge. Policy exclusions remain identical without invented C/L; disclosable-history refresh/suppression is unchanged. |
 | RD-C21 coverage, capacity and allowed wait | Use the existing section 5 cases. Record the exact resource holder and release dependency, pool lease versus backend capacity, and every participating source path. Only the existing enumerated storage wait evidenced through full D qualifies for Scope B; arbitrary exhaustion or missing coverage does not. |
 | Actual owner loss versus I | Observe original-owner termination and actual finalization entry through their owning mechanisms. Loss or reaching D before I prevents entry; eligible I before loss/expiry may settle only under its independent persistence authority and never restores L. Delaying a notification is not evidence that actual owner loss has been ordered. Keep this separate from the C/acknowledgement calibration. |
 
@@ -335,8 +376,9 @@ isolation device, new service or source-withdrawal mechanism is selected here.
 Applying section 5.1 to the existing restricted arrangement yields **not ready
 to select**. This is a bounded assessment of the published candidate and its
 corrections, not a new general method or a finding that every provider fails.
-The governing outcome rules remain unchanged; method review supplies no provider
-admission, deadline tolerance or renewed semantic approval.
+The owner outcome rules have changed only as recorded in section 1. Their
+approval supplies no provider admission or additional deadline tolerance; the
+existing source findings must now be classified under those exact rules.
 
 The candidate in the [placement proposal](https://github.com/samovers/OFARM2/issues/392#issuecomment-5695599206)
 has concrete content: establish the original read owner in one native PostgreSQL
@@ -473,17 +515,28 @@ source-stop operation. It is not the later binder admission-lock acquisition;
 ordinary database reads and their transaction/connection cleanup still use shared
 resources. Mere sharing proves neither a missed deadline nor harmlessness.
 
-| Outstanding part | Actual ownership and remaining work |
-|---|---|
-| Source transaction | The source stack retains its pool lease, backend, full XID and uncommitted challenge. It is inside synchronous mint; the current code has no stop/dispatch arbitration. After mint returns successfully it sends bind SQL; its error cleanup runs only after control returns. |
-| Authority lookup | `SigningAuthorityReader.current` owns a separate unpooled connection using the same configured DSN. Its two fetches and connection-context exit precede receipt verification. Rolling back the source transaction does not finish this query or release this backend. |
-| Later issuer work | Receipt loading/verification, capability construction and external signing remain possible after lookup exit. The issuer already takes immutable values and no source connection; that does not fence the source stack's later bind. KMS-only pending is a narrower state after the authority context has exited. |
-| Cleanup and reuse | Source rollback, authoritative attempt evidence, authority-connection completion and pool return are different facts. Pool return can retain the backend and invokes reset work; it is not database-capacity release. Late callbacks, reports and reclamation still need disposition through C acknowledgement and L. |
+The classification below uses the pinned source, unchanged in this branch, and
+PR #31's exact wait categories. No real governed-reader resource binding yet
+establishes which shared dependency applies; conditional entries are proof
+obligations, not measured waits or provider passes.
+
+| Resource or work | Actual lifetime/release boundary | Disposition under the approved rule |
+|---|---|---|
+| [Source pool lease](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tenant_uow.py#L450) | Checkout precedes `_run`; return occurs in `finally` after that stack unwinds. Reset and continued pooled-backend ownership are separate. | Pool acquisition/exhaustion is excluded. No implemented R entry establishes whether it shares this pool; parking W does not release its lease. |
+| [Source transaction](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tenant_uow.py#L470) | Backend, full XID and uncommitted challenge persist across synchronous mint; error rollback is reached only after control returns. Actual commit/abort ends the transaction, not necessarily the backend. | Item 1 is possible only if awaiting real source settlement or protection release directly blocks R's protection acquisition. Held resources or a wait for arbitrary mint preparation do not establish that causal storage wait. |
+| [Separate authority lookup](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/signing_authority.py#L180) | A separate unpooled same-DSN connection performs two fetches and exits its context before receipt verification. Source rollback does not settle this operation; server-side completion/release needs its own evidence. | Observation-query/drain waits are excluded. Its database activity could cause item-3 contention only with proof of the exact required R protection/C operation, internal resource and wait through D. Same DSN is insufficient. |
+| [Receipt verification and mint/signing](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tenant_capability_issuer.py#L110) | Receipt verification follows authority-context exit; capability construction and external signing follow. Return/exception releases control to the source stack, not proof of all remote-work cessation. | Application, verification, signing and network progress are excluded. KMS-only pending is narrower than pending mint, but supplies no full-D or resource-release proof. |
+| [Later bind dispatch](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tenant_uow.py#L436) | Successful mint proceeds directly to bind SQL; no stop-versus-dispatch arbitration intervenes. | Source rollback prevents use of the old challenge as a new valid binding, but does not fence later SQL/resource activity. Any required read-operation contention must be classified separately; a refused bind is not complete resource disposition. |
+| [Database cleanup and pool reset](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tenant_uow.py#L350) | Rollback-or-close, actual backend termination, pool return and `DISCARD ALL` reset are distinct. Client close is not proof of server rollback or termination. | Item 1's actual protection release or item 3's database completion/cleanup needed to issue C acknowledgement can qualify with causal proof. Blanket cleanup, reset scheduling and capacity-release assumptions cannot. |
+| Controller, callback, network and output scheduling | Existing read/output owners must establish actual failure determination, effective fence and L; no selected implementation supplies them here. | Excluded waits. In particular, storage release before D cannot cover later scheduling that misses D. Unknown boundary ordering stays unknown, not a fabricated deadline classification. |
 
 A proved source rollback removes the old challenge. The existing binder requires
 the matching backend incarnation, current full XID and CHALLENGE row, so an old
 capability does not thereby gain a valid new binding. The unresolved continuation
-can still dispatch SQL and consume resources even when binding is refused.
+can still dispatch SQL and consume resources even when binding is refused. Any future
+stop must fence every source continuation before rollback and pool return/reuse.
+The current synchronous manager unwinds before return; an early-return controller
+would be a new mechanism, not an existing safe stop. No such controller is added.
 
 There is no current stop point to select from these facts. The existing
 source-owned withdrawal proposal remains conditional: PR #26 section 11.5
@@ -505,11 +558,14 @@ or pretending cancellation succeeded.
 
 Natural completion before protected final S remains a legitimate ordering when
 the complete observation includes any resulting commit. It is not permission to
-wait for arbitrary preparation through D. After actual C, newly offered hidden
-work must not defeat acknowledgement or L; the positive pair also requires the
-same deferred writer's later valid commit. Neither suppression nor dropping W
-closes that obligation. The present evidence leaves this candidate **unproved**;
-it establishes neither a complete mechanism nor impossibility of other placements.
+wait for arbitrary preparation through D. After actual C, only the identified
+covered wait may justify hidden-induced expiry; the timely positive pair still
+requires L and the same deferred writer's later valid commit. A covered-expiry arm
+requires its commit after irrevocable termination. Dropping W supplies neither.
+The shared-database option is worth bounded reassessment under item 3, but is
+still **unproved** because the retained and surviving paths are not all mapped to
+covered dependencies or independently protected progress. This establishes no
+universal impossibility or need for additional placement machinery.
 
 **Scope and cost.** The [existing boundary allocation](https://github.com/samovers/OFARM2/issues/392#issuecomment-5695962121)
 is substantial; locating components together does not combine their authorities.
@@ -539,13 +595,14 @@ transport, direct local SQL, a dedicated connection and the two runtime paths ar
 candidate choices, not universal #392 requirements. Do not build out their audit,
 cancellation or isolation machinery before demonstrating source/progress viability.
 
-The next substantive design work stays with the existing source-owner discussion:
-bind the actual eligible attempt and exclusive stop versus dispatch; account for
-the separate lookup and every surviving continuation through acknowledgement/L;
-identify only real covered storage waits. Apply section 5's existing four cases,
-including delayed control/reporting and late completion. If this placement cannot
-supply that argument under unchanged D, reconsider it rather than add another
-flag, registry, controller or prerequisite. Do not infer global impossibility.
+The next substantive work follows the resource classification above under the approved
+wait rule, before more placement or adapter work. A source-stop proposal still
+needs actual eligible attempt ownership and exclusive stop versus dispatch;
+account for the separate lookup and every surviving continuation through
+acknowledgement/L. Apply section 5's positive, covered-expiry and excluded-delay
+cases. If the existing arrangement cannot supply that argument under unchanged
+D, identify the particular uncovered dependency rather than add another flag,
+registry, controller or prerequisite. Do not infer global impossibility.
 Original-owner entry, complete S/C membership and guarded output remain open.
 Independent authority changes still require their own bounded owner work before
 implementation. No new Delivery, hardware, interface or semantic decision is
@@ -803,8 +860,8 @@ change or implementation permission; the original S/I/C/L obligations remain ope
 
 ## 7. Verification and claim limits
 
-Completed before publication: live main/#392/PR inventory reads; pinned source
-and canonical input checks; primary driver/PostgreSQL contract reads; inert
+Retained evidence from prior revisions: live main/#392/PR inventory reads; pinned
+source and canonical input checks; primary driver/PostgreSQL contract reads; inert
 inspection of three lock-matching wheels (139 RECORD entries and ten extracted
 members verified); bounded local peer assessments. These are static evidence,
 not independent approval or #392 blocker clearance.
@@ -815,7 +872,12 @@ benchmark, crash or hosted expensive baseline ran for this design. No isolation
 topology was built. Prior implementation test results are not reused as evidence
 for this candidate.
 
-Next: review the bounded source-case assessment and corrected work priority, then
-resolve actual source ownership, stop/dispatch and surviving resources before
-resuming adapter design. Retain open blockers and existing approvals; no
-implementation decision card is ready.
+This revision consumes the task-approved #31/#37 heads and classifies the
+existing source path; it does not add runtime evidence. Verification is the
+mandatory package check plus exact input/link, structural, preservation and
+one-file boundary checks. The existing reviews apply only to their prior heads.
+
+Next: review this bounded alignment and resource classification, then address the
+identified uncovered dependency within its existing owner boundary. Keep adapter
+expansion parked, preserve the positive/covered-expiry distinction, and retain
+open provider and implementation gates; no implementation decision card is ready.
