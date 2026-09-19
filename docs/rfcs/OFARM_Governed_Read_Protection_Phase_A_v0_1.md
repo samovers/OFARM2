@@ -1,6 +1,6 @@
 # Governed-read protection: Phase A assessment and open blockers
 
-Version 0.13, 2026-09-18. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
+Version 0.14, 2026-09-19. Delivery [#392](https://github.com/samovers/OFARM2/issues/392).
 **Draft for design review. The bounded assessment has resumed against the newly
 approved owner inputs; the implementation design remains blocked. No protection
 mechanism is selected or ready for approval.**
@@ -379,34 +379,57 @@ same bigint tenant key** that source batch allocation already locks exclusively
 for its transaction. This is an assessment of one primitive and its missing
 bindings, not selection of a complete provider or expansion of sections 6.1–6.2.
 
+This candidate inherits section 6.2's **exclusive, per-invocation non-pooled
+connection** from before A. The backend below belongs to that conditional
+original owner; it is not borrowed from `TenantUnitOfWorkManager`. Its lifetime
+must remain outside the existing pool/reset path through L or proved irrevocable
+termination. This is an unimplemented precondition, not new adapter selection.
+
 After the original read invocation has acknowledged A and completed its fresh
 tenant binding, the proposed operation sequence is:
 
 | Stage | Concrete database operation / retained owner |
 |---|---|
-| Resolve resource | Read exactly one `advisory_lock_key` from `ofarm.tenant_registry WHERE tenant_id = ofarm.current_tenant_id()`, under the existing binding. Retain the database identity and key in that same invocation. No caller-selected key, key enumeration or use of the global key/principal admission pair. |
-| Acquire before final S | The intended lock operation is `SELECT pg_catalog.pg_advisory_lock($1::bigint)`, once, with that internally derived key. The reader's existing backend owns it. Take the final READ COMMITTED observation after acquisition, not a snapshot or rows collected before a blocking acquisition. |
+| Resolve resource | Inside the trusted database owner's proposed no-argument acquisition entry, derive exactly one tenant key from the verified context and `ofarm.tenant_registry`, as the existing write-lock wrapper does. The original owner retains that identity privately; application callers neither read, receive nor select the key. No enumeration or use of the global key/principal admission pair. |
+| Acquire before final S | The private owner invokes `pg_catalog.pg_advisory_lock(bigint)` once on that internally derived key, on the original non-pooled backend. This is an owner-internal operation, not a keyed caller entry. Take the final READ COMMITTED observation after acquisition, not a snapshot or rows collected before a blocking acquisition. |
 | Prepare and enter I | Keep that session/connection exclusively owned; establish complete S/P and the original owner's actual eligible I under section 1's full D. Naming a SQL operation or sampling time here supplies no I witness. |
 | Commit C | Use that same final tenant-bound transaction for S/P and the complete C set on the same backend. Its governed-batch allocator may acquire the same key's transaction lock reentrantly. Actual commit releases that transaction lock while the session hold remains. A COMMIT reply is acknowledgement, not a manufactured timestamp for C. |
-| End protection | Only after the original owner's actual guarded L or proved irrevocable termination, release exactly the one session hold with `SELECT pg_catalog.pg_advisory_unlock($1::bigint)` and verify success. A clock check, rollback, lost callback or pool return is not that terminal proof. |
+| End protection | Only after the original owner's actual guarded L or proved irrevocable termination, its private no-argument release entry invokes `pg_catalog.pg_advisory_unlock(bigint)` on the retained identity and checks success under the single-acquisition invariant. Pool return/reset is an excluded release path; neither it, a clock check, rollback nor a lost callback supplies terminal proof. A later failed unlock detects prior loss; it cannot fence an earlier disclosure. |
 
-These SQL expressions name the proposed operations, **not an executable API**.
-The [current lock owner](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/deployment/postgresql/provisioning_specs.py#L580)
+These owner-internal operations are **not an executable API**. The existing
+[zero-argument write-lock wrapper](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/migrations/0001_initial.sql#L6382)
+derives the key under its owner's registry-column grant. The [application/worker grants](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/migrations/0001_initial.sql#L6464)
+permit wrapper execution, not registry lookup; tenant binding alone supplies no
+such SELECT authority. The [current lock owner](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/deployment/postgresql/provisioning_specs.py#L584)
 has only the transaction-scoped bigint grant. Raw advisory routines are restricted
 by the [provisioner](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/deployment/postgresql/provisioning.py#L774).
-A future private acquisition/release entry needs its own database-owner authority,
-catalog proof and original-invocation lifetime binding; this PR grants none.
-A direct application grant would expose caller-controlled acquisition/release
-and is not proposed. The conditional native owner in section 6 could retain the
-hold, but its actual entry, I and guarded L are still unimplemented. An application
-check followed by later COMMIT/output does not fill those gaps.
+A future private entry pair needs database-owner authority, catalog proof and
+original-invocation lifetime binding; this PR grants none. Release must remain
+bound to that owner's privately retained identity across C: the existing
+tenant context is full-xid specific, so another `current_tenant_id()` call after
+C cannot substitute for that binding. Direct application grants, key arguments
+and key returns are not proposed. Actual entry, I, safe release and guarded L
+remain unimplemented; an application check followed by COMMIT/output supplies none.
+
+The existing [audit-clock lock pair](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/deployment/postgresql/provisioning_specs.py#L448)
+is a precedent for owner-held session operations with no caller key. Its
+[separate audit owner](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/deployment/postgresql/provisioning_specs.py#L2161)
+and fixed two-integer key supply neither tenant-reader authority nor a solution
+to this invocation's lifetime. No audit-role or implementation reuse is proposed.
 
 Use exclusive mode from the outset for this candidate. Shared reader holds that
 later upgrade for their own evidence writes introduce an avoidable upgrade
 problem between readers. PostgreSQL's [session/transaction lock contract](https://www.postgresql.org/docs/17/explicit-locking.html#ADVISORY-LOCKS)
 allows same-session reentry even with another waiter. A session hold survives
-both COMMIT and ROLLBACK, so cleanup must explicitly retire it after terminal
-proof and before any reuse. No second lock-holder connection, lease controller,
+COMMIT and ROLLBACK, but **not DISCARD ALL or backend exit**. The existing
+[pool reset](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tenant_uow.py#L371)
+runs [DISCARD ALL](https://www.postgresql.org/docs/17/sql-discard.html), which
+releases all session advisory locks without terminal proof; the manager's
+[close path](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/kernel/tenant_uow.py#L357)
+also ends the hold when the backend exits. The non-pooled precondition excludes
+ordinary reset, not backend loss; owner-loss/disclosure fencing remains open.
+An unlock result after L is only a cleanup observation, not evidence that the
+hold was continuous before L. No second lock-holder connection, lease controller,
 unlock timer, raw concurrent close or source withdrawal is introduced.
 
 **Source mapping and limits.** A writer already holding the tenant transaction
@@ -423,10 +446,15 @@ candidate after final S. Those membership and self-effect checks remain open.
 
 Pending authority lookup, binder work before the tenant lock, capacity and
 shared execution still need section 5.1's causal classification. The configured
-[application lock timeout is 2 seconds](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/deployment/postgresql/provisioning_specs.py#L1286);
-this is not full D, and an aborted/dropped writer is not the required later valid
-commit. This candidate changes no timeout or retry authority and proves no
-progress bound. Serializing readers also requires a capacity/progress argument;
+[application lock timeout is 2 seconds](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/deployment/postgresql/provisioning_specs.py#L1288),
+as is the [worker's](https://github.com/samovers/OFARM2/blob/1b4d52e2d6387d486110465973ad822089bd9583/deployment/postgresql/provisioning_specs.py#L1296).
+Under those settings the reader's own blocking acquisition also [ends by error](https://www.postgresql.org/docs/17/runtime-config-client.html#GUC-LOCK-TIMEOUT)
+when that lock-wait budget expires, including inside a SECURITY DEFINER entry;
+it cannot simply wait for a longer-running writer. Feasibility within that budget
+and any change by its database/runtime owner remain unresolved. This is not full
+D, and an aborted/dropped writer is not the required later valid commit. This
+candidate changes no timeout or retry authority and proves no progress bound.
+Serializing readers also requires a capacity/progress argument;
 a wait behind another read is not automatically an item-1 source-finalization
 wait. The key mechanism cannot relabel any excluded wait.
 
@@ -450,6 +478,12 @@ one logical attempt/decision and enforce unique complete success without a
 caller-chosen escape. No IDs, profiles, uniqueness constraints or custody
 authority are invented or implemented here. This is the exact remaining
 evidence-binding work, not a claim that generic JSON rows already satisfy C.
+
+Future profiles also retain [PR #37 section 9.2's digest rules](https://github.com/samovers/OFARM/blob/587cd5b9fccb374df0cb1030f0ad2b74ac1c9e48/package_meta/history/clean_baseline_migration/phase_reports/governed_read_transaction_coverage_and_disclosure_protocol_rfc_candidate_v0_1.md#L322):
+payload bytes contain neither their own digest nor the preparation-receipt digest;
+the decision bundle uses the exact two JSON-pointer exclusions from PR #11
+section 18.8, never a generic exclusion by field name. This mapping defines no
+new digest projection or schema.
 
 **Executed primitive check, 2026-09-18: four cases PASS.** A fresh PostgreSQL 17.10
 container from the cached pinned image ran with no external network or published
@@ -980,12 +1014,14 @@ members verified); bounded local peer assessments. These are static evidence,
 not independent approval or #392 blocker clearance.
 
 The draft PR body records the mandatory package check, whitespace/link checks
-and exact publication head. This revision adds section 5.2's four executed
-PostgreSQL 17.10 primitive cases and reader operation/storage mapping. It also
-sharpens the five source anchors requested by review 5248084404. No OFARM
-runtime/provider, real C/L, KMS, crash, latency-bound or expensive hosted baseline
-test ran. No provider isolation topology was built; prior implementation tests
-are not evidence for this candidate.
+and exact publication head. Section 5.2 retains the four PostgreSQL 17.10 primitive
+cases executed for v0.13. This revision corrects the connection lifetime and
+key-owner mapping identified in [review 5255061602](https://github.com/samovers/OFARM2/pull/396#pullrequestreview-5255061602),
+states the reader's timeout limit and sharpens existing-source references. No
+database test was rerun for these text corrections. No OFARM runtime/provider,
+real C/L, KMS, crash, latency-bound or expensive hosted baseline test ran.
+No provider isolation topology was built; prior implementation tests are not
+evidence for this candidate.
 
 The approved #31/#37 inputs, authority boundaries and conditional adapter
 sections 6.1–6.2 remain unchanged. Verification includes the mandatory package
@@ -993,6 +1029,6 @@ check and exact input/link, structure, preservation and one-file boundary checks
 The four primitive passes leave the named membership, authority, original-owner,
 termination and progress bindings open. Earlier reviews cover only their heads.
 
-Next: review section 5.2's concrete lock/storage/lifetime mapping and the limits
-of its primitive evidence. Keep adapter expansion parked and #392/B1 open;
+Next: review the section 5.2 lifetime/key-owner corrections and affected invariants,
+retaining the primitive evidence limits. Keep adapter expansion parked and #392/B1 open;
 no implementation decision card or provider approval is supplied.
