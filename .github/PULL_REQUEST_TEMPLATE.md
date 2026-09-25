@@ -1,3 +1,10 @@
+<!--
+Use root [AGENTS.md](../AGENTS.md) and its incorporated mandatory
+[Delivery Protocol](../docs/development/DELIVERY_PROTOCOL.md). Follow the root's
+stage-specific reading requirements. This template records evidence and
+navigation; it does not grant authority or waive that procedure.
+-->
+
 ## Delivery identity
 
 <!-- A Tracking Epic does not receive an implementation PR. Link its selected Delivery child issue. -->

@@ -5,6 +5,11 @@ combining independent authority or custody changes. Root `AGENTS.md` is the
 canonical source for repository-development procedure only. This guide
 explains how contributors apply it.
 
+Root [AGENTS.md](AGENTS.md) incorporates the mandatory
+[Delivery Protocol](docs/development/DELIVERY_PROTOCOL.md). Follow the root's
+stage-specific reading requirements before implementation, review, approval,
+admission, publication, or merge. The summaries here do not waive that procedure.
+
 ## Classify the work
 
 A **Tracking Epic** describes a programme with more than one independently

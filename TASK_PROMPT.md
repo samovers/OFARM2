@@ -4,6 +4,11 @@ Use this prompt before starting OFARM2 Delivery work. Root `AGENTS.md` is the
 canonical source for repository-development procedure; this file is its working
 form.
 
+Root [AGENTS.md](AGENTS.md) incorporates the mandatory
+[Delivery Protocol](docs/development/DELIVERY_PROTOCOL.md). Follow the root's
+stage-specific reading requirements before implementation, review, approval,
+admission, publication, or merge. This working form does not waive that procedure.
+
 Inputs:
 
 - Work unit: `Delivery issue` / `Tracking Epic`
