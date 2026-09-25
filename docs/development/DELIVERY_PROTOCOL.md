@@ -15,9 +15,9 @@ invariants and review classifications remain in [root AGENTS.md](../../AGENTS.md
 ## Extraction provenance
 
 The procedure below is extracted from `samovers/OFARM2` root `AGENTS.md`, Git
-blob `94e403aacbb2a3e3d1e07c22e338c5b4a10d8a95`, recorded in proposal v1 as
-read on 2026-09-24. Proposal v2 was prepared on 2026-09-25 from that supplied
-proposal, not a new live-repository snapshot.
+blob `94e403aacbb2a3e3d1e07c22e338c5b4a10d8a95` at the adoption PR's base
+commit `1b4d52e2d6387d486110465973ad822089bd9583`. At that base, the root had
+not changed since commit `c834c34019a2799f97e687b5f603a7bcedf8b566`.
 
 The source text runs from `Standing repository-development authority` through
 the end of `Final human acceptance and native merge`. Changes inside that
@@ -29,9 +29,11 @@ removed, reordered, or relaxed. Approval forms, closed precedence, trust
 boundaries, recovery, review ordering, admission, publication, and merge rules
 are otherwise unchanged.
 
-This companion has no standing effect until adopted together with the proposed
-root file through the existing workflow-governance process. Extraction does not
-rewrite historical decisions or approvals.
+This companion and root `AGENTS.md` are adopted together by
+[PR #398](https://github.com/samovers/OFARM2/pull/398), tracked in
+[Delivery #397](https://github.com/samovers/OFARM2/issues/397). The root
+incorporates this companion as its mandatory detailed procedure. Extraction
+does not rewrite historical decisions or approvals.
 
 ---
 
