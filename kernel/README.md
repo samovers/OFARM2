@@ -166,7 +166,7 @@ PGBIN=$(dirname "$(which initdb)")        # e.g. /opt/homebrew/opt/postgresql@17
 #    plus the stage-contract tests (policy tables, validator dispositions)
 .venv/bin/python -m pytest kernel/tests/ -q
 
-# 4. the package self-check (before every commit — AGENTS.md rule 3)
+# 4. the package self-check (before every commit — AGENTS.md, Verification and merge)
 python3 conformance/ofarm_pkg_contract_check.py
 ```
 
@@ -196,7 +196,7 @@ configuration. HS256 exists only in the test runtime.
 
 The submission shape `POST /commit` accepts is the runtime boundary, not a
 contract; `kernel/demo.py:spray_submission()` is the canonical worked example
-(fictional, format-true — privacy rule 1). For an operation claim, `payload`
+(fictional, format-true — AGENTS.md, Privacy safeguard). For an operation claim, `payload`
 is a complete `ExecutionRecordPayload` per `contracts/core/`.
 
 Before opening a transaction, the legacy pipeline requires non-empty string

@@ -10,7 +10,7 @@ CONTEST of an ALREADY IN-FORCE consequence appends a ReviewDecision (CONTESTED)
 qualifies disputeStatus, and refuses a high-consequence freeze — resolved only by
 a superseding CORRECTION. Both are authorized by the DISTINCT
 REVIEW_REJECT_OR_CONTEST action. All identifiers fictional and format-true
-(privacy rule 1).
+(AGENTS.md, Privacy safeguard).
 """
 from __future__ import annotations
 

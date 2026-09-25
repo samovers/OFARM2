@@ -5,7 +5,7 @@ mechanism: resolving a candidate against an in-force ReferenceSnapshot produces
 an ExternalRegistryVerificationTrace and a verdict — identity-grade confirms,
 locator-only / not-found routes to review, an absent snapshot refuses governably.
 A generic FIXTURE scheme only — no REGSR/GERK/FFSNaprave literals (P4 injects the
-real lookups). All data fictional and format-true (privacy rule 1).
+real lookups). All data fictional and format-true (AGENTS.md, Privacy safeguard).
 """
 from __future__ import annotations
 

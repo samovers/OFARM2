@@ -1,10 +1,10 @@
-"""Fictional demo onboarding (privacy rule 1, D14).
+"""Fictional demo onboarding (AGENTS.md, Privacy safeguard, D14).
 
 Every value here is fictional and format-true: KMG-MID 100000001 (9 digits),
 GERK-PID 1000001 (7 digits), training card FFS-000001, party names are
 obviously synthetic. No real person, holding, parcel, or document value
 appears anywhere in this module — real farm documents are evidence held
-farm-side only (AGENTS.md rule 1).
+farm-side only (AGENTS.md, Privacy safeguard).
 
 Substrate records (parties, grants, raw evidence, bindings) are bootstrapped
 directly: they are not authoritative-listed kinds. The domain IDENTITIES
@@ -101,7 +101,7 @@ def substrate_records() -> list[dict]:
 # ---------------------------------------------------------------------------
 # typed identity payloads (M2 G1) — generic Core shapes, no SI scheme bindings
 # (KMG-MID / GERK / REGSR / FFS-NAPRAVE bindings are P4). Every value fictional
-# and format-true (privacy rule 1, D14). Each builder accepts an explicit
+# and format-true (AGENTS.md, Privacy safeguard, D14). Each builder accepts an explicit
 # payload id so a revision can carry a NEW payload for the SAME identity.
 # ---------------------------------------------------------------------------
 

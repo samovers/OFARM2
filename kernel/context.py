@@ -289,7 +289,7 @@ def bootstrap(store) -> list[str]:
     """Load the shipped SI profile instances into the store (idempotent).
 
     These are package-validated instances (conformance self-check), inserted
-    verbatim — never edited (AGENTS.md rule 4).
+    verbatim — never edited (AGENTS.md, Authority and mandatory procedure).
     """
     return bootstrap_for_descriptor(store, store.active_descriptor)
 

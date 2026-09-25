@@ -12,7 +12,7 @@ inside the operation-claim commit would need a second PromotionTrace (the
 reachability invariant has no advisory slot), an architectural change out of P5
 scope. P5 ships the floor move + the immediate non-blocking result warning;
 durable advisory emission is a recorded follow-up (ERRATA E-006). All
-identifiers fictional and format-true (privacy rule 1).
+identifiers fictional and format-true (AGENTS.md, Privacy safeguard).
 """
 from __future__ import annotations
 
