@@ -7,7 +7,7 @@ re-import; the single-writer advisory lock serializes writers; and two concurren
 first STRUCTURE_ASSERTIONs for one identity resolve to exactly one governed
 winner with no ungoverned crash (the H1 hardening folded into G2). A generic
 FIXTURE scheme only — no REGSR/GERK/FFSNaprave literals (those are P1–P3). All
-data fictional and format-true (privacy rule 1).
+data fictional and format-true (AGENTS.md, Privacy safeguard).
 """
 from __future__ import annotations
 

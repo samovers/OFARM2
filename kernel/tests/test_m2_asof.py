@@ -18,7 +18,7 @@ one coherent deployment "generation", so the tests build generations with the
 `_generation` helper (artifact generated FROM the activation, deploying that
 code-binding profile) rather than mismatched copies. Each test runs on a fresh
 DB so session-accumulated spine records cannot pollute selection. All identifiers
-fictional and format-true (privacy rule 1).
+fictional and format-true (AGENTS.md, Privacy safeguard).
 """
 from __future__ import annotations
 

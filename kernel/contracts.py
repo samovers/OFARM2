@@ -10,8 +10,8 @@ Two lanes:
                 (implemented behind Kernel law, never promoted — D16; draft
                 records land in runtime_trace, never in kernel_record)
 
-Extracted contracts are read-only (AGENTS.md rule 4); this module only ever
-reads them.
+Extracted contracts are read-only (AGENTS.md, Authority and mandatory
+procedure); this module only ever reads them.
 """
 from __future__ import annotations
 

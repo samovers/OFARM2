@@ -11,7 +11,7 @@ still accepted. Every outcome is governed (a decisionOutcome, never a crash).
 
 The SI geometry that POPULATES such carriers is package content (P2/GERK); this
 ticket carries no SI geometry literals — the PartialExtent built here is a generic,
-format-true fixture. All identifiers fictional and format-true (privacy rule 1).
+format-true fixture. All identifiers fictional and format-true (AGENTS.md, Privacy safeguard).
 """
 from __future__ import annotations
 

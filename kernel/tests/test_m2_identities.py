@@ -12,7 +12,7 @@ and the PR-#9 steward decisions:
     distinct reviewer.
   * D18 — a re-assertion of an existing identity must explicitly supersede that
     identity's current structural consequence (never silent latest-wins).
-All data is fictional and format-true (privacy rule 1, D14). No SI bindings (P4).
+All data is fictional and format-true (AGENTS.md, Privacy safeguard, D14). No SI bindings (P4).
 """
 from __future__ import annotations
 

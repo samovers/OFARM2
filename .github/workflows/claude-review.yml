@@ -8,8 +8,8 @@
 # Repo-specific review guards, the seven Kernel rules, and claim limits live in
 # AGENTS.md (loaded through CLAUDE.md's `@AGENTS.md` import), so the reviewer
 # inherits them. The appended prompt below points at them explicitly and
-# enforces privacy rule 1: every finding must be paste-safe — counts, masked
-# IDs, booleans, never personal data.
+# enforces the Privacy safeguard in AGENTS.md: every finding must be paste-safe
+# — counts, masked IDs, booleans, never personal data.
 #
 # Setup: add repo secret CLAUDE_CODE_OAUTH_TOKEN, generated locally with
 # `claude setup-token` on a Pro/Max plan (Settings -> Secrets and variables ->
@@ -51,5 +51,5 @@ jobs:
             guards, the seven Kernel rules, and the claim limits defined in
             AGENTS.md. Flag any current-compliance, certification,
             production-readiness, or legal-advice claim. Keep every finding
-            paste-safe (privacy rule 1): report counts, masked IDs, and
-            booleans; never quote or echo personal data."
+            paste-safe (AGENTS.md, Privacy safeguard): report counts, masked
+            IDs, and booleans; never quote or echo personal data."

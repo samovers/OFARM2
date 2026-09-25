@@ -1,9 +1,9 @@
 """Conformance-suite harness.
 
 Fresh database per session; results land as a JSON evidence file per run
-(canonical runner style). Honest reporting (AGENTS.md rule 7): the evidence
-file records what actually executed — failing tests are recorded as failing,
-and a design fixture is never presented as executed evidence.
+(canonical runner style). Under the Honest evidence safeguard in AGENTS.md,
+the evidence file records what actually executed — failing tests are recorded
+as failing, and a design fixture is never presented as executed evidence.
 """
 from __future__ import annotations
 
@@ -164,8 +164,9 @@ def pytest_sessionfinish(session, exitstatus):
         "details": _DETAILS,
         "honestyNote": "This file records an actual executed run against the live "
                        "PostgreSQL store. Design fixtures are never presented as "
-                       "executed evidence (AGENTS.md rule 7). All test data is "
-                       "fictional and format-true (privacy rule 1).",
+                       "executed evidence (AGENTS.md, Honest evidence safeguard). "
+                       "All test data is "
+                       "fictional and format-true (AGENTS.md, Privacy safeguard).",
     }
     path = evidence_dir / f"platform_mvp_results_{ts.strftime('%Y-%m-%dT%H%M%SZ')}.json"
     path.write_text(json.dumps(payload, indent=2) + "\n")

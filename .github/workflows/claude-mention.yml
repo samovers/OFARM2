@@ -9,8 +9,8 @@
 #
 # Unlike the reviewer, this mode CAN modify the repo: it may push commits and
 # open PRs. AGENTS.md still binds it — conformance must pass before any commit,
-# the law freeze holds, privacy rule 1 is absolute. Treat its output as a draft
-# to review, never as settled truth.
+# the law freeze holds, and the Privacy safeguard in AGENTS.md is absolute.
+# Treat its output as a draft to review, never as settled truth.
 #
 # Requires the same repo secret CLAUDE_CODE_OAUTH_TOKEN. Action pinned by SHA.
 # To have Claude's commits re-trigger conformance CI, install the Claude GitHub

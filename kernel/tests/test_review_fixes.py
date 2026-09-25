@@ -3,7 +3,7 @@
 Engineering tests, NOT part of the named conformance suite (conftest only
 records test_conformance.py into the evidence file). Each test pins a defect
 the review found and the gate behavior that now closes it. All data is
-fictional and format-true (privacy rule 1).
+fictional and format-true (AGENTS.md, Privacy safeguard).
 """
 from __future__ import annotations
 
