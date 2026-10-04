@@ -185,5 +185,16 @@ pre-acquisition failures with empty slots. Probe containment runs only after
 product-disposal assertions. This correction requires focused B1 re-review at its
 new exact head; the earlier full review and local passes do not close B1 themselves.
 
-Next: finish correction checks, freeze its exact head for B1 and affected-invariant
-re-review, and obtain the required later acceptance.
+The existing pinned-driver acceptance case emits exactly one fixed JSON record
+with marker `OFARM2_SIGNING_OBSERVATION_CLIENT_RUNTIME ` through
+`capsys.disabled()`. It records libpq version, psycopg implementation/version,
+platform system/machine and OpenSSL_version resolved through the already loaded
+`psycopg_binary.pq` extension's dependency handle, after asserting that handle's
+PQlibVersion equals psycopg's loaded version. It records no DSN, credential or host
+path and does not substitute Python ssl's separate library version. The unchanged
+baseline runner inherits stdout; both admitted Linux run records must be retained
+and authenticated with their job-log digests by the existing evidence process.
+No baseline envelope/schema, workflow or publication-policy change is introduced.
+
+Next: finish correction checks, freeze its exact head for B1 and the runtime-metadata
+companion's focused re-review, and obtain the required later acceptance.

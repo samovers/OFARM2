@@ -1,8 +1,12 @@
 """S1-02/05/07 mechanical waiting and explicit partial-handle ownership."""
 from __future__ import annotations
 
+import ctypes
+import json
 import os
+import platform
 import socket
+import sys
 import threading
 import time
 from types import SimpleNamespace
@@ -251,8 +255,32 @@ def test_nested_wait_and_handle_cleanup_failures_still_dispose_all(monkeypatch):
     _assert_partial_disposed(handle)
 
 
-def test_pinned_binary_initial_bad_handle_is_finished_by_the_production_owner(monkeypatch):
+def _emit_loaded_client_runtime(capsys):
+    extension = sys.modules["psycopg_binary.pq"]
+    dependency = ctypes.CDLL(extension.__file__)
+    dependency.PQlibVersion.argtypes = []
+    dependency.PQlibVersion.restype = ctypes.c_int
+    assert dependency.PQlibVersion() == pq.version()
+    dependency.OpenSSL_version.argtypes = [ctypes.c_int]
+    dependency.OpenSSL_version.restype = ctypes.c_char_p
+    metadata = {
+        "libpqVersion": pq.version(),
+        "pqImplementation": pq.__impl__,
+        "psycopgVersion": psycopg.__version__,
+        "system": platform.system(),
+        "machine": platform.machine(),
+        "opensslVersion": dependency.OpenSSL_version(0).decode("ascii"),
+    }
+    assert metadata["opensslVersion"].startswith("OpenSSL ")
+    with capsys.disabled():
+        print("\nOFARM2_SIGNING_OBSERVATION_CLIENT_RUNTIME " + json.dumps(
+            metadata, sort_keys=True, separators=(",", ":"),
+        ), flush=True)
+
+
+def test_pinned_binary_initial_bad_handle_is_finished_by_the_production_owner(monkeypatch, capsys):
     assert psycopg.__version__ == "3.3.4" and pq.__impl__ == "binary"
+    _emit_loaded_client_runtime(capsys)
     frozen = transport.prepare_signing_conninfo(f"host=127.0.0.1 port=5432 {BASE}")
     native_start = pq.PGconn.connect_start
     retained = []
