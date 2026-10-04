@@ -4,6 +4,11 @@ from __future__ import annotations
 import base64
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from types import SimpleNamespace
+
+from psycopg import pq
+from psycopg.conninfo import make_conninfo
 from uuid import uuid4
 
 from cryptography.hazmat.primitives import serialization
@@ -239,12 +244,19 @@ class Connection:
         self.failure = failure
         self.exit_error = exit_error
         self.executions: list[tuple[str, tuple[object, ...] | None]] = []
+        self.pgconn = SimpleNamespace(transaction_status=pq.TransactionStatus.IDLE)
 
     def __enter__(self):
         return self
 
     def __exit__(self, _exception_type, _exception, _traceback):
         return False
+
+    def close(self):
+        pass
+
+    def cursor(self):
+        return ObservationCursor(self)
 
     def transaction(self):
         return Transaction(self.exit_error)
@@ -266,3 +278,48 @@ class Factory:
 
     def __call__(self):
         return self.connection
+
+
+def connected_test_dsn(dsn: str, connection) -> str:
+    """Pin the connected test endpoint, retaining its hostname and TLS options."""
+    if connection.info.hostaddr:
+        return make_conninfo(dsn, hostaddr=connection.info.hostaddr)
+    return dsn
+
+
+class ObservationCursor(Cursor):
+    def __init__(self, connection):
+        super().__init__([])
+        self.connection = connection
+        self.description = None
+
+    def execute(self, statement, parameters):
+        from kernel.signing_authority import _SIGNING_AUTHORITY_COLUMNS
+
+        self.rows = self.connection.execute(statement, parameters).rows
+        self.description = [SimpleNamespace(name=name) for name in _SIGNING_AUTHORITY_COLUMNS]
+
+    def close(self):
+        pass
+
+    def nextset(self):
+        return None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
+
+def reader_with_connection(monkeypatch, factory, receipt_source, verifier):
+    """Exercise production validation with explicit test-only I/O seams."""
+    from kernel import signing_authority as module
+
+    def connect(*_args, owner):
+        owner.connection = factory()
+        return owner.connection
+
+    monkeypatch.setattr(module, "connect_observation", connect)
+    monkeypatch.setattr(module, "read_signing_receipt", lambda _path, **_kw: receipt_source())
+    return module.SigningAuthorityReader(b"test-only", Path("unused"), verifier)

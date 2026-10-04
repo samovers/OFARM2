@@ -66,10 +66,10 @@ def _stored_contexts(target, challenges):
 
 
 def test_real_delayed_issuer_binds_exact_protected_challenge_deadline(
-    target, tenant_authority, key_authority, monkeypatch
+    target, tenant_authority, key_authority, tmp_path, monkeypatch
 ):
     principal = _principal(target, tenant_authority)
-    signing = live_signing(target, key_authority.kid)
+    signing = live_signing(target, key_authority.kid, tmp_path)
     minted = []
     original_mint = signing.issuer.mint
 
@@ -112,10 +112,10 @@ def test_real_delayed_issuer_binds_exact_protected_challenge_deadline(
 
 @pytest.mark.parametrize("failure_stage", ("before-bind", "after-bind"))
 def test_real_issuer_cancellation_rolls_back_and_next_transaction_is_fresh(
-    target, tenant_authority, key_authority, monkeypatch, failure_stage
+    target, tenant_authority, key_authority, tmp_path, monkeypatch, failure_stage
 ):
     principal = _principal(target, tenant_authority)
-    signing = live_signing(target, key_authority.kid)
+    signing = live_signing(target, key_authority.kid, tmp_path)
     challenges = []
     original_mint = signing.issuer.mint
 
@@ -158,10 +158,10 @@ def test_real_issuer_cancellation_rolls_back_and_next_transaction_is_fresh(
 
 
 def test_real_observation_uuid_substitution_refuses_before_signing(
-    target, tenant_authority, key_authority, monkeypatch
+    target, tenant_authority, key_authority, tmp_path, monkeypatch
 ):
     principal = _principal(target, tenant_authority)
-    signing = live_signing(target, key_authority.kid)
+    signing = live_signing(target, key_authority.kid, tmp_path)
     observed = []
     original_execute = psycopg.Connection.execute
 

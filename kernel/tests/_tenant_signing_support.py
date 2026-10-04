@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import psycopg
 from google.cloud import kms_v1
+from psycopg.conninfo import make_conninfo
 
 from deployment.postgresql.tenant_contract import crc32c
 from kernel.google_kms_signer import GoogleKmsSigner
 from kernel.signing_authority import SigningAuthority, SigningAuthorityReader
 from kernel.signing_receipt import SigningEvidenceVerifier
+from kernel.signing_authority_io import prepare_signing_conninfo
 from kernel.tenant_capability_issuer import TenantCapabilityIssuer
 from kernel.tests._signing_support import (
     OBSERVER_PRIVATE_KEY,
+    connected_test_dsn,
     raw_public_key,
     receipt_payload,
     signed_receipt,
@@ -55,11 +59,12 @@ class LiveSigning:
 
 
 def live_signing(
-    target: TenantTarget, kid: str, *, seed: bytes = RFC8032_TEST_SEED
+    target: TenantTarget, kid: str, receipt_directory: Path, *, seed: bytes = RFC8032_TEST_SEED
 ) -> LiveSigning:
     """Fresh signed fixture receipt; production reader still rereads authority."""
     app_dsn = target.role_dsn("ofarm_app")
     with psycopg.connect(app_dsn) as connection:
+        app_dsn = connected_test_dsn(app_dsn, connection)
         row = connection.execute(
             "SELECT * FROM ofarm.observe_signing_authority(%s)", (kid,)
         ).fetchone()
@@ -70,9 +75,14 @@ def live_signing(
         observedAtUnixMicroseconds=observed.observed_at_us,
         expiresAtUnixMicroseconds=observed.observed_at_us + 30_000_000,
     ))
+    receipt_path = receipt_directory / f"{kid}.json"
+    receipt_path.write_bytes(receipt)
+    conninfo = prepare_signing_conninfo(make_conninfo(
+        app_dsn, sslcertmode="disable", gssencmode="disable",
+    ))
     reader = SigningAuthorityReader(
-        lambda: psycopg.connect(app_dsn),
-        lambda: receipt,
+        conninfo,
+        receipt_path,
         SigningEvidenceVerifier(raw_public_key(OBSERVER_PRIVATE_KEY)),
     )
     client = FixtureKmsClient(observed.kms_key_version_resource, seed)

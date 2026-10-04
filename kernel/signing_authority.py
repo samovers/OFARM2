@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from pathlib import Path
+from threading import Event
+import time
 from dataclasses import dataclass, fields
 from uuid import UUID
 
-import psycopg
+from psycopg import pq
 
 from deployment.postgresql.tenant_contract import (
     TENANT_CAPABILITY_CONTRACT,
@@ -16,16 +18,17 @@ from deployment.postgresql.tenant_contract import (
     validate_google_kms_key_version_resource,
 )
 
+from .postgres_wait import checkpoint, disposing
+from .signing_authority_io import (
+    ObservationConnectionOwner, connect_observation, read_signing_receipt,
+)
 from .signing_receipt import (
-    SigningEvidenceError,
     SigningEvidenceReceipt,
     SigningEvidenceVerifier,
 )
 
 
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
-ConnectionFactory = Callable[[], psycopg.Connection[tuple[object, ...]]]
-ReceiptSource = Callable[[], bytes]
 
 
 class SigningAuthorityError(RuntimeError):
@@ -169,44 +172,63 @@ _SIGNING_AUTHORITY_QUERY = (
 class SigningAuthorityReader:
     def __init__(
         self,
-        connection_factory: ConnectionFactory,
-        receipt_source: ReceiptSource,
+        conninfo: bytes,
+        receipt_path: Path,
         receipt_verifier: SigningEvidenceVerifier,
     ) -> None:
-        self._connection_factory = connection_factory
-        self._receipt_source = receipt_source
+        self._conninfo = conninfo
+        self._receipt_path = receipt_path
         self._receipt_verifier = receipt_verifier
 
-    def current(self, kid: str) -> SigningAuthority:
+    def current(
+        self, kid: str, *, cancel_event: Event | None = None,
+        deadline_monotonic: float | None = None,
+    ) -> SigningAuthority:
+        reason = "database signing authority is unavailable"
         try:
-            with self._connection_factory() as connection:
-                cursor = connection.execute(
-                    _SIGNING_AUTHORITY_QUERY,
-                    (kid,),
+            deadline = time.monotonic() + 5.0
+            if deadline_monotonic is not None:
+                checkpoint(deadline_monotonic, cancel_event)
+                deadline = min(deadline, deadline_monotonic)
+            checkpoint(deadline, cancel_event)
+            owner = ObservationConnectionOwner()
+            with disposing(owner.close):
+                connection = connect_observation(
+                    self._conninfo, deadline, cancel_event, owner=owner,
                 )
-                row = cursor.fetchone()
-                duplicate = cursor.fetchone()
-        except psycopg.Error as exc:
-            raise SigningAuthorityUnavailable(
-                "database signing authority is unavailable"
-            ) from exc
-        if row is None:
-            raise SigningAuthorityUnavailable(
-                "database has no current signing authority"
-            )
-        if type(row) is not tuple or duplicate is not None:
-            raise SigningAuthorityUnavailable(
-                "database signing authority shape differs"
-            )
-        try:
+                cursor = None
+                with disposing(lambda: cursor.close() if cursor is not None else None):
+                    cursor = connection.cursor()
+                    cursor.execute(_SIGNING_AUTHORITY_QUERY, (kid,))
+                    columns = tuple(c.name for c in cursor.description or ())
+                    row, duplicate = cursor.fetchone(), cursor.fetchone()
+                    if (
+                        columns != _SIGNING_AUTHORITY_COLUMNS
+                        or cursor.nextset() is not None
+                        or connection.pgconn.transaction_status != pq.TransactionStatus.IDLE
+                        or (row is not None and type(row) is not tuple)
+                        or duplicate is not None
+                    ):
+                        raise SigningAuthorityUnavailable("database signing authority shape differs")
+            checkpoint(deadline, cancel_event)
+            if row is None:
+                raise SigningAuthorityUnavailable("database has no current signing authority")
+            reason = "signing evidence is unavailable"
             authority = SigningAuthority.from_database_row(row, kid)
-            receipt = self._receipt_verifier.verify(
-                self._receipt_source(),
-                now_us=authority.observed_at_us,
+            receipt_bytes = read_signing_receipt(
+                self._receipt_path, deadline=deadline, cancel_event=cancel_event,
             )
-        except (OSError, SigningEvidenceError, TypeError, ValueError) as exc:
-            raise SigningAuthorityUnavailable(
-                "signing evidence is unavailable"
-            ) from exc
-        authority.require_receipt(receipt)
-        return authority
+            checkpoint(deadline, cancel_event)
+            receipt = self._receipt_verifier.verify(
+                receipt_bytes, now_us=authority.observed_at_us,
+            )
+            authority.require_receipt(receipt)
+            checkpoint(deadline, cancel_event)
+        except SigningAuthorityUnavailable as failure:
+            reason = str(failure)
+        except Exception:
+            pass
+        else:
+            return authority
+        # Raising outside the handler avoids retaining driver exception context.
+        raise SigningAuthorityUnavailable(reason)
