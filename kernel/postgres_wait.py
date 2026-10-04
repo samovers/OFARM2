@@ -43,8 +43,9 @@ def wait(gen, fileno, deadline: float, cancel_event: Event | None = None):
     """Own the selector/generator; the caller owns any connection or result."""
     with disposing(gen.close):
         checkpoint(deadline, cancel_event)
-        selector = selectors.DefaultSelector()
-        with disposing(selector.close):
+        selector = None
+        with disposing(lambda: selector.close() if selector is not None else None):
+            selector = selectors.DefaultSelector()
             registered = None
             try:
                 requested = next(gen)

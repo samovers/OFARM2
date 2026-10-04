@@ -21011,6 +21011,66 @@
       "sourcePath": "kernel/tests/test_signing_authority.py"
     },
     {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_process_control_before_acquisition_handles_empty_owner_slots[connect]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_process_control_before_acquisition_handles_empty_owner_slots[cursor]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_process_control_before_acquisition_handles_empty_owner_slots[receipt]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_process_control_before_acquisition_handles_empty_owner_slots[selector]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_across_native_connection_acquisition_and_handoff[cursor]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_across_native_connection_acquisition_and_handoff[partial]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_across_native_connection_acquisition_and_handoff[reader]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_across_native_connection_acquisition_and_handoff[return-event]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_across_native_connection_acquisition_and_handoff[return-line]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_across_native_connection_acquisition_and_handoff[wrapper]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_immediately_after_native_selector_acquisition_closes_it",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_immediately_after_receipt_open_closes_retained_descriptor",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
       "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_create_app_refuses_static_route_before_fastapi_or_files",
       "sourceModule": "kernel.tests.test_signing_observation_configuration",
       "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
@@ -24411,8 +24471,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "593c66ee940d6f8a972625dc36bd727573ed1571cc43f74e375a1ce261f8f6c5",
-  "entryCount": 4882,
+  "entriesSha256": "0f7000fb3687f556287a60dd770e5a26aba8c714ae0f0124df0e394512b268e8",
+  "entryCount": 4894,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

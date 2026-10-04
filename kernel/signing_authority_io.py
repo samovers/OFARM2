@@ -125,32 +125,43 @@ def _connect_existing(pgconn):
             pass
 
 
-def connect_observation(conninfo: bytes, deadline: float, cancel_event):
+class ObservationConnectionOwner:
+    """Caller-owned slots remain live across acquisition and helper return."""
+
+    def __init__(self):
+        self.pgconn = None
+        self.connection = None
+
+    def close(self):
+        if self.connection is not None:
+            self.connection.close()
+        elif self.pgconn is not None:
+            self.pgconn.finish()
+
+
+def connect_observation(conninfo: bytes, deadline: float, cancel_event, *, owner):
+    """Borrow through the caller's active owner; never transfer cleanup."""
     checkpoint(deadline, cancel_event)
     if prepare_signing_conninfo(conninfo.decode()) != conninfo:
         raise SigningObservationConfigError("signing observation environment changed")
     checkpoint(deadline, cancel_event)
-    pgconn = pq.PGconn.connect_start(conninfo)
-    transferred = False
-    def finish_untransferred():
-        if not transferred:
-            pgconn.finish()
-    with disposing(finish_untransferred):
-        wait(_connect_existing(pgconn), lambda: pgconn.socket, deadline, cancel_event)
-        connection = _BoundedConnection(pgconn)
-        connection._deadline = deadline
-        connection._cancel_event = cancel_event
-        connection.autocommit = True
-        connection.prepare_threshold = None
-        checkpoint(deadline, cancel_event)
-        transferred = True
-        return connection
+    owner.pgconn = pq.PGconn.connect_start(conninfo)
+    wait(_connect_existing(owner.pgconn), lambda: owner.pgconn.socket, deadline, cancel_event)
+    owner.connection = _BoundedConnection(owner.pgconn)
+    connection = owner.connection
+    connection._deadline = deadline
+    connection._cancel_event = cancel_event
+    connection.autocommit = True
+    connection.prepare_threshold = None
+    checkpoint(deadline, cancel_event)
+    return connection
 
 
 def read_signing_receipt(path: Path, *, deadline: float, cancel_event=None) -> bytes:
     checkpoint(deadline, cancel_event)
-    descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
-    with disposing(lambda: os.close(descriptor)):
+    descriptor = None
+    with disposing(lambda: os.close(descriptor) if descriptor is not None else None):
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
         checkpoint(deadline, cancel_event)
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise OSError("signing receipt is not a regular file")

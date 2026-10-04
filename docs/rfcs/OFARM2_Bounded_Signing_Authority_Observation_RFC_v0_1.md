@@ -40,9 +40,9 @@ Psycopg has two generator protocols: stock connect yields `(fd, Wait)` and retur
 
 Pinned Python `_connect` and the actual exported Cython `connect` create a PGconn internally and expose it only after success. Their timeout path lacks an unconditional finish-finally; the initial BAD error can retain `.pgconn`. `_connect_gen` constructs a Connection only after that return. Closing an outer Connection cannot dispose a handle it has not received. Generator destruction or eventual garbage collection is insufficient while a generator, exception or traceback remains reachable.
 
-The narrow adaptation is therefore an outer owner that calls `pq.PGconn.connect_start` and immediately holds the returned handle, then drives a small `connect_poll` bridge. That owner encloses all subsequent work in `try/finally`, including the first poll, bad status, descriptor changes, expiry, cancellation, success and Connection construction. Failed `connect_start` itself is subject to the pinned binding's allocation contract; test that boundary too. Do not inspect generator frames or recover ownership from exception internals. The bridge issues no SQL and duplicates no query/result machinery.
+The narrow adaptation is therefore an outer owner that calls `pq.PGconn.connect_start` and immediately holds the returned handle, then drives a small `connect_poll` bridge. The reader creates a nullable raw-handle/wrapper owner and activates its cleanup scope before the helper acquires anything. The helper assigns directly into that owner; ownership covers the first poll, bad status, descriptor changes, expiry, cancellation, success and Connection construction. Failed `connect_start` itself is subject to the pinned binding's allocation contract; test that boundary too. Do not inspect generator frames or recover ownership from exception internals. The bridge issues no SQL and duplicates no query/result machinery.
 
-On successful polling, set nonblocking mode and construct the reader-owned `_BoundedConnection` with that same handle. Transfer ownership exactly once after construction; before transfer the outer owner finishes, afterward the reader closes the wrapper. Construction failure, a boundary cancellation or an exception retaining the handle must still leave it explicitly disposed. Keep an established connection nonblocking through finish; partial-connect sockets retain libpq's nonblocking setup. Actual loaded libpq/TLS disposal under failure is an acceptance obligation, not proved merely by a source reading.
+On successful polling, set nonblocking mode and construct the reader-owned `_BoundedConnection` with that same handle. Keep the same reader-owned cleanup responsibility active across construction and helper return. The returned wrapper is borrowed within that scope; there is no transfer flag or unowned return window. Cleanup selects wrapper close after construction, otherwise native finish. Construction failure, a boundary cancellation or an exception retaining the handle must still leave it explicitly disposed. Keep an established connection nonblocking through finish; partial-connect sockets retain libpq's nonblocking setup. Actual loaded libpq/TLS disposal under failure is an acceptance obligation, not proved merely by a source reading.
 
 Configure autocommit and `prepare_threshold=None`; use an explicit cursor and the unchanged parameterized `_SIGNING_AUTHORITY_QUERY` with `(kid,)`. Psycopg performs query conversion, send/flush/consume, result drain and normal loading through its cursor/Transformer. Disable access to pipeline, COPY, streaming, executemany, arbitrary SQL callbacks and connection sharing in this fixed reader path. No custom OID map, encoding conversion, raw result parser or copied field list is introduced.
 
@@ -54,7 +54,7 @@ Preserve a safe public refusal without retaining a raw driver exception, DSN or 
 
 ## Receipt, publication and real callers
 
-Read the configured receipt afresh after database disposal. Open with nonblocking and close-on-exec flags; `fstat` must identify a regular file. Read at most `SIGNING_EVIDENCE_MAX_BYTES + 1` (16,385 bytes) and close the descriptor in `finally`. Check cancellation/deadline around admitted local operations. A symlink's resolved target must meet H1; file kind alone cannot prove locality. Keep existing size limits, `SigningEvidenceVerifier.verify(receipt_bytes, now_us=authority.observed_at_us)` and `authority.require_receipt(receipt)` unchanged. No cached-good, startup-only or remote receipt fallback is allowed.
+Read the configured receipt afresh after database disposal. Activate a nullable descriptor cleanup scope before open. Open with nonblocking and close-on-exec flags; `fstat` must identify a regular file. Read at most `SIGNING_EVIDENCE_MAX_BYTES + 1` (16,385 bytes) and close the descriptor in `finally`. Check cancellation/deadline around admitted local operations. A symlink's resolved target must meet H1; file kind alone cannot prove locality. Keep existing size limits, `SigningEvidenceVerifier.verify(receipt_bytes, now_us=authority.observed_at_us)` and `authority.require_receipt(receipt)` unchanged. No cached-good, startup-only or remote receipt fallback is allowed.
 
 Check cancellation/deadline again after validation and cleanup, immediately before returning the immutable authority. Timeout/cancellation and supported transport/file failures map to `SigningAuthorityUnavailable`, with the existing issuer `CapabilityMintError` translation. Preserve exact authority/receipt refusal predicates. Never log credentials, raw evidence, DSNs or raw SQL errors.
 
@@ -147,8 +147,8 @@ again at connection time. Numeric host/hostaddr mismatches refuse before startup
 resources. The concrete admitted credentials/defaults profile is documented in
 `kernel/README.md`; local configuration-file health remains an H1 assumption.
 
-Measured complete source sizes are 221 receipt, 228 reader, 89 KMS signer,
-179 issuer, 314 key control, 68 mechanical wait and 168 signing I/O: **1,267/1,310**
+Measured complete source sizes are 221 receipt, 234 reader, 89 KMS signer,
+179 issuer, 314 key control, 69 mechanical wait and 179 signing I/O: **1,285/1,310**
 for the signing group. Runtime is **218/230**, with its group **417/500**.
 The largest changed functions are `_prepared_options` at 70 lines,
 `TenantCapabilityIssuer.mint` at 68 and `build_application_runtime` at 80;
@@ -169,5 +169,21 @@ not the authoritative Linux x86_64 hosted baseline or final human acceptance.
 The complete candidate handoff records exact commands, outcomes, source hashes,
 size measurements and remaining controls; no hosted baseline was launched here.
 
-Next: finish complete-candidate integration checks, freeze the exact head for
-independent implementation review, and obtain the required later acceptance.
+### B1 acquisition and handoff correction
+
+The one full implementation review of `3f43bbdce6ae0f27423c5a921b31affb2a45d7f5`
+found one Blocker: actual SIGINT could arrive after native acquisition but before
+cleanup scope entry, or after a transfer flag disabled cleanup before return.
+The correction installs nullable connection/cursor/selector/receipt ownership
+before acquisition and keeps the connection owner in the caller throughout helper
+return. It removes the transfer flag rather than moving it. Existing cleanup
+exception precedence, H1, query/validator behavior and authority boundaries remain.
+
+Twelve added controls use native resources and retained errors: eight actual SIGINT
+acquisition/return cases (including the Python return event and cursor), plus four
+pre-acquisition failures with empty slots. Probe containment runs only after
+product-disposal assertions. This correction requires focused B1 re-review at its
+new exact head; the earlier full review and local passes do not close B1 themselves.
+
+Next: finish correction checks, freeze its exact head for B1 and affected-invariant
+re-review, and obtain the required later acceptance.

@@ -19,7 +19,9 @@ from deployment.postgresql.tenant_contract import (
 )
 
 from .postgres_wait import checkpoint, disposing
-from .signing_authority_io import connect_observation, read_signing_receipt
+from .signing_authority_io import (
+    ObservationConnectionOwner, connect_observation, read_signing_receipt,
+)
 from .signing_receipt import (
     SigningEvidenceReceipt,
     SigningEvidenceVerifier,
@@ -189,10 +191,14 @@ class SigningAuthorityReader:
                 checkpoint(deadline_monotonic, cancel_event)
                 deadline = min(deadline, deadline_monotonic)
             checkpoint(deadline, cancel_event)
-            connection = connect_observation(self._conninfo, deadline, cancel_event)
-            with disposing(connection.close):
-                cursor = connection.cursor()
-                with disposing(cursor.close):
+            owner = ObservationConnectionOwner()
+            with disposing(owner.close):
+                connection = connect_observation(
+                    self._conninfo, deadline, cancel_event, owner=owner,
+                )
+                cursor = None
+                with disposing(lambda: cursor.close() if cursor is not None else None):
+                    cursor = connection.cursor()
                     cursor.execute(_SIGNING_AUTHORITY_QUERY, (kid,))
                     columns = tuple(c.name for c in cursor.description or ())
                     row, duplicate = cursor.fetchone(), cursor.fetchone()

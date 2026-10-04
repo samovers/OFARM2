@@ -308,6 +308,10 @@ def reader_with_connection(monkeypatch, factory, receipt_source, verifier):
     """Exercise production validation with explicit test-only I/O seams."""
     from kernel import signing_authority as module
 
-    monkeypatch.setattr(module, "connect_observation", lambda *_args: factory())
+    def connect(*_args, owner):
+        owner.connection = factory()
+        return owner.connection
+
+    monkeypatch.setattr(module, "connect_observation", connect)
     monkeypatch.setattr(module, "read_signing_receipt", lambda _path, **_kw: receipt_source())
     return module.SigningAuthorityReader(b"test-only", Path("unused"), verifier)

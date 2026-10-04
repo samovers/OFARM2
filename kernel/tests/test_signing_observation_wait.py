@@ -197,6 +197,12 @@ def _assert_partial_disposed(handle):
         os.fstat(handle.original_fd)
 
 
+def _connect_owned(conninfo, deadline, cancel_event):
+    owner = transport.ObservationConnectionOwner()
+    with mechanical.disposing(owner.close):
+        return transport.connect_observation(conninfo, deadline, cancel_event, owner=owner)
+
+
 @pytest.mark.parametrize("failure", (
     psycopg.OperationalError("fixture DSN password=must-not-escape"),
     TimeoutError("poll timeout"), KeyboardInterrupt(), SystemExit(),
@@ -205,7 +211,7 @@ def test_poll_failure_retains_pgconn_but_handle_already_finished(monkeypatch, fa
     handle = PartialHandle([failure])
     frozen = _install_partial(monkeypatch, handle)
     with pytest.raises(type(failure)) as retained:
-        transport.connect_observation(frozen, time.monotonic() + 1, None)
+        _connect_owned(frozen, time.monotonic() + 1, None)
     assert type(retained.value) is type(failure) and retained.value.pgconn is handle
     assert retained.value.__traceback__ is not None
     _assert_partial_disposed(handle)
@@ -217,7 +223,7 @@ def test_cancel_during_first_poll_or_success_disposes_owned_completion(monkeypat
     handle = PartialHandle([state], stop=stop)
     frozen = _install_partial(monkeypatch, handle)
     with pytest.raises(mechanical.PostgresWaitStopped):
-        transport.connect_observation(frozen, time.monotonic() + 1, stop)
+        _connect_owned(frozen, time.monotonic() + 1, stop)
     _assert_partial_disposed(handle)
 
 
@@ -229,7 +235,7 @@ def test_connection_construction_failure_retains_no_live_partial_handle(monkeypa
         raise failure
     monkeypatch.setattr(transport, "_BoundedConnection", fail)
     with pytest.raises(RuntimeError) as retained:
-        transport.connect_observation(frozen, time.monotonic() + 1, None)
+        _connect_owned(frozen, time.monotonic() + 1, None)
     assert retained.value is failure
     _assert_partial_disposed(handle)
 
@@ -240,7 +246,7 @@ def test_nested_wait_and_handle_cleanup_failures_still_dispose_all(monkeypatch):
     selector = Selector(failure=OSError("wait fault"), close_failure=RuntimeError("selector close fault"))
     monkeypatch.setattr(mechanical.selectors, "DefaultSelector", lambda: selector)
     with pytest.raises(OSError) as retained:
-        transport.connect_observation(frozen, time.monotonic() + 1, None)
+        _connect_owned(frozen, time.monotonic() + 1, None)
     assert selector.closed and retained.value.__context__ is not None
     _assert_partial_disposed(handle)
 
@@ -260,7 +266,7 @@ def test_pinned_binary_initial_bad_handle_is_finished_by_the_production_owner(mo
     errors = []
     for _ in range(5):
         with pytest.raises(psycopg.OperationalError) as raised:
-            transport.connect_observation(frozen, time.monotonic() + 1, None)
+            _connect_owned(frozen, time.monotonic() + 1, None)
         errors.append(raised.value)
     # The pinned binding exposes a NULL pointer diagnostic only after finish.
     assert all(b"connection pointer is NULL" in handle.error_message for handle in retained)
