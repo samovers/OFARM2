@@ -1,8 +1,8 @@
-# Bounded signing-authority observation — Phase A candidate v0.2
+# Bounded signing-authority observation — approved design and implementation candidate
 
 **Recommendation:** retain one `SigningAuthorityReader` and its validators. Bound pinned psycopg 3.3.4's normal query execution through a small `Connection.wait` override. Add only the connect-ownership bridge needed to dispose an incomplete connection explicitly. Reuse psycopg's query generators, cursor and Transformer; do not implement a second query protocol or scalar loader.
 
-Primary trust boundary: **signing-authority observation integrity and availability**. Delivery [#406](https://github.com/samovers/OFARM2/issues/406), under [#167](https://github.com/samovers/OFARM2/issues/167), is the separate prerequisite blocking [#404](https://github.com/samovers/OFARM2/issues/404) / [PR405](https://github.com/samovers/OFARM2/pull/405) PS11. This revision corrects the design in [PR407](https://github.com/samovers/OFARM2/pull/407); it changes only this RFC. H1 and implementation remain unaccepted. The same draft must later contain the complete approved capability, tests and mechanical companions, not merge this design as an independent enabling change.
+Primary trust boundary: **signing-authority observation integrity and availability**. Delivery [#406](https://github.com/samovers/OFARM2/issues/406), under [#167](https://github.com/samovers/OFARM2/issues/167), is the separate prerequisite blocking [#404](https://github.com/samovers/OFARM2/issues/404) / [PR405](https://github.com/samovers/OFARM2/pull/405) PS11. Decision `OFARM2-SIGNING-AUTHORITY-OBSERVATION-001` version 2 received the exact task-user approval on 4 October 2026, after the corrected Phase A at `6ca04c8ef92523e4c73c3fd1d2a42f192c2b6b3b` and its zero-blocker focused design review. That approval accepts H1 for provisional development and authorizes this complete PR407 implementation candidate. It does not grant final technical acceptance, baseline admission, merge or deployment. Runtime code, focused controls and mechanical companions remain one candidate in the same draft.
 
 ## Problem, capability and boundary
 
@@ -24,7 +24,7 @@ Place this pure preflight at the beginning of `build_application_runtime`, after
 
 Pure parsing cannot attest a mount's locality or health. Healthy local open/read/close, finite driver CPU work and host scheduling are explicit support assumptions; a socket deadline cannot interrupt a hung kernel or storage device. Later receipt absence, bad file kind or I/O failure remains an observation refusal. Supported-route connection/TLS/credential failures likewise remain runtime unavailability, not static configuration errors. Actual configuration-file opens must remain within the admitted local profile. The preflight and frozen explicit parameters must not leave a later ambient route/default expansion that can escape H1.
 
-**Replacement H1 decision, still pending:** may the entire production runtime require its shared `OFARM_PG_DSN` to identify one explicit DNS-free endpoint, refuse multi-route/service/environment-only routing and external authentication callbacks, and require healthy local receipt/configuration storage, with unsupported static configuration rejected before startup resources exist? Accepting this profile is necessary for the proposed mechanism; it does not approve implementation. If wider support is required, revise this design and its isolation/route contract before coding. The earlier reader-only question and decision version 1 are superseded; the coordinator owns the replacement version 2 decision.
+**Approved version 2 H1 scope:** the entire production runtime may require its shared `OFARM_PG_DSN` to identify one explicit DNS-free endpoint, refuse multi-route/service/environment-only routing and external authentication callbacks, and require healthy local receipt/configuration storage, with unsupported static configuration rejected before startup resources exist. The approved version 2 decision also authorizes provisional implementation in PR407. Wider support requires a new design/support decision. The earlier reader-only question and version 1 are superseded; final technical acceptance remains separate.
 
 ## One deadline and mechanical wait
 
@@ -96,11 +96,11 @@ The 180-line S1 I/O allowance covers the pure H1 guard/frozen parameters, connec
 | Stop waiting for a blocking thread | Leaves the operation/worker alive and permits accumulation or late results |
 | Isolated per-call process | Could own broader blocking facilities but adds lifecycle and result transfer. Not needed for proposed H1; reconsider explicitly if that support profile is rejected |
 
-B1 is addressed by the selected wait/normal-query path and the specific partial-connect exception. B2 is addressed by the whole-runtime H1 statement and early pure configuration refusal. FU-1 is addressed by complete measured/prospective accounting; FU-2 is traced to #404/PR405's actual minter protocol/call site. P-1 removes the semaphore, P-2 corrects connect-timeout claims, and P-3 records TCP limits. These are producer dispositions awaiting focused independent review, not self-awarded closure.
+B1 is addressed by the selected wait/normal-query path and the specific partial-connect exception. B2 is addressed by the whole-runtime H1 statement and early pure configuration refusal. FU-1 is addressed by complete measured/prospective accounting; FU-2 is traced to #404/PR405's actual minter protocol/call site. P-1 removes the semaphore, P-2 corrects connect-timeout claims, and P-3 records TCP limits. The focused exact-head Phase A review at `6ca04c8ef92523e4c73c3fd1d2a42f192c2b6b3b` reported zero design blockers. Runtime evidence and independent implementation review remain distinct obligations.
 
 ## S1 falsifiable acceptance controls
 
-Future implementation uses pinned Python 3.12.13 and psycopg/psycopg-binary 3.3.4 in the required Linux baseline against PostgreSQL 17.10, the real `ofarm_app` function/role and signed fixture receipts. Record the actual loaded libpq/TLS versions and supported platform. Local inspection found libpq 180000; that is not all-platform acceptance. No test may replace authority verification with unconditional success.
+Required implementation acceptance uses pinned Python 3.12.13 and psycopg/psycopg-binary 3.3.4 in the required Linux baseline against PostgreSQL 17.10, the real `ofarm_app` function/role and signed fixture receipts. Record the actual loaded libpq/TLS versions and supported platform. Local inspection found libpq 180000; that is not all-platform acceptance. No test may replace authority verification with unconditional success.
 
 | ID / invariant | Required control |
 | --- | --- |
@@ -119,12 +119,55 @@ Future implementation uses pinned Python 3.12.13 and psycopg/psycopg-binary 3.3.
 | S1-13 independent owners | Function/migrations, receipt predicates, keys, shared principal factory/resolver, tenant/audit decisions, readiness and generic RuntimeConfig parser remain unchanged. One reader path, no arbitrary SQL callback, unsafe driver-error exposure or unbounded fallback. H1's whole-runtime compatibility effect is explicit in the decision |
 | S1-14 downstream dependency | After independently accepted S1, #404/PR405 supplies its actual event/deadline through CapabilityMinter and the real mint call. PS11 black-holes this actual reader during observer binding and regains control with both authority connection and observer disposed. Fake minter/private-state assertions alone do not pass; PR405 owns its observer and budget |
 
-These controls are requirements, not executed acceptance. A source/control-flow probe executed pinned Python `_connect` with a fake PGconn and clock: a retained timeout traceback kept the handle reachable, and generator.close did not invoke finish. Explicit fake-owner disposal did. This was no real socket, binary-generator, TLS, database or runtime leak test. The exact-tag Cython source independently shows the same internal ownership/timeout shape. The published reviewer reports seven fault probes on Python 3.12.3/PG16.15, loopback trust/no TLS and a stand-in authority function; those support the smaller query-wait choice but do not satisfy the real-role, retained-failure, H1 or complete-runtime controls here.
+These controls remain the acceptance requirements. Focused local implementation results are recorded separately from authoritative hosted acceptance. A source/control-flow probe executed pinned Python `_connect` with a fake PGconn and clock: a retained timeout traceback kept the handle reachable, and generator.close did not invoke finish. Explicit fake-owner disposal did. This was no real socket, binary-generator, TLS, database or runtime leak test. The exact-tag Cython source independently shows the same internal ownership/timeout shape. The published reviewer reports seven fault probes on Python 3.12.3/PG16.15, loopback trust/no TLS and a stand-in authority function; those support the smaller query-wait choice but do not satisfy the real-role, retained-failure, H1 or complete-runtime controls here.
 
 ## Source provenance and review posture
 
 Source anchors are repository `dfbceac403ac42399b0c0be06c5d6d9f92874551` (runtime equals base `bccb7a1f0cd5d4c81d21898e4b0978830904b716`) and installed psycopg 3.3.4 binary/libpq 180000. Inspected driver sources include `generators.py`, `connection.py`, `_connection_base.py`, `cursor.py`, `_cursor_base.py`, `waiting.py` and `pq/abc.py`. The [exact-tag Cython connect/query generators](https://github.com/psycopg/psycopg/blob/3.3.4/psycopg_c/psycopg_c/_psycopg/generators.pyx) confirm the loaded implementation's protocol/ownership shape; [PGconn source](https://github.com/psycopg/psycopg/blob/3.3.4/psycopg_c/psycopg_c/pq/pgconn.pyx) distinguishes explicit finish from destruction. PostgreSQL's [nonblocking connection contract](https://www.postgresql.org/docs/17/libpq-connect.html#LIBPQ-PQCONNECTSTARTPARAMS) explains DNS restrictions, changing sockets and caller polling; its [asynchronous query contract](https://www.postgresql.org/docs/17/libpq-async.html) requires complete drain. Source arguments do not replace the loaded-library TLS/disposal controls.
 
-The prior local conditional review and original packaging checkpoint are historical. The [public review at the original head](https://github.com/samovers/OFARM2/pull/407#pullrequestreview-5405007874) raised B1/B2; neither earlier clearance nor reviewer prototype authenticates this corrected head. This revision stays inside signing-authority observation integrity and availability. The full-head checkpoint records the one-file diff, source hashes, findings and mandatory package/cheap architecture/whitespace results separately. No runtime, network-fault, database, hosted-baseline, implementation or H1 acceptance is claimed.
+The prior local conditional review and original packaging checkpoint are historical. The [public review at the original head](https://github.com/samovers/OFARM2/pull/407#pullrequestreview-5405007874) raised B1/B2; neither earlier clearance nor reviewer prototype authenticates this corrected head. The corrected Phase A stayed inside signing-authority observation integrity and availability. Its checkpoint recorded the one-file design diff, source hashes, findings and package/architecture/whitespace checks. That historical design checkpoint did not claim runtime tests or H1 acceptance; the later decision and implementation state are recorded below.
 
-Next: obtain focused independent review of this corrected head, publish matching PR/Delivery descriptions, and present the replacement H1/design decision before any implementation.
+## Implementation candidate record
+
+The approved design source SHA-256 was
+`516fa6a5e2f187aa481c56ed861bc3c7dbf2c207df7d82e764d8e35577fe5789`.
+Original approval references are card turn `01a1060a-c89a-7461-8938-8318973eb258`
+and later approval turn `01a1064a-d9d1-7ef3-8f9d-6b2668d4c48d` in coordinator
+chat `01a0aab4-3ce9-7540-abf2-41bc78b859b3`. The implementation stays inside
+signing-authority observation integrity and availability; there is no
+cross-boundary exception.
+
+The reader now uses one explicitly owned partial-connect bridge, normal psycopg
+query/cursor loading, the mechanical wait and a fresh bounded regular-file receipt.
+`read_signing_receipt(path, *, deadline, cancel_event=None)` checks the same owner
+budget around every short read. A small shared disposal context always attempts
+cleanup and preserves an active process-control BaseException through ordinary
+cleanup errors; cleanup error after success still refuses. Sorted prepared parameters are stable when checked
+again at connection time. Numeric host/hostaddr mismatches refuse before startup
+resources. The concrete admitted credentials/defaults profile is documented in
+`kernel/README.md`; local configuration-file health remains an H1 assumption.
+
+Measured complete source sizes are 221 receipt, 228 reader, 89 KMS signer,
+179 issuer, 314 key control, 68 mechanical wait and 168 signing I/O: **1,267/1,310**
+for the signing group. Runtime is **218/230**, with its group **417/500**.
+The largest changed functions are `_prepared_options` at 70 lines,
+`TenantCapabilityIssuer.mint` at 68 and `build_application_runtime` at 80;
+existing function limits remain unchanged. The earlier table records the
+pre-implementation measurement and prospective allocation, not current sizes.
+
+Existing signing/issuer/runtime tests use explicit test-only I/O seams. Real
+signing fixtures now write a receipt in pytest-owned temporary storage and use
+the production prepared-conninfo reader. New independent acceptance tests target
+S1-01 through S1-13. S1-14 stays with Delivery #404 / PR405. No production
+`tenant_uow.py`, database function/grant/migration, generic configuration parser,
+receipt predicate, key custody, audit or readiness authority changes.
+
+Focused local evidence uses Python 3.12.13, psycopg/psycopg-binary 3.3.4,
+libpq 180000 and its bundled OpenSSL 3.5.4 on macOS arm64 against isolated
+PostgreSQL 17.10 with the real function/role and signed fixture receipts. It is
+not the authoritative Linux x86_64 hosted baseline or final human acceptance.
+The complete candidate handoff records exact commands, outcomes, source hashes,
+size measurements and remaining controls; no hosted baseline was launched here.
+
+Next: finish complete-candidate integration checks, freeze the exact head for
+independent implementation review, and obtain the required later acceptance.

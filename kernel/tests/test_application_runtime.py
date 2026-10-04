@@ -42,7 +42,7 @@ def _environment() -> dict[str, str]:
         "OFARM_OIDC_ISSUER": "https://issuer.example/tenant",
         "OFARM_OIDC_AUDIENCE": "external-api",
         "OFARM_OIDC_JWKS_URL": "https://issuer.example/jwks",
-        "OFARM_PG_DSN": "dbname=ofarm user=ofarm_app",
+        "OFARM_PG_DSN": "host=127.0.0.1 port=5432 dbname=ofarm user=ofarm_app sslmode=disable gssencmode=disable",
         "OFARM_TENANT_READINESS_PG_DSN": (
             "dbname=ofarm_tenant user=ofarm_readiness"
         ),
@@ -78,7 +78,7 @@ def _config(*, image: str = IMAGE) -> RuntimeConfig:
         oidc_issuer="https://issuer.example/tenant",
         oidc_audience="external-api",
         oidc_jwks_url="https://issuer.example/jwks",
-        pg_dsn="dbname=ofarm user=ofarm_app",
+        pg_dsn="host=127.0.0.1 port=5432 dbname=ofarm user=ofarm_app sslmode=disable gssencmode=disable",
         tenant_readiness_pg_dsn=(
             "dbname=ofarm_tenant user=ofarm_readiness"
         ),
@@ -358,7 +358,7 @@ def test_production_graph_initializes_in_fixed_order(monkeypatch):
         "reader.build",
         "signer.build",
         "issuer.build",
-        ("pool.build", "dbname=ofarm user=ofarm_app"),
+        ("pool.build", "host=127.0.0.1 port=5432 dbname=ofarm user=ofarm_app sslmode=disable gssencmode=disable"),
         "verifier.initialize",
         "resolver.initialize",
         "audit.initialize",

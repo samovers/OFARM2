@@ -1,8 +1,10 @@
 """Construct and sign one frozen TenantCapability per database challenge."""
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from threading import Event
 from uuid import UUID, uuid4
 
 from deployment.postgresql.tenant_contract import (
@@ -16,6 +18,7 @@ from deployment.postgresql.tenant_contract import (
     validate_tenant_capability,
 )
 
+from .postgres_wait import PostgresWaitStopped, checkpoint
 from .authentication import VerifiedIdentity
 from .google_kms_signer import GoogleKmsSigner, KmsSigningError
 from .principal import PrincipalAuthority
@@ -68,6 +71,28 @@ def _raw_digest(value: str) -> bytes:
         ) from exc
 
 
+def _validate_mint_inputs(
+    identity: VerifiedIdentity, authority: PrincipalAuthority, challenge: TenantChallenge,
+) -> None:
+    if (
+        type(challenge) is not TenantChallenge
+        or type(challenge.challenge_id) is not UUID
+        or challenge.challenge_id.int == 0
+        or type(challenge.created_at_us) is not int
+        or (
+            identity.equality_policy,
+            identity.issuer,
+            identity.subject,
+        )
+        != (
+            authority.equality_policy,
+            authority.issuer,
+            authority.subject,
+        )
+    ):
+        raise CapabilityMintError("capability inputs differ")
+
+
 class TenantCapabilityIssuer:
     """Pin one key; rebuild on rotation; spend challenges and nonces once."""
 
@@ -89,26 +114,14 @@ class TenantCapabilityIssuer:
         identity: VerifiedIdentity,
         authority: PrincipalAuthority,
         challenge: TenantChallenge,
+        *, cancel_event: Event | None = None,
+        deadline_monotonic: float | None = None,
     ) -> str:
-        if (
-            type(challenge) is not TenantChallenge
-            or type(challenge.challenge_id) is not UUID
-            or challenge.challenge_id.int == 0
-            or type(challenge.created_at_us) is not int
-            or (
-                identity.equality_policy,
-                identity.issuer,
-                identity.subject,
-            )
-            != (
-                authority.equality_policy,
-                authority.issuer,
-                authority.subject,
-            )
-        ):
-            raise CapabilityMintError("capability inputs differ")
+        _validate_mint_inputs(identity, authority, challenge)
         try:
-            signing = self._signing_authority_reader.current(self._kid)
+            signing = self._signing_authority_reader.current(
+                self._kid, cancel_event=cancel_event, deadline_monotonic=deadline_monotonic,
+            )
             if challenge.audience != signing.audience:
                 raise CapabilityMintError("challenge audience differs")
             nonce = self._nonce_factory()
@@ -148,12 +161,17 @@ class TenantCapabilityIssuer:
                 now_unix_microseconds=signing.observed_at_us,
                 challenge_created_at_unix_microseconds=challenge.created_at_us,
             )
+            checkpoint(
+                deadline_monotonic if deadline_monotonic is not None else time.monotonic() + 5,
+                cancel_event,
+            )
             signature = self._signer.sign(
                 canonical_jws_signing_input(capability),
                 signing,
             )
             return serialize_tenant_capability_jws(capability, signature)
         except (
+            PostgresWaitStopped,
             KmsSigningError,
             SigningAuthorityUnavailable,
             TenantCapabilityContractError,

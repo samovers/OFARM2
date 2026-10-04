@@ -9,7 +9,6 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from kernel.signing_authority import (
-    SigningAuthorityReader,
     SigningAuthorityUnavailable,
 )
 from kernel.signing_receipt import (
@@ -28,6 +27,7 @@ from kernel.tests._signing_support import (
     authority_database_row,
     authority_row,
     raw_public_key,
+    reader_with_connection,
     receipt_payload,
     signed_receipt,
     signing_authority,
@@ -105,10 +105,11 @@ def test_signed_but_noncanonical_payload_is_refused():
         _verifier().verify(envelope, now_us=NOW_US)
 
 
-def test_reader_composes_one_database_row_and_matching_receipt():
+def test_reader_composes_one_database_row_and_matching_receipt(monkeypatch):
     authority = signing_authority()
     connection = Connection([[authority_database_row(authority)]])
-    reader = SigningAuthorityReader(
+    reader = reader_with_connection(
+        monkeypatch,
         Factory(connection),
         lambda: signed_receipt(receipt_payload(authority)),
         _verifier(),
@@ -133,10 +134,11 @@ def test_reader_composes_one_database_row_and_matching_receipt():
         ("lifecycleHeadDigest", "sha256:" + "d" * 64),
     ],
 )
-def test_fresh_but_conflicting_receipt_is_refused(member, value):
+def test_fresh_but_conflicting_receipt_is_refused(member, value, monkeypatch):
     authority = signing_authority()
     payload = receipt_payload(authority, **{member: value})
-    reader = SigningAuthorityReader(
+    reader = reader_with_connection(
+        monkeypatch,
         Factory(Connection([[authority_database_row(authority)]])),
         lambda: signed_receipt(payload),
         _verifier(),
@@ -156,9 +158,10 @@ def test_fresh_but_conflicting_receipt_is_refused(member, value):
         [authority_row(issuance_end_us=NOW_US)],
     ],
 )
-def test_database_authority_absence_or_malformed_shape_is_closed(rows):
+def test_database_authority_absence_or_malformed_shape_is_closed(rows, monkeypatch):
     authority = signing_authority()
-    reader = SigningAuthorityReader(
+    reader = reader_with_connection(
+        monkeypatch,
         Factory(Connection([rows])),
         lambda: signed_receipt(receipt_payload(authority)),
         _verifier(),
@@ -168,14 +171,15 @@ def test_database_authority_absence_or_malformed_shape_is_closed(rows):
         reader.current(KID)
 
 
-def test_database_authority_failure_is_closed():
+def test_database_authority_failure_is_closed(monkeypatch):
     authority = signing_authority()
     connection = Connection(
         [],
         fail_at=1,
         failure=psycopg.OperationalError("database unavailable"),
     )
-    reader = SigningAuthorityReader(
+    reader = reader_with_connection(
+        monkeypatch,
         Factory(connection),
         lambda: signed_receipt(receipt_payload(authority)),
         _verifier(),

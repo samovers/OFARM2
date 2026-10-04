@@ -72,6 +72,8 @@ MODULE_BUDGETS = {
     "kernel/principal_control.py": 350,
     "kernel/signing_receipt.py": 250,
     "kernel/signing_authority.py": 250,
+    "kernel/signing_authority_io.py": 180,
+    "kernel/postgres_wait.py": 70,
     "kernel/google_kms_signer.py": 120,
     "kernel/tenant_capability_issuer.py": 180,
     "kernel/key_control.py": 350,
@@ -134,10 +136,12 @@ GROUP_BUDGETS = {
         ),
     ),
     "capability signing": (
-        1_000,
+        1_310,
         (
             "kernel/signing_receipt.py",
             "kernel/signing_authority.py",
+            "kernel/signing_authority_io.py",
+            "kernel/postgres_wait.py",
             "kernel/google_kms_signer.py",
             "kernel/tenant_capability_issuer.py",
             "kernel/key_control.py",
