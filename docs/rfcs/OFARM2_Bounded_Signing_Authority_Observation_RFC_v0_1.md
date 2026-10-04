@@ -196,5 +196,18 @@ baseline runner inherits stdout; both admitted Linux run records must be retaine
 and authenticated with their job-log digests by the existing evidence process.
 No baseline envelope/schema, workflow or publication-policy change is introduced.
 
-Next: finish correction checks, freeze its exact head for B1 and the runtime-metadata
-companion's focused re-review, and obtain the required later acceptance.
+### Hosted fixture route correction
+
+The first admitted Linux run at `fbcd13fa09e60a92c5d00bf2db1594aa38571181`
+exposed a test-fixture mismatch: the hosted database DSN uses `host=localhost`
+without hostaddr, while prior local checks used a numeric host. H1 correctly
+refused that unresolved route. Test fixtures now reuse the numeric address from
+their already connected PostgreSQL session when preparing the signing test DSN.
+They retain the configured hostname, port, credentials and TLS identity/options;
+explicit Unix socket routes remain unchanged. This adds no production DNS path,
+endpoint fallback, H1 relaxation or workflow/publication change. Focused correction
+evidence includes the hostname-only failure before repair, the same database setup
+after repair, adjacent TLS/route controls and continued raw hostname-only refusal.
+
+Next: freeze the test-fixture correction for focused exact-head review, then obtain
+the required fresh hosted evidence and later acceptance.

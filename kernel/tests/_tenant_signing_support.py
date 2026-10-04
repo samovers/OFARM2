@@ -17,6 +17,7 @@ from kernel.signing_authority_io import prepare_signing_conninfo
 from kernel.tenant_capability_issuer import TenantCapabilityIssuer
 from kernel.tests._signing_support import (
     OBSERVER_PRIVATE_KEY,
+    connected_test_dsn,
     raw_public_key,
     receipt_payload,
     signed_receipt,
@@ -63,6 +64,7 @@ def live_signing(
     """Fresh signed fixture receipt; production reader still rereads authority."""
     app_dsn = target.role_dsn("ofarm_app")
     with psycopg.connect(app_dsn) as connection:
+        app_dsn = connected_test_dsn(app_dsn, connection)
         row = connection.execute(
             "SELECT * FROM ofarm.observe_signing_authority(%s)", (kid,)
         ).fetchone()

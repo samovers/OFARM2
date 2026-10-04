@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from psycopg import pq
+from psycopg.conninfo import make_conninfo
 from uuid import uuid4
 
 from cryptography.hazmat.primitives import serialization
@@ -277,6 +278,13 @@ class Factory:
 
     def __call__(self):
         return self.connection
+
+
+def connected_test_dsn(dsn: str, connection) -> str:
+    """Pin the connected test endpoint, retaining its hostname and TLS options."""
+    if connection.info.hostaddr:
+        return make_conninfo(dsn, hostaddr=connection.info.hostaddr)
+    return dsn
 
 
 class ObservationCursor(Cursor):

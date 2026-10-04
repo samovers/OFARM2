@@ -11,7 +11,7 @@ from kernel.signing_authority import SigningAuthority, SigningAuthorityReader
 from kernel.signing_authority_io import prepare_signing_conninfo
 from kernel.signing_receipt import SigningEvidenceVerifier
 from kernel.tests._signing_support import (
-    OBSERVER_PRIVATE_KEY, raw_public_key, receipt_payload, signed_receipt,
+    OBSERVER_PRIVATE_KEY, connected_test_dsn, raw_public_key, receipt_payload, signed_receipt,
 )
 
 
@@ -22,15 +22,17 @@ def admitted_dsn(dsn: str, **changes) -> str:
     return make_conninfo(**values)
 
 
-def observe(target, kid: str) -> SigningAuthority:
-    with psycopg.connect(target.role_dsn("ofarm_app"), autocommit=True) as connection:
+def observe(target, kid: str) -> tuple[SigningAuthority, str]:
+    dsn = target.role_dsn("ofarm_app")
+    with psycopg.connect(dsn, autocommit=True) as connection:
+        dsn = connected_test_dsn(dsn, connection)
         assert connection.info.server_version == 170010
         assert connection.execute("SELECT SESSION_USER").fetchone() == ("ofarm_app",)
         row = connection.execute(
             "SELECT * FROM ofarm.observe_signing_authority(%s)", (kid,),
         ).fetchone()
     assert row is not None
-    return SigningAuthority.from_database_row(row, kid)
+    return SigningAuthority.from_database_row(row, kid), dsn
 
 
 def write_receipt(path: Path, authority: SigningAuthority, **changes) -> bytes:

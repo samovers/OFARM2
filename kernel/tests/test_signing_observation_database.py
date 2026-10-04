@@ -31,10 +31,10 @@ from kernel.tests.test_postgresql_tenant_uow import _principal
 
 @pytest.fixture
 def observation(tenant_target, capability_key, tmp_path):
-    observed = observe(tenant_target, capability_key.kid)
+    observed, connected_dsn = observe(tenant_target, capability_key.kid)
     path = tmp_path / "receipt.json"
     write_receipt(path, observed)
-    return admitted_dsn(tenant_target.role_dsn("ofarm_app")), observed, path
+    return admitted_dsn(connected_dsn), observed, path
 
 
 def test_real_function_signed_receipt_and_psycopg_types(observation, monkeypatch):

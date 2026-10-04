@@ -6,6 +6,7 @@ import os
 import socket
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from psycopg.conninfo import conninfo_to_dict
@@ -16,6 +17,7 @@ from kernel.signing_authority_io import (
     SigningObservationConfigError, prepare_signing_conninfo,
 )
 from kernel.tests.test_application_runtime import _config, _environment
+from kernel.tests._signing_support import connected_test_dsn
 
 
 BASE = "dbname=ofarm user=ofarm_app password=fixture sslmode=disable gssencmode=disable"
@@ -189,3 +191,32 @@ def test_implicit_config_files_are_frozen_and_preparation_is_idempotent():
     for name in ("passfile", "sslkey", "sslcert", "sslrootcert", "sslcrl"):
         assert Path(values[name]).is_absolute()
     assert set(values["require_auth"].split(",")) <= {"none", "password", "md5", "scram-sha-256"}
+
+
+@pytest.mark.parametrize("host,address", (
+    ("localhost", "127.0.0.1"),
+    ("database.fixture.test", "::1"),
+    ("/tmp/fixture-socket", ""),
+))
+def test_fixture_pins_only_the_observed_address_and_preserves_identity_and_tls(
+    monkeypatch, host, address,
+):
+    dsn = (
+        f"host={host} port=6543 user=fixture dbname=fixture password=fixture "
+        "sslmode=verify-full sslcertmode=disable gssencmode=disable "
+        "sslrootcert=/tmp/fixture-ca.pem"
+    )
+    original = conninfo_to_dict(dsn)
+    assert "hostaddr" not in original
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("fixture must reuse the connected address, not resolve a new endpoint")
+    monkeypatch.setattr(socket, "getaddrinfo", forbidden)
+    if address:
+        with pytest.raises(SigningObservationConfigError):
+            prepare_signing_conninfo(dsn)
+    connection = SimpleNamespace(info=SimpleNamespace(hostaddr=address))
+    explicit = connected_test_dsn(dsn, connection)
+    expected = {**original, **({"hostaddr": address} if address else {})}
+    assert conninfo_to_dict(explicit) == expected
+    frozen = conninfo_to_dict(prepare_signing_conninfo(explicit).decode())
+    assert all(frozen[name] == value for name, value in expected.items())
