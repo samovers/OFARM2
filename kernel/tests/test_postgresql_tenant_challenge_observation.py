@@ -117,6 +117,7 @@ def test_expired_worker_challenge_remains_observable_without_renewal(
     target: TenantTarget,
     tenant_authority: TenantAuthority,
     key_authority: CapabilityKeyAuthority,
+    tmp_path,
 ) -> None:
     # The existing worker limits allow 120s transactions and 60s statements.
     # Keep the transaction active while crossing the genuine 60s challenge
@@ -141,7 +142,7 @@ def test_expired_worker_challenge_remains_observable_without_renewal(
         # Refresh the simulated external receipt after the genuine wait, then
         # use the actual reader/verifier/issuer. Refusal must be the challenge
         # interval, not a stale receipt, retired key or fabricated DB clock.
-        signing = live_signing(target, key_authority.kid)
+        signing = live_signing(target, key_authority.kid, tmp_path)
         signing_authority = signing.reader.current(key_authority.kid)
         assert now_us <= signing_authority.observed_at_us
         assert signing_authority.issuance_end_us > signing_authority.observed_at_us

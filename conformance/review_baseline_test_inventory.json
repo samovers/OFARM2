@@ -21011,6 +21011,686 @@
       "sourcePath": "kernel/tests/test_signing_authority.py"
     },
     {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_process_control_before_acquisition_handles_empty_owner_slots[connect]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_process_control_before_acquisition_handles_empty_owner_slots[cursor]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_process_control_before_acquisition_handles_empty_owner_slots[receipt]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_process_control_before_acquisition_handles_empty_owner_slots[selector]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_across_native_connection_acquisition_and_handoff[cursor]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_across_native_connection_acquisition_and_handoff[partial]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_across_native_connection_acquisition_and_handoff[reader]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_across_native_connection_acquisition_and_handoff[return-event]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_across_native_connection_acquisition_and_handoff[return-line]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_across_native_connection_acquisition_and_handoff[wrapper]",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_immediately_after_native_selector_acquisition_closes_it",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_sigint_immediately_after_receipt_open_closes_retained_descriptor",
+      "sourceModule": "kernel.tests.test_signing_observation_acquisition",
+      "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_create_app_refuses_static_route_before_fastapi_or_files",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_explicit_parameters_cannot_be_overridden_by_ambient_defaults[PGGSSENCMODE-require]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_explicit_parameters_cannot_be_overridden_by_ambient_defaults[PGHOST-remote.test]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_explicit_parameters_cannot_be_overridden_by_ambient_defaults[PGPORT-9999]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_explicit_single_routes_are_frozen_without_io[host='/tmp/signing socket' port=5432]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_explicit_single_routes_are_frozen_without_io[host=127.0.0.1 port=5432]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_explicit_single_routes_are_frozen_without_io[host=::1 port=5432]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_explicit_single_routes_are_frozen_without_io[host=signing.test hostaddr=127.0.0.1 port=5432]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_external_credential_or_uncertain_facility_refuses[gssencmode=prefer]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_external_credential_or_uncertain_facility_refuses[gssencmode=require]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_external_credential_or_uncertain_facility_refuses[oauth_issuer=https://issuer.test]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_external_credential_or_uncertain_facility_refuses[passfile=file:///tmp/passwords]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_external_credential_or_uncertain_facility_refuses[require_auth=gss]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_external_credential_or_uncertain_facility_refuses[require_auth=oauth]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_external_credential_or_uncertain_facility_refuses[service=signing]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_external_credential_or_uncertain_facility_refuses[sslmode=require sslcertmode=require sslkey=/tmp/key]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_external_tls_key_engine_peer_lookup_and_keylog_facilities_refuse[requirepeer=fixture]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_external_tls_key_engine_peer_lookup_and_keylog_facilities_refuse[sslkeylogfile=/tmp/fixture-keylog]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_external_tls_key_engine_peer_lookup_and_keylog_facilities_refuse[sslmode=require sslkey=engine:fixture sslpassword=fixture]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_external_tls_key_engine_peer_lookup_and_keylog_facilities_refuse[sslmode=require sslkey=pkcs11:fixture sslpassword=fixture]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_fixture_pins_only_the_observed_address_and_preserves_identity_and_tls[/tmp/fixture-socket-]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_fixture_pins_only_the_observed_address_and_preserves_identity_and_tls[database.fixture.test-::1]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_fixture_pins_only_the_observed_address_and_preserves_identity_and_tls[localhost-127.0.0.1]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_hidden_environment_facilities_are_not_silently_expanded[PGHOSTADDR-127.0.0.2]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_hidden_environment_facilities_are_not_silently_expanded[PGREQUIREAUTH-gss]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_hidden_environment_facilities_are_not_silently_expanded[PGSERVICE-hidden]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_hidden_environment_facilities_are_not_silently_expanded[PGSERVICEFILE-/tmp/service]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_implicit_config_files_are_frozen_and_preparation_is_idempotent",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_local_credentials_and_noninteractive_key_password_are_preserved",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_missing_password_and_tls_auth_defaults_are_not_external_fallbacks",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_unsupported_route_refuses_without_dependency_creation[]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_unsupported_route_refuses_without_dependency_creation[host='' port=5432]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_unsupported_route_refuses_without_dependency_creation[host=127.0.0.1 hostaddr=127.0.0.2 port=5432]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_unsupported_route_refuses_without_dependency_creation[host=127.0.0.1 port=0]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_unsupported_route_refuses_without_dependency_creation[host=127.0.0.1 port=5432,5433]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_unsupported_route_refuses_without_dependency_creation[host=127.0.0.1,127.0.0.2 port=5432]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_unsupported_route_refuses_without_dependency_creation[host=127.0.0.1]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_unsupported_route_refuses_without_dependency_creation[host=localhost port=5432]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_unsupported_route_refuses_without_dependency_creation[host=relative/socket port=5432]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_unsupported_route_refuses_without_dependency_creation[hostaddr=127.0.0.1,127.0.0.2 port=5432]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_unsupported_route_refuses_without_dependency_creation[service=signing]",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_configuration.py::test_uri_route_preserves_paired_tls_hostname_and_credentials",
+      "sourceModule": "kernel.tests.test_signing_observation_configuration",
+      "sourcePath": "kernel/tests/test_signing_observation_configuration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_actual_partial_connect_is_owned_during_startup_and_tls[startup]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_actual_partial_connect_is_owned_during_startup_and_tls[tls-handshake]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_actual_partial_connect_is_owned_during_startup_and_tls[tls-startup]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_actual_partial_handle_retained_by_poll_exception_is_finished[KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_actual_partial_handle_retained_by_poll_exception_is_finished[OperationalError]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_actual_partial_handle_retained_by_poll_exception_is_finished[SystemExit]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_actual_tls_credential_failure_does_not_downgrade_or_expose_driver[certificate]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_actual_tls_credential_failure_does_not_downgrade_or_expose_driver[password]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_cancellation_after_dispatch_is_seen_without_remote_ack",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_eight_real_tenant_callers_cancel_before_signing_and_release_their_leases",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_eight_real_tenant_lease_owners_use_the_production_issuer",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_fresh_receipt_replacement_cannot_fall_back_to_cached_good[conflicting]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_fresh_receipt_replacement_cannot_fall_back_to_cached_good[corrupt]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_fresh_receipt_replacement_cannot_fall_back_to_cached_good[duplicate-member]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_fresh_receipt_replacement_cannot_fall_back_to_cached_good[expired]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_fresh_receipt_replacement_cannot_fall_back_to_cached_good[missing]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_fresh_receipt_replacement_cannot_fall_back_to_cached_good[noncanonical]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_fresh_receipt_replacement_cannot_fall_back_to_cached_good[oversized]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_fresh_receipt_replacement_cannot_fall_back_to_cached_good[wrong-signature]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_lost_real_authority_reply_obeys_one_total_budget[0.15]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_lost_real_authority_reply_obeys_one_total_budget[None]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_mutated_real_result_never_publishes_authority[columns]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_mutated_real_result_never_publishes_authority[duplicate]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_mutated_real_result_never_publishes_authority[extra-result]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_mutated_real_result_never_publishes_authority[fatal]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_mutated_real_result_never_publishes_authority[malformed]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_mutated_real_result_never_publishes_authority[nonidle]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_mutated_real_result_never_publishes_authority[null]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_process_control_survives_real_query_cleanup_failures[connection]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_process_control_survives_real_query_cleanup_failures[cursor]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_real_connect_completion_is_disposed_if_wrapper_creation_or_transfer_stops[construction]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_real_connect_completion_is_disposed_if_wrapper_creation_or_transfer_stops[transfer]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_real_function_signed_receipt_and_psycopg_types",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_real_issuer_final_stop_and_dispatched_kms_timeout_are_distinct[after-dispatch]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_real_issuer_final_stop_and_dispatched_kms_timeout_are_distinct[before-connect]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_real_issuer_final_stop_and_dispatched_kms_timeout_are_distinct[before-kms]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_real_row_without_ready_is_incomplete_and_tls_finish_is_local[False]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_real_row_without_ready_is_incomplete_and_tls_finish_is_local[True]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_real_runtime_builder_uses_reader_signer_and_shared_dsn",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_repeated_real_failures_retain_errors_but_not_client_connections",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_retained_binary_query_generators_and_cursor_close_failure_dispose_connection",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_valid_receipt_then_final_stop_never_publishes_authority[deadline]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_database.py::test_valid_receipt_then_final_stop_never_publishes_authority[event]",
+      "sourceModule": "kernel.tests.test_signing_observation_database",
+      "sourcePath": "kernel/tests/test_signing_observation_database.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_bad_file_size_refuses_and_closes[0]",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_bad_file_size_refuses_and_closes[16385]",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_nonregular_local_kinds_refuse_without_blocking_open[device]",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_nonregular_local_kinds_refuse_without_blocking_open[directory]",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_nonregular_local_kinds_refuse_without_blocking_open[fifo]",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_process_control_survives_receipt_close_failure[control0]",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_process_control_survives_receipt_close_failure[control1]",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_read_failure_retained_traceback_does_not_retain_fd[failure0]",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_read_failure_retained_traceback_does_not_retain_fd[failure1]",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_read_failure_retained_traceback_does_not_retain_fd[failure2]",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_regular_receipt_is_reopened_after_atomic_replacement",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_repeated_delayed_short_reads_share_the_deadline_and_event[deadline]",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_repeated_delayed_short_reads_share_the_deadline_and_event[event]",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_short_read_cannot_hide_oversized_tail_after_a_valid_signed_prefix",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_short_regular_file_reads_do_not_truncate_receipt",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_files.py::test_symlink_to_healthy_local_regular_file_is_read",
+      "sourceModule": "kernel.tests.test_signing_observation_files",
+      "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_cancel_during_first_poll_or_success_disposes_owned_completion[1]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_cancel_during_first_poll_or_success_disposes_owned_completion[3]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_completion_then_cancellation_is_not_published_and_generator_is_closed",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_connection_construction_failure_retains_no_live_partial_handle",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_generator_cleanup_failure_cannot_skip_selector_cleanup",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_invalid_deadline_never_disables_the_mechanical_limit[False]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_invalid_deadline_never_disables_the_mechanical_limit[True]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_invalid_deadline_never_disables_the_mechanical_limit[inf]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_invalid_deadline_never_disables_the_mechanical_limit[later]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_invalid_deadline_never_disables_the_mechanical_limit[nan]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_nested_wait_and_handle_cleanup_failures_still_dispose_all",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_pinned_binary_initial_bad_handle_is_finished_by_the_production_owner",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_poll_failure_retains_pgconn_but_handle_already_finished[failure0]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_poll_failure_retains_pgconn_but_handle_already_finished[failure1]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_poll_failure_retains_pgconn_but_handle_already_finished[failure2]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_poll_failure_retains_pgconn_but_handle_already_finished[failure3]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_process_control_survives_nested_selector_cleanup_failure[control0]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_process_control_survives_nested_selector_cleanup_failure[control1]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_real_selector_cancellation_is_polled_without_socket_readiness",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_selector_error_retained_exception_still_closes_generator[failure0]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_selector_error_retained_exception_still_closes_generator[failure1]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_selector_error_retained_exception_still_closes_generator[failure2]",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_wait.py::test_wait_refreshes_changed_descriptors_empty_polls_and_combined_readiness",
+      "sourceModule": "kernel.tests.test_signing_observation_wait",
+      "sourcePath": "kernel/tests/test_signing_observation_wait.py"
+    },
+    {
       "nodeid": "kernel/tests/test_stages.py::test_carrier_schema_validator_refuses_unknown_contract",
       "sourceModule": "kernel.tests.test_stages",
       "sourcePath": "kernel/tests/test_stages.py"
@@ -23806,8 +24486,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "aff28da8d2a22bd94cf82d26a8decadc73ba588a84c9fc1cac31f1cb4d4bbfaf",
-  "entryCount": 4761,
+  "entriesSha256": "a2cc24921b535d302b7d30cde0d7697dfdb6ca3e845c038f3e80aa0b66fe8e19",
+  "entryCount": 4897,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
