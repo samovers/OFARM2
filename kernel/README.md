@@ -162,6 +162,54 @@ this boundary does not change `tenant_uow.py`. See the
 [signing observation RFC](../docs/rfcs/OFARM2_Bounded_Signing_Authority_Observation_RFC_v0_1.md)
 for the approved provisional scope and remaining acceptance obligations.
 
+## Physical transaction outcome observation
+
+When original COMMIT becomes ambiguous, the same
+`TenantBoundaryError(FINALIZATION_UNKNOWN)` reaches the runtime caller with a
+read-only `physical_observation`. This frozen value reports COMMITTED, ABORTED
+or UNKNOWN separately from batch occurrence. It contains the original validated
+batch and safe evidence/failure classifications, with no connection, callable,
+credential or later lookup handle. No physical result grants command success,
+NO_EFFECT or retry permission.
+One complete observed metadata tuple is retained separately from the original;
+partial or malformed rows are unavailable and cannot carry mutable data out.
+
+Optional recovery requires P1: the original effective `synchronous_commit=on`
+through COMMIT, `fsync=on`, reliable durable storage and the same accepted primary
+and WAL history. The existing INSERT returns a private setting observation
+alongside its unchanged nine-field batch. Off, missing or malformed eligibility
+disables recovery without rejecting ordinary allocation or changing settings.
+The point-in-time guard does not attest deployment or future setting stability.
+
+The manager closes the original facade and discards and returns its lease before
+one fresh observer checkout. The pool remains limited to eight connections and
+32 waiters, with at most one tenant lease per call. Fresh binding uses the
+existing principal and signing owners. Separate status and batch reads require
+all nine original fields to match for COMMITTED; qualified aborted status may
+prove ABORTED under P1. Committed status without a matching batch remains UNKNOWN,
+and contradictory complete evidence always downgrades the physical conclusion.
+
+Checkout uses a 100 ms queue budget and the existing empty health probe with a
+two-second client transport bound. Each observer SQL exchange and rollback has
+its own two-second bound; local statement/lock limits are 2,000/500 ms. The same
+private cancellation event and one absolute five-second provider deadline pass
+through the real binder to the signing issuer/reader. The provider budget begins
+before the challenge queries and does not replace the separate dispatched KMS
+timeout. No whole-call two-second guarantee is made.
+
+Cancellation detected directly by the observer, including process-control
+exceptions, records CANCELLED after cleanup. When the existing issuer maps
+cancellation to `CapabilityMintError`, the observer preserves that owner's
+CAPABILITY_REFUSED classification. Both preserve the original boundary error.
+Cleanup interruptions record CLEANUP_UNAVAILABLE. Entry and body exception
+propagation is unchanged. Qualified received facts survive subsequent cleanup failure;
+cleanup still attempts one pool return, recording RETURN_FAILED if that attempt
+fails, without retrying it or the observation. An original pool-return failure
+prevents observer checkout. Existing ordinary-finalization and failed-allocation
+semantics F1/F2 remain separate work. See the
+[physical observation RFC](../docs/rfcs/OFARM2_Physical_Transaction_Outcome_Recovery_RFC_v0_1.md)
+for P1 restrictions, exclusions and required acceptance evidence.
+
 ## Runtime provider import trust
 
 The provider registry and its import-policy module are startup bootstrap code.
@@ -283,6 +331,7 @@ remain exact and continue to the existing normalization and contract checks.
 | `principal_resolver.py` | exact database principal-authority resolution |
 | `signing_authority.py` / `tenant_capability_issuer.py` | bounded fresh signing evidence and tenant capability minting |
 | `signing_authority_io.py` / `postgres_wait.py` | pure H1 preflight, owned signing connection/file I/O and mechanical deadline/cancellation waiting |
+| `tenant_uow.py` / `tenant_physical_outcome.py` | tenant transaction ownership and one bounded physical observation after ambiguous finalization |
 | `legacy_m1/api.py` / `legacy_m1/runtime.py` | explicit injected legacy development and conformance composition |
 | `auth_oidc.py` | quarantined legacy HS256 verifier; test-only |
 | `context.py` | SI profile instance bootstrap, in-force reference snapshots, per-farm `ContextSnapshot` assembly with content-addressed reuse (basis drift mints, sameness reuses) |

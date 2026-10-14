@@ -49,7 +49,10 @@ class _FixtureMinter:
     def __init__(self, key: CapabilityKeyAuthority) -> None:
         self._key = key
 
-    def mint(self, identity, principal_authority, challenge):
+    def mint(
+        self, identity, principal_authority, challenge, *,
+        cancel_event=None, deadline_monotonic=None,
+    ):
         now_us = time.time_ns() // 1_000
         capability = TenantCapability(
             contract_digest=TENANT_CAPABILITY_CONTRACT.raw_digest,

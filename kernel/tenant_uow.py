@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterator
+import time
+from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from threading import Event
 from typing import Protocol
 from uuid import RFC_4122, UUID
 
@@ -16,10 +18,15 @@ from psycopg_pool import ConnectionPool
 
 from .authentication import VerifiedIdentity
 from .principal import AuthenticatedPrincipal, PrincipalAuthority
+from .postgres_wait import checkpoint
 from .tenant_capability_issuer import CapabilityMintError, TenantChallenge
 from .tenant_command_runtime_bundle_selector import (
     CommandRuntimeBundleSelectionRefused, TrustedCommandRuntimeBundle,
     _resolve_commit_operation_claim_draft_runtime_bundle,
+)
+from .tenant_physical_outcome import (
+    PhysicalObservation, _BoundedTransaction, check_tenant_connection,
+    observe_physical_outcome,
 )
 
 _ASCII_ID = re.compile(r"[A-Za-z0-9._:-]{1,255}")
@@ -41,6 +48,9 @@ class CapabilityMinter(Protocol):
         identity: VerifiedIdentity,
         authority: PrincipalAuthority,
         challenge: TenantChallenge,
+        *,
+        cancel_event: Event | None = None,
+        deadline_monotonic: float | None = None,
     ) -> str: ...
 
 
@@ -54,7 +64,12 @@ class TenantBoundaryOutcome(str, Enum):
 class TenantBoundaryError(RuntimeError):
     def __init__(self, outcome: TenantBoundaryOutcome) -> None:
         self.outcome = outcome
+        self._physical_observation: PhysicalObservation | None = None
         super().__init__(f"tenant boundary refused ({outcome.value})")
+
+    @property
+    def physical_observation(self) -> PhysicalObservation | None:
+        return self._physical_observation
 
 
 class TenantUnitOfWorkStartupError(RuntimeError):
@@ -207,7 +222,7 @@ def _allocate_governed_batch(
     connection: Connection,
     binding: TenantBinding,
     request: GovernedBatchRequest,
-) -> GovernedWriteBatch:
+) -> tuple[GovernedWriteBatch, bool]:
     row = connection.execute(
         """
         INSERT INTO ofarm.governed_write_batch (
@@ -217,7 +232,9 @@ def _allocate_governed_batch(
         RETURNING tenant_id, batch_id, full_xid::pg_catalog.text,
                   authenticated_principal_ref, governed_operation,
                   request_id, runtime_bundle_digest,
-                  knowledge_position, created_at
+                  knowledge_position, created_at,
+                  pg_catalog.current_setting('synchronous_commit') = 'on'
+                  AND pg_catalog.current_setting('fsync') = 'on'
         """,
         (
             binding.tenant_id,
@@ -228,7 +245,7 @@ def _allocate_governed_batch(
             request.runtime_bundle_digest,
         ),
     ).fetchone()
-    if row is None or len(row) != 9:
+    if row is None or len(row) < 9:
         raise RuntimeError("governed batch allocation failed")
     expected = (
         binding.tenant_id,
@@ -250,7 +267,7 @@ def _allocate_governed_batch(
         or knowledge_position > _MAX_KNOWLEDGE_POSITION
     ):
         raise RuntimeError("governed batch knowledge position differs")
-    return GovernedWriteBatch(
+    batch = GovernedWriteBatch(
         tenant_id=_uuid(row[0], "batch tenant"),
         batch_id=request.batch_id,
         full_xid=full_xid,
@@ -261,6 +278,7 @@ def _allocate_governed_batch(
         knowledge_position=knowledge_position,
         created_at=_time(row[8], "batch creation time"),
     )
+    return batch, len(row) == 10 and row[9] is True
 
 
 class TenantUnitOfWork:
@@ -356,7 +374,8 @@ def _idle(connection: Connection) -> bool:
 
 def _discard(connection: Connection) -> None:
     with suppress(Exception):
-        connection.close()
+        if not connection.closed:
+            connection.close()
 
 
 def _rollback_or_discard(connection: Connection) -> None:
@@ -393,7 +412,7 @@ def create_tenant_connection_pool(dsn: str) -> ConnectionPool:
         min_size=_POOL_MIN_SIZE,
         max_size=_POOL_MAX_SIZE,
         open=False,
-        check=ConnectionPool.check_connection,
+        check=check_tenant_connection,
         reset=_reset_tenant_connection,
         timeout=_POOL_WAIT_SECONDS,
         max_waiting=_POOL_MAX_WAITING,
@@ -421,8 +440,11 @@ class TenantUnitOfWorkManager:
 
     def _bind(
         self,
-        connection: Connection,
+        connection: Connection | _BoundedTransaction,
         principal: AuthenticatedPrincipal,
+        *,
+        cancel_event: Event | None = None,
+        deadline_monotonic: float | None = None,
     ) -> TenantBinding:
         challenge_row = connection.execute(
             "SELECT * FROM ofarm.create_tenant_challenge()"
@@ -434,8 +456,11 @@ class TenantUnitOfWorkManager:
             challenge_row, observation_row
         )
         capability = self._minter.mint(
-            principal.identity, principal.authority, challenge
+            principal.identity, principal.authority, challenge,
+            cancel_event=cancel_event, deadline_monotonic=deadline_monotonic,
         )
+        if cancel_event is not None:
+            checkpoint(time.monotonic() + 2.0, cancel_event)
         connection.execute(
             "SELECT ofarm.bind_tenant_capability(%s)",
             (capability,),
@@ -456,18 +481,36 @@ class TenantUnitOfWorkManager:
             connection = self._pool.getconn(timeout=_POOL_WAIT_SECONDS)
         except Exception:
             raise TenantBoundaryError(TenantBoundaryOutcome.UNAVAILABLE) from None
+        capture = []
+        original_error = None
+        returned = True
         try:
-            yield from self._run(connection, principal)
+            original_error = yield from self._run(connection, principal, capture)
         finally:
             if not _idle(connection):
                 _discard(connection)
-            self._pool.putconn(connection)
+            try:
+                self._pool.putconn(connection)
+            except BaseException:
+                if original_error is None:
+                    raise
+                returned = False
+        if original_error is not None:
+            original_error._physical_observation = (
+                observe_physical_outcome(self._pool, self._bind, principal, capture)
+                if returned else PhysicalObservation(
+                    original_batch=capture[0][1] if capture else None,
+                    observer_failure="ORIGINAL_RETURN_UNAVAILABLE",
+                )
+            )
+            raise original_error from None
 
     def _run(
         self,
         connection: Connection,
         principal: AuthenticatedPrincipal,
-    ) -> Iterator[TenantUnitOfWork]:
+        capture: list,
+    ) -> Generator[TenantUnitOfWork, None, TenantBoundaryError | None]:
         if not _idle(connection):
             _discard(connection)
             raise TenantBoundaryError(TenantBoundaryOutcome.UNAVAILABLE)
@@ -484,13 +527,13 @@ class TenantUnitOfWorkManager:
             raise TenantBoundaryError(
                 TenantBoundaryOutcome.BINDING_REFUSED
             ) from None
+        def allocate(request):
+            batch, eligible = _allocate_governed_batch(connection, binding, request)
+            capture[:] = [(binding, batch, eligible)]
+            return batch
+
         unit = TenantUnitOfWork(
-            binding,
-            lambda request: _allocate_governed_batch(
-                connection,
-                binding,
-                request,
-            ),
+            binding, allocate,
             lambda: _resolve_commit_operation_claim_draft_runtime_bundle(
                 connection,
                 binding.tenant_id,
@@ -510,11 +553,11 @@ class TenantUnitOfWorkManager:
             connection.commit()
         except Exception:
             _discard(connection)
-            raise TenantBoundaryError(
+            return TenantBoundaryError(
                 TenantBoundaryOutcome.FINALIZATION_UNKNOWN
-            ) from None
+            )
         if not _idle(connection):
             _discard(connection)
-            raise TenantBoundaryError(
+            return TenantBoundaryError(
                 TenantBoundaryOutcome.FINALIZATION_UNKNOWN
             )

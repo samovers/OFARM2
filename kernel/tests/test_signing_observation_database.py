@@ -568,10 +568,11 @@ def test_eight_real_tenant_callers_cancel_before_signing_and_release_their_lease
         receipt = original_read(*args, **kwargs)
         barrier.wait()
         return receipt
-    def cancelled_mint(*args):
+    def cancelled_mint(*args, **timing):
         # Exercise the PR407 producer keywords. PR405 owns forwarding them from
         # the future observer; this test does not claim that downstream control.
-        return original_mint(*args, cancel_event=stop)
+        timing["cancel_event"] = stop
+        return original_mint(*args, **timing)
     monkeypatch.setattr(signing_module, "read_signing_receipt", receipt_boundary)
     monkeypatch.setattr(issuer, "mint", cancelled_mint)
     retained = retained_connections(monkeypatch)

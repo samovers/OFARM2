@@ -78,7 +78,8 @@ MODULE_BUDGETS = {
     "kernel/tenant_capability_issuer.py": 180,
     "kernel/key_control.py": 350,
     "kernel/tenant_command_runtime_bundle_selector.py": 420,
-    "kernel/tenant_uow.py": 520,
+    "kernel/tenant_uow.py": 600,
+    "kernel/tenant_physical_outcome.py": 260,
     "kernel/api.py": 120,
     "kernel/deployment_identity.py": 50,
     "kernel/runtime_config.py": 180,
@@ -166,10 +167,11 @@ GROUP_BUDGETS = {
         ),
     ),
     "tenant transaction": (
-        940,
+        1_280,
         (
             "kernel/tenant_command_runtime_bundle_selector.py",
             "kernel/tenant_uow.py",
+            "kernel/tenant_physical_outcome.py",
         ),
     ),
     "security audit ingest": (
@@ -439,6 +441,7 @@ TEST_GLOBS = (
     "kernel/tests/*application_runtime*.py",
     "kernel/tests/*runtime_config*.py",
     "kernel/tests/*tenant_uow*.py",
+    "kernel/tests/*physical_outcome*.py",
     "kernel/tests/*tenant_command_runtime_bundle_selector*.py",
     "kernel/tests/*security_audit_client*.py",
     "kernel/tests/*authentication_audit*.py",

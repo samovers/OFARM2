@@ -201,7 +201,10 @@ class _Minter:
         self.authorities = []
         self._error = error
 
-    def mint(self, identity, authority, challenge):
+    def mint(
+        self, identity, authority, challenge, *,
+        cancel_event=None, deadline_monotonic=None,
+    ):
         assert identity == IDENTITY
         assert authority.subject == identity.subject
         self.authorities.append(authority)

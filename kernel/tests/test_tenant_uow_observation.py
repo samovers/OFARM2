@@ -97,10 +97,16 @@ class _RecordingMinter(_Minter):
         super().__init__(error)
         self.connection = connection
 
-    def mint(self, identity, authority, challenge):
+    def mint(
+        self, identity, authority, challenge, *,
+        cancel_event=None, deadline_monotonic=None,
+    ):
         assert self.connection.info.transaction_status is TransactionStatus.INTRANS
         self.connection.events.append(("MINT", (challenge,)))
-        return super().mint(identity, authority, challenge)
+        return super().mint(
+            identity, authority, challenge,
+            cancel_event=cancel_event, deadline_monotonic=deadline_monotonic,
+        )
 
 
 @pytest.fixture
