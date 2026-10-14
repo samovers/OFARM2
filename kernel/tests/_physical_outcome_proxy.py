@@ -90,21 +90,40 @@ class PhysicalWireProxy:
         self.stop.set()
         self.release.set()
         self.listener.close()
-        for connection in self.sockets:
-            self._close(connection)
         self.thread.join(2)
+        with self._lock:
+            for connection in self.sockets:
+                self._shutdown(connection)
         for worker in self.workers:
             worker.join(2)
+        for connection in self.sockets:
+            self._close(connection)
         assert not self.thread.is_alive()
         assert not any(worker.is_alive() for worker in self.workers)
-        assert not self.failures, self.failures
+        if self.failures:
+            failures = list(self.failures)
+            if _exc[1] is not None:
+                failures.insert(0, _exc[1])
+            raise BaseExceptionGroup("physical wire proxy failed", failures)
+
+    def _remember(self, connection):
+        with self._lock:
+            self.sockets.append(connection)
+            if self.stop.is_set():
+                self._shutdown(connection)
+        return connection
+
+    @staticmethod
+    def _shutdown(connection):
+        try:
+            # Wake a worker without clearing SSLSocket._sslobj before its recv.
+            socket.socket.shutdown(connection, socket.SHUT_RDWR)
+        except OSError:
+            pass
 
     @staticmethod
     def _close(connection):
-        try:
-            connection.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
+        PhysicalWireProxy._shutdown(connection)
         connection.close()
 
     def _serve(self):
@@ -115,7 +134,7 @@ class PhysicalWireProxy:
                 continue
             except OSError:
                 return
-            self.sockets.append(client)
+            self._remember(client)
             number = len(self.workers) + 1
             worker = Thread(target=self._connection, args=(client, number),
                             name=f"physical-fault-{number}")
@@ -130,23 +149,30 @@ class PhysicalWireProxy:
             if struct.unpack("!I", startup[4:8])[0] == 80877103:
                 assert self.tls is not None
                 client.sendall(b"S")
-                client = self.tls.wrap_socket(client, server_side=True)
-                self.sockets.append(client)
+                client = self.tls.wrap_socket(
+                    client, server_side=True, do_handshake_on_connect=False,
+                )
+                self._remember(client)
+                client.do_handshake()
                 startup = _startup(client)
             host = self.source.get("hostaddr") or self.source["host"]
             upstream = socket.create_connection((host, int(self.source["port"])), 3)
-            self.sockets.append(upstream)
+            self._remember(upstream)
             upstream.sendall(startup)
             self._relay(client, upstream, number)
         except (OSError, EOFError):
             # Closing a client is the intended fault/disposal observation.
             pass
         except BaseException as failure:
-            self.failures.append(failure)
+            if not any(failure is recorded for recorded in self.failures):
+                self.failures.append(failure)
         finally:
-            if upstream:
-                self._close(upstream)
-            self._close(client)
+            for connection in (upstream, client):
+                if connection is not None:
+                    try:
+                        self._close(connection)
+                    except BaseException as failure:
+                        self.failures.append(failure)
 
     def _relay(self, client, upstream, number):
         buffers = {client: bytearray(), upstream: bytearray()}

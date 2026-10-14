@@ -6236,6 +6236,91 @@
       "sourcePath": "kernel/tests/test_physical_outcome_health.py"
     },
     {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_commit_callback_failure_is_retained_once[failure0]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_commit_callback_failure_is_retained_once[failure1]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_commit_callback_failure_is_retained_once[failure2]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_incomplete_tls_handshake_is_registered_and_woken_on_stop",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_malformed_frame_retains_worker_traceback_and_body_error[None-False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_malformed_frame_retains_worker_traceback_and_body_error[None-True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_malformed_frame_retains_worker_traceback_and_body_error[body1-False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_malformed_frame_retains_worker_traceback_and_body_error[body1-True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_malformed_startup_remains_a_worker_failure[False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_malformed_startup_remains_a_worker_failure[True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_proxy_forwards_real_socket_packets_and_joins_all_owners[False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_proxy_forwards_real_socket_packets_and_joins_all_owners[True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_socket_registered_after_stop_is_woken_and_closed[accepted]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_socket_registered_after_stop_is_woken_and_closed[upstream]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_socket_registered_after_stop_is_woken_and_closed[wrapped]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_tls_shutdown_cannot_turn_pending_encrypted_read_into_plaintext",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_worker_socket_cleanup_failure_is_retained_after_owners_join",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
       "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_dsn_off_keeps_ordinary_behavior_but_disables_recovery[ofarm_app-False]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
@@ -25951,8 +26036,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "82e57651c52b74a2f659ec413907d223e88f0e144533633fdf899a64641ffe26",
-  "entryCount": 5190,
+  "entriesSha256": "91528b572c31892567ec5b67a697100d0a6e5f26f9c70406c86c1f67355a0b7f",
+  "entryCount": 5207,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
