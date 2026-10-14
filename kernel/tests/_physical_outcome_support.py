@@ -24,6 +24,42 @@ from kernel.tests.test_postgresql_tenant_migration import ISSUER
 from kernel.tests.test_postgresql_tenant_uow import _principal
 
 
+class _NativeConnections:
+    """Fixture-local factory delegation; every result is the original native."""
+
+    def __init__(self, connection_class):
+        self.connection_class = connection_class
+        self.connections = []
+        self.disposed = False
+        self._lock = Lock()
+
+    def connect(self, *args, **kwargs):
+        connection = self.connection_class.connect(*args, **kwargs)
+        with self._lock:
+            self.connections.append(connection)
+            disposed = self.disposed
+        # A native creation may finish after the pool's bounded worker join.
+        # This is fixture disposal, never evidence of production pool disposal.
+        if disposed and not connection.closed:
+            connection.close()
+        return connection
+
+    def dispose(self):
+        with self._lock:
+            self.disposed = True
+            connections = tuple(self.connections)
+        failure = None
+        for connection in connections:
+            try:
+                if not connection.closed:
+                    connection.close()
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+        if failure is not None:
+            raise failure
+
+
 class TrackingPool:
     """Measure actual leases without replacing the pool or its health callback."""
 
@@ -37,6 +73,8 @@ class TrackingPool:
         self.on_get = None
         self.on_put = None
         self._lock = Lock()
+        self.native = _NativeConnections(inner.connection_class)
+        inner.connection_class = self.native
 
     def __getattr__(self, name):
         return getattr(self.inner, name)
@@ -124,12 +162,24 @@ def physical_harness(target, authority, key, tmp_path, role, *, dsn=None, config
         None, None, manager,
     )
     principal = _principal(target, authority)
-    manager.initialize()
+    failure = None
     try:
+        manager.initialize()
         yield PhysicalHarness(runtime, manager, pool, principal, signing, audit)
+    except BaseException as error:
+        failure = error
     finally:
-        manager.close()
-        pool.assert_released()
+        # Preserve the test/ownership failure; cleanup must never turn it green.
+        for cleanup in (pool.assert_released, manager.close, pool.native.dispose):
+            try:
+                cleanup()
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+                else:
+                    failure.add_note(f"physical fixture cleanup also failed: {type(error).__name__}")
+        if failure is not None:
+            raise failure
 
 
 def request(authority, prefix="physical"):
