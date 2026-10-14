@@ -50,9 +50,13 @@ class _BoundedTransaction:
                 generator, lambda: self.connection.pgconn.socket,
                 time.monotonic() + 2.0, self.cancel_event,
             )
-        except BaseException:
-            if not self.connection.closed:
-                self.connection.close()
+        except BaseException as failure:
+            try:
+                if not self.connection.closed:
+                    self.connection.close()
+            except BaseException:
+                if isinstance(failure, Exception):
+                    raise
             raise
 
     def execute(self, query, params=None):
@@ -76,18 +80,34 @@ class _BoundedTransaction:
 def check_tenant_connection(connection) -> None:
     """Same empty checkout probe, with a finite client transport wait."""
     transaction = _BoundedTransaction(connection, None)
-    autocommit = connection.autocommit
+    failure = None
     try:
+        autocommit = connection.autocommit
         connection.autocommit = True
         transaction.execute("")
-    except BaseException:
-        if not connection.closed:
-            connection.close()
-        raise
-    finally:
+    except BaseException as error:
+        failure = error
+    try:
         transaction.close()
-        if not connection.closed:
+        if failure is None and not connection.closed:
             connection.autocommit = autocommit
+    except BaseException as error:
+        if failure is None or isinstance(failure, Exception):
+            failure = error
+    if failure is not None:
+        try:
+            if not connection.closed:
+                connection.close()
+        except BaseException as error:
+            if isinstance(failure, Exception):
+                failure = error
+        # The pinned pool returns Exception failures itself, but not process control.
+        if not isinstance(failure, Exception):
+            try:
+                connection._pool.putconn(connection)
+            finally:
+                raise failure
+        raise failure
 
 
 def _combine(observation: PhysicalObservation, rows) -> PhysicalObservation:

@@ -5776,6 +5776,406 @@
       "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
     },
     {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-cursor-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-cursor-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-cursor-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-cursor-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-True-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-True-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-True-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-True-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-return-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-return-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-return-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-return-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-restore-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-restore-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-restore-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-restore-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-True-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-True-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-True-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-True-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-control-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-control-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-control-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-control-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-cursor-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-cursor-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-cursor-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-cursor-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-True-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-True-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-True-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-True-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-return-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-return-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-return-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-return-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-restore-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-restore-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-restore-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-restore-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-True-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-True-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-True-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-True-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-control-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-control-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-control-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-control-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-cursor-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-cursor-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-probe-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-probe-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-restore-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-restore-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-wait-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-wait-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-cursor-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-cursor-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-probe-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-probe-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-restore-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-restore-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-wait-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-wait-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
       "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_dsn_off_keeps_ordinary_behavior_but_disables_recovery[ofarm_app-False]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
@@ -25491,8 +25891,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "c634ad01ad2bf99ce8bd94fbcc5d88ce82833d08973fcd9acda1086517c78805",
-  "entryCount": 5098,
+  "entriesSha256": "9e34aab886e2c842bed37fc81e69c9f4f710dcd4d54bf6db45a7da74dbb160b1",
+  "entryCount": 5178,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

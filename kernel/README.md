@@ -197,6 +197,12 @@ through the real binder to the signing issuer/reader. The provider budget begins
 before the challenge queries and does not replace the separate dispatched KMS
 timeout. No whole-call two-second guarantee is made.
 
+If process-control cancellation interrupts the health callback, it attempts to
+return the borrowed native connection to its owning pool before propagating the
+first cancellation. Cleanup or return failures cannot replace that cancellation.
+Ordinary health exceptions retain the pinned pool's existing return path. Each
+path makes one return attempt.
+
 Cancellation detected directly by the observer, including process-control
 exceptions, records CANCELLED after cleanup. When the existing issuer maps
 cancellation to `CapabilityMintError`, the observer preserves that owner's
