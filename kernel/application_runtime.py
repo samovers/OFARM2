@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager, suppress
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Callable
 
 import httpx
@@ -20,17 +19,15 @@ from .google_kms_signer import GoogleKmsSigner
 from .principal import AuthenticatedPrincipal, PrincipalAuthority
 from .principal_resolver import PrincipalBindingResolver
 from .production_oidc import ProductionOidcConfig, ProductionOidcVerifier
-from .runtime_config import RuntimeConfig, RuntimeMode
+from .runtime_config import RuntimeConfig, RuntimeMode, RuntimeConfigurationError
 from .security_audit_runtime import (
     PreTenantAuditRuntime,
     build_pretenant_audit_runtime,
 )
 from .security_audit_health import SecurityAuditReadiness
 from .signing_authority import SigningAuthorityReader
-from .signing_receipt import (
-    SIGNING_EVIDENCE_MAX_BYTES,
-    SigningEvidenceVerifier,
-)
+from .signing_authority_io import SigningObservationConfigError, prepare_signing_conninfo
+from .signing_receipt import SigningEvidenceVerifier
 from .tenant_capability_issuer import (
     TenantCapabilityIssuer,
     TenantChallenge,
@@ -123,14 +120,6 @@ def _close_runtime_clients(
         kms_client.transport.close()
 
 
-def _receipt_source(path: Path) -> bytes:
-    with path.open("rb") as stream:
-        receipt = stream.read(SIGNING_EVIDENCE_MAX_BYTES + 1)
-    if not 1 <= len(receipt) <= SIGNING_EVIDENCE_MAX_BYTES:
-        raise OSError("signing evidence receipt size differs")
-    return receipt
-
-
 def _connection_factory(
     dsn: str,
 ) -> Callable[[], psycopg.Connection[tuple[object, ...]]]:
@@ -140,9 +129,17 @@ def _connection_factory(
     return connect
 
 
+def _signing_conninfo(dsn: str) -> bytes:
+    try:
+        return prepare_signing_conninfo(dsn)
+    except SigningObservationConfigError:
+        raise RuntimeConfigurationError("unsupported signing observation configuration") from None
+
+
 def build_application_runtime(config: RuntimeConfig) -> ApplicationRuntime:
     if type(config) is not RuntimeConfig or config.mode is not RuntimeMode.PRODUCTION:
         raise RuntimeStartupError("production runtime config differs")
+    signing_conninfo = _signing_conninfo(config.pg_dsn)
     image_digest = require_deployment_image_digest(
         config.deployment_image_digest
     )
@@ -166,8 +163,8 @@ def build_application_runtime(config: RuntimeConfig) -> ApplicationRuntime:
         )
         resolver = PrincipalBindingResolver(connection_factory)
         signing_reader = SigningAuthorityReader(
-            connection_factory,
-            lambda: _receipt_source(config.signing_evidence_receipt_path),
+            signing_conninfo,
+            config.signing_evidence_receipt_path,
             SigningEvidenceVerifier(
                 config.signing_evidence_observer_public_key
             ),

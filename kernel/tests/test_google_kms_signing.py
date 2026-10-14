@@ -15,7 +15,6 @@ from kernel.google_kms_signer import (
     GoogleKmsSigner,
     KmsSigningError,
 )
-from kernel.signing_authority import SigningAuthorityReader
 from kernel.signing_receipt import SigningEvidenceVerifier
 from kernel.tenant_capability_issuer import (
     CapabilityMintError,
@@ -35,6 +34,7 @@ from kernel.tests._signing_support import (
     authority_database_row,
     principal_authority,
     raw_public_key,
+    reader_with_connection,
     receipt_payload,
     signed_receipt,
     signing_authority,
@@ -106,7 +106,7 @@ class _Reader:
         self.authority = authority
         self.calls = []
 
-    def current(self, kid):
+    def current(self, kid, *, cancel_event=None, deadline_monotonic=None):
         self.calls.append(kid)
         return self.authority
 
@@ -190,10 +190,11 @@ def test_issuer_refuses_identity_authority_mismatch_without_reading_key():
     assert reader.calls == []
 
 
-def test_issuer_refuses_when_database_issuance_window_is_exhausted():
+def test_issuer_refuses_when_database_issuance_window_is_exhausted(monkeypatch):
     signing = replace(signing_authority(), issuance_end_us=NOW_US)
     connection = Connection([[authority_database_row(signing)]])
-    reader = SigningAuthorityReader(
+    reader = reader_with_connection(
+        monkeypatch,
         Factory(connection), lambda: signed_receipt(receipt_payload(signing)),
         SigningEvidenceVerifier(raw_public_key(OBSERVER_PRIVATE_KEY)),
     )
@@ -420,7 +421,7 @@ def test_nonce_is_evaluated_once_before_invalid_authority_digest_refuses():
     assert client.calls == []
 
 
-def test_receipt_time_is_freshness_evidence_not_issuance_clock():
+def test_receipt_time_is_freshness_evidence_not_issuance_clock(monkeypatch):
     signing = signing_authority()
     connection = Connection([[authority_database_row(signing)]] * 2)
     receipts = [
@@ -430,7 +431,8 @@ def test_receipt_time_is_freshness_evidence_not_issuance_clock():
         ))
         for observed in (NOW_US, NOW_US - 59_999_999)
     ]
-    reader = SigningAuthorityReader(
+    reader = reader_with_connection(
+        monkeypatch,
         Factory(connection), lambda: receipts.pop(0),
         SigningEvidenceVerifier(raw_public_key(OBSERVER_PRIVATE_KEY)),
     )
@@ -465,7 +467,7 @@ def test_receipt_time_is_freshness_evidence_not_issuance_clock():
     ],
 )
 def test_issuer_refuses_invalid_receipt_freshness_before_kms(
-    receipt_observed, receipt_expires,
+    receipt_observed, receipt_expires, monkeypatch,
 ):
     signing = signing_authority()
     connection = Connection([[authority_database_row(signing)]])
@@ -473,7 +475,8 @@ def test_issuer_refuses_invalid_receipt_freshness_before_kms(
         signing, observedAtUnixMicroseconds=receipt_observed,
         expiresAtUnixMicroseconds=receipt_expires,
     ))
-    reader = SigningAuthorityReader(
+    reader = reader_with_connection(
+        monkeypatch,
         Factory(connection), lambda: receipt,
         SigningEvidenceVerifier(raw_public_key(OBSERVER_PRIVATE_KEY)),
     )

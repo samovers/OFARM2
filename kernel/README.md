@@ -15,8 +15,8 @@ for record-keeping completeness, not production authority or OFARM law.
 ## Production authentication runtime
 
 `kernel.api:create_app` is environment-only. `RuntimeConfig.from_env()` reads
-the environment once, then the production builder validates the deployment
-image, constructs the graph, initializes RS256 OIDC/JWKS, validates the
+the environment once, then the production builder checks signing-observation
+support, validates the deployment image, constructs the graph, initializes RS256 OIDC/JWKS, validates the
 database authentication contract and principal resolver, proves that the
 tenant and security-audit structures use separate PostgreSQL services, checks
 every startup connection's exact database role, observes the correlation-HMAC
@@ -107,6 +107,60 @@ are never published through `app.state`.
 Production exports no dependency-injection constructor. Importing
 `kernel.api` does not load the legacy Store, startup posture, HS256 verifier,
 gate pipeline, or SI output generator.
+
+## Bounded signing-authority observation
+
+The shared `OFARM_PG_DSN` must satisfy the signing reader's H1 support profile.
+Pure preflight runs before startup creates clients, pools or other resources.
+Unsupported static configuration raises a safe `RuntimeConfigurationError`.
+This restriction applies to the whole runtime even though principal resolution
+and the tenant pool retain their existing connection factory and authority rules.
+
+Use exactly one explicit endpoint and numeric port in the DSN or URI: a numeric
+host, an absolute Unix socket directory, or a hostname paired with numeric
+`hostaddr`. The paired hostname remains the TLS identity; two numeric host and
+hostaddr values must identify the same address. Lists, empty/default routes,
+hostname-only DNS routing, environment-added routes and service expansion refuse.
+Preflight never resolves DNS, opens a file or changes the process environment.
+
+Credentials and TLS checks are preserved. Supply a user in the DSN or PGUSER;
+preflight freezes that user and applicable libpq defaults. Healthy local password,
+certificate, key, root and CRL paths are allowed, with relative paths frozen
+absolute and default paths frozen beneath an absolute HOME. External engine/URI
+keys, external authentication facilities, requirepeer account lookup and TLS key
+logging refuse. Effective `gssencmode` must be `disable` and delegation must be
+zero. `require_auth` defaults to `none,password,md5,scram-sha-256`; a supplied
+positive subset or negative set excluding all GSS/SSPI/OAuth methods is preserved.
+For TCP with SSL enabled, supply a nonempty `sslpassword` or explicitly select
+`sslcertmode=disable` to avoid an interactive encrypted client-key prompt. No
+passphrase is invented and no requested TLS check is weakened. `sslrootcert=system`
+preserves its implicit verify-full behavior and refuses external SSL_CERT_FILE or
+SSL_CERT_DIR overrides. PGSERVICE, PGSERVICEFILE, PGSYSCONFDIR and PGREQUIRESSL
+refuse even when empty. Changed ambient values cannot alter the frozen reader
+configuration at connection time.
+
+Each reader call owns a disposable nonblocking connection and a mandatory
+five-second total monotonic budget. A caller may shorten it with
+`deadline_monotonic` and stop it with `cancel_event`; socket waits poll at most
+50 milliseconds plus scheduling. Pinned psycopg query/cursor loading must finish
+with one exact result and an idle connection. Disposal never waits for remote
+COMMIT, ROLLBACK or cancellation acknowledgement. No connection or result is cached.
+
+After closing the database connection, the reader freshly opens the configured
+receipt with nonblocking/close-on-exec flags, requires a regular file and reads to
+EOF or 16,385 bytes. The same deadline/event is checked around local operations,
+including every short read. Existing signature, canonicalization, freshness and
+authority equality checks still use database-observed time. Ordinary failures
+produce safe `SigningAuthorityUnavailable`; process-control exceptions propagate
+after cleanup. Healthy local storage, finite driver work and host scheduling are
+support assumptions; no hung-kernel or remote/FUSE storage guarantee is made.
+
+The issuer forwards the optional timing inputs and checks them before KMS dispatch.
+A dispatched KMS call retains its existing finite timeout. Delivery #404 / PR405
+owns the later tenant observer's actual event/deadline handoff and acceptance;
+this boundary does not change `tenant_uow.py`. See the
+[signing observation RFC](../docs/rfcs/OFARM2_Bounded_Signing_Authority_Observation_RFC_v0_1.md)
+for the approved provisional scope and remaining acceptance obligations.
 
 ## Runtime provider import trust
 
@@ -227,7 +281,8 @@ remain exact and continue to the existing normalization and contract checks.
 | `authentication_audit.py` / `request_router_audit.py` | synchronous fail-closed production of classified pre-tenant failure evidence |
 | `production_oidc.py` | production RS256/JWKS credential verification |
 | `principal_resolver.py` | exact database principal-authority resolution |
-| `signing_authority.py` / `tenant_capability_issuer.py` | fresh signing evidence and tenant capability minting |
+| `signing_authority.py` / `tenant_capability_issuer.py` | bounded fresh signing evidence and tenant capability minting |
+| `signing_authority_io.py` / `postgres_wait.py` | pure H1 preflight, owned signing connection/file I/O and mechanical deadline/cancellation waiting |
 | `legacy_m1/api.py` / `legacy_m1/runtime.py` | explicit injected legacy development and conformance composition |
 | `auth_oidc.py` | quarantined legacy HS256 verifier; test-only |
 | `context.py` | SI profile instance bootstrap, in-force reference snapshots, per-farm `ContextSnapshot` assembly with content-addressed reuse (basis drift mints, sameness reuses) |

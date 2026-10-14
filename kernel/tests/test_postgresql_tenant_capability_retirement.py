@@ -43,10 +43,10 @@ def _refused(manager, principal):
 
 
 def test_real_issuer_refuses_retired_pinned_key_and_closed_admission(
-    target, tenant_authority, key_authority
+    target, tenant_authority, key_authority, tmp_path
 ):
     principal = _principal(target, tenant_authority)
-    old_signing = live_signing(target, key_authority.kid)
+    old_signing = live_signing(target, key_authority.kid, tmp_path)
     old_manager = _manager(target, old_signing.issuer)
     new_manager = None
     kms = _sha256_id(b"issuer-retirement-kms-fixture")
@@ -74,7 +74,7 @@ def test_real_issuer_refuses_retired_pinned_key_and_closed_admission(
             _refused(old_manager, principal)
             assert old_signing.client.calls == []
             new_signing = live_signing(
-                target, replacement.kid, seed=replacement.seed
+                target, replacement.kid, tmp_path, seed=replacement.seed
             )
             new_manager = _manager(target, new_signing.issuer)
             controller.execute(
