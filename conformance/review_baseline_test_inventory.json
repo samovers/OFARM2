@@ -5646,6 +5646,1556 @@
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps05_real_recovery_future_xid_refuses_status[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps05_real_recovery_future_xid_refuses_status[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps15_actual_full_xid_reuse[False-ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps15_actual_full_xid_reuse[False-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps15_actual_full_xid_reuse[True-ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps15_actual_full_xid_reuse[True-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_crash_before_capture_or_commit[False-ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_crash_before_capture_or_commit[False-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_crash_before_capture_or_commit[True-ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_crash_before_capture_or_commit[True-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_crash_during_observation_retains_only_received_facts[aborted_after_status-ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_crash_during_observation_retains_only_received_facts[aborted_after_status-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_crash_during_observation_retains_only_received_facts[after_batch-ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_crash_during_observation_retains_only_received_facts[after_batch-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_crash_during_observation_retains_only_received_facts[after_status-ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_crash_during_observation_retains_only_received_facts[after_status-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_crash_during_observation_retains_only_received_facts[before_status-ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_crash_during_observation_retains_only_received_facts[before_status-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_durable_commit_survives_child_crash_and_postmaster_restart[False-ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_durable_commit_survives_child_crash_and_postmaster_restart[False-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_durable_commit_survives_child_crash_and_postmaster_restart[True-ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps16_durable_commit_survives_child_crash_and_postmaster_restart[True-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps18_historical_async_commit_loss_is_ineligible[False-ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps18_historical_async_commit_loss_is_ineligible[False-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps18_historical_async_commit_loss_is_ineligible[True-ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps18_historical_async_commit_loss_is_ineligible[True-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_crash",
+      "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_fixture.py::test_fixture_closes_real_native_creation_finishing_after_teardown[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_fixture",
+      "sourcePath": "kernel/tests/test_physical_outcome_fixture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_fixture.py::test_fixture_closes_real_native_creation_finishing_after_teardown[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_fixture",
+      "sourcePath": "kernel/tests/test_physical_outcome_fixture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_fixture.py::test_fixture_disposes_retained_natives_before_next_eight_slot_pool[ofarm_app-direct]",
+      "sourceModule": "kernel.tests.test_physical_outcome_fixture",
+      "sourcePath": "kernel/tests/test_physical_outcome_fixture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_fixture.py::test_fixture_disposes_retained_natives_before_next_eight_slot_pool[ofarm_app-tracked]",
+      "sourceModule": "kernel.tests.test_physical_outcome_fixture",
+      "sourcePath": "kernel/tests/test_physical_outcome_fixture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_fixture.py::test_fixture_disposes_retained_natives_before_next_eight_slot_pool[ofarm_worker-direct]",
+      "sourceModule": "kernel.tests.test_physical_outcome_fixture",
+      "sourcePath": "kernel/tests/test_physical_outcome_fixture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_fixture.py::test_fixture_disposes_retained_natives_before_next_eight_slot_pool[ofarm_worker-tracked]",
+      "sourceModule": "kernel.tests.test_physical_outcome_fixture",
+      "sourcePath": "kernel/tests/test_physical_outcome_fixture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_fixture.py::test_fixture_missing_runtime_return_still_fails_before_native_cleanup[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_fixture",
+      "sourcePath": "kernel/tests/test_physical_outcome_fixture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_fixture.py::test_fixture_missing_runtime_return_still_fails_before_native_cleanup[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_fixture",
+      "sourcePath": "kernel/tests/test_physical_outcome_fixture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_fixture.py::test_fixture_preserves_body_assertion_and_disposes_native_references[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_fixture",
+      "sourcePath": "kernel/tests/test_physical_outcome_fixture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_fixture.py::test_fixture_preserves_body_assertion_and_disposes_native_references[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_fixture",
+      "sourcePath": "kernel/tests/test_physical_outcome_fixture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_fixture.py::test_fixture_setup_failure_closes_natives_created_before_configure[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_fixture",
+      "sourcePath": "kernel/tests/test_physical_outcome_fixture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_fixture.py::test_fixture_setup_failure_closes_natives_created_before_configure[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_fixture",
+      "sourcePath": "kernel/tests/test_physical_outcome_fixture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-cursor-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-cursor-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-cursor-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-cursor-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-True-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-True-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-True-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-True-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-return-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-return-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-return-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-probe-return-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-restore-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-restore-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-restore-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-restore-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-True-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-True-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-True-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-True-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-control-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-control-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-control-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_app-wait-control-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-cursor-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-cursor-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-cursor-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-cursor-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-True-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-True-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-True-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-True-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-return-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-return-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-return-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-probe-return-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-restore-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-restore-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-restore-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-restore-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-False-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-False-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-False-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-False-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-True-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-True-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-True-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-True-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-control-CancelledError-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-control-CancelledError-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-control-KeyboardInterrupt-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_health_cancellation_returns_native_slot_once[ofarm_worker-wait-control-KeyboardInterrupt-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-cursor-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-cursor-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-probe-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-probe-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-restore-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-restore-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-wait-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_app-wait-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-cursor-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-cursor-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-probe-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-probe-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-restore-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-restore-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-wait-entry]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_health.py::test_ps10_ps11_ordinary_health_exception_keeps_pool_owned_return[ofarm_worker-wait-observer]",
+      "sourceModule": "kernel.tests.test_physical_outcome_health",
+      "sourcePath": "kernel/tests/test_physical_outcome_health.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_commit_callback_failure_is_retained_once[failure0]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_commit_callback_failure_is_retained_once[failure1]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_commit_callback_failure_is_retained_once[failure2]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_incomplete_tls_handshake_is_registered_and_woken_on_stop",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_malformed_frame_retains_worker_traceback_and_body_error[None-False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_malformed_frame_retains_worker_traceback_and_body_error[None-True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_malformed_frame_retains_worker_traceback_and_body_error[body1-False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_malformed_frame_retains_worker_traceback_and_body_error[body1-True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_malformed_startup_remains_a_worker_failure[False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_malformed_startup_remains_a_worker_failure[True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_proxy_forwards_real_socket_packets_and_joins_all_owners[False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_proxy_forwards_real_socket_packets_and_joins_all_owners[True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_socket_registered_after_stop_is_woken_and_closed[accepted]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_socket_registered_after_stop_is_woken_and_closed[upstream]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_socket_registered_after_stop_is_woken_and_closed[wrapped]",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_tls_shutdown_cannot_turn_pending_encrypted_read_into_plaintext",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_proxy.py::test_worker_socket_cleanup_failure_is_retained_after_owners_join",
+      "sourceModule": "kernel.tests.test_physical_outcome_proxy",
+      "sourcePath": "kernel/tests/test_physical_outcome_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_dsn_off_keeps_ordinary_behavior_but_disables_recovery[ofarm_app-False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_dsn_off_keeps_ordinary_behavior_but_disables_recovery[ofarm_app-True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_dsn_off_keeps_ordinary_behavior_but_disables_recovery[ofarm_worker-False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_dsn_off_keeps_ordinary_behavior_but_disables_recovery[ofarm_worker-True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_malformed_private_eligibility_does_not_reject_valid_batch[ofarm_app-1]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_malformed_private_eligibility_does_not_reject_valid_batch[ofarm_app-None]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_malformed_private_eligibility_does_not_reject_valid_batch[ofarm_app-missing]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_malformed_private_eligibility_does_not_reject_valid_batch[ofarm_app-true]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_malformed_private_eligibility_does_not_reject_valid_batch[ofarm_worker-1]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_malformed_private_eligibility_does_not_reject_valid_batch[ofarm_worker-None]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_malformed_private_eligibility_does_not_reject_valid_batch[ofarm_worker-missing]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_malformed_private_eligibility_does_not_reject_valid_batch[ofarm_worker-true]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_ps13_configure_on_cannot_rescue_actual_original_backend_off[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps01_ps13_configure_on_cannot_rescue_actual_original_backend_off[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps02_ps14_lost_wire_commit_delivers_frozen_matching_fact[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps02_ps14_lost_wire_commit_delivers_frozen_matching_fact[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps03_real_idle_timeout_abort_is_delivered[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps03_real_idle_timeout_abort_is_delivered[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps04_original_queued_commit_remains_unknown_then_finishes_separately[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps04_original_queued_commit_remains_unknown_then_finishes_separately[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_corrupt_status_shape_never_supplies_abort_proof[ofarm_app-rows0]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_corrupt_status_shape_never_supplies_abort_proof[ofarm_app-rows1]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_corrupt_status_shape_never_supplies_abort_proof[ofarm_app-rows2]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_corrupt_status_shape_never_supplies_abort_proof[ofarm_app-rows3]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_corrupt_status_shape_never_supplies_abort_proof[ofarm_app-rows4]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_corrupt_status_shape_never_supplies_abort_proof[ofarm_app-rows5]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_corrupt_status_shape_never_supplies_abort_proof[ofarm_worker-rows0]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_corrupt_status_shape_never_supplies_abort_proof[ofarm_worker-rows1]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_corrupt_status_shape_never_supplies_abort_proof[ofarm_worker-rows2]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_corrupt_status_shape_never_supplies_abort_proof[ofarm_worker-rows3]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_corrupt_status_shape_never_supplies_abort_proof[ofarm_worker-rows4]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_corrupt_status_shape_never_supplies_abort_proof[ofarm_worker-rows5]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_ps12_labelled_status_seam_combines_separate_real_batch[ofarm_app-False-None]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_ps12_labelled_status_seam_combines_separate_real_batch[ofarm_app-False-aborted]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_ps12_labelled_status_seam_combines_separate_real_batch[ofarm_app-False-in progress]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_ps12_labelled_status_seam_combines_separate_real_batch[ofarm_app-True-None]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_ps12_labelled_status_seam_combines_separate_real_batch[ofarm_app-True-aborted]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_ps12_labelled_status_seam_combines_separate_real_batch[ofarm_app-True-in progress]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_ps12_labelled_status_seam_combines_separate_real_batch[ofarm_worker-False-None]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_ps12_labelled_status_seam_combines_separate_real_batch[ofarm_worker-False-aborted]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_ps12_labelled_status_seam_combines_separate_real_batch[ofarm_worker-False-in progress]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_ps12_labelled_status_seam_combines_separate_real_batch[ofarm_worker-True-None]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_ps12_labelled_status_seam_combines_separate_real_batch[ofarm_worker-True-aborted]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps05_ps12_labelled_status_seam_combines_separate_real_batch[ofarm_worker-True-in progress]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps06_ps07_real_savepoints_preserve_physical_only_meaning[ofarm_app-False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps06_ps07_real_savepoints_preserve_physical_only_meaning[ofarm_app-True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps06_ps07_real_savepoints_preserve_physical_only_meaning[ofarm_worker-False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps06_ps07_real_savepoints_preserve_physical_only_meaning[ofarm_worker-True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps08_real_roles_cannot_forge_xid_mutate_batches_or_read_other_tenant[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps08_real_roles_cannot_forge_xid_mutate_batches_or_read_other_tenant[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps09_actual_principal_revocation_refuses_fresh_observer_without_audit[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps09_actual_principal_revocation_refuses_fresh_observer_without_audit[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps10_ps14_body_authored_finalization_error_cannot_request_observation[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps10_ps14_body_authored_finalization_error_cannot_request_observation[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_app-0]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_app-1]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_app-2]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_app-3]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_app-4]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_app-5]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_app-6]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_app-7]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_app-8]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_worker-0]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_worker-1]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_worker-2]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_worker-3]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_worker-4]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_worker-5]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_worker-6]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_worker-7]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps12_every_tuple_field_participates_in_association[ofarm_worker-8]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f1_swallowed_sql_failure_retains_existing_ordinary_return[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f1_swallowed_sql_failure_retains_existing_ordinary_return[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit[ofarm_app-False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit[ofarm_app-True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit[ofarm_worker-False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit[ofarm_worker-True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_runtime",
+      "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_actual_late_pool_connection_is_not_delivered_or_retried[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_actual_late_pool_connection_is_not_delivered_or_retried[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_body_process_cancellation_propagates_unchanged_without_observer[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_body_process_cancellation_propagates_unchanged_without_observer[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_eight_ordinary_calls_never_reserve_observers[ofarm_app-allocator-failure]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_eight_ordinary_calls_never_reserve_observers[ofarm_app-body-error]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_eight_ordinary_calls_never_reserve_observers[ofarm_app-ordinary]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_eight_ordinary_calls_never_reserve_observers[ofarm_app-rollback-only]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_eight_ordinary_calls_never_reserve_observers[ofarm_worker-allocator-failure]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_eight_ordinary_calls_never_reserve_observers[ofarm_worker-body-error]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_eight_ordinary_calls_never_reserve_observers[ofarm_worker-ordinary]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_eight_ordinary_calls_never_reserve_observers[ofarm_worker-rollback-only]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_mixed_seven_ordinary_and_one_observing_call_share_eight_leases[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_mixed_seven_ordinary_and_one_observing_call_share_eight_leases[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_pool_pressure_bounds_observation_and_late_release_is_not_retried[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_pool_pressure_bounds_observation_and_late_release_is_not_retried[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_cancellation_at_observer_ownership_transitions[ofarm_app-acquired]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_cancellation_at_observer_ownership_transitions[ofarm_app-batch]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_cancellation_at_observer_ownership_transitions[ofarm_app-begin]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_cancellation_at_observer_ownership_transitions[ofarm_app-challenge]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_cancellation_at_observer_ownership_transitions[ofarm_app-cleanup]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_cancellation_at_observer_ownership_transitions[ofarm_app-status]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_cancellation_at_observer_ownership_transitions[ofarm_worker-acquired]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_cancellation_at_observer_ownership_transitions[ofarm_worker-batch]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_cancellation_at_observer_ownership_transitions[ofarm_worker-begin]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_cancellation_at_observer_ownership_transitions[ofarm_worker-challenge]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_cancellation_at_observer_ownership_transitions[ofarm_worker-cleanup]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_cancellation_at_observer_ownership_transitions[ofarm_worker-status]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_pool_return_failure_preserves_original_error_and_received_fact[ofarm_app-1]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_pool_return_failure_preserves_original_error_and_received_fact[ofarm_app-2]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_pool_return_failure_preserves_original_error_and_received_fact[ofarm_worker-1]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_ps11_pool_return_failure_preserves_original_error_and_received_fact[ofarm_worker-2]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_shutdown_after_original_return_disposes_without_observer_retry[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps10_shutdown_after_original_return_disposes_without_observer_retry[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_cursor_cleanup_failure_retains_complete_matching_fact[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_cursor_cleanup_failure_retains_complete_matching_fact[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_app-batch]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_app-begin]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_app-bind]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_app-challenge]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_app-challenge_read]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_app-context]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_app-probe]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_app-rollback]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_app-status]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_app-timeouts]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_worker-batch]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_worker-begin]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_worker-bind]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_worker-challenge]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_worker-challenge_read]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_worker-context]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_worker-probe]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_worker-rollback]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_worker-status]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_each_real_exchange_has_finite_wait_and_one_disposal[ofarm_worker-timeouts]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_existing_kms_rpc_timeout_stays_separate_from_provider_deadline[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_existing_kms_rpc_timeout_stays_separate_from_provider_deadline[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_partial_wire_result_is_not_a_fact[ofarm_app-batch]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_partial_wire_result_is_not_a_fact[ofarm_app-status]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_partial_wire_result_is_not_a_fact[ofarm_worker-batch]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_partial_wire_result_is_not_a_fact[ofarm_worker-status]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_qualified_actual_abort_survives_later_wire_loss[ofarm_app-batch]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_qualified_actual_abort_survives_later_wire_loss[ofarm_app-rollback]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_qualified_actual_abort_survives_later_wire_loss[ofarm_worker-batch]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_qualified_actual_abort_survives_later_wire_loss[ofarm_worker-rollback]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_real_bind_forwards_one_event_and_unrenewed_provider_deadline[ofarm_app]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_real_bind_forwards_one_event_and_unrenewed_provider_deadline[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_real_provider_blackhole_expiry_and_cancellation_reach_runtime[ofarm_app-False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_real_provider_blackhole_expiry_and_cancellation_reach_runtime[ofarm_app-True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_real_provider_blackhole_expiry_and_cancellation_reach_runtime[ofarm_worker-False]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_transport.py::test_ps11_real_provider_blackhole_expiry_and_cancellation_reach_runtime[ofarm_worker-True]",
+      "sourceModule": "kernel.tests.test_physical_outcome_transport",
+      "sourcePath": "kernel/tests/test_physical_outcome_transport.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[absent-None]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[absent-aborted]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[absent-committed]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[absent-in progress]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[different-None]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[different-aborted]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[different-committed]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[different-in progress]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[duplicate-None]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[duplicate-aborted]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[duplicate-committed]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[duplicate-in progress]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[matching-None]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[matching-aborted]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[matching-committed]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[matching-in progress]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[partial-None]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[partial-aborted]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[partial-committed]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_complete_truth_table_keeps_physical_and_occurrence_distinct[partial-in progress]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_malformed_complete_row_never_retains_mutable_evidence[1]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_malformed_complete_row_never_retains_mutable_evidence[None]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_malformed_complete_row_never_retains_mutable_evidence[replacement0]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_malformed_complete_row_never_retains_mutable_evidence[replacement1]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_physical_outcome_values.py::test_ps12_malformed_complete_row_never_retains_mutable_evidence[replacement2]",
+      "sourceModule": "kernel.tests.test_physical_outcome_values",
+      "sourcePath": "kernel/tests/test_physical_outcome_values.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_break_glass_login_is_absent_in_normal_structural_state",
       "sourceModule": "kernel.tests.test_postgresql_audit_contract",
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
@@ -24486,8 +26036,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "a2cc24921b535d302b7d30cde0d7697dfdb6ca3e845c038f3e80aa0b66fe8e19",
-  "entryCount": 4897,
+  "entriesSha256": "91528b572c31892567ec5b67a697100d0a6e5f26f9c70406c86c1f67355a0b7f",
+  "entryCount": 5207,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

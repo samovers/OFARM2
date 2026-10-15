@@ -270,7 +270,10 @@ def _install_graph_fakes(monkeypatch, events, failures=None):
             assert kid == KID
             events.append("issuer.build")
 
-        def mint(self, _identity, _authority, _challenge):
+        def mint(
+            self, _identity, _authority, _challenge, *,
+            cancel_event=None, deadline_monotonic=None,
+        ):
             events.append("issuer.mint")
             return "capability"
 

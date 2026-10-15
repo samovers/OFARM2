@@ -73,10 +73,10 @@ def test_real_delayed_issuer_binds_exact_protected_challenge_deadline(
     minted = []
     original_mint = signing.issuer.mint
 
-    def delayed_mint(identity, principal_authority, challenge):
+    def delayed_mint(identity, principal_authority, challenge, **timing):
         # Real elapsed delay, with no DB clock or protected timestamp mutation.
         time.sleep(0.02)
-        token = original_mint(identity, principal_authority, challenge)
+        token = original_mint(identity, principal_authority, challenge, **timing)
         minted.append((challenge, decode_tenant_capability_jws(token).capability))
         return token
 
@@ -119,9 +119,9 @@ def test_real_issuer_cancellation_rolls_back_and_next_transaction_is_fresh(
     challenges = []
     original_mint = signing.issuer.mint
 
-    def capture_mint(identity, principal_authority, challenge):
+    def capture_mint(identity, principal_authority, challenge, **timing):
         challenges.append(challenge)
-        token = original_mint(identity, principal_authority, challenge)
+        token = original_mint(identity, principal_authority, challenge, **timing)
         if failure_stage == "before-bind" and len(challenges) == 1:
             raise asyncio.CancelledError
         return token

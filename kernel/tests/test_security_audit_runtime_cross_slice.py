@@ -196,14 +196,14 @@ class _SwitchableMinter:
         with self._lock:
             self._failures += 1
 
-    def mint(self, identity, principal_authority, challenge):
+    def mint(self, identity, principal_authority, challenge, **timing):
         with self._lock:
             refused = self._failures > 0
             if refused:
                 self._failures -= 1
         if refused:
             raise CapabilityMintError(f"{EXCEPTION_CANARY}-CAPABILITY")
-        return self._inner.mint(identity, principal_authority, challenge)
+        return self._inner.mint(identity, principal_authority, challenge, **timing)
 
 
 class _RecordingResolver:
