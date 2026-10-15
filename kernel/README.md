@@ -99,6 +99,33 @@ the connection. Automatic statement preparation is disabled so client
 bookkeeping cannot outlive that reset, while production provisioning keeps
 two-phase transactions disabled.
 
+An invoked batch allocator failure makes the current UnitOfWork rollback-only
+before the original exception is re-raised. Catching that error does not make
+the transaction usable again: later allocation refuses, and bundle resolution
+raises `CommandRuntimeBundleSelectionRefused` even when a selection was cached.
+Pre-invocation type and duplicate-call guards preserve an already valid batch
+when caught, because those guards do not enter the allocator.
+
+On normal body exit, the manager closes the facade and refuses COMMIT when
+rollback-only is set or PostgreSQL reports INERROR. It performs existing
+rollback/discard cleanup and reports `TRANSACTION_FAILED`. This also applies
+after a caught selector refusal. A duplicate persisted batch/request identity
+is a real allocation-SQL failure; post-INSERT returned-field validation can
+fail while PostgreSQL still reports INTRANS. Both must prevent normal success.
+
+Only readable INTRANS without a failure flag permits COMMIT. Unexpected or
+unreadable pre-COMMIT state discards the connection and reports
+`FINALIZATION_UNKNOWN` with `physical_observation is None`, without starting
+an observer. That pair cannot distinguish a manager state refusal from a
+body-authored error; it conveys no authenticated error provenance. The state
+gate adds defense in depth beyond the current poisoning callbacks and avoids
+mistaking an IDLE no-op COMMIT for successful finalization.
+
+These failure outcomes do not prove ABORTED, NO_EFFECT, domain success or retry
+permission. Existing attempted-COMMIT recovery below is unchanged. The
+[transaction failure RFC](../docs/rfcs/OFARM2_Tenant_Transaction_Failure_Handling_RFC_v0_1.md)
+defines the complete failure, cleanup and compatibility acceptance boundary.
+
 Governed production handlers are still downstream work, so protected endpoints
 return `GOVERNED_SURFACE_BLOCKED`. `/health` and `/manifest` expose immutable
 runtime metadata only. Authoritative services are held by route closures and
@@ -211,8 +238,8 @@ Cleanup interruptions record CLEANUP_UNAVAILABLE. Entry and body exception
 propagation is unchanged. Qualified received facts survive subsequent cleanup failure;
 cleanup still attempts one pool return, recording RETURN_FAILED if that attempt
 fails, without retrying it or the observation. An original pool-return failure
-prevents observer checkout. Existing ordinary-finalization and failed-allocation
-semantics F1/F2 remain separate work. See the
+prevents observer checkout. Known transaction/allocation failures are handled
+before COMMIT as described above and never request observation. See the
 [physical observation RFC](../docs/rfcs/OFARM2_Physical_Transaction_Outcome_Recovery_RFC_v0_1.md)
 for P1 restrictions, exclusions and required acceptance evidence.
 

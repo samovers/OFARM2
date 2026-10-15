@@ -32,6 +32,8 @@ from kernel.tenant_command_runtime_bundle_selector import (
 )
 from kernel.tenant_uow import (
     GovernedBatchRequest,
+    TenantBoundaryError,
+    TenantBoundaryOutcome,
     TenantUnitOfWorkManager,
     create_tenant_connection_pool,
 )
@@ -448,21 +450,24 @@ def test_other_tenant_absence_is_one_opaque_refusal(
         migrated_audit_service,
         monkeypatch,
     )
-    with runtime.tenant_unit_of_work(principal) as unit:
-        for _attempt in range(2):
-            with pytest.raises(CommandRuntimeBundleSelectionRefused) as raised:
-                unit.resolve_commit_operation_claim_draft_runtime_bundle()
-            assert str(raised.value) == raised.value.outcome
-            assert raised.value.__cause__ is None
-        with pytest.raises(RuntimeError, match="rollback-only"):
-            unit.begin_batch(
-                GovernedBatchRequest(
-                    f"batch-selector-absent-{uuid4().hex}",
-                    "SELECTOR_ABSENT_FALLBACK",
-                    f"request-selector-absent-{uuid4().hex}",
-                    other_tenant_authority.runtime_bundle_digest,
+    with pytest.raises(TenantBoundaryError) as failed:
+        with runtime.tenant_unit_of_work(principal) as unit:
+            for _attempt in range(2):
+                with pytest.raises(CommandRuntimeBundleSelectionRefused) as raised:
+                    unit.resolve_commit_operation_claim_draft_runtime_bundle()
+                assert str(raised.value) == raised.value.outcome
+                assert raised.value.__cause__ is None
+            with pytest.raises(RuntimeError, match="rollback-only"):
+                unit.begin_batch(
+                    GovernedBatchRequest(
+                        f"batch-selector-absent-{uuid4().hex}",
+                        "SELECTOR_ABSENT_FALLBACK",
+                        f"request-selector-absent-{uuid4().hex}",
+                        other_tenant_authority.runtime_bundle_digest,
+                    )
                 )
-            )
+    assert failed.value.outcome is TenantBoundaryOutcome.TRANSACTION_FAILED
+    assert failed.value.physical_observation is None
 
     assert observed == [(request_router, principal)]
     assert _tenant_state(
@@ -494,21 +499,24 @@ def test_database_read_failure_stays_opaque_and_rolls_back_without_audit(
     )
     _set_app_resolver_execute(target, granted=False)
     try:
-        with runtime.tenant_unit_of_work(principal) as unit:
-            for _attempt in range(2):
-                with pytest.raises(CommandRuntimeBundleSelectionRefused) as raised:
-                    unit.resolve_commit_operation_claim_draft_runtime_bundle()
-                assert str(raised.value) == raised.value.outcome
-                assert raised.value.__cause__ is None
-            with pytest.raises(RuntimeError, match="rollback-only"):
-                unit.begin_batch(
-                    GovernedBatchRequest(
-                        f"batch-selector-db-failure-{uuid4().hex}",
-                        "SELECTOR_DATABASE_FAILURE_FALLBACK",
-                        f"request-selector-db-failure-{uuid4().hex}",
-                        tenant_authority.runtime_bundle_digest,
+        with pytest.raises(TenantBoundaryError) as failed:
+            with runtime.tenant_unit_of_work(principal) as unit:
+                for _attempt in range(2):
+                    with pytest.raises(CommandRuntimeBundleSelectionRefused) as raised:
+                        unit.resolve_commit_operation_claim_draft_runtime_bundle()
+                    assert str(raised.value) == raised.value.outcome
+                    assert raised.value.__cause__ is None
+                with pytest.raises(RuntimeError, match="rollback-only"):
+                    unit.begin_batch(
+                        GovernedBatchRequest(
+                            f"batch-selector-db-failure-{uuid4().hex}",
+                            "SELECTOR_DATABASE_FAILURE_FALLBACK",
+                            f"request-selector-db-failure-{uuid4().hex}",
+                            tenant_authority.runtime_bundle_digest,
+                        )
                     )
-                )
+        assert failed.value.outcome is TenantBoundaryOutcome.TRANSACTION_FAILED
+        assert failed.value.physical_observation is None
     finally:
         _set_app_resolver_execute(target, granted=True)
 
@@ -535,17 +543,20 @@ def test_database_and_uow_ordering_guards_refuse_after_batch(
         connection.rollback()
 
     managed_batch = f"batch-selector-uow-{uuid4().hex}"
-    with manager.unit_of_work(_principal(target, tenant_authority)) as unit:
-        unit.begin_batch(
-            GovernedBatchRequest(
-                managed_batch,
-                "SELECTOR_ORDERING_GUARD",
-                f"request-selector-{uuid4().hex}",
-                tenant_authority.runtime_bundle_digest,
+    with pytest.raises(TenantBoundaryError) as failed:
+        with manager.unit_of_work(_principal(target, tenant_authority)) as unit:
+            unit.begin_batch(
+                GovernedBatchRequest(
+                    managed_batch,
+                    "SELECTOR_ORDERING_GUARD",
+                    f"request-selector-{uuid4().hex}",
+                    tenant_authority.runtime_bundle_digest,
+                )
             )
-        )
-        with pytest.raises(CommandRuntimeBundleSelectionRefused):
-            unit.resolve_commit_operation_claim_draft_runtime_bundle()
+            with pytest.raises(CommandRuntimeBundleSelectionRefused):
+                unit.resolve_commit_operation_claim_draft_runtime_bundle()
+    assert failed.value.outcome is TenantBoundaryOutcome.TRANSACTION_FAILED
+    assert failed.value.physical_observation is None
     with psycopg.connect(target.target_admin_dsn) as connection:
         assert connection.execute(
             "SELECT count(*) FROM ofarm.governed_write_batch "

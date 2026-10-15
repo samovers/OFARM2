@@ -1,6 +1,6 @@
 # OFARM2 tenant transaction failure handling — RFC v0.1
 
-Status: proposed Phase A for one Delivery implementation PR. Runtime implementation is not yet authorized.
+Status: version 1 approved on 15 October 2026 and implemented in PR409; the PR records review and executed verification.
 Decision: `OFARM2-TENANT-TRANSACTION-FAILURE-001`, version 1.
 Base: `301bf4aa3196b503ec114ebfa0f455be818627a4` (PR405 merged).
 Delivery: #408, under Tracking Epic #167. Consumers: the existing ApplicationRuntime tenant boundary and future #178 command handling.
@@ -19,6 +19,10 @@ different database outcomes behind that same misleading return:
   If the caller catches that exception, the manager can commit the inserted
   batch even though `unit.batch` is absent.
 
+F1 is reachable through the public facade: reuse a previously committed
+`batch_id` or `request_id`, catch the allocation's unique-constraint error,
+and let the body exit normally. This needs no raw-connection test seam.
+
 This Delivery makes a failed tenant transaction terminal in its owning call.
 Once the allocator fails, an existing rollback-only condition is set, or the
 database reports a failed transaction, normal context exit must not be reported
@@ -26,10 +30,13 @@ as successful finalization. The manager refuses COMMIT, performs existing
 rollback/discard cleanup, and delivers a bounded internal failure to the caller.
 
 F1 and F2 belong together: they share the same transaction manager, original
-connection, protected writes, lifecycle and rollback story. Changing only
-allocation poisoning misses a database failure outside allocation; changing
-only the PostgreSQL-state check misses an allocation-validation failure in an
-otherwise committable transaction.
+connection, protected writes, lifecycle and rollback story. Allocator poisoning
+closes the current production F1/F2 paths; the selector already poisons its own
+callback failures. The pre-COMMIT state gate is defense in depth for failures
+outside those callbacks and unexpected transaction state, currently exercised
+with declared seams. It also prevents an IDLE no-op COMMIT from looking like
+successful finalization. A state check alone misses F2's otherwise committable
+post-INSERT validation failure.
 
 ## Authority, actors and containment
 
@@ -71,6 +78,8 @@ physical-outcome fact or retry permission.
    This includes post-INSERT validation and process control. It does not
    retain the exception, its traceback, SQL, connection or request as new state.
 2. A poisoned UnitOfWork cannot invoke another allocator or resolver callback.
+   Its resolver raises the existing `CommandRuntimeBundleSelectionRefused`,
+   including when a successful selection was cached before the failure.
    It may retain immutable binding/batch values for inspection; those values
    do not become authority after failure or closure. The existing public
    facade and its no-SQL/no-connection rule remain.
@@ -87,6 +96,9 @@ physical-outcome fact or retry permission.
    original connection and raises the existing `FINALIZATION_UNKNOWN` outcome
    **without starting a physical observer**. There was no manager COMMIT attempt
    on this path, so no new PR405 recovery trigger is introduced.
+   Its `physical_observation` is `None`; that pair of outcome and observation
+   cannot tell the caller whether this error or a body-authored error produced
+   it. It is not an authenticated provenance signal.
 6. Once an eligible ordinary COMMIT is attempted, its existing success,
    exception, non-idle result and PR405 observation paths remain unchanged.
    Body-authored boundary errors still propagate as body failures and cannot
@@ -124,7 +136,7 @@ exception cache or recoverable handle.
 | Normal body exit, readable INERROR | Same failed path, even without an allocator failure |
 | Normal body exit, unreadable/IDLE/ACTIVE/UNKNOWN status | Close/discard, FINALIZATION_UNKNOWN without observer; no COMMIT |
 | Normal body exit, readable INTRANS and no failure | Existing one COMMIT and original finalization/observer behavior |
-| All exits | Original lease returned once; failed/non-idle native discarded as today |
+| All exits | One original lease-return attempt; failed/non-idle native discarded as today, with no restored-capacity claim when native return fails |
 
 If rollback cannot be proved, discard the connection. Never turn cleanup
 failure into an ABORTED or NO_EFFECT claim. Existing process-control precedence
@@ -143,13 +155,13 @@ All production-path database controls run as both `ofarm_app` and
 
 | ID | Required negative and positive evidence |
 | --- | --- |
-| TF01 F1 | Allocate a real batch, cause and catch a real SQL error using a declared internal seam, exit normally: caller receives TRANSACTION_FAILED, no COMMIT was attempted, fresh qualified read confirms no batch, original lease released once. Also exercise real allocation SQL rejection. |
+| TF01 F1 | First commit a real batch, then separately reuse its batch_id and request_id through the public allocator and catch each real SQL rejection: normal body exit reports TRANSACTION_FAILED, no new COMMIT/observer occurs, earlier stored batch is unchanged and the original lease is released once. Also allocate a new real batch, cause/catch SELECT 1/0 through the declared internal seam and prove the state gate refuses COMMIT and a fresh qualified read finds no new batch. Both roles are required. |
 | TF02 F2 | After a real INSERT, force validation of a returned field to raise while the database remains INTRANS. Catch it: batch remains unpublished, normal exit fails, no COMMIT or observer occurs, fresh qualified read finds no inserted batch. Cover malformed/missing returned metadata and the existing PS17 timestamp-validation counterexample. |
-| TF03 terminal failure | After either caught failure, try allocation and resolution, including a previously cached successful selection; no further database callback occurs. Restoring driver state cannot clear application poisoning. |
+| TF03 terminal failure | After either caught failure, try allocation and resolution, including a previously cached successful selection; allocation raises its existing rollback-only RuntimeError and resolution raises CommandRuntimeBundleSelectionRefused, with no further database callback. Restoring driver state cannot clear application poisoning. |
 | TF04 error identity | Uncaught allocator/body errors and process control remain the exact original object through existing cleanup. Caught allocator process control poisons the call and prevents normal successful exit. Secondary cleanup failures cannot fabricate successful return or a physical fact. |
 | TF05 cleanup failure | Inject ordinary rollback/close/return failures with actual ownership accounting. Assert cleanup/discard policy, one original return attempt, no new observer lease and no claimed ABORTED/NO_EFFECT. Do not claim a failed native return restores capacity. |
 | TF06 existing selector | Caught expected/unexpected selector failures, re-entry and selector-after-batch retain existing terminal refusal and rollback. Normal outer exit now raises TRANSACTION_FAILED. No authority result, callback count or fallback capability changes. |
-| TF07 state gate | Readable INTRANS succeeds. INERROR fails without COMMIT. IDLE/ACTIVE/UNKNOWN and a raising status read discard and fail without COMMIT/observer. A process-control interruption during state read keeps its existing propagation discipline. |
+| TF07 state gate | Readable INTRANS succeeds. INERROR fails without COMMIT. IDLE/ACTIVE/UNKNOWN and a raising status read discard and fail without COMMIT/observer; physical_observation is None and cannot establish the error's provenance. A process-control interruption during state read keeps its existing propagation discipline. |
 | TF08 healthy compatibility | Successful read-only/batch calls commit once; batch metadata is unchanged. Pre-invocation wrong-type/duplicate guards preserve the previously valid transaction. Closed-unit use stays refused. |
 | TF09 observer compatibility | Real lost COMMIT reply still enters PR405 recovery, preserving matching COMMITTED, qualified ABORTED and UNKNOWN controls and exactly-one-lease ordering. No body-authored error, known rollback-only path or pre-COMMIT state refusal starts it. |
 | TF10 audit/authority isolation | Through actual runtime/router composition, the new exit failure is not an entry audit event. Existing entry failures still route identically. No tenant/principal/binder/selector decision or public endpoint behavior is altered. |
@@ -185,16 +197,20 @@ EXC-001–006: use the existing rollback-only flag and one existing finalizer;
 add no durable state or second authority path; link TF01–TF11 to exact owner
 branches; delete obsolete silent-failure expectations rather than retaining a
 compatibility mode; add no new helper abstraction without current need.
-Only checking INERROR is simpler but misses F2's healthy post-INSERT state;
-only poisoning the allocator misses F1's other SQL failures. Their combined
-gate is the smallest complete correction.
+Only checking INERROR is simpler but misses F2's healthy post-INSERT state.
+Allocator poisoning closes the currently exposed production F1/F2 paths; the
+small pre-COMMIT state gate additionally proves finalization eligibility
+without new state, ownership or a second connection. Its outside-callback
+failure and IDLE no-op controls use declared seams, not invented public SQL
+access. Together they implement the approved finalization contract directly.
 
 ## Approval and verification posture
 
-This is high-risk transaction work. Phase A must receive zero-Blocker review,
-then the task user must approve the complete live decision card naming the
-existing draft PR before runtime or test implementation. This RFC stays in the
-same eventual implementation PR; it is not a separate contract-only merge.
+This is high-risk transaction work. Phase A received zero-Blocker review and
+the task user approved the complete version-1 live decision card naming draft
+PR409 in the coordinator chat before runtime or test implementation. Original
+messages remain the authority; the PR links their navigation evidence. This
+RFC stays in the same implementation PR, not a separate contract-only merge.
 
 Before each commit: mandatory package check. Phase A uses package,
 architecture and whitespace checks only; no expensive baseline admission.
