@@ -1,8 +1,8 @@
 # OFARM2 Conformance Execution Capacity RFC v0.1
 
-**Status:** Phase A design proposal; not approved or implemented.
+**Status:** Decision version 1 approved; implemented in PR #411, pending required verification and final human merge acceptance.
 **Delivery:** [#410](https://github.com/samovers/OFARM2/issues/410), child of #167.
-**Draft PR:** the single live draft PR linked from Delivery #410; its number is bound in the PR description and decision card.
+**PR:** [#411](https://github.com/samovers/OFARM2/pull/411), the single live implementation PR for Delivery #410.
 **Decision:** `OFARM2-CONFORMANCE-EXECUTION-CAPACITY-001`, version `1`.
 **Primary boundary:** trusted CI execution-resource policy/currentness.
 **Design path:** `docs/rfcs/OFARM2_Conformance_Execution_Capacity_RFC_v0_1.md`.
@@ -29,7 +29,7 @@ The new 58-case runtime suite fits within a 44.9-second enclosing hosted window.
 No sufficient fixture saving preserving coverage and isolation was demonstrated.
 These observations support a capacity diagnosis, not proof of its root cause.
 
-## 2. Capability and proposed decision
+## 2. Capability and approved decision
 
 Permit the existing conformance executor up to 60 minutes, retaining a finite
 ceiling, the complete test/evidence contract, and all current authorities.
@@ -136,5 +136,6 @@ The existing currentness model and retained release evidence stay unchanged.
 A new decision version/approval is required for changed capability, boundary,
 authority, permitted effects/non-effects, invariants, named PR, irreversible
 behavior, or deployment posture; uncertain preservation also stops work.
-Next: publish the single draft PR's Phase A for exact-head design review, then
-present its complete decision card before changing workflow or sidecar bytes.
+Next: complete focused checks, exact-head implementation review, required hosted
+evidence and publication, then present the final packet for separate human merge
+authorization. This decision does not authorize merge or deployment.
