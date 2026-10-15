@@ -12,7 +12,7 @@ import pytest
 from kernel import tenant_physical_outcome as physical
 from kernel import signing_authority_io
 from kernel.signing_authority_io import prepare_signing_conninfo
-from kernel.tenant_uow import TenantBoundaryError
+from kernel.tenant_uow import TenantBoundaryError, TenantBoundaryOutcome
 from kernel.tests._physical_outcome_proxy import PhysicalWireProxy
 from kernel.tests._physical_outcome_support import (
     lose_commit_reply, physical_harness, request,
@@ -250,6 +250,10 @@ def test_ps10_eight_ordinary_calls_never_reserve_observers(
                         unit.begin_batch(object())
         except ValueError:
             assert finish == "body-error"
+        except TenantBoundaryError as error:
+            assert finish == "rollback-only"
+            assert error.outcome is TenantBoundaryOutcome.TRANSACTION_FAILED
+            assert error.physical_observation is None
     with ThreadPoolExecutor(max_workers=8) as executor:
         list(executor.map(lambda _: call(), range(8)))
     assert len(harness.pool.acquired) == 8
