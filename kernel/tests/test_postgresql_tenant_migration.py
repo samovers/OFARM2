@@ -33,9 +33,7 @@ from deployment.postgresql.migration_runner import (
 from deployment.postgresql.migration_sets import (
     TENANT_SERVICE,
     MigrationSet,
-    load_migration_set,
 )
-from deployment.postgresql.provisioning import provision_service
 from deployment.postgresql.provisioning_specs import TENANT_PROVISIONING_SPEC
 from deployment.postgresql.tenant_contract import (
     OIDC_ISSUER_EQUALITY_POLICY,
@@ -64,15 +62,14 @@ from kernel.tests.tenant_capability_fixture import (
     sign,
     sign_capability,
 )
-from kernel.tests.test_postgresql_migration_runner import (
-    _assert_clean_service,
-    _database_dsn,
-    _destroy_test_service,
-    _passwords,
+from kernel.tests.postgresql_tenant_support import (
+    ADMIN_ENV,
+    TenantTarget as OperationalTenantTarget,
+    fresh_tenant_service,
 )
+from kernel.tests.test_postgresql_migration_runner import _database_dsn
 
 
-ADMIN_ENV = "OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN"
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_PATH = PACKAGE_ROOT / "kernel" / "migrations" / "0001_initial.sql"
 KNOWLEDGE_POSITION_MIGRATION_PATH = (
@@ -108,12 +105,7 @@ RUNTIME_LOGICAL_REF_MAX = RUNTIME_LOGICAL_REF_PREFIX + "a" * (
 
 
 @dataclass(frozen=True, slots=True)
-class TenantTarget:
-    admin_dsn: str
-    target_admin_dsn: str
-    migrator_dsn: str
-    passwords: Mapping[str, str]
-    migration_set: MigrationSet
+class TenantTarget(OperationalTenantTarget):
     v3_report: object
     v4_guard_evidence: tuple[str, ...]
     v4_report: object
@@ -125,14 +117,6 @@ class TenantTarget:
     v7_report: object
     first_report: object
     noop_report: object
-
-    def role_dsn(self, role_name: str) -> str:
-        return _database_dsn(
-            self.admin_dsn,
-            TENANT_PROVISIONING_SPEC.database_name,
-            user=role_name,
-            password=self.passwords[role_name],
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -633,23 +617,17 @@ def _assert_v6_write_lock_admission_is_inert(
 
 @pytest.fixture(scope="module")
 def tenant_target() -> TenantTarget:
-    admin_dsn = _admin_dsn()
-    spec = TENANT_PROVISIONING_SPEC
-    _assert_clean_service(admin_dsn, spec)
-    passwords = _passwords(spec, "tenant-baseline")
-    migration_set = load_migration_set(PACKAGE_ROOT, TENANT_SERVICE)
-    v3_set = MigrationSet(
-        service=TENANT_SERVICE,
-        migrations=migration_set.migrations[:3],
-        digest=migration_set.prefix_digest(3),
-    )
-    try:
-        provision_service(admin_dsn, spec, login_passwords=passwords)
-        migrator_dsn = _database_dsn(
-            admin_dsn,
-            spec.database_name,
-            user="ofarm_migrator",
-            password=passwords["ofarm_migrator"],
+    with fresh_tenant_service(_admin_dsn()) as target:
+        admin_dsn = target.admin_dsn
+        spec = TENANT_PROVISIONING_SPEC
+        passwords = target.passwords
+        migration_set = target.migration_set
+        migrator_dsn = target.migrator_dsn
+        target_admin_dsn = target.target_admin_dsn
+        v3_set = MigrationSet(
+            service=TENANT_SERVICE,
+            migrations=migration_set.migrations[:3],
+            digest=migration_set.prefix_digest(3),
         )
         v3_report = _migrate_service_for_testing(
             admin_dsn=admin_dsn,
@@ -659,7 +637,6 @@ def tenant_target() -> TenantTarget:
             release_identity=f"{RELEASE_IDENTITY}-v3-prefix",
             execution_id=uuid4(),
         )
-        target_admin_dsn = _database_dsn(admin_dsn, spec.database_name)
         v4_guard_evidence = _assert_v4_guards_refuse_before_catalog_change(
             admin_dsn=admin_dsn,
             target_admin_dsn=target_admin_dsn,
@@ -774,8 +751,6 @@ def tenant_target() -> TenantTarget:
             first_report=first_report,
             noop_report=noop_report,
         )
-    finally:
-        _destroy_test_service(admin_dsn, spec)
 
 
 def _sha256_id(value: bytes) -> str:

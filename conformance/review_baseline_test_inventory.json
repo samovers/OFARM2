@@ -11856,6 +11856,106 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_body_failure_stays_visible_and_owned_cleanup_follows_dependents[False]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_body_failure_stays_visible_and_owned_cleanup_follows_dependents[True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_dirty_service_is_refused_before_provisioning_or_cleanup",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_false_noop_or_wrong_lineage_refuses_before_yield[applied]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_false_noop_or_wrong_lineage_refuses_before_yield[execution]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_false_noop_or_wrong_lineage_refuses_before_yield[final]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_false_noop_or_wrong_lineage_refuses_before_yield[head]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_false_noop_or_wrong_lineage_refuses_before_yield[previous]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_owned_setup_failure_propagates_and_disposes[full-migration]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_owned_setup_failure_propagates_and_disposes[noop]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_owned_setup_failure_propagates_and_disposes[provision]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_owned_setup_failure_propagates_and_disposes[target]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_partial_or_inconsistent_fresh_report_refuses_before_yield[missing-tail]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_partial_or_inconsistent_fresh_report_refuses_before_yield[not-fresh]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_partial_or_inconsistent_fresh_report_refuses_before_yield[v7-only]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_partial_or_inconsistent_fresh_report_refuses_before_yield[wrong-final]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_partial_or_inconsistent_fresh_report_refuses_before_yield[wrong-head]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_runtime_registrations_share_operational_target_and_keep_staged_owner",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_runtime_uses_full_source_public_migration_and_distinct_verified_noop",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_fixture_support.py::test_staged_manual_route_keeps_patched_admin_and_every_schedule_step",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_fixture_support",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_fixture_support.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_app_worker_and_selection_activation_share_one_monotonic_tenant_lock",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -26036,8 +26136,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "91528b572c31892567ec5b67a697100d0a6e5f26f9c70406c86c1f67355a0b7f",
-  "entryCount": 5207,
+  "entriesSha256": "74e15a44c54b40a4525f081bb168dc878ebd604db68924782cab49ad4aacf2d2",
+  "entryCount": 5227,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

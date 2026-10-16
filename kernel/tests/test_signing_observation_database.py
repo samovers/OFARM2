@@ -23,8 +23,9 @@ from kernel.tests._signing_observation_support import (
 )
 from kernel.tests._tenant_signing_support import FixtureKmsClient
 from kernel.tests.tenant_capability_fixture import RFC8032_TEST_SEED
+from kernel.tests.postgresql_tenant_support import tenant_target  # noqa: F401
 from kernel.tests.test_postgresql_tenant_migration import (
-    authority, capability_key, tenant_target,  # noqa: F401 - real fixtures
+    authority, capability_key,  # noqa: F401 - real fixtures
 )
 from kernel.tests.test_postgresql_tenant_uow import _principal
 

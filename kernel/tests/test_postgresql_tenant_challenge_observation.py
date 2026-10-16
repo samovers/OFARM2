@@ -11,14 +11,14 @@ from psycopg import sql
 from deployment.postgresql.tenant_contract import TenantCapabilityContractError
 from kernel.tenant_capability_issuer import CapabilityMintError, TenantChallenge
 from kernel.tests._tenant_signing_support import live_signing
+from kernel.tests.postgresql_tenant_support import TenantTarget
+from kernel.tests.postgresql_tenant_support import tenant_target  # noqa: F401
 from kernel.tests.test_postgresql_tenant_migration import (
     CapabilityKeyAuthority,
     TenantAuthority,
-    TenantTarget,
     _signed_capability_for_new_challenge,
     authority,  # noqa: F401 - imported fixture
     capability_key,  # noqa: F401 - imported fixture
-    tenant_target,  # noqa: F401 - imported fixture
 )
 from kernel.tests.test_postgresql_tenant_uow import _principal
 
