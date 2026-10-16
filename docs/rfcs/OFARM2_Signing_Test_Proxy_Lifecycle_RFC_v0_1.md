@@ -1,6 +1,6 @@
-# Signing test-proxy lifecycle repair — proposed design v0.1
+# Signing test-proxy lifecycle repair — design v0.1
 
-**Status:** Phase A only; no implementation or implementation approval.
+**Status:** implemented in PR413; focused local checks passed; hosted acceptance pending.
 **Delivery:** [#412](https://github.com/samovers/OFARM2/issues/412), child of #167,
 prerequisite of #410 / PR411 and transitively #408 / PR409.
 **Decision:** `OFARM2-SIGNING-TEST-PROXY-LIFECYCLE-001`, version `1`.
@@ -17,8 +17,10 @@ job limit. Its log does not identify the offending bytes or exact interleaving.
 
 A bounded local diagnostic on Python 3.12.13/macOS arm64 used real TLS 1.2 and
 1.3 socket pairs and the unchanged relay/exit methods. Scheduling the reader
-after `SSLSocket.shutdown` clears TLS state but before raw shutdown exposed TLS
-record bytes to PostgreSQL framing and reproduced the same assertion. Both
+after `SSLSocket.shutdown` clears TLS state exposed TLS record bytes to
+PostgreSQL framing and reproduced the same assertion. That diagnostic forced
+the read before raw shutdown; safe cleanup must not assume raw shutdown makes
+already buffered ciphertext unreadable on every supported platform. Both
 ordinary-order controls passed; every diagnostic worker/socket was reclaimed.
 This proves a sufficient fixture defect, not the hosted event's precise cause,
 production authentication behavior, a Linux acceptance result or a timing fix.
@@ -128,8 +130,8 @@ not an automatic upgrade path. No production-readiness or deployment claim.
 
 | ID / invariant | Required negative and positive controls |
 | --- | --- |
-| SP01 TLS ownership | Real TLS 1.2 and 1.3, readiness before read then concurrent teardown: no ciphertext at framing; ordinary plaintext forwards. The regression fails against the old helper. |
-| SP02 complete ownership | Stop during accept, partial startup, incomplete TLS handshake, relay read and withholding; race accepted/wrapped/upstream registration with stop; exercise acquisition failure and Unix upstream. Every owned worker joins and every owned descriptor closes within existing bounds. |
+| SP01 TLS ownership | Real TLS 1.2 and 1.3: pause the reader between readiness and `recv`, then release it from a neutral seam reached by both old and new teardown at the wrapper's base socket wake, before the actual shutdown. Prove that this scheduled reader decrypts and forwards the plaintext frame, rather than merely avoiding an error. Apply the same schedule to both helpers: it fails the old helper and passes the repair. Ordinary forwarding also passes. |
+| SP02 complete ownership | Stop during accept, partial startup, incomplete TLS handshake, relay read and withholding; race accepted/wrapped/upstream registration with stop; exercise acquisition failure and Unix upstream. Include the worker passing its stop check and re-entering `select` during teardown, on plain and TLS sockets. Every owned worker joins and every owned descriptor closes within existing bounds. |
 | SP03 honest errors | Malformed startup/frame, genuine worker error immediately before stop, body-only failure and simultaneous body/worker/cleanup failures stay observable with cause/context intact; remaining cleanup is attempted. Expected stop I/O stays distinct from an unexpected error while running. |
 | SP04 credential evidence | Preserve actual `SigningAuthorityReader.current` certificate/password refusal through the existing test: safe refusal, one accepted connection, no query/downgrade, native handles disposed. Retain successful observation and existing result/cancel/deadline controls. |
 | SP05 downstream compatibility | Existing physical transport PS11 invokes the actual signing reader under observer cancellation/deadline; its assertions pass. Existing physical-proxy socket tests and shared helper consumers retain their behavior. |
@@ -151,8 +153,8 @@ for both complete unfiltered baselines, fixed-policy equivalence, 23 platform
 cases, both native architectures and sealed publication. Existing final
 human acceptance and exact-head native merge authorization remain required.
 
-Phase A performs only mandatory/cheap checks and design review. It requests
-no expensive source run, reuses no failed evidence and changes no test code.
+Phase A performed only mandatory/cheap checks and design review. It requested
+no expensive source run, reused no failed evidence and changed no test code.
 The current 45-minute pre-merge budget remains a separate unresolved constraint.
 If complete gates cannot pass, report it; this repair grants no bypass or
 further identical PR411/PR409 attempt and promises no capacity saving.
@@ -160,7 +162,7 @@ further identical PR411/PR409 attempt and promises no capacity saving.
 ## Code excellence and simplest alternative
 
 EXC-001: one worker/lifecycle and socket list own fixture disposal.
-EXC-002: one small registration lock closes a demonstrated race; no duplicate
+EXC-002: one small registration lock closes the stop/registration race; no duplicate
 authority, generic proxy layer, parallel implementation or cleanup registry.
 EXC-003: SP01–SP06 trace ownership, error and evidence invariants to focused
 controls and unchanged runtime assertions.
@@ -170,5 +172,29 @@ EXC-006: a stop check or ignored assertion cannot serialize TLS disposal;
 the already accepted direct physical-proxy pattern is the simpler sufficient
 starting point. Preserve signing-specific topology/error/Unix behavior.
 
-Next: review this complete Phase A, present the named draft PR's decision,
-and obtain its separate semantic approval before implementation.
+## Implementation evidence and limits
+
+The fixture now preserves TLS state through native wake-up, registers wrappers
+before handshake, retains acquisition ownership and joins its single worker
+before final disposal. It keeps one worker-failure record; grouped exceptions
+retain concurrent body, worker and cleanup errors without losing their original
+tracebacks. A lone expected certificate failure remains available through the
+existing `failure` attribute. Stop is set before acquiring the registration lock.
+
+On pinned Python 3.12.13/macOS arm64, all 53 focused socket cases passed. The
+same neutral SP01 schedule failed against the unchanged base helper for both
+TLS versions at its original framing assertion; the repaired reader forwarded
+the actual plaintext query. The regression adds no alternate parser or fault
+suppression. All 5,207 existing inventory entries are retained unchanged; the
+complete inventory now has 5,260 entries.
+
+The unchanged signing database, physical transport and physical-proxy modules
+passed all 132 cases against owned PostgreSQL 17.10 with TLS/SCRAM. Actual
+certificate/password refusal and PS11 cancellation/deadline controls passed.
+One existing Starlette/httpx deprecation warning was reported. No timing shim,
+retry, production-source change or relaxed assertion was used. These are local
+engineering results, not the required Linux hosted acceptance or a capacity
+claim. Complete hosted gates and authenticated publication remain pending.
+
+Next: obtain fresh implementation review before requesting complete hosted
+evidence, then present final acceptance only after every applicable gate passes.

@@ -23126,6 +23126,271 @@
       "sourcePath": "kernel/tests/test_signing_observation_files.py"
     },
     {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp01_neutral_wake_seam_preserves_tls_and_forwards_plaintext[771]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp01_neutral_wake_seam_preserves_tls_and_forwards_plaintext[772]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_acquisition_failure_keeps_previous_owner[tcp]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_acquisition_failure_keeps_previous_owner[wrap]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_failed_registration_retains_local_owner[accepted]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_failed_registration_retains_local_owner[upstream]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_failed_registration_retains_local_owner[wrapped]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_late_registration_is_woken_and_closed[accepted]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_late_registration_is_woken_and_closed[upstream]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_late_registration_is_woken_and_closed[wrapped]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_normal_forwarding_and_owned_disposal[False-771]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_normal_forwarding_and_owned_disposal[False-772]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_normal_forwarding_and_owned_disposal[False-None]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_normal_forwarding_and_owned_disposal[True-771]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_normal_forwarding_and_owned_disposal[True-772]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_normal_forwarding_and_owned_disposal[True-None]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_stop_interrupts_each_owned_blocking_stage[accept]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_stop_interrupts_each_owned_blocking_stage[handshake]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_stop_interrupts_each_owned_blocking_stage[relay]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_stop_interrupts_each_owned_blocking_stage[startup]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_unix_connect_failure_closes_created_socket",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_withholding_remains_stop_driven[ready]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_withholding_remains_stop_driven[reply]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_withholding_remains_stop_driven[startup]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_withholding_remains_stop_driven[tls-handshake]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_worker_reenters_select_before_final_close[771]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_worker_reenters_select_before_final_close[772]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_worker_reenters_select_before_final_close[None]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_body_only_propagates_unchanged[body0]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_body_only_propagates_unchanged[body1]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_body_worker_and_cleanup_failures_are_all_retained",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_failed_worker_wake_still_closes_owned_socket",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_malformed_input_retains_original_worker_traceback[frame-771]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_malformed_input_retains_original_worker_traceback[frame-772]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_malformed_input_retains_original_worker_traceback[frame-None]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_malformed_input_retains_original_worker_traceback[startup-771]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_malformed_input_retains_original_worker_traceback[startup-772]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_malformed_input_retains_original_worker_traceback[startup-None]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[running-EOFError]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[running-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[running-OSError]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[stop-EOFError]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[stop-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[stop-OSError]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[withheld-EOFError]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[withheld-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[withheld-OSError]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_simultaneous_wake_and_close_failures_keep_context_and_later_owners",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_stop_precedes_blocking_registration_lock",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_teardown_failure_cannot_skip_remaining_disposal[close]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_teardown_failure_cannot_skip_remaining_disposal[join]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_teardown_failure_cannot_skip_remaining_disposal[listener]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_teardown_failure_cannot_skip_remaining_disposal[wake]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
       "nodeid": "kernel/tests/test_signing_observation_wait.py::test_cancel_during_first_poll_or_success_disposes_owned_completion[1]",
       "sourceModule": "kernel.tests.test_signing_observation_wait",
       "sourcePath": "kernel/tests/test_signing_observation_wait.py"
@@ -26036,8 +26301,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "91528b572c31892567ec5b67a697100d0a6e5f26f9c70406c86c1f67355a0b7f",
-  "entryCount": 5207,
+  "entriesSha256": "e16af138fcc9978233415781eef0c69f7527529508de5ddb8588837df09b4488",
+  "entryCount": 5260,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
