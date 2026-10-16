@@ -20,14 +20,14 @@ from kernel.tenant_uow import (
     TenantUnitOfWorkManager,
     create_tenant_connection_pool,
 )
+from kernel.tests.postgresql_tenant_support import TenantTarget
+from kernel.tests.postgresql_tenant_support import tenant_target  # noqa: F401
 from kernel.tests.test_postgresql_tenant_migration import (
     ISSUER,
     CapabilityKeyAuthority,
     TenantAuthority,
-    TenantTarget,
     authority,  # noqa: F401 - imported fixture
     capability_key,  # noqa: F401 - imported fixture
-    tenant_target,  # noqa: F401 - imported fixture
 )
 from kernel.tests.test_postgresql_tenant_uow import (
     _FixtureMinter,

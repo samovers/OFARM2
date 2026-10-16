@@ -38,14 +38,14 @@ from kernel.security_audit_runtime import PreTenantAuditRuntime
 from kernel.tenant_capability_issuer import CapabilityMintError
 from kernel.tests.postgresql_audit_support import audit_service_fixture  # noqa: F401
 from kernel.tests.postgresql_audit_support import role_dsn
+from kernel.tests.postgresql_tenant_support import TenantTarget
+from kernel.tests.postgresql_tenant_support import tenant_target  # noqa: F401
 from kernel.tests.test_postgresql_tenant_migration import (
     ISSUER,
     CapabilityKeyAuthority,
     TenantAuthority,
-    TenantTarget,
     authority,  # noqa: F401
     capability_key,  # noqa: F401
-    tenant_target,  # noqa: F401
 )
 from kernel.tests.test_postgresql_tenant_uow import _FixtureMinter, _knowledge_head
 

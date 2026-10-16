@@ -10,12 +10,12 @@ import pytest
 from kernel.tenant_uow import TenantBoundaryError, TenantBoundaryOutcome
 from kernel.tests._tenant_signing_support import live_signing
 from kernel.tests.test_postgresql_tenant_capability_signing import _manager
+from kernel.tests.postgresql_tenant_support import tenant_target  # noqa: F401
 from kernel.tests.test_postgresql_tenant_migration import (
     _register_capability_key_candidate,
     _sha256_id,
     authority,  # noqa: F401 - imported fixture
     capability_key,  # noqa: F401 - imported fixture
-    tenant_target,  # noqa: F401 - imported fixture
 )
 from kernel.tests.test_postgresql_tenant_uow import _principal
 

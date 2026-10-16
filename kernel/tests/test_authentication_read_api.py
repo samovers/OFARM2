@@ -21,9 +21,10 @@ from kernel.principal_control import (
     PrincipalTransitionKind,
 )
 from kernel.principal_resolver import PrincipalBindingResolver
+from kernel.tests import postgresql_tenant_support as runtime
 from kernel.tests import test_postgresql_tenant_migration as baseline
 
-tenant_target = baseline.tenant_target
+tenant_target = runtime.tenant_target
 authority = baseline.authority
 capability_key = baseline.capability_key
 
