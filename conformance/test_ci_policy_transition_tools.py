@@ -263,6 +263,7 @@ def test_real_supervisor_first_refusal_stays_terminal_after_restart(status):
             tools.assert_supervisor(environment, "conformance")
         budget = tools.RequestBudget("conformance", path=control / "ledger.json")
         assert budget.used == {"shared-tools": [1, 0]}
+        assert budget.quota["REST"]["remaining"] == 999
         with pytest.raises(tools.TransitionError):
             budget.assert_healthy()
         with pytest.raises(tools.TransitionError):
@@ -463,7 +464,7 @@ def test_supervisor_lifetime_matches_guard_and_binding_jobs():
     assert tools.JOB_LIFETIMES["source-guard"] == 135 * 60
     assert tools.JOB_LIFETIMES["source-gate"] == 5 * 60
     assert tools.JOB_LIFETIMES["publisher-gate"] == 5 * 60
-    assert tools.JOB_LIFETIMES["source-admission"] == 5 * 60
+    assert tools.JOB_LIFETIMES["source-admission"] == 10 * 60
 
 
 def test_start_output_failure_reaps_daemon_and_cleanup_handles_fresh_assets(
@@ -522,3 +523,77 @@ def test_frozen_factory_loads_only_selected_trusted_native_policy():
     supervisor.config = {"rootSha": "0" * 40}
     with pytest.raises(tools.TransitionError, match="wrong trusted"):
         supervisor._policy(str(root))
+
+
+@pytest.mark.parametrize("status,late", [(403, False), (429, False), (200, True)])
+def test_owned_graphql_settles_known_upper_bound_after_throttle_or_other_failure(status, late):
+    with _running_supervisor() as (control, config, _environment):
+        supervisor = tools.Supervisor(control, config)
+        reset = int(time.time()) + 3600
+        supervisor.budget.observe_quota("GraphQL", remaining=980, reset=reset, limit=1000)
+        process = str(uuid.uuid4())
+        request = process + ":1"
+        def send(sequence, operation, **fields):
+            return supervisor.accept(_frame(config, process, sequence, operation, **fields), trusted_kind="gh")
+        assert send(0, "open", kind="gh", pid=os.getpid(), ppid=os.getppid())["accepted"]
+        assert send(1, "begin", requestId=request, method="POST", host="api.github.com", path="/graphql", bucket="GraphQL")["accepted"]
+        if late:
+            supervisor.budget.fail("another already-started request failed")
+        reply = send(2, "response", requestId=request, status=status,
+            quota={"bucket":"GraphQL", "remaining":979, "used":21, "reset":reset, "limit":1000})
+        assert reply["accepted"] is False
+        assert supervisor.budget.used == {"shared-tools":[0,21]}
+        assert supervisor.budget.quota["GraphQL"]["remaining"] == 979
+        bound = next(item for item in supervisor.budget.trace if item.get("costMode") == "absolute-used-upper-bound")
+        assert bound["actualCost"] is None and bound["chargedBound"] == 21
+        assert send(3, "end", requestId=request, bytes=17, complete=True)["accepted"] is False
+        assert supervisor.budget._snapshot("transport")["bytes"] == 17
+        with pytest.raises(tools.TransitionError):
+            supervisor.budget.charge("GraphQL", 1, "new dispatch")
+
+
+def test_unknown_graphql_cost_is_explicit_after_failure():
+    supervisor = tools.Supervisor.__new__(tools.Supervisor)
+    supervisor.budget = tools.RequestBudget("conformance")
+    supervisor.budget.current_pool = "shared-tools"
+    supervisor.budget.charge("GraphQL", 1, "reservation before dispatch")
+    supervisor.budget.fail("fictional transport failure")
+    with pytest.raises(tools.TransitionError):
+        supervisor._observe_primary("GraphQL", None)
+    assert supervisor.budget.used == {"shared-tools":[0,1]}
+    assert supervisor.budget.trace[-1] == {"bucket":"GraphQL", "costMode":"unknown", "actualCost":None, "chargedBound":None}
+
+
+def test_every_generated_job_lifetime_matches_its_supervisor():
+    import re
+    def generated_timeouts(name):
+        document = (ROOT.parent / ".github/workflows" / name).read_text().split("\njobs:\n", 1)[1]
+        jobs = {}
+        for match in re.finditer(r"^  ([a-z][a-z0-9-]*):\n(.*?)(?=^  [a-z][a-z0-9-]*:|\Z)", document, re.M | re.S):
+            timeouts = re.findall(r"^    timeout-minutes: ([1-9][0-9]*)$", match[2], re.M)
+            assert len(timeouts) == 1
+            jobs[match[1]] = int(timeouts[0])
+        return jobs
+    source = generated_timeouts("ci-policy-transition-source.yml")
+    publication = generated_timeouts("ci-policy-transition-publication.yml")
+    pairs = [(source, "baseline-admission", "source-gate"), (source, "conformance", "conformance"),
+        (source, "native-verifier", "native-amd64"), (source, "native-verifier", "native-arm64"),
+        (source, "source-guard", "source-guard"), (source, "publication-handoff", "handoff"),
+        (publication, "publisher-binding", "publisher-gate"), (publication, "source-admission", "source-admission"),
+        (publication, "publish", "publish"), (publication, "publisher-guard", "publisher-guard"),
+        (publication, "publication-seal", "seal")]
+    assert {owner for _, _, owner in pairs} == set(tools.JOB_LIFETIMES) - {"external-acceptance"}
+    for jobs, job, owner in pairs:
+        assert tools.JOB_LIFETIMES[owner] == jobs[job] * 60
+
+
+def test_source_admission_control_stays_alive_after_five_minutes(monkeypatch):
+    with _running_supervisor("source-admission") as (control, config, _environment):
+        supervisor = tools.Supervisor(control, config)
+        started = supervisor.started
+        monkeypatch.setattr(tools.time, "monotonic", lambda: started + 360)
+        supervisor._custody()
+        supervisor.budget.assert_healthy()
+        monkeypatch.setattr(tools.time, "monotonic", lambda: started + 601)
+        with pytest.raises(tools.TransitionError, match="lifetime"):
+            supervisor._custody()

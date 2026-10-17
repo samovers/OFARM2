@@ -385,15 +385,21 @@ class ApiReader:
             "X-GitHub-Api-Version": ordinary.GITHUB_API_VERSION,
         })
 
-    def _drain(self, response, label, request_id):
+    def _drain(self, response, label, request_id, *, capture=False):
         # Failure is already latched before draining an error. This can only
         # finish an existing request; it never permits another dispatch.
+        payload = bytearray() if capture else None
         with _BoundedResponse(response, self.budget, label, 16_777_216,
                               request_id, completion=True) as observed:
-            while observed.read(65536):
-                pass
+            while chunk := observed.read(65536):
+                if payload is not None:
+                    if len(payload) + len(chunk) > 4_000_000:
+                        payload = None
+                    else:
+                        payload.extend(chunk)
+        return None if payload is None else bytes(payload)
 
-    def _open(self, request, timeout, *, artifact=False, absence=False):
+    def _open(self, request, timeout, *, artifact=False, absence=False, completion=False):
         url = urllib.parse.urlsplit(request.full_url)
         if url.scheme != "https" or url.username or url.password or url.fragment or url.port not in (None, 443):
             raise TransitionError("unsafe response URL")
@@ -410,6 +416,8 @@ class ApiReader:
         if api:
             self.budget.charge("GraphQL" if graphql else "REST", 1, label)
         self.budget.charge_transport(label, requests=1, bytes=len(request.data or b""))
+        if graphql:
+            request._transition_graphql_settlement = "pending"
         try:
             response = self._opener(request, timeout=self.budget.remaining_timeout(timeout))
         except urllib.error.HTTPError as exc:
@@ -421,7 +429,9 @@ class ApiReader:
                 if api and not graphql:
                     self._quota_headers(exc.headers, "REST", completion=not permitted)
             finally:
-                self._drain(exc, label, request_id)
+                payload = self._drain(exc, label, request_id, capture=graphql)
+                if graphql and payload is not None:
+                    self._settle_graphql_document(_object(decode_json(payload), "GraphQL response"), request)
             if permitted:
                 if exc.code == 404:
                     raise
@@ -433,7 +443,9 @@ class ApiReader:
             raise TransitionError("authoritative read unavailable") from exc
         if getattr(response, "status", None) not in (200, 202):
             self.budget.fail("unexpected HTTP response status")
-            self._drain(response, label, request_id)
+            payload = self._drain(response, label, request_id, capture=graphql)
+            if graphql and payload is not None:
+                self._settle_graphql_document(_object(decode_json(payload), "GraphQL response"), request)
             raise TransitionError("unexpected HTTP response status")
         if api and not graphql:
             try:
@@ -446,7 +458,8 @@ class ApiReader:
             self._drain(response, label, request_id)
             raise TransitionError("transport followed an unobserved redirect")
         return _BoundedResponse(response, self.budget, label,
-                                1_650_000_000 if artifact else 16_777_216, request_id)
+                                1_650_000_000 if artifact else 16_777_216, request_id,
+                                completion=completion)
 
     def response(self, request, timeout=20):
         """Accounted no-redirect opener for unchanged authenticated source reads."""
@@ -489,13 +502,14 @@ class ApiReader:
             self.budget.fail("provider quota unavailable")
             raise TransitionError("provider quota unavailable") from exc
 
-    def _json(self, request):
+    def _json(self, request, *, completion=False):
         try:
-            with self.response(request) as response:
+            with self._open(request, 20, completion=completion) as response:
                 if response.status != 200:
                     raise TransitionError("unexpected API response status")
                 payload = response.read(4_000_001)
-            self.budget.remaining_timeout()
+            if not completion:
+                self.budget.remaining_timeout()
             if len(payload) > 4_000_000:
                 raise TransitionError("API response exceeds bounded page")
             return decode_json(payload)
@@ -506,17 +520,40 @@ class ApiReader:
     def __call__(self, path):
         return self._json(self._request(path))
 
-    def graphql(self, query, variables):
-        response = _object(self._json(self._request("/graphql", data=canonical_json({"query": query, "variables": variables}), method="POST")), "GraphQL response")
-        if response.get("errors") is not None:
-            self.budget.fail("GraphQL required facts unavailable")
-            raise TransitionError("GraphQL required facts unavailable")
+    def _settle_graphql_document(self, response, request):
+        if getattr(request, "_transition_graphql_settlement", None) != "pending":
+            raise TransitionError("GraphQL settlement is not pending")
         data = _object(response.get("data"), "GraphQL data")
         quota = _object(data.get("rateLimit"), "GraphQL quota")
         cost = _integer(quota.get("cost"), "GraphQL cost")
-        self.budget.charge("GraphQL", cost-1, "actual GraphQL points")
-        self.budget.observe_quota("GraphQL", remaining=quota.get("remaining"), reset=int(timestamp(quota.get("resetAt")).timestamp()), limit=quota.get("limit"))
+        # A returned cost is independent of GraphQL errors or another failed
+        # request. Record it before validating the remaining quota facts.
+        request._transition_graphql_settlement = "known"
+        try:
+            self.budget.charge("GraphQL", cost-1, "actual GraphQL points", completion=True)
+        finally:
+            with self.budget._transaction() as state:
+                self.budget._trace(state, {"bucket": "GraphQL", "costMode": "actual",
+                    "actualCost": cost, "chargedBound": cost})
+        self.budget.observe_quota("GraphQL", remaining=quota.get("remaining"),
+            reset=int(timestamp(quota.get("resetAt")).timestamp()), limit=quota.get("limit"), completion=True)
         return data
+
+    def graphql(self, query, variables):
+        request = self._request("/graphql", data=canonical_json({"query": query, "variables": variables}), method="POST")
+        try:
+            response = _object(self._json(request, completion=True), "GraphQL response")
+            if response.get("errors") is not None:
+                self.budget.fail("GraphQL required facts unavailable")
+            data = self._settle_graphql_document(response, request)
+            self.budget.assert_healthy()
+            return data
+        except Exception:
+            if getattr(request, "_transition_graphql_settlement", None) == "pending":
+                request._transition_graphql_settlement = "unknown"
+                self.budget.record_unknown_graphql_cost()
+            self.budget.fail("GraphQL required facts unavailable")
+            raise
 
     def absent_ref(self, path):
         try:

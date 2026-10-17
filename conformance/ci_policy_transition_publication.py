@@ -468,6 +468,48 @@ def acceptance_tuple(live: Json, source_artifacts: list[Json], receipt: Json) ->
         "receiptArtifactId": receipt["artifactId"], "receiptDigest": receipt["digest"]}
 
 
+def _require_selected_execution(checkout: Path, closure: Json) -> None:
+    """Bind the running verifier and its validators to the selected checkout."""
+    from conformance import ci_policy_transition as transition
+    from conformance import ci_policy_transition_operator as operator
+    from conformance import ci_policy_transition_workflows as workflows
+
+    selected = checkout.resolve()
+    _require(Path(__file__).resolve() == selected / "conformance/ci_policy_transition_publication.py",
+             "external verifier must execute from the selected policy checkout")
+    modules = {
+        "conformance/ci_policy_transition_publication.py": __file__,
+        "conformance/ci_policy_transition.py": transition.__file__,
+        "conformance/ci_policy_transition_operator.py": operator.__file__,
+        "conformance/ci_policy_transition_workflows.py": workflows.__file__,
+        "conformance/ci_policy_transition_tools.py": transition.tool_policy.__file__,
+        "conformance/ci_policy_transition_coverage.py": coverage.__file__,
+        "conformance/evidence_publication_policy.py": evidence.__file__,
+        "conformance/review_baseline_admission.py": ordinary.__file__,
+    }
+    for relative, source in modules.items():
+        _require(Path(source).resolve() == selected / relative,
+                 "executing authority module is outside the selected policy checkout")
+    # The unchanged evidence owner loads these validators lazily. Authenticate
+    # the real module objects it will use, including any existing import cache.
+    review = evidence._review_policy_module()
+    native = evidence._native_policy_module()
+    identity = sys.modules[native.load_native_release_identity.__module__]
+    modules.update({
+        "conformance/run_review_baseline.py": review.__file__,
+        "deployment/postgresql/native_evidence.py": native.__file__,
+        "deployment/postgresql/native_release_identity.py": identity.__file__,
+    })
+    for relative, source in modules.items():
+        path = Path(source).resolve()
+        _require(path == selected / relative,
+                 "executing authority module is outside the selected policy checkout")
+        entry = closure.get("files", {}).get(relative, {})
+        _require(stat.S_ISREG(path.stat(follow_symlinks=False).st_mode) and
+                 transition.digest(path.read_bytes()) == entry.get("sha256"),
+                 "executing authority module bytes differ from the selected closure")
+
+
 def verify_for_acceptance(*, policy: Json, grant: Json, reader: Any,
                           checkout: Path, closure: Json, expected_root: str,
                           expected_closure: str, authority_projection: Json,
@@ -494,6 +536,7 @@ def _verify_for_acceptance(*, policy: Json, grant: Json, reader: Any,
     from conformance import ci_policy_transition as transition
     from conformance import ci_policy_transition_operator as operator
 
+    _require_selected_execution(checkout, closure)
     _require(expected_root == grant["rootSha"] and expected_closure == grant["closureDigest"],
              "external root and closure do not match the separately supplied grant")
     _require(policy == evidence._read_json_object(checkout / transition.ROOT_FILE, "selected root policy"),
@@ -563,6 +606,7 @@ def _verify_for_acceptance(*, policy: Json, grant: Json, reader: Any,
         repository=grant["repository"], merge_sha=live["mergeSha"],
         source_run_id=live["source"]["runId"], policy_root=checkout)
     # Bytes, original authority, closure and all live facts stay decisive at use.
+    _require_selected_execution(checkout, closure)
     operator.verify_policy_closure(checkout, closure, expected_root,
                                    grant["baseSha"], expected_closure, expected_tree=grant["rootTree"])
     transition.authenticate_policy_checkout(checkout, policy, grant)
@@ -736,6 +780,10 @@ def main(argv: list[str] | None = None) -> int:
                     source_run_id=args.source_run_id, source_run_attempt=args.source_run_attempt,
                     source_response_factory=reader.response)
         else:
+            closure = None
+            if args.operation == "verify-for-acceptance":
+                closure = evidence._read_json_object(args.closure, "external closure")
+                _require_selected_execution(args.policy_root, closure)
             _require(args.journal is not None and args.checkpoint is not None and args.journal_genesis is not None,
                      "independent journal coordinates are required")
             with operator.TransitionJournal(args.journal, args.checkpoint, args.journal_genesis,
@@ -751,7 +799,7 @@ def main(argv: list[str] | None = None) -> int:
                         token=os.environ.get("OFARM_ADMISSION_TOKEN", ""), budget_path=args.budget_path)
                     report = verify_for_acceptance(policy=policy, grant=grant, reader=reader,
                         checkout=args.policy_root,
-                        closure=evidence._read_json_object(args.closure, "external closure"),
+                        closure=closure,
                         expected_root=args.expected_root, expected_closure=args.expected_closure,
                         authority_projection=evidence._read_json_object(args.authority_projection, "original authority"),
                         journal=journal, output=args.output_directory)

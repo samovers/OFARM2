@@ -702,3 +702,49 @@ def test_coverage_is_fixed_by_selected_code_and_cannot_be_widened_by_inputs():
         with pytest.raises(transition.TransitionError, match="coverage"):
             transition.validate_grant(candidate_policy, candidate_grant)
     assert "universal-first-403-or-429-refusal" in transition.coverage.declaration()["notEstablished"]
+
+
+@pytest.mark.parametrize("kind", ["graphql-errors", "late", "http-403", "http-429", "bad-quota"])
+def test_failed_graphql_settles_reported_cost_before_refusing(kind):
+    provider = Provider()
+    budget = transition.RequestBudget("source-gate", clock=lambda: provider.now.timestamp())
+    calls = []
+    quota = {"cost":3, "limit":1000, "remaining":997, "resetAt":datetime.fromtimestamp(provider.reset, timezone.utc).isoformat().replace("+00:00", "Z")}
+    document = {"data":{"rateLimit":quota}}
+    if kind == "bad-quota":
+        quota["remaining"] = 1001
+    if kind == "graphql-errors":
+        document["errors"] = [{"message":"fictional sensitive resolver failure"}]
+    payload = transition.canonical_json(document)
+    def opener(request, timeout):
+        calls.append(request)
+        headers = {"Content-Length":str(len(payload))}
+        if kind == "late":
+            budget.fail("another request failed while this one was in flight")
+        if kind.startswith("http-"):
+            raise urllib.error.HTTPError(request.full_url, int(kind[5:]), "fictional", headers, io.BytesIO(payload))
+        return Response(request.full_url, payload, headers)
+    reader = transition.ApiReader("fictional-token", budget=budget, opener=opener)
+    for _ in range(2):
+        with pytest.raises(transition.TransitionError):
+            reader.graphql("fixture", {})
+    assert len(calls) == 1
+    assert budget.used == {"source-gate":[0,3]}
+    if kind == "bad-quota":
+        assert "GraphQL" not in budget.quota
+    else:
+        assert budget.quota["GraphQL"]["remaining"] == 997
+    assert any(item.get("actualCost") == 3 and item.get("chargedBound") == 3 for item in budget.trace)
+    assert "fictional sensitive" not in json.dumps(budget.trace)
+
+
+def test_graphql_failure_without_cost_keeps_uncertainty_explicit():
+    provider = Provider()
+    budget = transition.RequestBudget("source-gate", clock=lambda: provider.now.timestamp())
+    payload = transition.canonical_json({"errors":[{"message":"fictional"}], "data":None})
+    reader = transition.ApiReader("fictional-token", budget=budget,
+        opener=lambda request, timeout: Response(request.full_url, payload, {}))
+    with pytest.raises(transition.TransitionError):
+        reader.graphql("fixture", {})
+    assert budget.used == {"source-gate":[0,1]}
+    assert budget.trace[-1] == {"bucket":"GraphQL", "costMode":"unknown", "actualCost":None, "chargedBound":None}

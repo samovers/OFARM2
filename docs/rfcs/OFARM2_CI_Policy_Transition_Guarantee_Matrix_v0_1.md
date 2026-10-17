@@ -70,9 +70,20 @@ remain fixtures. Existing substantive validation code runs unchanged.
 | G01–G10, G21 | `ci_policy_transition.py`, `ci_policy_transition_operator.py` | Core and operator tests cover original exact approval, actor/root/closure selection, one-use binding, journal intent/reconciliation, torn writes and rollback, mutable or revoked authority, guarded cancellation and typed output. |
 | G11, G25 coverage | `ci_policy_transition_coverage.py`, `ci_policy_transition_workflows.py` | Coverage cannot be widened by input or receipt. Exact canonical/generated workflow parity checks every allowed rewrite, all five bootstrap asset hashes, lifecycle entry/post steps, job isolation and retained command ordering. |
 | G12–G20 | `ci_policy_transition_publication.py` | Publication tests reconstruct complete baseline/platform/native fixtures through the original validators, detect targeted source/artifact substitutions, preserve ordinary-main receipt behavior and refuse provider exceptions without printing their context. |
-| G21, G23–G24 | Operator and external publication verifier | Acceptance test creates a real isolated selected Git root and durable journal, executes the generated policy sequence, verifies the complete receipt, consumes the exact tuple, retires it and audits the archived roots. Low headroom, forged coverage, generic approval and mismatched journal receipt each reach their intended refusal. |
+| G21, G23–G24 | Operator and external publication verifier | Acceptance test creates a real isolated selected Git root and durable journal, loads that root's actual authority modules, executes the generated policy sequence, verifies the complete receipt, consumes the exact tuple, retires it and audits the archived roots. A verifier from another checkout, foreign cached validator or changed executing source refuses before provider work. Low headroom, forged coverage, generic approval and mismatched journal receipt each reach their intended refusal. |
 | G09, G25 schedule | `test_ci_policy_transition_integration.py` | Complete source60/handoff10/publication45 sequence, reset positions, long guards and every inclusive hour-boundary placement retain fresh checks, a single120-second grid and at most31 sweeps. Exact135/60-minute guard ceilings refuse even when the provider completes at the ceiling. |
 | G25 protected tools | `ci_policy_transition_tools.py`, `ci_policy_transition_execution.py`, Node/Git hooks, curl observer and gh relay | Real supervisor startup/drain/cleanup, failed and late completion accounting, missing/changed configuration, route/identity/body failures, first403/429, unknown GraphQL cost, quota/pagination overruns and fixed pool conservation. External acceptance uses the same56/10 share, not a new450/200 allowance. |
+
+The [first exact-head implementation review](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5558535455)
+identified three in-scope defects. The verifier now binds its executing modules
+and imported validators to selected T, including their closure bytes. The
+source-admission supervisor now retains the full600-second job lifetime.
+GraphQL error, throttle and late-response paths settle independently known
+costs or conservative bounds for existing requests while terminal failure
+continues to prevent new dispatch and authority. Unavailable cost remains
+explicit uncertainty. Focused controls cover these cases; the complete positive
+acceptance fixture executes actual selected-T modules without mocking the new
+binding check. These corrections preserve the approved boundary and ceilings.
 
 The complete local policy and external-verifier path was composed with actual
 pinned Action entry/post observations, all four actual curl commands and the
@@ -84,7 +95,7 @@ stderr. It made56 gh requests:17 REST,1 GraphQL,33 TUF and5 blob. The former
 and two peeled-commit reads and is not the full-native result.
 
 The conformance owning-supervisor composition accounts73 protected requests,
-332,269,040 bytes and19 REST/21 conservatively charged points inside20/40.
+332,269,027 bytes and19 REST/21 conservatively charged points inside20/40.
 The query does not return its actual point cost. The21 is an explicitly proven
 same-bucket/window absolute-used upper bound, not a header-difference estimate
 or an invented cost of one. Publication spends6/0 of its8/8 shared-tool share.
@@ -94,7 +105,7 @@ Its54 periodic sweeps across the complete schedule spend640 REST/54 points;
 these are lifetime totals, not a single-hour charge. Each sweep fits15/5, and
 the maximum31 sweeps in an inclusive hour preserves the990/430 protected
 planning envelope including75/75 margin. Separately tracked protected
-transports total1,188 requests and340,303,891 bytes; primary-quota requests are
+transports total1,188 requests and339,980,999 bytes; primary-quota requests are
 a subset of that count.
 
 These measurements have explicit limits. The44 actual pinned Action main/post
@@ -112,7 +123,7 @@ remain unknown, not zero or proven inside the margin. Local observations do
 not establish future workflow-token headroom or reserve quota.
 
 The full-native composition report has SHA-256
-`c7781ebf76fce31a0511ac0d45b70e4b920a01b4e68642aa27991f3c1330c6ea`.
+`53eba5ac2397f9b61c4041faad3e87e3471df63cd5aeebf43b3c23194f4a3e35`.
 The review record retains the local measurement index, source hashes and
 commands. Exact-head independent implementation review remains a separate
 gate; all hosted provenance, substantive jobs and final acceptance obligations
