@@ -72,6 +72,7 @@ remain fixtures. Existing substantive validation code runs unchanged.
 | G12–G20 | `ci_policy_transition_publication.py` | Publication tests reconstruct complete baseline/platform/native fixtures through the original validators, detect targeted source/artifact substitutions, preserve ordinary-main receipt behavior and refuse provider exceptions without printing their context. |
 | G21, G23–G24 | Operator and external publication verifier | Acceptance test creates a real isolated selected Git root and durable journal, loads that root's actual authority modules, executes the generated policy sequence, verifies the complete receipt, consumes the exact tuple, retires it and audits the archived roots. A verifier from another checkout, foreign cached validator or changed executing source refuses before provider work. Low headroom, forged coverage, generic approval and mismatched journal receipt each reach their intended refusal. |
 | G09, G25 schedule | `test_ci_policy_transition_integration.py` | Complete source60/handoff10/publication45 sequence, reset positions, long guards and every inclusive hour-boundary placement retain fresh checks, a single120-second grid and at most31 sweeps. Exact135/60-minute guard ceilings refuse even when the provider completes at the ceiling. |
+| G25 remaining headroom | Core and integration controls | Replay measured conformance19 REST/21 conservative points and native2 REST each through their owning shared-tool ledgers into the same provider quota as policy calls. Complete positive chains include window ages1,60,120 seconds. An exact-boundary completed periodic sweep is not forecast twice; initial, unproven, foreign and future ticks cannot earn that exclusion. Tool-share overruns and insufficient fresh headroom still refuse. |
 | G25 protected tools | `ci_policy_transition_tools.py`, `ci_policy_transition_execution.py`, Node/Git hooks, curl observer and gh relay | Real supervisor startup/drain/cleanup, failed and late completion accounting, missing/changed configuration, route/identity/body failures, first403/429, unknown GraphQL cost, quota/pagination overruns and fixed pool conservation. External acceptance uses the same56/10 share, not a new450/200 allowance. |
 
 The [first exact-head implementation review](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5558535455)
@@ -91,6 +92,25 @@ case across quota reset. Structural same-window validation now retains the
 historical point bound before the separate fresh-headroom check refuses the
 expired observation. Production begin/response controls for200/403/429 retain
 the21-point bound and completion bytes while refusing headroom and new dispatch.
+
+The [B4 review](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5559141060)
+exposed missing concurrent tool traffic in the pipeline fixture. The unchanged
+core refused the measured19-request conformance traffic at the first periodic
+source sweep in a fresh window. The new fixture also includes the two measured
+REST calls from each native job before the guard starts. All23 requests and the
+21-point conservative bound now lower the shared provider quota during the
+pipeline, rather than only appearing in a later aggregate report.
+
+The correction excludes only the periodic sweep this isolated guard has just
+completed from its future schedule. At an exact tick the old formula counted
+that already charged sweep again; once time advanced fractionally it did not.
+The guard supplies completion only after full live and producer-state checks,
+bound to its own current periodic pool. Full allowances for active siblings
+remain conservative because their remaining spend is unknown. An earlier gate
+does not reserve capacity and provider-counter differences do not attribute
+spend. This preserves version4's current remaining-plan check, fixed ceilings
+and75/75 margin; some within-ceiling schedules can still refuse conservatively.
+The measured complete positive path passes without removing those safeguards.
 
 The complete local policy and external-verifier path was composed with actual
 pinned Action entry/post observations, all four actual curl commands and the
@@ -112,7 +132,7 @@ Its54 periodic sweeps across the complete schedule spend640 REST/54 points;
 these are lifetime totals, not a single-hour charge. Each sweep fits15/5, and
 the maximum31 sweeps in an inclusive hour preserves the990/430 protected
 planning envelope including75/75 margin. Separately tracked protected
-transports total1,188 requests and339,980,979 bytes; primary-quota requests are
+transports total1,188 requests and339,980,958 bytes; primary-quota requests are
 a subset of that count.
 
 These measurements have explicit limits. The44 actual pinned Action main/post

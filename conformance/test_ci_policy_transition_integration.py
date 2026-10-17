@@ -2,16 +2,19 @@
 
 Complete fictional artifact bytes reach the unchanged substantive validators.
 The generated command sequence drives the real transition core/publication paths;
-there are no substituted validator results. The virtual clock measures policy API
-costs over actual guard schedules, not elapsed baseline execution performance.
+there are no substituted validator results. Recorded tool primary costs are
+replayed through the real reader and owning ledger into the same provider quota
+window. Tool internals/bytes remain separate controls; this is not a hosted
+execution or a measurement of baseline elapsed time.
 """
 from __future__ import annotations
 
 import argparse
 from bisect import bisect_left, bisect_right
 import copy
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import io
+import json
 from pathlib import Path
 import re
 import urllib.error
@@ -25,6 +28,20 @@ from conformance import ci_policy_transition_publication as publication
 from conformance import ci_policy_transition_workflows as workflows
 from conformance import test_ci_policy_transition as core_fixture
 from conformance import test_ci_policy_transition_publication as artifact_fixture
+
+
+# Additional primary traffic from the measured pinned Action/gh/curl controls.
+# Conformance: 17 gh REST + 2 Action REST, and one gh GraphQL request charged
+# conservatively at 21 points (its actual cost was not reported). Native jobs:
+# two Action REST each. Other jobs' tools measured zero *additional primary*
+# calls; their ticket/artifact downloads already execute below. This is not a
+# claim that non-primary transport or provider/dependency traffic is zero.
+# Evidence: full-native-reset-window-final.json SHA256
+# 16b45bfb8cbd30868e9715c7d90fae125c5bf478654903399f1702dcf21a58b2;
+# final-production-node-owning-jobs-index-04.json SHA256
+# 8728e135476ac7b0ef9d9eb6d3912190c24c3995d036c4255a106fe1bb32502e.
+MEASURED_TOOL_PRIMARY = {"conformance": (19, 21), "native-amd64": (2, 0), "native-arm64": (2, 0)}
+TOOL_QUERY = "query FixtureToolCost { rateLimit { cost limit remaining resetAt } }"
 
 
 class PipelineProvider(core_fixture.Provider):
@@ -55,6 +72,8 @@ class PipelineProvider(core_fixture.Provider):
         self.window_index = 0
         self.window_rest_start = 0
         self.window_graph_start = 0
+        self.tool_replays = {}
+        self.tool_replay_transports = {}
 
     def restart_observations(self, *, offset=0):
         self.calls, self.rest, self.points, self.observations, self.readers = [], 0, 0, [], {}
@@ -65,6 +84,8 @@ class PipelineProvider(core_fixture.Provider):
         self.window_rest_start = self.window_graph_start = 0
         self.rest_remaining = self.graph_remaining = 1000
         self.reset = int(self.origin.timestamp()) + (3600-offset)
+        self.tool_replays = {}
+        self.tool_replay_transports = {}
 
     def _window(self):
         while self.now.timestamp() >= self.reset:
@@ -122,7 +143,15 @@ class PipelineProvider(core_fixture.Provider):
             assert request.get_header("Authorization") is None
             return core_fixture.Response(request.full_url, self.payloads[int(path.rsplit("/", 1)[1])], {})
         extra = None
-        if self.source_graph is not None and request.full_url in self.source_graph.documents:
+        if path.startswith("/fixture-tool/"):
+            extra = {"fixture": "recorded tool primary request"}
+        elif path == "/graphql" and json.loads(request.data)["query"] == TOOL_QUERY:
+            cost = MEASURED_TOOL_PRIMARY[job][1]
+            self.points += cost
+            return core_fixture.Response(request.full_url, transition.canonical_json({"data": {"rateLimit": {
+                "cost": cost, "limit": 1000, "remaining": self.graph_remaining-self.points,
+                "resetAt": core_fixture.stamp(datetime.fromtimestamp(self.reset, timezone.utc))}}}), {})
+        elif self.source_graph is not None and request.full_url in self.source_graph.documents:
             extra = copy.deepcopy(self.source_graph.documents[request.full_url])
             if path.startswith("/git/commits/"):
                 extra["parents"] = [{"sha": self.grant["baseSha"]}, {"sha": self.grant["headSha"]}]
@@ -149,6 +178,22 @@ class PipelineProvider(core_fixture.Provider):
     def _headers(self):
         return {"X-RateLimit-Remaining": str(self.rest_remaining-self.rest),
             "X-RateLimit-Reset": str(self.reset), "X-RateLimit-Limit": "1000"}
+
+    def replay_tools(self, phase):
+        """Charge recorded primary costs once, before sibling guard observations."""
+        job = transition.PHASE_JOBS[phase]
+        assert job not in self.tool_replays
+        counts = MEASURED_TOOL_PRIMARY.get(job, (0, 0))
+        reader = self.reader(phase)
+        before = reader.budget._snapshot("transport")
+        with reader.pool("shared-tools"):
+            for number in range(counts[0]):
+                reader(f"/repos/{self.grant['repository']}/fixture-tool/{job}/{number}")
+            if counts[1]:
+                reader.graphql(TOOL_QUERY, {})
+        self.tool_replays[job] = list(counts)
+        after = reader.budget._snapshot("transport")
+        self.tool_replay_transports[job] = {key: after[key]-before[key] for key in before}
 
     def sleep(self, seconds):
         self.now += timedelta(seconds=seconds)
@@ -269,13 +314,16 @@ def run_pipeline(directory, *, offset=0, source_seconds=3600, publish_seconds=27
     operations = generated_operations()
     for op, phase in operations["baseline-admission"]:
         operation(provider, directory, op, phase, chain)
+    provider.replay_tools("source-gate")
     for job in ("conformance", "native-verifier"):
         for op, phase in operations[job]:
             if "matrix.architecture" in phase:
                 for architecture in ("amd64", "arm64"):
                     operation(provider, directory, op, "native-"+architecture, chain)
+                    provider.replay_tools("native-"+architecture)
             else:
                 operation(provider, directory, op, phase, chain)
+                provider.replay_tools(phase)
     for op, phase in operations["source-guard"]:
         operation(provider, directory, op, phase, chain, guard_seconds=source_seconds)
     for op, phase in operations["publication-handoff"]:
@@ -360,11 +408,40 @@ def test_generated_policy_pipeline_reaches_real_validators_and_records_every_api
     assert (tmp_path / "actual-receipt.json").is_file()
 
 
-@pytest.mark.parametrize("offset", [1, 119, 120, 1799, 3599])
+@pytest.mark.parametrize("offset", [1, 60, 119, 120, 1799, 3599])
 def test_generated_policy_positive_preserves_quota_across_reset_positions(tmp_path, offset):
     provider, _chain, _operations = run_pipeline(tmp_path, offset=offset)
     assert provider.window_index >= 1
+    assert {job: provider.readers[job].budget.used["shared-tools"] for job in MEASURED_TOOL_PRIMARY} == {
+        job: list(counts) for job, counts in MEASURED_TOOL_PRIMARY.items()}
+    assert sum(row["path"].startswith("/fixture-tool/") for row in provider.observations) == 23
     assert all(reader.budget.quota["REST"]["remaining"] >= 0 for reader in provider.readers.values())
+
+
+@pytest.mark.parametrize("counts", [(21, 21), (19, 41)])
+def test_replayed_tool_traffic_cannot_exceed_its_owning_share(tmp_path, counts):
+    provider = PipelineProvider()
+    with mock.patch.dict(MEASURED_TOOL_PRIMARY, {"conformance": counts}):
+        with pytest.raises(transition.TransitionError, match="owned request allowance"):
+            run_pipeline(tmp_path, offset=1, provider=provider)
+    with pytest.raises(transition.TransitionError):
+        provider.readers["conformance"].budget.assert_healthy()
+    assert not (tmp_path / "actual-ticket.json").exists()
+    assert not (tmp_path / "actual-receipt.json").exists()
+
+
+def test_completed_tick_does_not_credit_ambient_consumption_or_active_sibling_allowances(tmp_path):
+    class AmbientProvider(PipelineProvider):
+        def sleep(self, seconds):
+            super().sleep(seconds)
+            self.rest += 100  # Another caller in the same provider window.
+    provider = AmbientProvider()
+    with pytest.raises(transition.TransitionError, match="headroom|quota"):
+        run_pipeline(tmp_path, offset=1, provider=provider)
+    assert provider.cancelled == [201]
+    assert provider.tool_replays["conformance"] == [19, 21]
+    assert not (tmp_path / "actual-ticket.json").exists()
+    assert not (tmp_path / "actual-receipt.json").exists()
 
 
 def test_long_generated_guards_share_one_grid_for_every_hour_boundary(tmp_path):

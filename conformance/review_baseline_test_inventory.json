@@ -996,6 +996,31 @@
       "sourcePath": "conformance/test_ci_policy_transition_tools.py"
     },
     {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_completed_periodic_sweep_is_not_forecast_again_at_its_exact_tick[0-publisher-guard]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_completed_periodic_sweep_is_not_forecast_again_at_its_exact_tick[0-source-guard]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_completed_periodic_sweep_is_not_forecast_again_at_its_exact_tick[0.25-publisher-guard]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_completed_periodic_sweep_is_not_forecast_again_at_its_exact_tick[0.25-source-guard]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_completed_tick_does_not_credit_ambient_consumption_or_active_sibling_allowances",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_coverage_is_fixed_by_selected_code_and_cannot_be_widened_by_inputs",
       "sourceModule": "conformance.test_ci_policy_transition",
       "sourcePath": "conformance/test_ci_policy_transition.py"
@@ -1217,6 +1242,11 @@
     },
     {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_generated_policy_positive_preserves_quota_across_reset_positions[3599]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_generated_policy_positive_preserves_quota_across_reset_positions[60]",
       "sourceModule": "conformance.test_ci_policy_transition_integration",
       "sourcePath": "conformance/test_ci_policy_transition_integration.py"
     },
@@ -1451,6 +1481,16 @@
       "sourcePath": "conformance/test_ci_policy_transition_tools.py"
     },
     {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_replayed_tool_traffic_cannot_exceed_its_owning_share[counts0]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_replayed_tool_traffic_cannot_exceed_its_owning_share[counts1]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_selected_verifier_binds_its_actual_imports_and_bytes[changed-source]",
       "sourceModule": "conformance.test_ci_policy_transition_acceptance",
       "sourcePath": "conformance/test_ci_policy_transition_acceptance.py"
@@ -1552,6 +1592,41 @@
     },
     {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unknown_job_cannot_join_the_guarded_inventory",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unproven_or_foreign_tick_cannot_reduce_remaining_headroom[foreign]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unproven_or_foreign_tick_cannot_reduce_remaining_headroom[future]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unproven_or_foreign_tick_cannot_reduce_remaining_headroom[initial]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unproven_or_foreign_tick_cannot_reduce_remaining_headroom[off-grid]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unproven_or_foreign_tick_cannot_reduce_remaining_headroom[old]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unproven_or_foreign_tick_cannot_reduce_remaining_headroom[producer]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unproven_or_foreign_tick_cannot_reduce_remaining_headroom[unspent]",
       "sourceModule": "conformance.test_ci_policy_transition",
       "sourcePath": "conformance/test_ci_policy_transition.py"
     },
@@ -27241,8 +27316,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "71ea90a419d150bf6dd0a8eb86d312e77a4ce9a51e643bc165c74df567e98c02",
-  "entryCount": 5448,
+  "entriesSha256": "b4343acc12219b1c2dee2b83a69ff05dc2af59b131de2e81f0ffac2932275908",
+  "entryCount": 5463,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

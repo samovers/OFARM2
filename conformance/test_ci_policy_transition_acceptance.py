@@ -191,7 +191,9 @@ def test_complete_selected_root_pipeline_external_acceptance_and_retired_audit(t
         (tmp_path / "measured-api.json").write_bytes(transition.canonical_json({
             "purpose": "fictional-provider real-validator measurement; no hosted authority",
             "root": f["grant"]["rootSha"], "coverageDigest": f["grant"]["coverageDigest"],
-            "jobs": measurements, "observations": f["provider"].observations}))
+            "jobs": measurements, "observations": f["provider"].observations,
+            "replayedToolPrimary": f["provider"].tool_replays,
+            "replayedToolTransport": f["provider"].tool_replay_transports}))
         f["journal"].retire({"consumerPr": 413, "headSha": f["grant"]["headSha"], "mergeCommit": "a"*40})
         roots = tmp_path / "roots"
         roots.mkdir()
