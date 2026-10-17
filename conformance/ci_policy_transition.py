@@ -629,7 +629,7 @@ query TransitionFacts($ids:[ID!]!, $owner:String!, $name:String!, $number:Int!, 
     pullRequest(number:$number) {
       number state headRefOid baseRefOid baseRefName
       timelineItems(first:100,after:$after,since:$since,itemTypes:[CLOSED_EVENT,REOPENED_EVENT,HEAD_REF_DELETED_EVENT,HEAD_REF_RESTORED_EVENT,HEAD_REF_FORCE_PUSHED_EVENT,BASE_REF_CHANGED_EVENT,BASE_REF_DELETED_EVENT,BASE_REF_FORCE_PUSHED_EVENT]) {
-        totalCount pageInfo { hasNextPage endCursor }
+        filteredCount pageInfo { hasNextPage endCursor }
         nodes {
           __typename
           ... on ClosedEvent { id createdAt }
@@ -728,7 +728,9 @@ def _graph_facts(reader, grant, comments, since, now):
             raise TransitionError("GraphQL and REST live PR facts differ")
         timeline = _object(pr.get("timelineItems"), "PR lifecycle")
         events = timeline.get("nodes")
-        total = _integer(timeline.get("totalCount"), "timeline total", 0)
+        # totalCount includes unrelated timeline history despite these filters.
+        # Only an empty, complete first page may pass; every event below revokes.
+        total = _integer(timeline.get("filteredCount"), "timeline filtered count", 0)
         if not isinstance(events, list) or len(events) > 100:
             raise TransitionError("incomplete lifecycle page")
         for event in events:
