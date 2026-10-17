@@ -1,6 +1,6 @@
 # Version-4 guarantees, explicit limits and required controls
 
-This is the implementation acceptance plan for the proposed [transition decision v4](OFARM2_CI_Policy_Transition_RFC_v0_1.md), [Delivery #416](https://github.com/samovers/OFARM2/issues/416). The rows are implementation acceptance obligations. Local tool diagnostics support feasibility only; they do not claim that this matrix or complete hosted acceptance has run. Every positive fixture must be complete enough to reach the named real validator; a negative earns credit only for the intended refusal. Synthetic admission, grant, workflow and identity fixtures must use fictional identities/data. Separately identified measurements of authenticated public dependencies retain their real public facts and provenance; they do not earn complete-G25 credit or permit fabricated signatures, secret disclosure or real personal/farm data in fixtures.
+This is the implementation acceptance plan for the approved [transition decision v4](OFARM2_CI_Policy_Transition_RFC_v0_1.md), [Delivery #416](https://github.com/samovers/OFARM2/issues/416). The rows remain implementation acceptance obligations. Local controls and tool diagnostics do not replace complete hosted acceptance. Every positive fixture must be complete enough to reach the named real validator; a negative earns credit only for the intended refusal. Synthetic admission, grant, workflow and identity fixtures must use fictional identities/data. Separately identified measurements of authenticated public dependencies retain their real public facts and provenance; they do not alone earn complete-G25 credit or permit fabricated signatures, secret disclosure or real personal/farm data in fixtures.
 
 | ID | Guarantee and owner | Reachable negative case and expected refusal |
 | --- | --- | --- |
@@ -36,7 +36,7 @@ The pool-overrun rule refuses acceptance; it does not claim that asynchronous ob
 
 ## Required version-4 coverage and exception controls
 
-The RFC's closed operation inventory is authoritative for this proposal. Protected operations are T-owned Python policy/API/source/artifact/publication/acceptance readers; pinned Node Actions and selected child Git after trusted bootstrap, including reachable post paths; the four retry-zero curl executions; and all five gh phases including API/GraphQL, TUF, signed blobs and assets. Setup-python's Node manifest/tree/blob/archive downloads stay protected. There is no dependency exception for evidence transport or native authentication.
+The RFC's closed operation inventory is authoritative for this implementation. Protected operations are T-owned Python policy/API/source/artifact/publication/acceptance readers; pinned Node Actions and selected child Git after trusted bootstrap, including reachable post paths; the four retry-zero curl executions; and the complete native command, including its five gh phases, surrounding API metadata reads, GraphQL, TUF, signed blobs and assets. Setup-python's Node manifest/tree/blob/archive downloads stay protected. There is no dependency exception for evidence transport or native authentication.
 
 The named exceptions are provider-process provisioning, runner/image/tool-cache/Action preparation and control/logging/reporting before, during and after steps; the Python archive installer and unversioned pip bootstrap plus the four canonical conformance pip installs; Docker daemon/Buildx's retained BuildKit bootstrap/local-image fallback; BuildKit's pinned frontend/base/scanner acquisition and checksum ADD inputs; and the pinned scanner's existing internal analysis. Preserve the RFC's exact commands/pins/configuration, including both architecture operations, core-only scan target and existing image/file/SBOM catalogers. No new enrichment, selector, URL, credential forwarding, retry loop or timeout is added. Arbitrary candidate/unrelated traffic is untrusted ambient activity, not an authorized dependency exception. Candidate outputs can depend on network input; the original validators, not an asserted egress sandbox, decide their acceptability.
 
@@ -49,7 +49,7 @@ The named exceptions are provider-process provisioning, runner/image/tool-cache/
 | Low/changing workflow-token headroom, hidden/background consumption, protected budget overrun or cancellation failure | Fresh required checks refuse as specified. No PAT substitution, quota reservation claim, all-traffic attribution by header subtraction, fresh per-job pool or wait-through-throttle success. |
 | Short supervisor lifetime, startup crash, late/in-flight request, failed drain or cleanup | Refuse the protected disposition and authority. Complete generated-path controls cover source guard135/publisher guard60, all original job/gate/handoff/seal limits and one fixed grant/campaign lifetime. Deadlines do not prove internal request counts or instantaneous provider cancellation. |
 
-G01–G24's substantive authority, custody, test and acceptance guarantees remain. G11 gains the fixed coverage declaration; G25 explicitly gives up universal first-throttle refusal, complete all-traffic accounting and an all-traffic990/430 ceiling. The known mutable Python version manifest and unpinned pip bootstrap remain disclosed provider/dependency reliance, without weakening their existing final checks. These changes are not approved by selecting an assessment direction.
+G01–G24's substantive authority, custody, test and acceptance guarantees remain. G11 gains the fixed coverage declaration; G25 explicitly gives up universal first-throttle refusal, complete all-traffic accounting and an all-traffic990/430 ceiling. The known mutable Python version manifest and unpinned pip bootstrap remain disclosed provider/dependency reliance, without weakening their existing final checks. The later original version-4 approval recorded in the RFC authorizes this meaning; the earlier choice of assessment direction alone did not.
 
 The focused suite must include one complete source→handoff→publisher→external-consumer positive chain using the existing substantive validator implementations, an ordinary-main positive chain to prove preservation, and a transition refusal through each real entry point. Workflow parity must compare generated output to its canonical input, not merely search for test command names. Review must inspect the allowlisted differences and the full authority/import closure.
 
@@ -57,4 +57,68 @@ Implementation needs an integration control for two gate instances competing for
 
 After exact approval/review, real hosted installation must demonstrate actual push provenance, one source and separate publisher at the same T, all substantive jobs, complete ticket/receipt and external acceptance. No mock, source inspection, local unfiltered suite or prior historical hosted result substitutes for that evidence.
 
-Next: complete focused exact-head review of this published version-4 plan with the RFC, runbook and proposed card; implementation and these acceptance controls remain later obligations after valid semantic approval. No completed matrix or hosted result is claimed.
+## Local implementation verification
+
+The implemented entry points and focused controls are below. All are collected
+through `kernel/tests/test_ci_policy_transition.py`; the reviewed baseline
+inventory adds their node IDs and source attribution without removing an
+existing test. Fictional provider responses, clocks and authority messages
+remain fixtures. Existing substantive validation code runs unchanged.
+
+| Guarantees | Owning implementation | Focused local evidence |
+| --- | --- | --- |
+| G01–G10, G21 | `ci_policy_transition.py`, `ci_policy_transition_operator.py` | Core and operator tests cover original exact approval, actor/root/closure selection, one-use binding, journal intent/reconciliation, torn writes and rollback, mutable or revoked authority, guarded cancellation and typed output. |
+| G11, G25 coverage | `ci_policy_transition_coverage.py`, `ci_policy_transition_workflows.py` | Coverage cannot be widened by input or receipt. Exact canonical/generated workflow parity checks every allowed rewrite, all five bootstrap asset hashes, lifecycle entry/post steps, job isolation and retained command ordering. |
+| G12–G20 | `ci_policy_transition_publication.py` | Publication tests reconstruct complete baseline/platform/native fixtures through the original validators, detect targeted source/artifact substitutions, preserve ordinary-main receipt behavior and refuse provider exceptions without printing their context. |
+| G21, G23–G24 | Operator and external publication verifier | Acceptance test creates a real isolated selected Git root and durable journal, executes the generated policy sequence, verifies the complete receipt, consumes the exact tuple, retires it and audits the archived roots. Low headroom, forged coverage, generic approval and mismatched journal receipt each reach their intended refusal. |
+| G09, G25 schedule | `test_ci_policy_transition_integration.py` | Complete source60/handoff10/publication45 sequence, reset positions, long guards and every inclusive hour-boundary placement retain fresh checks, a single120-second grid and at most31 sweeps. Exact135/60-minute guard ceilings refuse even when the provider completes at the ceiling. |
+| G25 protected tools | `ci_policy_transition_tools.py`, `ci_policy_transition_execution.py`, Node/Git hooks, curl observer and gh relay | Real supervisor startup/drain/cleanup, failed and late completion accounting, missing/changed configuration, route/identity/body failures, first403/429, unknown GraphQL cost, quota/pagination overruns and fixed pool conservation. External acceptance uses the same56/10 share, not a new450/200 allowance. |
+
+The complete local policy and external-verifier path was composed with actual
+pinned Action entry/post observations, all four actual curl commands and the
+complete unchanged `verify-frozen-evidence-receipt` command. The native command
+validated genuine signed release bytes, current source/authority inputs and OCI
+archives, returning the exact frozen provider verification digest with empty
+stderr. It made56 gh requests:17 REST,1 GraphQL,33 TUF and5 blob. The former
+51-request five-phase probe omitted repository identity, two release metadata
+and two peeled-commit reads and is not the full-native result.
+
+The conformance owning-supervisor composition accounts73 protected requests,
+332,269,040 bytes and19 REST/21 conservatively charged points inside20/40.
+The query does not return its actual point cost. The21 is an explicitly proven
+same-bucket/window absolute-used upper bound, not a header-difference estimate
+or an invented cost of one. Publication spends6/0 of its8/8 shared-tool share.
+The complete grant composition, including external acceptance, measures324
+nonperiodic REST requests and41 conservatively charged points within450/200.
+Its54 periodic sweeps across the complete schedule spend640 REST/54 points;
+these are lifetime totals, not a single-hour charge. Each sweep fits15/5, and
+the maximum31 sweeps in an inclusive hour preserves the990/430 protected
+planning envelope including75/75 margin. Separately tracked protected
+transports total1,188 requests and340,303,891 bytes; primary-quota requests are
+a subset of that count.
+
+These measurements have explicit limits. The44 actual pinned Action main/post
+processes across11 owning jobs ran with local TLS fixtures on macOS; the pinned
+Linux gh ran with genuine signed bytes and explicitly coherent fixture quota
+headers. Action/curl observations were replayed through the same production
+supervisor as the full native command, with fixture liveness and quota facts.
+This is protocol/accounting composition, not one generated hosted workflow.
+The four curl fixtures prove transport and cleanup with small fictional bodies,
+not the final binary checks. Those checks remain unchanged in the workflows.
+Earlier real-provider attempts returned contradictory still-live quota windows
+and correctly refused. Their cause is unknown; no final shared positive with
+unmodified provider quota facts is claimed. Dependency/provider/ambient totals
+remain unknown, not zero or proven inside the margin. Local observations do
+not establish future workflow-token headroom or reserve quota.
+
+The full-native composition report has SHA-256
+`c7781ebf76fce31a0511ac0d45b70e4b920a01b4e68642aa27991f3c1330c6ea`.
+The review record retains the local measurement index, source hashes and
+commands. Exact-head independent implementation review remains a separate
+gate; all hosted provenance, substantive jobs and final acceptance obligations
+above remain required before their corresponding use or merge.
+
+Next: complete exact-head implementation review, clear the separate #413
+test-harness prerequisite and consumer amendment, then prepare the distinct
+exact-root activation packet. No activation or hosted acceptance is recorded
+by this local verification section.
