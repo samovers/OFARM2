@@ -86,6 +86,20 @@ explicit uncertainty. Focused controls cover these cases; the complete positive
 acceptance fixture executes actual selected-T modules without mocking the new
 binding check. These corrections preserve the approved boundary and ceilings.
 
+Pre-admission provider inspection on 17 October exposed a separate lifecycle
+count defect before either execution attempt. GitHub returned whole-history
+`totalCount: 17` with no nodes for the exact lifecycle-type/since filters. The
+frozen root refused this unchanged response as omitted events. Independent
+queries confirmed `filteredCount: 0`, and separate type/time controls confirmed
+that it follows both filters. The adapter now requests that count and retains
+the complete-page check. Only an empty complete first page can pass: every
+matching event still revokes, irrespective of its reported count. The provider
+fixture includes unrelated history and returns the new count only when queried.
+Both admission positives failed before the fix; controls cover every lifecycle
+type, missing/invalid/positive counts with empty nodes, incomplete pagination,
+malformed pages and inconsistent timestamps. The failed old grant is terminal;
+the corrected root requires fresh review and a new exact-root user grant.
+
 The [focused re-review](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5558614492)
 resolved root binding and lifetime, then identified one remaining accounting
 case across quota reset. Structural same-window validation now retains the

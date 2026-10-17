@@ -1091,6 +1091,86 @@
       "sourcePath": "conformance/test_ci_policy_transition_tools.py"
     },
     {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[0-BaseRefChangedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[0-BaseRefDeletedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[0-BaseRefForcePushedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[0-ClosedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[0-HeadRefDeletedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[0-HeadRefForcePushedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[0-HeadRefRestoredEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[0-ReopenedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[1-BaseRefChangedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[1-BaseRefDeletedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[1-BaseRefForcePushedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[1-ClosedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[1-HeadRefDeletedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[1-HeadRefForcePushedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[1-HeadRefRestoredEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_every_lifecycle_transition_revokes_even_with_a_false_zero_count[1-ReopenedEvent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_exact_original_v4_approval_is_required_without_whitespace_aliases",
       "sourceModule": "conformance.test_ci_policy_transition",
       "sourcePath": "conformance/test_ci_policy_transition.py"
@@ -1322,6 +1402,51 @@
     },
     {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_incomplete_response_body_is_terminal_even_when_json_looks_valid",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_lifecycle_count_must_prove_the_complete_filtered_result[-1]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_lifecycle_count_must_prove_the_complete_filtered_result[0.0]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_lifecycle_count_must_prove_the_complete_filtered_result[0]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_lifecycle_count_must_prove_the_complete_filtered_result[101]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_lifecycle_count_must_prove_the_complete_filtered_result[1]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_lifecycle_count_must_prove_the_complete_filtered_result[False]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_lifecycle_count_must_prove_the_complete_filtered_result[None]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_lifecycle_count_must_prove_the_complete_filtered_result[True]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_lifecycle_count_must_prove_the_complete_filtered_result[missing]",
       "sourceModule": "conformance.test_ci_policy_transition",
       "sourcePath": "conformance/test_ci_policy_transition.py"
     },
@@ -1627,6 +1752,61 @@
     },
     {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unproven_or_foreign_tick_cannot_reduce_remaining_headroom[unspent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_zero_filtered_count_cannot_excuse_incomplete_or_inconsistent_history[timeline0-incomplete lifecycle page]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_zero_filtered_count_cannot_excuse_incomplete_or_inconsistent_history[timeline1-incomplete lifecycle page]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_zero_filtered_count_cannot_excuse_incomplete_or_inconsistent_history[timeline10-timestamp inconsistent]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_zero_filtered_count_cannot_excuse_incomplete_or_inconsistent_history[timeline2-lifecycle pagination]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_zero_filtered_count_cannot_excuse_incomplete_or_inconsistent_history[timeline3-pagination is incomplete]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_zero_filtered_count_cannot_excuse_incomplete_or_inconsistent_history[timeline4-pagination is incomplete]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_zero_filtered_count_cannot_excuse_incomplete_or_inconsistent_history[timeline5-unknown lifecycle event]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_zero_filtered_count_cannot_excuse_incomplete_or_inconsistent_history[timeline6-lifecycle event ID]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_zero_filtered_count_cannot_excuse_incomplete_or_inconsistent_history[timeline7-lifecycle event ID]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_zero_filtered_count_cannot_excuse_incomplete_or_inconsistent_history[timeline8-timestamp]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_zero_filtered_count_cannot_excuse_incomplete_or_inconsistent_history[timeline9-timestamp inconsistent]",
       "sourceModule": "conformance.test_ci_policy_transition",
       "sourcePath": "conformance/test_ci_policy_transition.py"
     },
@@ -27316,8 +27496,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "b4343acc12219b1c2dee2b83a69ff05dc2af59b131de2e81f0ffac2932275908",
-  "entryCount": 5463,
+  "entriesSha256": "8deb4a8b575db236ad0db19c59766c48b8fe5af6a95eaa8f69c0ddaf2af8d0cd",
+  "entryCount": 5499,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

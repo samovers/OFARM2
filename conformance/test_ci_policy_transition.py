@@ -71,6 +71,7 @@ class Provider:
         self.now = NOW
         self.publisher = publisher
         self.calls, self.rest, self.points = [], 0, 0
+        self.graph_requests = []
         self.graph_cost = 1
         self.rest_remaining, self.graph_remaining = 1000, 1000
         self.reset = int((NOW+timedelta(hours=1)).timestamp())
@@ -152,7 +153,8 @@ class Provider:
                     "repository": {"nameWithOwner": grant["repository"], "databaseId": 9100}}})
         return {"nodes": nodes, "repository": {"databaseId": 9100, "nameWithOwner": grant["repository"],
             "pullRequest": {"number": 413, "state": "OPEN", "headRefOid": grant["headSha"],
-                "baseRefOid": grant["baseSha"], "baseRefName": "main", "timelineItems": {"totalCount": 0,
+                "baseRefOid": grant["baseSha"], "baseRefName": "main", "timelineItems": {
+                    "totalCount": 17, "filteredCount": 0,
                     "nodes": [], "pageInfo": {"hasNextPage": False, "endCursor": None}}}},
             "rateLimit": {"cost": self.graph_cost, "limit": 1000,
                 "remaining": self.graph_remaining-self.points, "resetAt": stamp(datetime.fromtimestamp(self.reset, timezone.utc))}}
@@ -171,7 +173,13 @@ class Provider:
         if self.fail_status is not None:
             raise urllib.error.HTTPError(request.full_url, self.fail_status, "fictional failure", headers, io.BytesIO(b""))
         if path == "/graphql":
-            body = {"data": self.graph(json.loads(request.data)["variables"])}
+            payload = json.loads(request.data)
+            self.graph_requests.append(payload)
+            body = {"data": self.graph(payload["variables"])}
+            # GitHub's whole-history count includes unrelated commits/reviews.
+            # Return the filtered count only when the actual query requests it.
+            if "filteredCount" not in payload["query"]:
+                del body["data"]["repository"]["pullRequest"]["timelineItems"]["filteredCount"]
         elif path == "/issues/413/comments":
             page = int(urllib.parse.parse_qs(url.query).get("page", ["1"])[0])
             body = self.comments[(page-1)*100:page*100]
@@ -225,8 +233,80 @@ def test_complete_live_positive_records_every_actual_primary_request(publisher, 
     assert provider.rest == calls
     assert provider.points == 1
     assert reader.budget.used[transition.PHASE_JOBS[phase]] == [calls, 1]
+    assert len(provider.graph_requests) == 1
+    request = provider.graph_requests[0]
+    assert request["variables"]["since"] == provider.comments[0]["created_at"]
+    assert request["variables"]["after"] is None
+    assert "timelineItems(first:100,after:$after,since:$since,itemTypes:[CLOSED_EVENT,REOPENED_EVENT,HEAD_REF_DELETED_EVENT,HEAD_REF_RESTORED_EVENT,HEAD_REF_FORCE_PUSHED_EVENT,BASE_REF_CHANGED_EVENT,BASE_REF_DELETED_EVENT,BASE_REF_FORCE_PUSHED_EVENT])" in request["query"]
     required = transition.require_quota_headroom(reader, provider.grant, phase, now=provider.now)
     assert required["REST"] <= 990
+
+
+@pytest.mark.parametrize("count", ["missing", None, False, True, -1, 0.0, "0", 1, 101])
+def test_lifecycle_count_must_prove_the_complete_filtered_result(count):
+    provider = Provider()
+
+    def fault(path, body):
+        if path == "/graphql":
+            timeline = body["data"]["repository"]["pullRequest"]["timelineItems"]
+            # A benign whole-history count cannot stand in for missing or
+            # inconsistent completeness evidence for the requested filters.
+            timeline["totalCount"] = 0
+            if count == "missing":
+                timeline.pop("filteredCount", None)
+            else:
+                timeline["filteredCount"] = count
+
+    provider.fault = fault
+    with pytest.raises(transition.TransitionError, match="filtered count|omitted events"):
+        validate(provider, "source-gate")
+
+
+@pytest.mark.parametrize("event_type", [
+    "ClosedEvent", "ReopenedEvent", "HeadRefDeletedEvent", "HeadRefRestoredEvent",
+    "HeadRefForcePushedEvent", "BaseRefChangedEvent", "BaseRefDeletedEvent", "BaseRefForcePushedEvent",
+])
+@pytest.mark.parametrize("filtered_count", [0, 1])
+def test_every_lifecycle_transition_revokes_even_with_a_false_zero_count(event_type, filtered_count):
+    provider = Provider()
+
+    def fault(path, body):
+        if path == "/graphql":
+            body["data"]["repository"]["pullRequest"]["timelineItems"].update(
+                filteredCount=filtered_count, nodes=[{"__typename": event_type,
+                    "id": "fictional-lifecycle-event", "createdAt": "2030-01-01T00:00:00Z"}])
+
+    provider.fault = fault
+    with pytest.raises(transition.TransitionError, match="lifecycle changed"):
+        validate(provider, "source-gate")
+
+
+@pytest.mark.parametrize("timeline,message", [
+    ({"nodes": None}, "incomplete lifecycle page"),
+    ({"nodes": [{}] * 101}, "incomplete lifecycle page"),
+    ({"pageInfo": None}, "lifecycle pagination"),
+    ({"pageInfo": {"hasNextPage": None, "endCursor": None}}, "pagination is incomplete"),
+    ({"pageInfo": {"hasNextPage": True, "endCursor": "fictional-next"}}, "pagination is incomplete"),
+    ({"nodes": [{"__typename": "IssueComment", "id": "fictional-unrelated"}]}, "unknown lifecycle event"),
+    ({"nodes": [{"__typename": "ReopenedEvent"}]}, "lifecycle event ID"),
+    ({"nodes": [{"__typename": "ReopenedEvent", "id": ""}]}, "lifecycle event ID"),
+    ({"nodes": [{"__typename": "ReopenedEvent", "id": "fictional-malformed",
+        "createdAt": "not-a-timestamp"}]}, "timestamp"),
+    ({"nodes": [{"__typename": "ReopenedEvent", "id": "fictional-before",
+        "createdAt": "2029-12-31T23:59:59Z"}]}, "timestamp inconsistent"),
+    ({"nodes": [{"__typename": "ReopenedEvent", "id": "fictional-future",
+        "createdAt": "2030-01-01T00:00:11Z"}]}, "timestamp inconsistent"),
+])
+def test_zero_filtered_count_cannot_excuse_incomplete_or_inconsistent_history(timeline, message):
+    provider = Provider()
+
+    def fault(path, body):
+        if path == "/graphql":
+            body["data"]["repository"]["pullRequest"]["timelineItems"].update(timeline)
+
+    provider.fault = fault
+    with pytest.raises(transition.TransitionError, match=message):
+        validate(provider, "source-gate")
 
 
 @pytest.mark.parametrize("mutation,message", [
@@ -263,7 +343,7 @@ def test_each_revocation_and_provenance_fault_refuses_its_real_observation(kind)
     else:
         def fault(path, body):
             if kind == "lifecycle" and path == "/graphql":
-                body["data"]["repository"]["pullRequest"]["timelineItems"] = {"totalCount": 1,
+                body["data"]["repository"]["pullRequest"]["timelineItems"] = {"totalCount": 18, "filteredCount": 1,
                     "nodes": [{"__typename": "ReopenedEvent", "id": "fictional-reopen", "createdAt": "2030-01-01T00:00:05Z"}],
                     "pageInfo": {"hasNextPage": False, "endCursor": None}}
             if kind == "minimized" and path == "/graphql":
