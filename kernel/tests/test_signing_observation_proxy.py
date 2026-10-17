@@ -8,7 +8,7 @@ import ssl
 import struct
 import sys
 import tempfile
-from threading import Event, Thread, current_thread
+from threading import Event, Lock, Thread, current_thread
 
 import pytest
 
@@ -32,6 +32,7 @@ class _Wire:
         self.stop, self.started, self.received = Event(), Event(), Event()
         self.sockets, self.clients, self.errors, self.packets = [], [], [], []
         self.closed = False
+        self.client_lock = Lock()
         self.unix_directory = tempfile.TemporaryDirectory(prefix="signing-wire-") if unix else None
         self.listener = socket.socket(socket.AF_UNIX if unix else socket.AF_INET)
         if unix:
@@ -81,10 +82,16 @@ class _Wire:
             for connection in self.sockets:
                 connection.close()
 
-    def raw_client(self):
-        client = socket.create_connection(("127.0.0.1", self.proxy.port), 2)
-        self.clients.append(client)
+    def _own_client(self, client):
+        with self.client_lock:
+            if self.closed:
+                client.close()
+                raise OSError("wire already closed")
+            self.clients.append(client)
         return client
+
+    def raw_client(self):
+        return self._own_client(socket.create_connection(("127.0.0.1", self.proxy.port), 2))
 
     def connect(self, startup=STARTUP):
         client = self.raw_client()
@@ -93,15 +100,15 @@ class _Wire:
             assert _exact(client, 1) == b"S"
             context = ssl.create_default_context(cafile=str(self.certificate))
             context.minimum_version = context.maximum_version = self.version
-            client = context.wrap_socket(client, server_hostname="signing.test")
-            self.clients.append(client)
+            client = self._own_client(context.wrap_socket(client, server_hostname="signing.test"))
         client.sendall(startup)
         return client
 
     def finish(self, body=None):
-        if self.closed:
-            return
-        self.closed = True
+        with self.client_lock:
+            if self.closed:
+                return
+            self.closed = True
         try:
             self.proxy.__exit__(type(body) if body else None, body, None)
         finally:
@@ -207,7 +214,7 @@ def test_sp01_neutral_wake_seam_preserves_tls_and_forwards_plaintext(wires, monk
                 and connection.fileno() >= 0 and current_thread().name == "signing-test-close"):
             facts["tls_preserved"] = connection._sslobj is not None
             allow_read.set()
-            assert processed.wait(2)
+            assert processed.wait(2) and wire.received.wait(2)
         return native_shutdown(connection, how)
     monkeypatch.setattr(socket.socket, "shutdown", shutdown)
     wire = wires(version=version)

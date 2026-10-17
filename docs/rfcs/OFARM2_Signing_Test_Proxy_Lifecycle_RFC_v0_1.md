@@ -196,5 +196,48 @@ retry, production-source change or relaxed assertion was used. These are local
 engineering results, not the required Linux hosted acceptance or a capacity
 claim. Complete hosted gates and authenticated publication remain pending.
 
-Next: obtain fresh implementation review before requesting complete hosted
-evidence, then present final acceptance only after every applicable gate passes.
+## Harness review correction, 17 October 2026
+
+[Review 5546518916](https://github.com/samovers/OFARM2/pull/413#pullrequestreview-5546518916)
+identified B1 in the new socket-test harness: SP01 could close its echo peer
+after proxy forwarding but before the peer read the plaintext; a TLS client
+could also finish wrapping after teardown captured its client list. These are
+harness ownership/scheduling defects, not new defects in the proxy helper.
+
+SP01 now waits for the peer's existing receipt event before allowing teardown
+to continue. One harness-local lock serializes the closed flag with ownership
+of both raw and wrapped clients; a client arriving after close is immediately
+closed and rejected. The lock is released before proxy teardown. All assertions,
+timeouts, 53 collected cases, helper bytes and actual-runtime controls remain
+unchanged. The complete 5,260-entry inventory regenerates byte-identically.
+
+On local Linux x86_64 with two CPU cores, CPython 3.12.13, OpenSSL 3.0.20 and
+the unchanged hash-locked baseline dependencies, the original harness failed
+2 of 10 fresh-process full-suite runs. The repaired harness passed all 20 of
+20 fresh-process full-suite runs (1,060 case executions). Controlled real-socket
+schedules failed both original SP01 cases and the late-wrapper descriptor
+assertion, then passed all three with the repair. The Linux environment runs
+under local emulation; these counts do not estimate the hosted failure rate.
+
+The full 53-case suite also passed on CPython 3.12.13 / OpenSSL 3.6.2 / macOS
+arm64. The late disconnected-wrapper schedule was reproduced on Linux; macOS
+did not satisfy that diagnostic's precondition. Earlier diagnostic refinements
+and the rejected Linux ARM dependency setup remain recorded, not passing tests.
+
+With the unchanged main helper substituted into an external diagnostic tree,
+the exact repaired tests still expose both original TLS framing failures and
+all three close-before-select failures. The diagnostic retains the underlying
+worker exceptions, TLS record prefixes and cleared-TLS facts, then explicitly
+reclaims old-helper leftovers. No negative-control worker or descriptor survives.
+These controls remain separate from candidate pass results.
+
+The previous 132-case database/physical result above is historical and was not
+rerun for this harness-only correction; those modules and their helper inputs
+remain byte-identical. Complete fresh hosted acceptance is still required.
+Review FU-1's additional late-wake and surviving-worker mutation coverage remains
+separate follow-up work. P-1 is addressed by explicit platform and repeat counts.
+Scope stayed within test-owned wire transport and evidence fidelity.
+
+Next: obtain focused exact-head re-review. A separately prepared consumer
+amendment may propose #417's transition evidence, but version 1's effective
+evidence requirements remain unchanged until that amendment is approved.
