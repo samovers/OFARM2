@@ -12,6 +12,25 @@ governed action or claim to have verified its missing requirements.
 Paths mentioned below are repository-root-relative. Code-excellence
 invariants and review classifications remain in [root AGENTS.md](../../AGENTS.md).
 
+## Exact-action CI transition amendment
+
+[Decision `OFARM2-CI-POLICY-TRANSITION-001` version 4](../rfcs/OFARM2_CI_Policy_Transition_RFC_v0_1.md),
+implemented by [Delivery #416 / PR #417](https://github.com/samovers/OFARM2/pull/417),
+defines a temporary, explicitly granted evidence route for PRs #413 and #411.
+It selects one reviewed policy root, uses separate source and publication runs,
+and requires external verification under the original same-task authority.
+The [guarantee matrix](../rfcs/OFARM2_CI_Policy_Transition_Guarantee_Matrix_v0_1.md)
+and [installation runbook](../rfcs/OFARM2_CI_Policy_Transition_Installation_Runbook_v0_1.md)
+specify its checks, fixed lifetime and retirement.
+
+This navigation does not activate that route. Each consumer needs its own
+versioned evidence amendment and an exact-root, one-use grant after the named
+implementation and review gates pass. Ordinary main admission, substantive
+validators and final human/native merge rules remain unchanged. PR #417 itself
+must obtain its complete ordinary-main evidence after retirement; consumer
+runs cannot stand in for its acceptance. This is the RFC's closed exact-action
+amendment, not a general override of the procedure below.
+
 ## Extraction provenance
 
 The procedure below is extracted from `samovers/OFARM2` root `AGENTS.md`, Git

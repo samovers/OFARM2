@@ -1,0 +1,223 @@
+{
+  "baseSha": "301bf4aa3196b503ec114ebfa0f455be818627a4",
+  "campaign": {
+    "id": "ci-policy-transition-20261017",
+    "notBefore": "2026-10-17T00:00:00Z",
+    "sunset": "2026-10-24T00:00:00Z"
+  },
+  "closure": {
+    "allowedChangedPaths": [
+      "conformance/review_baseline_test_inventory.json",
+      "docs/development/DELIVERY_PROTOCOL.md"
+    ],
+    "dependencies": {
+      "conformance/ci_policy_transition_tools.py": [
+        "conformance/ci_policy_transition_execution.py",
+        "conformance/ci_policy_transition_gh_relay.py",
+        "conformance/ci_policy_transition_curl.py"
+      ],
+      "conformance/ci_policy_transition_workflows.py": [
+        "conformance/ci_policy_transition.py",
+        "conformance/ci_policy_transition_coverage.py",
+        "conformance/ci_policy_transition_curl.py",
+        "conformance/ci_policy_transition_execution.py",
+        "conformance/ci_policy_transition_gh_relay.py",
+        "conformance/ci_policy_transition_operator.py",
+        "conformance/ci_policy_transition_prepare.py",
+        "conformance/ci_policy_transition_publication.py",
+        "conformance/ci_policy_transition_tools.py",
+        "conformance/ci_policy_transition_workflows.py",
+        "conformance/ci_policy_transition_node.cjs"
+      ],
+      "conformance/evidence_publication_policy.py": [
+        "deployment/postgresql/native_evidence.py"
+      ],
+      "kernel/manifest.py": [
+        "kernel/profiles/si_ffs/manifest_inputs.py",
+        "kernel/profiles/si_ffs/regsr_adapter.py",
+        "kernel/profiles/si_ffs/gerk_adapter.py",
+        "kernel/profiles/si_ffs/ffsnaprave_adapter.py"
+      ],
+      "kernel/profiles/si_ffs/gerk_adapter.py": [
+        "tooling/gerk_roundtrip/gerk_roundtrip.py"
+      ],
+      "kernel/profiles/si_ffs/regsr_adapter.py": [
+        "tooling/regsr_snapshot/parse_regsr.py"
+      ],
+      "kernel/tests/test_security_audit_process_crash.py": [
+        "deployment/postgresql/run_security_audit_process_crash.py"
+      ]
+    },
+    "entrypoints": [
+      "conformance/ci_policy_transition.py",
+      "conformance/ci_policy_transition_coverage.py",
+      "conformance/ci_policy_transition_curl.py",
+      "conformance/ci_policy_transition_execution.py",
+      "conformance/ci_policy_transition_gh_relay.py",
+      "conformance/ci_policy_transition_operator.py",
+      "conformance/ci_policy_transition_prepare.py",
+      "conformance/ci_policy_transition_publication.py",
+      "conformance/ci_policy_transition_tools.py",
+      "conformance/ci_policy_transition_workflows.py",
+      "conformance/ci_policy_transition_node.cjs"
+    ],
+    "inputs": {
+      "configuration": [
+        "conformance/ci_policy_transition_root.json",
+        "conformance/review_baseline_config.json",
+        "conformance/review_baseline_test_inventory.json"
+      ],
+      "generatedInputs": [
+        ".github/workflows/conformance.yml",
+        ".github/workflows/evidence-publication.yml"
+      ],
+      "generatedWorkflows": [
+        ".github/workflows/ci-policy-transition-source.yml",
+        ".github/workflows/ci-policy-transition-publication.yml"
+      ],
+      "pins": [
+        "requirements-review-baseline.lock",
+        "requirements-review-pip.lock",
+        "requirements-review-tools.lock",
+        "deployment/postgresql/ofarm_ed25519/Containerfile",
+        "deployment/postgresql/ofarm_ed25519/native_release_identity.json",
+        "deployment/postgresql/ofarm_ed25519/native_evidence_receipt.json",
+        "deployment/postgresql/ofarm_ed25519/native_evidence_verification_currentness.json"
+      ],
+      "tests": [
+        "conformance/test_ci_policy_transition.py",
+        "conformance/test_ci_policy_transition_acceptance.py",
+        "conformance/test_ci_policy_transition_curl.py",
+        "conformance/test_ci_policy_transition_execution.py",
+        "conformance/test_ci_policy_transition_gh_relay.py",
+        "conformance/test_ci_policy_transition_integration.py",
+        "conformance/test_ci_policy_transition_node.py",
+        "conformance/test_ci_policy_transition_operator.py",
+        "conformance/test_ci_policy_transition_publication.py",
+        "conformance/test_ci_policy_transition_tool_calls.py",
+        "conformance/test_ci_policy_transition_tools.py",
+        "conformance/test_ci_policy_transition_workflows.py",
+        "kernel/tests/test_ci_policy_transition.py"
+      ]
+    }
+  },
+  "consumerPullRequest": 413,
+  "coverageDigest": "sha256:dba2be9a1bbb641337e665853fb84ef1748d597c67a1f9418b3b22377e576c3e",
+  "operatorId": 263070375,
+  "repository": {
+    "id": 1266697770,
+    "name": "samovers/OFARM2"
+  },
+  "requestPlan": {
+    "periodSeconds": 120,
+    "periodicGraphQL": 5,
+    "periodicREST": 15,
+    "pools": {
+      "conformance": [
+        16,
+        4
+      ],
+      "handoff": [
+        34,
+        10
+      ],
+      "native-amd64": [
+        16,
+        4
+      ],
+      "native-arm64": [
+        16,
+        4
+      ],
+      "publish": [
+        45,
+        15
+      ],
+      "publisher-gate": [
+        36,
+        10
+      ],
+      "publisher-guard": [
+        30,
+        10
+      ],
+      "seal": [
+        40,
+        15
+      ],
+      "source-admission": [
+        19,
+        5
+      ],
+      "source-gate": [
+        40,
+        10
+      ],
+      "source-guard": [
+        30,
+        10
+      ],
+      "source-reader": [
+        12,
+        0
+      ]
+    },
+    "sharedMargin": [
+      75,
+      75
+    ],
+    "sweepDeadlineSeconds": 15,
+    "toolAllocations": {
+      "conformance": [
+        20,
+        40
+      ],
+      "external-acceptance": [
+        56,
+        10
+      ],
+      "handoff": [
+        4,
+        8
+      ],
+      "native-amd64": [
+        4,
+        4
+      ],
+      "native-arm64": [
+        4,
+        4
+      ],
+      "publish": [
+        8,
+        8
+      ],
+      "publisher-gate": [
+        4,
+        4
+      ],
+      "publisher-guard": [
+        2,
+        2
+      ],
+      "seal": [
+        4,
+        9
+      ],
+      "source-admission": [
+        4,
+        8
+      ],
+      "source-gate": [
+        4,
+        4
+      ],
+      "source-guard": [
+        2,
+        2
+      ]
+    }
+  },
+  "schemaVersion": "ofarm.ci-policy-transition-root.v1",
+  "transitionPullRequest": 417
+}
