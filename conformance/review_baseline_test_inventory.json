@@ -546,6 +546,11 @@
       "sourcePath": "conformance/test_ci_policy_transition_tool_calls.py"
     },
     {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_actual_bootstrap_clears_both_proxy_cases_for_action_and_post",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_actual_bootstrap_main_observer_and_last_post_cleanup",
       "sourceModule": "conformance.test_ci_policy_transition_node",
       "sourcePath": "conformance/test_ci_policy_transition_node.py"
@@ -566,7 +571,17 @@
       "sourcePath": "conformance/test_ci_policy_transition_node.py"
     },
     {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_bootstrap_proxy_environment_write_failure_starts_no_supervisor",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_complete_http_and_undici_body_and_ordered_close",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_every_proxy_case_reintroduced_after_bootstrap_refuses_before_dispatch",
       "sourceModule": "conformance.test_ci_policy_transition_node",
       "sourcePath": "conformance/test_ci_policy_transition_node.py"
     },
@@ -807,6 +822,11 @@
     },
     {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_frozen_grants_use_environment_and_typed_outputs_only",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_generated_environment_keys_are_unique_ignoring_case",
       "sourceModule": "conformance.test_ci_policy_transition_workflows",
       "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
     },
@@ -27761,8 +27781,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "1fe0c6dcd895acf19e022e8796cc81a9fab3ed96923f5066920a9a94e9898e36",
-  "entryCount": 5552,
+  "entriesSha256": "cc3e04b58c48177d2e1b568eee116b86b9fbbcd349ca2569aeb91d3a1ff17516",
+  "entryCount": 5556,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

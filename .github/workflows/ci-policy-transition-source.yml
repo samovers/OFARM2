@@ -16,7 +16,7 @@ concurrency:
 env:
   OFARM_BASELINE_ADMISSION_POLICY_SHA: ${{ github.workflow_sha }}
   OFARM_EVIDENCE_PUBLICATION_WORKFLOW_SHA256: >-
-    sha256:92811f3c86e72605f495dc571c7e9860ea3447f30ef024cdc6d4f5e0ceef204a
+    sha256:cd77c0a22418d3e35fa9c5c4b9879477f806bee021866caf4e0fed7d86023b8e
 
 jobs:
   baseline-admission:
@@ -81,6 +81,11 @@ jobs:
                   target.chmod(0o600)
               environment = {"PATH": "/usr/bin:/bin", "HOME": str(control), "LANG": "C.UTF-8"}
               environment.update({key: digests[name] for name, key in {'tools.py': 'OFARM_TRANSITION_TOOLS_SHA256', 'node.cjs': 'OFARM_TRANSITION_NODE_SHA256', 'execution.py': 'OFARM_TRANSITION_EXECUTION_SHA256', 'gh_relay.py': 'OFARM_TRANSITION_GH_RELAY_SHA256', 'curl.py': 'OFARM_TRANSITION_CURL_SHA256'}.items()})
+              # Linux environment keys are case-sensitive, unlike workflow YAML keys.
+              # Publish fixed empty values before starting any process or Action posts.
+              with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+                  output.write("http_proxy=\nhttps_proxy=\nall_proxy=\nno_proxy=\n")
+                  output.flush()
               start_attempted = True
               subprocess.run(["/usr/bin/python3", "-I", "-S", str(control / "tools.py"), "start",
                   "--directory", str(control), "--job", os.environ["TRANSITION_TOOLS_JOB"],
@@ -113,10 +118,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -137,10 +138,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -186,10 +183,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -249,6 +242,11 @@ jobs:
                   target.chmod(0o600)
               environment = {"PATH": "/usr/bin:/bin", "HOME": str(control), "LANG": "C.UTF-8"}
               environment.update({key: digests[name] for name, key in {'tools.py': 'OFARM_TRANSITION_TOOLS_SHA256', 'node.cjs': 'OFARM_TRANSITION_NODE_SHA256', 'execution.py': 'OFARM_TRANSITION_EXECUTION_SHA256', 'gh_relay.py': 'OFARM_TRANSITION_GH_RELAY_SHA256', 'curl.py': 'OFARM_TRANSITION_CURL_SHA256'}.items()})
+              # Linux environment keys are case-sensitive, unlike workflow YAML keys.
+              # Publish fixed empty values before starting any process or Action posts.
+              with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+                  output.write("http_proxy=\nhttps_proxy=\nall_proxy=\nno_proxy=\n")
+                  output.flush()
               start_attempted = True
               subprocess.run(["/usr/bin/python3", "-I", "-S", str(control / "tools.py"), "start",
                   "--directory", str(control), "--job", os.environ["TRANSITION_TOOLS_JOB"],
@@ -281,10 +279,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -305,10 +299,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -360,10 +350,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -417,10 +403,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -444,10 +426,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -468,10 +446,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -508,10 +482,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -547,10 +517,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -594,10 +560,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -619,10 +581,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -725,10 +683,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -749,10 +703,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -815,10 +765,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -978,10 +924,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1025,10 +967,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1111,6 +1049,11 @@ jobs:
                   target.chmod(0o600)
               environment = {"PATH": "/usr/bin:/bin", "HOME": str(control), "LANG": "C.UTF-8"}
               environment.update({key: digests[name] for name, key in {'tools.py': 'OFARM_TRANSITION_TOOLS_SHA256', 'node.cjs': 'OFARM_TRANSITION_NODE_SHA256', 'execution.py': 'OFARM_TRANSITION_EXECUTION_SHA256', 'gh_relay.py': 'OFARM_TRANSITION_GH_RELAY_SHA256', 'curl.py': 'OFARM_TRANSITION_CURL_SHA256'}.items()})
+              # Linux environment keys are case-sensitive, unlike workflow YAML keys.
+              # Publish fixed empty values before starting any process or Action posts.
+              with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+                  output.write("http_proxy=\nhttps_proxy=\nall_proxy=\nno_proxy=\n")
+                  output.flush()
               start_attempted = True
               subprocess.run(["/usr/bin/python3", "-I", "-S", str(control / "tools.py"), "start",
                   "--directory", str(control), "--job", os.environ["TRANSITION_TOOLS_JOB"],
@@ -1143,10 +1086,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1167,10 +1106,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1253,10 +1188,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1280,10 +1211,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1306,10 +1233,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1330,10 +1253,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1369,10 +1288,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1644,10 +1559,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1684,10 +1595,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1748,6 +1655,11 @@ jobs:
                   target.chmod(0o600)
               environment = {"PATH": "/usr/bin:/bin", "HOME": str(control), "LANG": "C.UTF-8"}
               environment.update({key: digests[name] for name, key in {'tools.py': 'OFARM_TRANSITION_TOOLS_SHA256', 'node.cjs': 'OFARM_TRANSITION_NODE_SHA256', 'execution.py': 'OFARM_TRANSITION_EXECUTION_SHA256', 'gh_relay.py': 'OFARM_TRANSITION_GH_RELAY_SHA256', 'curl.py': 'OFARM_TRANSITION_CURL_SHA256'}.items()})
+              # Linux environment keys are case-sensitive, unlike workflow YAML keys.
+              # Publish fixed empty values before starting any process or Action posts.
+              with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+                  output.write("http_proxy=\nhttps_proxy=\nall_proxy=\nno_proxy=\n")
+                  output.flush()
               start_attempted = True
               subprocess.run(["/usr/bin/python3", "-I", "-S", str(control / "tools.py"), "start",
                   "--directory", str(control), "--job", os.environ["TRANSITION_TOOLS_JOB"],
@@ -1780,10 +1692,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1804,10 +1712,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1859,10 +1763,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1929,6 +1829,11 @@ jobs:
                   target.chmod(0o600)
               environment = {"PATH": "/usr/bin:/bin", "HOME": str(control), "LANG": "C.UTF-8"}
               environment.update({key: digests[name] for name, key in {'tools.py': 'OFARM_TRANSITION_TOOLS_SHA256', 'node.cjs': 'OFARM_TRANSITION_NODE_SHA256', 'execution.py': 'OFARM_TRANSITION_EXECUTION_SHA256', 'gh_relay.py': 'OFARM_TRANSITION_GH_RELAY_SHA256', 'curl.py': 'OFARM_TRANSITION_CURL_SHA256'}.items()})
+              # Linux environment keys are case-sensitive, unlike workflow YAML keys.
+              # Publish fixed empty values before starting any process or Action posts.
+              with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+                  output.write("http_proxy=\nhttps_proxy=\nall_proxy=\nno_proxy=\n")
+                  output.flush()
               start_attempted = True
               subprocess.run(["/usr/bin/python3", "-I", "-S", str(control / "tools.py"), "start",
                   "--directory", str(control), "--job", os.environ["TRANSITION_TOOLS_JOB"],
@@ -1961,10 +1866,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -1985,10 +1886,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -2072,10 +1969,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""
@@ -2101,10 +1994,6 @@ jobs:
           HTTPS_PROXY: ""
           ALL_PROXY: ""
           NO_PROXY: ""
-          http_proxy: ""
-          https_proxy: ""
-          all_proxy: ""
-          no_proxy: ""
           NODE_PATH: ""
           NODE_EXTRA_CA_CERTS: ""
           NODE_TLS_REJECT_UNAUTHORIZED: ""

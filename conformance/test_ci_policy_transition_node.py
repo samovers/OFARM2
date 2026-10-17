@@ -311,6 +311,100 @@ class TransitionNodeTests(unittest.TestCase):
         self.assertFalse(control.exists())
         self.assertFalse(action.exists())
 
+    def test_actual_bootstrap_clears_both_proxy_cases_for_action_and_post(self):
+        from conformance import ci_policy_transition_workflows as workflows
+
+        script, env, _, runner_temp, github_env = self.generated_bootstrap()
+        proxy_keys = ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
+                      'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy')
+        env.update({key: 'http://untrusted.invalid:9' for key in proxy_keys})
+        result = subprocess.run(["/usr/bin/python3", "-I", "-S", "-"], input=script,
+                                env=env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        control = runner_temp / "ofarm-ci-transition-control"
+        action = runner_temp / "ofarm-ci-transition-action"
+        # Model runner ordering: file-command values precede per-step env on
+        # Linux and retain spelling for subsequent steps and Action posts.
+        values = dict(line.split("=", 1) for line in github_env.read_text().splitlines())
+        inherited = dict(env, **values)
+        def step_environment(node):
+            selected = dict(inherited)
+            for line in workflows._tool_environment("conformance", workflows._tool_assets(), node=node).splitlines():
+                key, value = line.strip().split(": ", 1)
+                selected[key] = value.replace(workflows.CONTROL, str(control)) if value != '\"\"' else ''
+            return selected
+        try:
+            self.assertEqual({key: values.get(key) for key in proxy_keys[4:]},
+                             dict.fromkeys(proxy_keys[4:], ''))
+            registration = subprocess.run([NODE, str(action / "main.cjs")], env=step_environment(False),
+                                          capture_output=True, text=True, timeout=30)
+            self.assertEqual(registration.returncode, 0, registration.stderr)
+            for phase in ('main', 'post'):
+                with self.subTest(phase=phase):
+                    selected = step_environment(True)
+                    self.assertEqual({key: selected[key] for key in proxy_keys}, dict.fromkeys(proxy_keys, ''))
+                    result = self.run_node("process.stdout.write('complete')", env=selected)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, 'complete')
+        finally:
+            cleanup = subprocess.run([NODE, str(action / "post.cjs")], env=step_environment(False),
+                                     capture_output=True, text=True, timeout=30)
+        self.assertEqual(cleanup.returncode, 0, cleanup.stderr)
+        self.assertFalse(control.exists())
+        self.assertFalse(action.exists())
+
+    def test_every_proxy_case_reintroduced_after_bootstrap_refuses_before_dispatch(self):
+        server, url = self.server(200)
+        for key in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
+                    'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy'):
+            with self.subTest(key=key):
+                selected = dict(self.env, **{key: 'http://untrusted.invalid:9'})
+                result = self.run_node(f"require('http').get({url!r}, () => process.stdout.write('BYPASS'));", env=selected)
+                self.assertEqual(result.returncode, 86)
+                self.assertEqual(result.stdout, '')
+        self.assertEqual(server.calls, [])
+        self.assertEqual(self.frames(), [])
+
+    def test_bootstrap_proxy_environment_write_failure_starts_no_supervisor(self):
+        script, env, _, runner_temp, github_env = self.generated_bootstrap()
+        process_record = self.root / 'process-was-started'
+        # Inject the file append failure and record any subprocess invocation.
+        # This exercises actual generated cleanup without starting a daemon.
+        fault = '''import builtins, os, pathlib, subprocess
+original_open = builtins.open
+original_run = subprocess.run
+def record_run(*args, **kwargs):
+    pathlib.Path(os.environ["PROCESS_RECORD"]).touch()
+    return original_run(*args, **kwargs)
+class PartialOutput:
+    def __init__(self, output): self.output = output
+    def __enter__(self): return self
+    def __exit__(self, *_): self.output.close()
+    def write(self, value):
+        self.output.write(value[:len(value) // 2])
+        self.output.flush()
+        raise OSError("fixture environment append failed")
+def fail_proxy_append(path, *args, **kwargs):
+    if path == os.environ["GITHUB_ENV"] and args and args[0] == "a":
+        if os.environ["PROXY_FAILURE"] == "partial":
+            return PartialOutput(original_open(path, *args, **kwargs))
+        raise OSError("fixture environment append failed")
+    return original_open(path, *args, **kwargs)
+builtins.open = fail_proxy_append
+subprocess.run = record_run
+'''
+        for failure in ('open', 'partial'):
+            with self.subTest(failure=failure):
+                result = subprocess.run(["/usr/bin/python3", "-I", "-S", "-"], input=fault + script,
+                                        env=dict(env, PROCESS_RECORD=str(process_record), PROXY_FAILURE=failure),
+                                        capture_output=True, text=True, timeout=30)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('fixture environment append failed', result.stderr)
+                self.assertFalse(process_record.exists())
+                self.assertFalse((runner_temp / 'ofarm-ci-transition-control').exists())
+                self.assertFalse((runner_temp / 'ofarm-ci-transition-action').exists())
+                self.assertEqual(bool(github_env.read_bytes()), failure == 'partial')
+
     def test_generated_bootstrap_failure_before_registration_cleans_only_created_paths(self):
         script, env, _, runner_temp, _ = self.generated_bootstrap()
         for fault in ("bad-literal", "invalid-attempt", "existing-action"):

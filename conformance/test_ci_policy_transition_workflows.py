@@ -34,6 +34,28 @@ def steps(job: str) -> dict[str, str]:
     return result
 
 
+def environment_keys(text: bytes):
+    """Read the generated block mappings without interpreting scalar values."""
+    current = None
+    for number, line in enumerate(text.decode().splitlines(), 1):
+        indent = len(line) - len(line.lstrip())
+        if current is not None and line.strip() and indent <= current[0]:
+            yield current[1], current[2]
+            current = None
+        if re.fullmatch(r" *env:", line):
+            current = (indent, number, [])
+        elif current is not None and line.strip():
+            if indent > current[0] + 2:
+                # Retained multiline scalar values, such as pinned hashes.
+                continue
+            match = re.fullmatch(r" *([A-Za-z_][A-Za-z0-9_]*): .+", line)
+            if not match or indent != current[0] + 2:
+                raise AssertionError("unexpected generated environment mapping")
+            current[2].append(match[1])
+    if current is not None:
+        yield current[1], current[2]
+
+
 def without_observation(job: str, job_name: str) -> str:
     """Reverse only the exact declared v4 additions, never arbitrary step env."""
     assets = workflows._tool_assets()
@@ -428,6 +450,20 @@ class TransitionWorkflowTests(unittest.TestCase):
                     self.assertIn("post-if: always()", source)
                     self.assertIn("finish", source)
                     self.assertIn('workspace / "../../_temp/ofarm-ci-transition-action"', source)
+
+    def test_generated_environment_keys_are_unique_ignoring_case(self) -> None:
+        # GitHub TemplateReader compares mapping keys with OrdinalIgnoreCase,
+        # even though the Linux runner's process environment is case-sensitive.
+        # Keep this oracle independent of _tool_environment's expected text.
+        for consumer in (413, 411):
+            generated = workflows.generate(self.source, self.publication, consumer_pr=consumer)
+            for workflow in (generated.source, generated.publication):
+                mappings = list(environment_keys(workflow))
+                self.assertGreater(len(mappings), 1)
+                for line, keys in mappings:
+                    with self.subTest(consumer=consumer, workflow=workflow.splitlines()[0], line=line):
+                        folded = [key.upper() for key in keys]
+                        self.assertEqual(len(folded), len(set(folded)), keys)
 
     def test_retry_rewrite_is_exactly_four_execution_invocations(self) -> None:
         generated = jobs(self.generated.source)
