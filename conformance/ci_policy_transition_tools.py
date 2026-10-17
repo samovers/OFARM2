@@ -69,7 +69,7 @@ FRAME_LIMIT = 8192
 JOB_LIFETIMES = {
     "source-gate": 300, "conformance": 3600, "native-amd64": 7200,
     "native-arm64": 7200, "source-guard": 8100, "handoff": 600,
-    "publisher-gate": 300, "source-admission": 300, "publish": 2700,
+    "publisher-gate": 300, "source-admission": 600, "publish": 2700,
     "publisher-guard": 3600, "seal": 600, "external-acceptance": 7200,
 }
 LIFETIME_SECONDS = max(JOB_LIFETIMES.values())
@@ -317,6 +317,12 @@ class RequestBudget:
             if status is None or not complete:
                 state["failed"] = True
 
+    def record_unknown_graphql_cost(self):
+        with self._transaction() as state:
+            self._trace(state, {"bucket": "GraphQL", "costMode": "unknown",
+                                "actualCost": None, "chargedBound": None})
+            state["failed"] = True
+
     def charge(self, bucket, cost, label, *, completion=False):
         integer(cost)
         if bucket not in ("REST", "GraphQL"):
@@ -366,14 +372,15 @@ class RequestBudget:
                 or (check_time and reset <= self.clock())):
             raise TransitionError("unknown or contradictory primary quota")
 
-    def observe_quota(self, bucket, *, remaining, reset, limit):
+    def observe_quota(self, bucket, *, remaining, reset, limit, completion=False):
         try:
             self._quota(bucket, remaining=remaining, reset=reset, limit=limit)
         except TransitionError:
             self.fail("unknown quota")
             raise
         with self._transaction() as state:
-            self._healthy(state)
+            if not completion:
+                self._healthy(state)
             previous = state["quota"].get(bucket)
             if previous and (reset < previous["reset"] or limit != previous["limit"]):
                 state["failed"] = True
@@ -723,13 +730,17 @@ class Supervisor:
                     request["response"] = True
                     request["status"] = status
                     if status in (403, 429):
-                        raise TransitionError("provider refused tool request")
+                        # Refuse immediately, then retain independently known
+                        # quota/cost for this already-started request.
+                        self.budget.fail("provider refused tool request")
                     if request["bucket"] in ("REST", "GraphQL"):
                         self._observe_primary(request["bucket"], frame["quota"], request["priorQuota"])
                     elif frame["quota"] is not None:
                         raise TransitionError("unknown applicable quota")
                 else:
                     request["ended"] = True
+                    if request["bucket"] == "GraphQL" and not request["response"]:
+                        self.budget.record_unknown_graphql_cost()
                     self.budget.charge_transport(request["bucket"], requests=0,
                         bytes=integer(frame["bytes"]), completion=True)
                     self.budget.record_outcome(frame["requestId"].replace("-", ""),
@@ -751,31 +762,43 @@ class Supervisor:
             return {"accepted": False, "reason": "terminal-refusal"}
 
     def _observe_primary(self, bucket, quota, prior=None):
-        if (not isinstance(quota, dict) or quota.get("bucket") != bucket
-                or not {"bucket", "remaining", "reset", "limit"} <= set(quota)
-                or set(quota) - {"bucket", "remaining", "reset", "limit", "used", "cost"}):
-            raise TransitionError("missing applicable primary quota")
-        if bucket == "GraphQL":
-            # A response's entire same-window used value is only a conservative
-            # upper bound including this completed request, never its attributed
-            # cost. Regional/ambient variation makes snapshot subtraction unsafe.
-            if "cost" in quota:
-                cost = integer(quota["cost"], 1)
-            else:
-                used = integer(quota.get("used"), 1)
-                if (prior is None or quota["reset"] != prior["reset"]
-                        or quota["limit"] != prior["limit"]
-                        or used != quota["limit"] - quota["remaining"]):
-                    raise TransitionError("GraphQL point cost unavailable")
-                cost = used
-            self.budget.charge(bucket, cost - 1, "conservative tool GraphQL points")
-            with self.budget._transaction() as state:
-                self.budget._trace(state, {"bucket": bucket,
-                    "costMode": "actual" if "cost" in quota else "absolute-used-upper-bound",
-                    "actualCost": quota.get("cost"), "chargedBound": cost,
-                    "responseUsed": quota.get("used"), "reset": quota["reset"],
-                    "limit": quota["limit"], "responseRemaining": quota["remaining"]})
-        self.budget.observe_quota(bucket, remaining=quota["remaining"], reset=quota["reset"], limit=quota["limit"])
+        known = False
+        try:
+            if (not isinstance(quota, dict) or quota.get("bucket") != bucket
+                    or not {"bucket", "remaining", "reset", "limit"} <= set(quota)
+                    or set(quota) - {"bucket", "remaining", "reset", "limit", "used", "cost"}):
+                raise TransitionError("missing applicable primary quota")
+            if bucket == "GraphQL":
+                # Same-window absolute used is only a conservative bound, never
+                # this request's attributed cost or a snapshot difference.
+                if "cost" in quota:
+                    cost = integer(quota["cost"], 1)
+                else:
+                    self.budget._quota(bucket, remaining=quota["remaining"],
+                        reset=quota["reset"], limit=quota["limit"])
+                    used = integer(quota.get("used"), 1)
+                    if (prior is None or quota["reset"] != prior["reset"]
+                            or quota["limit"] != prior["limit"]
+                            or used != quota["limit"] - quota["remaining"]):
+                        raise TransitionError("GraphQL point cost unavailable")
+                    cost = used
+                known = True
+                try:
+                    self.budget.charge(bucket, cost - 1, "conservative tool GraphQL points", completion=True)
+                finally:
+                    with self.budget._transaction() as state:
+                        self.budget._trace(state, {"bucket": bucket,
+                            "costMode": "actual" if "cost" in quota else "absolute-used-upper-bound",
+                            "actualCost": quota.get("cost"), "chargedBound": cost,
+                            "responseUsed": quota.get("used"), "reset": quota["reset"],
+                            "limit": quota["limit"], "responseRemaining": quota["remaining"]})
+            self.budget.observe_quota(bucket, remaining=quota["remaining"], reset=quota["reset"],
+                limit=quota["limit"], completion=True)
+        except (TransitionError, ValueError, KeyError, TypeError):
+            if bucket == "GraphQL" and not known:
+                self.budget.record_unknown_graphql_cost()
+            self.budget.fail("required primary quota unavailable")
+            raise
 
 
 def serve(directory):

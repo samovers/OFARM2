@@ -7,10 +7,13 @@ No substantive validator, closure result or journal decision is substituted.
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
+import importlib
 import io
 import json
 from pathlib import Path
 import shutil
+import sys
 import tarfile
 from unittest import mock
 
@@ -91,8 +94,8 @@ def original_projection(grant):
     return result
 
 
-def sealed_pipeline(directory):
-    repository, policy, grant, closure = selected_root(directory)
+def sealed_pipeline(directory, *, selected=None):
+    repository, policy, grant, closure = selected if selected is not None else selected_root(directory)
     journal_path, checkpoint = directory / "journal/grant.jsonl", directory / "checkpoint/tail.json"
     journal_path.parent.mkdir()
     checkpoint.parent.mkdir()
@@ -139,10 +142,46 @@ def verify(fixture):
             journal=f["journal"], output=f["directory"] / "accepted-archive")
 
 
-def test_complete_selected_root_pipeline_external_acceptance_and_retired_audit(tmp_path):
-    f = sealed_pipeline(tmp_path)
+@contextmanager
+def selected_modules(repository):
+    """Import actual selected-T code with an isolated repository module cache."""
+    def owned(name, module):
+        if name.split(".")[0] in {"conformance", "kernel", "deployment", "tooling"}:
+            return True
+        source = getattr(module, "__file__", None)
+        return source is not None and any(Path(source).resolve().is_relative_to(root)
+            for root in (ROOT, repository.resolve()))
+
+    prior = {name: module for name, module in tuple(sys.modules.items()) if owned(name, module)}
+    prior_path = list(sys.path)
+    try:
+        for name in prior:
+            del sys.modules[name]
+        sys.path.insert(0, str(repository))
+        importlib.invalidate_caches()
+        from conformance import test_ci_policy_transition_acceptance as selected
+        assert Path(selected.publication.__file__).resolve().is_relative_to(repository.resolve())
+        yield selected
+    finally:
+        for name, module in tuple(sys.modules.items()):
+            if owned(name, module):
+                del sys.modules[name]
+        sys.modules.update(prior)
+        sys.path[:] = prior_path
+        importlib.invalidate_caches()
+
+
+@pytest.fixture
+def selected_pipeline(tmp_path):
+    coordinates = selected_root(tmp_path)
+    with selected_modules(coordinates[0]) as selected:
+        yield selected, selected.sealed_pipeline(tmp_path, selected=coordinates)
+
+
+def test_complete_selected_root_pipeline_external_acceptance_and_retired_audit(tmp_path, selected_pipeline):
+    selected, f = selected_pipeline
     with f["journal"]:
-        report = verify(f)
+        report = selected.verify(f)
         assert report["newlyAccepted"] is True
         assert report["substantiveValidation"] == "passed"
         assert report["receipt"]["coverage"] == transition.coverage.declaration()
@@ -156,10 +195,10 @@ def test_complete_selected_root_pipeline_external_acceptance_and_retired_audit(t
         f["journal"].retire({"consumerPr": 413, "headSha": f["grant"]["headSha"], "mergeCommit": "a"*40})
         roots = tmp_path / "roots"
         roots.mkdir()
-        manifest = operator.archive_policy_roots(f["repository"], [{"rootSha": f["grant"]["rootSha"],
+        manifest = selected.operator.archive_policy_roots(f["repository"], [{"rootSha": f["grant"]["rootSha"],
             "rootTree": f["grant"]["rootTree"], "baseSha": f["grant"]["baseSha"]}], roots,
             candidate_roots=(f["repository"],))
-        audit = publication.audit_consumed(journal=f["journal"], archive_directory=tmp_path / "accepted-archive",
+        audit = selected.publication.audit_consumed(journal=f["journal"], archive_directory=tmp_path / "accepted-archive",
             roots_directory=roots, root_manifest=manifest)
         assert audit["archiveIntegrity"] is True
         assert not any(audit[key] for key in ("liveAcceptanceAuthority", "executionAuthority", "mergeAuthority"))
@@ -168,8 +207,8 @@ def test_complete_selected_root_pipeline_external_acceptance_and_retired_audit(t
 
 
 @pytest.mark.parametrize("fault", ["low-quota", "coverage", "original-approval", "journal-receipt"])
-def test_external_acceptance_refuses_without_consuming_a_false_positive(tmp_path, fault):
-    f = sealed_pipeline(tmp_path)
+def test_external_acceptance_refuses_without_consuming_a_false_positive(tmp_path, selected_pipeline, fault):
+    selected, f = selected_pipeline
     if fault == "low-quota":
         # Background consumption is a fresh provider fact, not attributed here.
         real_window = f["provider"]._window
@@ -190,7 +229,34 @@ def test_external_acceptance_refuses_without_consuming_a_false_positive(tmp_path
     with f["journal"]:
         expected = {"low-quota": "insufficient current-window primary quota", "coverage": "coverage",
             "original-approval": "approval", "journal-receipt": "journal ticket or receipt"}[fault]
-        with pytest.raises((transition.TransitionError, publication.TransitionPublicationError, operator.OperatorError), match=expected):
-            verify(f)
+        with pytest.raises((selected.transition.TransitionError, selected.publication.TransitionPublicationError,
+                            selected.operator.OperatorError), match=expected):
+            selected.verify(f)
         assert f["journal"].snapshot()["state"] == "FAILED"
         assert not (tmp_path / "accepted-archive/acceptance.json").exists()
+
+
+def test_external_acceptance_refuses_a_verifier_running_from_another_root(tmp_path, selected_pipeline):
+    selected, f = selected_pipeline
+    before = copy.deepcopy(f["provider"].observations)
+    with f["journal"]:
+        with pytest.raises(publication.TransitionPublicationError, match="execute from the selected policy checkout"):
+            verify(f)
+        assert f["journal"].snapshot()["state"] == "FAILED"
+    assert f["provider"].observations == before
+    assert not (tmp_path / "accepted-archive").exists()
+
+
+@pytest.mark.parametrize("fault", ["foreign-import", "changed-source"])
+def test_selected_verifier_binds_its_actual_imports_and_bytes(tmp_path, fault):
+    repository, _, _, closure = selected_root(tmp_path)
+    with selected_modules(repository) as selected:
+        if fault == "foreign-import":
+            with mock.patch.object(selected.publication, "evidence", publication.evidence):
+                with pytest.raises(selected.publication.TransitionPublicationError, match="outside the selected"):
+                    selected.publication._require_selected_execution(repository, closure)
+        else:
+            path = repository / "conformance/ci_policy_transition_publication.py"
+            path.write_bytes(path.read_bytes() + b"\n# Stale executing source fixture.\n")
+            with pytest.raises(selected.publication.TransitionPublicationError, match="bytes differ"):
+                selected.publication._require_selected_execution(repository, closure)
