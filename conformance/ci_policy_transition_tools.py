@@ -774,8 +774,10 @@ class Supervisor:
                 if "cost" in quota:
                     cost = integer(quota["cost"], 1)
                 else:
+                    # Expiry prevents current headroom, but does not erase a
+                    # known bound for an already-started same-window request.
                     self.budget._quota(bucket, remaining=quota["remaining"],
-                        reset=quota["reset"], limit=quota["limit"])
+                        reset=quota["reset"], limit=quota["limit"], check_time=False)
                     used = integer(quota.get("used"), 1)
                     if (prior is None or quota["reset"] != prior["reset"]
                             or quota["limit"] != prior["limit"]

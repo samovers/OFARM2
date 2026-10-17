@@ -85,6 +85,13 @@ explicit uncertainty. Focused controls cover these cases; the complete positive
 acceptance fixture executes actual selected-T modules without mocking the new
 binding check. These corrections preserve the approved boundary and ceilings.
 
+The [focused re-review](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5558614492)
+resolved root binding and lifetime, then identified one remaining accounting
+case across quota reset. Structural same-window validation now retains the
+historical point bound before the separate fresh-headroom check refuses the
+expired observation. Production begin/response controls for200/403/429 retain
+the21-point bound and completion bytes while refusing headroom and new dispatch.
+
 The complete local policy and external-verifier path was composed with actual
 pinned Action entry/post observations, all four actual curl commands and the
 complete unchanged `verify-frozen-evidence-receipt` command. The native command
@@ -95,7 +102,7 @@ stderr. It made56 gh requests:17 REST,1 GraphQL,33 TUF and5 blob. The former
 and two peeled-commit reads and is not the full-native result.
 
 The conformance owning-supervisor composition accounts73 protected requests,
-332,269,027 bytes and19 REST/21 conservatively charged points inside20/40.
+332,269,034 bytes and19 REST/21 conservatively charged points inside20/40.
 The query does not return its actual point cost. The21 is an explicitly proven
 same-bucket/window absolute-used upper bound, not a header-difference estimate
 or an invented cost of one. Publication spends6/0 of its8/8 shared-tool share.
@@ -105,7 +112,7 @@ Its54 periodic sweeps across the complete schedule spend640 REST/54 points;
 these are lifetime totals, not a single-hour charge. Each sweep fits15/5, and
 the maximum31 sweeps in an inclusive hour preserves the990/430 protected
 planning envelope including75/75 margin. Separately tracked protected
-transports total1,188 requests and339,980,999 bytes; primary-quota requests are
+transports total1,188 requests and339,980,979 bytes; primary-quota requests are
 a subset of that count.
 
 These measurements have explicit limits. The44 actual pinned Action main/post
@@ -123,7 +130,7 @@ remain unknown, not zero or proven inside the margin. Local observations do
 not establish future workflow-token headroom or reserve quota.
 
 The full-native composition report has SHA-256
-`53eba5ac2397f9b61c4041faad3e87e3471df63cd5aeebf43b3c23194f4a3e35`.
+`16b45bfb8cbd30868e9715c7d90fae125c5bf478654903399f1702dcf21a58b2`.
 The review record retains the local measurement index, source hashes and
 commands. Exact-head independent implementation review remains a separate
 gate; all hosted provenance, substantive jobs and final acceptance obligations

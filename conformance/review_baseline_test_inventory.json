@@ -1306,6 +1306,21 @@
       "sourcePath": "conformance/test_ci_policy_transition_publication.py"
     },
     {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_owned_graphql_settles_historical_bound_after_reset_without_headroom[200]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_owned_graphql_settles_historical_bound_after_reset_without_headroom[403]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_owned_graphql_settles_historical_bound_after_reset_without_headroom[429]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_owned_graphql_settles_known_upper_bound_after_throttle_or_other_failure[200-True]",
       "sourceModule": "conformance.test_ci_policy_transition_tools",
       "sourcePath": "conformance/test_ci_policy_transition_tools.py"
@@ -27226,8 +27241,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "68f7d932f4fdea970156b4322268a272a7614419a0c7965fb3daafe5e9d95c8a",
-  "entryCount": 5445,
+  "entriesSha256": "71ea90a419d150bf6dd0a8eb86d312e77a4ce9a51e643bc165c74df567e98c02",
+  "entryCount": 5448,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
