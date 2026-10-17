@@ -1108,10 +1108,22 @@ _SOURCE_JOBS = frozenset({"source-gate", "conformance", "native-amd64", "native-
 _PUBLISHER_JOBS = frozenset({"publisher-gate", "source-admission", "publish", "publisher-guard", "seal"})
 
 
-def require_quota_headroom(reader, grant, phase, *, now=None, guard_complete=False):
+def require_quota_headroom(reader, grant, phase, *, now=None, guard_complete=False, completed_tick=None):
     """Check affordability of remaining work; a snapshot reserves no capacity."""
     now = (now or utcnow()).timestamp()
     job = PHASE_JOBS[phase]
+    first_tick = math.ceil(now/120)*120
+    if completed_tick is not None:
+        # Only run_guard supplies this fact, after its complete live/job sweep.
+        # Its current isolated pool must own that tick. Neither a sibling's
+        # ledger nor a provider remaining-counter delta establishes completion.
+        if (job not in {"source-guard", "publisher-guard"} or reader.budget.job != job
+                or type(completed_tick) is not int or completed_tick % 120
+                or not 0 <= now-completed_tick < 15
+                or reader.budget.current_pool != f"periodic:{completed_tick}"
+                or f"periodic:{completed_tick}" not in reader.budget.used):
+            raise TransitionError("completed tick must belong to this guard's current full sweep")
+        first_tick = max(first_tick, completed_tick+120)
     if job == "external-acceptance":
         future = {"external-acceptance"}
     elif job == "source-gate":
@@ -1157,7 +1169,7 @@ def require_quota_headroom(reader, grant, phase, *, now=None, guard_complete=Fal
             raise TransitionError("both actual workflow-token primary quotas are required")
         if future & {"source-guard", "publisher-guard"}:
             end = min(quota["reset"], timestamp(grant["expiresAt"]).timestamp(), now+3600)
-            ticks = max(0, min(31, math.floor(end/120)-math.ceil(now/120)+1))
+            ticks = max(0, min(31, math.floor(end/120)-first_tick//120+1))
             remaining[index] += ticks * (15 if bucket == "REST" else 5)
         remaining[index] += 75
     reader.budget.require_headroom(future_rest=remaining[0], future_graphql=remaining[1])
@@ -1220,7 +1232,8 @@ def run_guard(policy, grant, reader, *, phase, event, job_context, expected_bind
                 if authenticated_id != job_context["runId"]:
                     raise TransitionError("guard provider run differs from its job context")
                 complete = _producer_state(reader, grant, live, role)
-                require_quota_headroom(reader, grant, phase, now=clock(), guard_complete=complete)
+                require_quota_headroom(reader, grant, phase, now=clock(), guard_complete=complete,
+                    completed_tick=int(next_tick) if periodic else None)
             if complete:
                 # Completion always earns its own fresh nonperiodic full sweep;
                 # neither the initial nor a periodic snapshot substitutes for it.

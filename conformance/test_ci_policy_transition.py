@@ -651,6 +651,53 @@ def test_final_guard_forecast_excludes_only_provider_proved_finished_work():
     assert complete["GraphQL"] < active["GraphQL"]
 
 
+@pytest.mark.parametrize("phase", ["source-guard", "publisher-guard"])
+@pytest.mark.parametrize("fraction", [0, 0.25])
+def test_completed_periodic_sweep_is_not_forecast_again_at_its_exact_tick(phase, fraction):
+    provider = Provider(publisher=phase == "publisher-guard")
+    provider.producers_complete = False
+    provider.now = NOW+timedelta(seconds=110+fraction)
+    tick = int((NOW+timedelta(seconds=110)).timestamp())
+    reader = provider.reader(phase)
+    with reader.pool(f"periodic:{tick}"):
+        live = transition.validate_live(provider.policy, provider.grant, reader, phase=phase,
+            now=provider.now, event=provider.event, job_context=provider.context,
+            expected_bindings=provider.bindings())
+        assert not transition._producer_state(reader, provider.grant, live,
+            "source" if phase == "source-guard" else "publisher")
+        unproven = transition.require_quota_headroom(reader, provider.grant, phase, now=provider.now)
+        complete = transition.require_quota_headroom(reader, provider.grant, phase,
+            now=provider.now, completed_tick=tick)
+        assert [unproven[bucket]-complete[bucket] for bucket in ("REST", "GraphQL")] == (
+            [15, 5] if fraction == 0 else [0, 0])
+        # A completed sweep removes only itself. Unknown siblings still retain
+        # their full ceilings, and a fresh snapshot one below the forecast fails.
+        reader.budget.observe_quota("REST", remaining=complete["REST"]-1, reset=provider.reset, limit=1000)
+        with pytest.raises(transition.TransitionError, match="headroom|quota"):
+            transition.require_quota_headroom(reader, provider.grant, phase,
+                now=provider.now, completed_tick=tick)
+
+
+@pytest.mark.parametrize("kind", ["initial", "unspent", "future", "old", "off-grid", "foreign", "producer"])
+def test_unproven_or_foreign_tick_cannot_reduce_remaining_headroom(kind):
+    provider = Provider()
+    provider.now = NOW+timedelta(seconds=110)
+    tick = int(provider.now.timestamp())
+    phase = "conformance" if kind == "producer" else "source-guard"
+    reader = provider.reader(phase)
+    with reader.pool(phase if kind == "producer" else f"periodic:{tick}"):
+        if kind != "unspent":
+            reader.budget.charge("REST", 1, "fictional incomplete sweep")
+        if kind == "initial":
+            reader.budget.current_pool = "source-guard"
+        elif kind == "foreign":
+            reader.budget.job = "publisher-guard"
+        claim = tick + {"future": 120, "old": -120, "off-grid": -1}.get(kind, 0)
+        with pytest.raises(transition.TransitionError, match="completed tick"):
+            transition.require_quota_headroom(reader, provider.grant, phase,
+                now=provider.now, completed_tick=claim)
+
+
 @pytest.mark.parametrize("status", [403, 429, 503])
 def test_protected_error_body_is_fully_accounted_after_terminal_status_without_retention(status):
     provider = Provider()
