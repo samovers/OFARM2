@@ -552,6 +552,49 @@ def test_owned_graphql_settles_known_upper_bound_after_throttle_or_other_failure
             supervisor.budget.charge("GraphQL", 1, "new dispatch")
 
 
+@pytest.mark.parametrize("status", [200, 403, 429])
+def test_owned_graphql_settles_historical_bound_after_reset_without_headroom(status):
+    with _running_supervisor() as (control, config, _environment):
+        supervisor = tools.Supervisor(control, config)
+        reset = 1001
+        now = [reset - 1]
+        supervisor.budget.clock = lambda: now[0]
+        supervisor.budget.observe_quota("GraphQL", remaining=980, reset=reset, limit=1000)
+        prior = supervisor.budget.quota["GraphQL"]
+        process = str(uuid.uuid4())
+        request = process + ":1"
+
+        def send(sequence, operation, **fields):
+            return supervisor.accept(
+                _frame(config, process, sequence, operation, **fields), trusted_kind="gh"
+            )
+
+        assert send(0, "open", kind="gh", pid=os.getpid(), ppid=os.getppid())["accepted"]
+        assert send(1, "begin", requestId=request, method="POST", host="api.github.com",
+                    path="/graphql", bucket="GraphQL")["accepted"]
+        assert supervisor.clients[process]["requests"][request]["priorQuota"] == prior
+        now[0] = reset + 1
+        reply = send(2, "response", requestId=request, status=status,
+                     quota={"bucket": "GraphQL", "remaining": 979, "used": 21,
+                            "reset": reset, "limit": 1000})
+        assert reply["accepted"] is False
+        assert supervisor.budget.used == {"shared-tools": [0, 21]}
+        assert supervisor.budget.quota["GraphQL"] == prior
+        costs = [item for item in supervisor.budget.trace if "costMode" in item]
+        assert len(costs) == 1
+        assert costs[0]["costMode"] == "absolute-used-upper-bound"
+        assert costs[0]["actualCost"] is None and costs[0]["chargedBound"] == 21
+        assert costs[0]["reset"] == reset < now[0]
+        assert send(3, "end", requestId=request, bytes=17, complete=True)["accepted"] is False
+        assert supervisor.budget._snapshot("transport")["bytes"] == 17
+        assert supervisor.budget._snapshot("failed") is True
+        with pytest.raises(tools.TransitionError):
+            supervisor.budget.require_headroom(future_rest=0, future_graphql=0)
+        assert send(4, "begin", requestId=process + ":2", method="POST",
+                    host="api.github.com", path="/graphql", bucket="GraphQL")["accepted"] is False
+        assert supervisor.budget.used == {"shared-tools": [0, 21]}
+
+
 def test_unknown_graphql_cost_is_explicit_after_failure():
     supervisor = tools.Supervisor.__new__(tools.Supervisor)
     supervisor.budget = tools.RequestBudget("conformance")
