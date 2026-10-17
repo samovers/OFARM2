@@ -1,6 +1,6 @@
-# Installation and retirement runbook — proposed decision v4
+# Installation and retirement runbook — approved decision v4
 
-This runbook is part of the published proposed and semantically unapproved version-4 [Phase A](OFARM2_CI_Policy_Transition_RFC_v0_1.md) for [Delivery #416](https://github.com/samovers/OFARM2/issues/416), existing draft [PR #417](https://github.com/samovers/OFARM2/pull/417). Versions 2 and 3 were approved historically; implementation remains paused on the extended B3 finding. This proposal changes two guarantees and needs a new same-task card and later exact approval. It contains future operations, not commands to execute now. No policy SHA, grant, deadline or approval is implied by an example. `P` is the existing PR417; create no replacement PR. Publication does not authorize implementation or activation.
+This runbook implements the approved version-4 [Phase A](OFARM2_CI_Policy_Transition_RFC_v0_1.md) for [Delivery #416](https://github.com/samovers/OFARM2/issues/416), existing draft [PR #417](https://github.com/samovers/OFARM2/pull/417). The RFC records the original same-task card and later exact implementation approval. Section 1 records the completed design-approval stage; later activation and merge operations still need their named gates and separate original approvals. No policy SHA, grant or approval is implied by an example. `P` is the existing PR417; create no replacement PR.
 
 ## 1. Publish a reviewable proposal, then approve its meaning
 
@@ -111,4 +111,14 @@ T1 must retain the original campaign sunset; a fresh root/grant does not restart
 | User refuses provisional root reliance | Do not activate. Current policy remains and #411 stays blocked. |
 | Need to change DB, comparator, native currentness or independent custody rules | Stop at that boundary and propose separate work; do not stretch P. |
 
-Next: complete focused exact-head design review of the published version-4 Phase A before the live card. Implementation, activation and each merge retain their separate later gates.
+## Implemented entry points
+
+`conformance/ci_policy_transition_prepare.py` writes the fixed root manifest and both generated workflows. It requires an explicit consumer, campaign ID, not-before and sunset; it creates no grant, journal or activation. The prepared first root selects #413 and campaign `ci-policy-transition-20261017`, bounded by `2026-10-17T00:00:00Z` and `2026-10-24T00:00:00Z`. Later T1 must retain that sunset. Preparation dates do not supply permission to use the root.
+
+The generated workflows invoke `ci_policy_transition.py` for binding, live checks, guards, handoff, publication and seal. `ci_policy_transition_tools.py` owns the private accounting supervisor and exact Node/Git, curl and gh lifecycles. The root manifest fixes the coverage digest and disjoint request shares. Regenerate after any embedded asset changes and require the committed parity test to pass.
+
+The isolated operator uses `TransitionJournal` and the closure/archive functions in `ci_policy_transition_operator.py`. Journal creation precedes the exact-root packet. Hold its single-writer context while recording intent, reconciling the one public outcome, binding runs and consuming acceptance. These functions do not issue public writes or authenticate a human; the original-message and activation procedure above remains decisive.
+
+`ci_policy_transition_publication.py --operation verify-for-acceptance` takes the independently selected policy checkout, root manifest, grant, closure, expected root/closure, original-message projection and external journal/checkpoint/genesis paths. It reconstructs and revalidates the complete chain, checks fresh live facts, then consumes the exact tuple. Run it from the isolated selected T environment; never execute a receipt-selected or candidate verifier. Its `audit-consumed` operation requires a retired journal and archived root bundle and returns historical integrity only. No verifier output authorizes a native merge.
+
+Next: complete exact-head implementation review and the separate #413 repair/amendment prerequisites before presenting a concrete activation packet. Activation and each merge retain their later original-user gates.

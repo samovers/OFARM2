@@ -351,6 +351,1121 @@
       "sourcePath": "kernel/tests/test_authentication_read_api.py"
     },
     {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::LifecycleTests::test_bucket_mapping_and_explicit_cost_only_when_observed",
+      "sourceModule": "conformance.test_ci_policy_transition_execution",
+      "sourcePath": "conformance/test_ci_policy_transition_execution.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::LifecycleTests::test_callback_failure_and_cleanup_failure_cannot_close",
+      "sourceModule": "conformance.test_ci_policy_transition_execution",
+      "sourcePath": "conformance/test_ci_policy_transition_execution.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::LifecycleTests::test_cleanup_error_refuses_and_notifies",
+      "sourceModule": "conformance.test_ci_policy_transition_execution",
+      "sourcePath": "conformance/test_ci_policy_transition_execution.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::LifecycleTests::test_concurrent_callbacks_have_one_sequence_and_unique_request_ids",
+      "sourceModule": "conformance.test_ci_policy_transition_execution",
+      "sourcePath": "conformance/test_ci_policy_transition_execution.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::LifecycleTests::test_credential_free_environment_and_cleanup_before_close",
+      "sourceModule": "conformance.test_ci_policy_transition_execution",
+      "sourcePath": "conformance/test_ci_policy_transition_execution.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::LifecycleTests::test_graphql_does_not_invent_point_cost",
+      "sourceModule": "conformance.test_ci_policy_transition_execution",
+      "sourcePath": "conformance/test_ci_policy_transition_execution.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::LifecycleTests::test_unknown_cancel_stays_incomplete",
+      "sourceModule": "conformance.test_ci_policy_transition_execution",
+      "sourcePath": "conformance/test_ci_policy_transition_execution.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_account_before_dispatch_and_no_callback_secret",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_accounting_and_supervisor_failures_are_terminal",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_attestation_discovery_does_not_enable_foreign_blob",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_chunk_parser_partial_bytes_survive_terminal_failure",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_complete_response_and_owned_cleanup",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_completed_callback_failure_refuses_and_joins",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_concurrency_limit_is_terminal_even_without_forwarded_request",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_concurrent_requests_have_distinct_complete_identities",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_credential_substitution_and_external_credential_refuse",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_duplicate_or_hostile_headers_refuse",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_fixed_gh_headers_cannot_expand_authority",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_frozen_factory_uses_existing_validated_coordinates",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_graphql_has_exact_body_and_no_invented_point_cost",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_graphql_http_200_error_or_incomplete_data_refuses",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_hostile_redirect_and_page_overrun_refuse",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_incomplete_response_is_recorded_and_never_accepted",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_known_complete_tuf_404_survives_downstream_close",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_lifetime_and_cleanup_failure_are_terminal",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_missing_or_changed_config_and_socket_refuse",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_missing_quota_unknown_status_and_body_limit_refuse",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_no_traffic_cannot_accept_direct_fallback",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_receive_time_framing_limit_and_setup_cleanup",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_redirect_is_not_followed_and_each_leg_is_charged",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_request_limit_is_atomic",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_response_status_header_and_json_ambiguity_refuse",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_symlink_replacement_cannot_read_or_delete_target",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_terminal_403_and_429_never_resume",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_tls_failure_is_not_a_successful_response",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_unknown_method_host_path_query_and_body_refuse",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::RelayTests::test_unsafe_environment_refuses_without_network",
+      "sourceModule": "conformance.test_ci_policy_transition_gh_relay",
+      "sourcePath": "conformance/test_ci_policy_transition_gh_relay.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::ToolTraceHarnessTests::test_fixture_runtime_identity_is_explicitly_fictional",
+      "sourceModule": "conformance.test_ci_policy_transition_tool_calls",
+      "sourcePath": "conformance/test_ci_policy_transition_tool_calls.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::ToolTraceHarnessTests::test_wrong_bundle_refuses_before_execution_or_network",
+      "sourceModule": "conformance.test_ci_policy_transition_tool_calls",
+      "sourcePath": "conformance/test_ci_policy_transition_tool_calls.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_actual_bootstrap_main_observer_and_last_post_cleanup",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_actual_generated_supervisor_refuses_unknown_transport_then_post_cleans",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_actual_git_complete_history_private_pipe_and_hostile_header",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_actual_git_error_status_stops_before_retry",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_complete_http_and_undici_body_and_ordered_close",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_first_403_or_429_never_reaches_action_callback",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_generated_bootstrap_failure_before_registration_cleans_only_created_paths",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_generated_supervisor_rejects_killed_observer_and_last_post_cleans",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_generated_supervisor_rejects_unenumerated_node_graphql_before_dispatch",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_incomplete_response_settles_observed_bytes_and_never_closes_successfully",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_missing_changed_or_inherited_hook_selection_refuses_before_dispatch",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_missing_supervisor_ack_and_failed_process_refuse",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionNodeTests::test_no_raw_body_header_url_or_query_in_accounting_frames",
+      "sourceModule": "conformance.test_ci_policy_transition_node",
+      "sourcePath": "conformance/test_ci_policy_transition_node.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_append_fsync_and_checkpoint_boundaries_poison_handle",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_candidate_storage_and_colocated_checkpoint_refuse",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_complete_chain_consumes_once_and_only_same_tuple_is_inspection",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_concurrent_gate_instances_cannot_reserve_one_grant",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_durable_read_failure_never_returns_cached_authority",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_every_public_intent_boundary_is_preserved_on_checkpoint_failure",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_genesis_cannot_embed_final_grant_or_authority",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_live_projection_is_not_an_original_approval_claim",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_missing_journal_checkpoint_or_lock_refuses_no_rebuild",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_missing_original_authority_references_cannot_be_projected",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_observed_contradictory_comment_identity_is_terminal",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_only_exact_absent_nonmain_ref_can_be_reserved",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_out_of_order_publication_or_acceptance_refuses",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_post_public_write_checkpoint_failure_cannot_reconcile_or_reissue",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_returning_ref_does_not_allow_another_run_or_attempt",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_source_intent_is_durable_before_public_write",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_torn_append_and_checkpoint_rollback_refuse",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_unknown_public_outcome_consumes_grant_without_second_write",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionOperatorJournalTests::test_wrong_identity_and_attempt_two_cannot_rebind",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_closure_covers_static_imports_inputs_tests_and_exact_tree",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_closure_must_match_the_committed_manifest_declarations",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_exact_root_bundle_verifies_in_empty_repository_and_stays_historical",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_missing_dependency_symlink_unknown_declaration_and_skip_ci_refuse",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_native_currentness_retains_exact_six_ordinary_authority_files",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_preserved_ordinary_source_cannot_be_allowlisted_for_changes",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_receipt_selected_root_base_digest_or_tree_is_rejected",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_runtime_loaded_module_must_have_an_explicit_dependency_edge",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_static_import_or_explicit_dependency_mutation_invalidates_frozen_closure",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_undeclared_new_module_or_config_is_not_hidden_by_full_tree_digest",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_activation_filters_exclude_preparation_main_dispatch_tags_and_prs",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_all_producer_steps_after_candidate_checkout_are_unchanged",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_all_unlisted_publisher_steps_remain_byte_identical_and_ordered",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_bootstrap_loader_cleanup_and_retry_mutations_are_closed",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_cli_regeneration_changes_only_generated_files",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_committed_generated_outputs_regenerate_byte_for_byte",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_complete_generated_job_graph_has_no_missing_or_cyclic_dependencies",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_download_adapter_preserves_exact_ids_digests_destinations_and_validation",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_every_action_and_post_has_literal_bootstrap_and_final_disposition",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_external_parity_uses_assets_from_explicit_authenticated_policy_checkout",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_frozen_grants_use_environment_and_typed_outputs_only",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_generated_source_authenticates_exact_generated_publisher",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_guards_are_fresh_read_only_policy_jobs_except_self_cancellation",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_hostile_generated_transformations_are_refused",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_input_git_blobs_and_sha256_are_both_pinned",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_missing_duplicate_and_unexpected_structure_anchors_refuse",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_no_guard_dependency_cycle_and_all_producers_required",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_only_canonical_curl_and_gh_steps_receive_typed_lifecycle_environment",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_only_conformance_substantive_timeout_increases",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_only_two_named_consumers_and_fixed_concurrency",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_retry_rewrite_is_exactly_four_execution_invocations",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_ticket_and_receipt_exist_only_after_guarded_jobs",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_workload_tampering_cannot_become_a_generator_input",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_absolute_sweep_deadline_covers_body_parsing_and_whole_scan",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_accounting_is_atomic_across_processes_and_retains_terminal_failure",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_actual_core_cli_path_emits_only_frozen_typed_inputs_after_final_checks",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_actual_curl_first_refusal_is_incomplete_and_cleanup[403]",
+      "sourceModule": "conformance.test_ci_policy_transition_curl",
+      "sourcePath": "conformance/test_ci_policy_transition_curl.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_actual_curl_first_refusal_is_incomplete_and_cleanup[429]",
+      "sourceModule": "conformance.test_ci_policy_transition_curl",
+      "sourcePath": "conformance/test_ci_policy_transition_curl.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_actual_curl_redirect_status_bytes_and_cleanup",
+      "sourceModule": "conformance.test_ci_policy_transition_curl",
+      "sourcePath": "conformance/test_ci_policy_transition_curl.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_actual_curl_truncated_body_cannot_succeed",
+      "sourceModule": "conformance.test_ci_policy_transition_curl",
+      "sourcePath": "conformance/test_ci_policy_transition_curl.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_actual_low_quota_refuses_after_complete_positive_observations",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_artifact_redirect_charges_external_transport_without_spending_primary_rest_twice",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_authenticated_source_reader_refuses_even_https_redirect",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_binding_discovery_and_gate_charge_every_complete_comment_page",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_binding_discovery_expires_without_starting_a_producer",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_binding_discovery_never_rebinds_an_observed_admission",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_binding_discovery_positive_waits_once_then_performs_complete_gate",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_cancellation_counts_two_rest_requests_without_clearing_failure",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_changed_lock_cannot_fork_accounting_authority",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_complete_chain_rejects_targeted_published_substitution[<lambda>-context differs]",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_complete_chain_rejects_targeted_published_substitution[<lambda>-independently reconstructed0]",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_complete_chain_rejects_targeted_published_substitution[<lambda>-independently reconstructed1]",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_complete_chain_rejects_targeted_published_substitution[<lambda>-inventory is not exact]",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_complete_live_positive_records_every_actual_primary_request[False-source-gate-10]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_complete_live_positive_records_every_actual_primary_request[True-publisher-gate-12]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_complete_selected_root_pipeline_external_acceptance_and_retired_audit",
+      "sourceModule": "conformance.test_ci_policy_transition_acceptance",
+      "sourcePath": "conformance/test_ci_policy_transition_acceptance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_complete_source_ticket_native_publication_and_independent_reconstruction",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_completed_bytes_are_retained_after_failure_and_trace_omits_secrets",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_coverage_is_fixed_by_selected_code_and_cannot_be_widened_by_inputs",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_deleted_state_cannot_restart_budget",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_dispatch_rejects_cross_phase_operation_before_reading_candidate_inputs",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_download_refuses_bad_digest_before_extraction",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_each_revocation_and_provenance_fault_refuses_its_real_observation[actor]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_each_revocation_and_provenance_fault_refuses_its_real_observation[base]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_each_revocation_and_provenance_fault_refuses_its_real_observation[graph-cost]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_each_revocation_and_provenance_fault_refuses_its_real_observation[lifecycle]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_each_revocation_and_provenance_fault_refuses_its_real_observation[minimized]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_each_revocation_and_provenance_fault_refuses_its_real_observation[ordinary]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_each_revocation_and_provenance_fault_refuses_its_real_observation[parents]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_each_revocation_and_provenance_fault_refuses_its_real_observation[run-attempt]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_each_revocation_and_provenance_fault_refuses_its_real_observation[transition]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_exact_original_v4_approval_is_required_without_whitespace_aliases",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_exact_transition_artifact_inventory_rejects_single_fault[duplicate]",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_exact_transition_artifact_inventory_rejects_single_fault[expired]",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_exact_transition_artifact_inventory_rejects_single_fault[extra]",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_exact_transition_artifact_inventory_rejects_single_fault[incomplete]",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_exact_transition_artifact_inventory_rejects_single_fault[missing]",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_exact_transition_artifact_inventory_rejects_single_fault[other-run]",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_expected_binding_mutation_after_gate_refuses_before_handoff",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_external_acceptance_refuses_without_consuming_a_false_positive[coverage]",
+      "sourceModule": "conformance.test_ci_policy_transition_acceptance",
+      "sourcePath": "conformance/test_ci_policy_transition_acceptance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_external_acceptance_refuses_without_consuming_a_false_positive[journal-receipt]",
+      "sourceModule": "conformance.test_ci_policy_transition_acceptance",
+      "sourcePath": "conformance/test_ci_policy_transition_acceptance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_external_acceptance_refuses_without_consuming_a_false_positive[low-quota]",
+      "sourceModule": "conformance.test_ci_policy_transition_acceptance",
+      "sourcePath": "conformance/test_ci_policy_transition_acceptance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_external_acceptance_refuses_without_consuming_a_false_positive[original-approval]",
+      "sourceModule": "conformance.test_ci_policy_transition_acceptance",
+      "sourcePath": "conformance/test_ci_policy_transition_acceptance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_external_aliases_cannot_create_new_allowances",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_final_guard_forecast_excludes_only_provider_proved_finished_work",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_final_root_reauthentication_failure_emits_no_success_output",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_first_network_failure_latches_even_if_next_response_would_succeed[403]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_first_network_failure_latches_even_if_next_response_would_succeed[429]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_first_network_failure_latches_even_if_next_response_would_succeed[500]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_frozen_factory_loads_only_selected_trusted_native_policy",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_generated_policy_pipeline_reaches_real_validators_and_records_every_api_pool",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_generated_policy_positive_preserves_quota_across_reset_positions[119]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_generated_policy_positive_preserves_quota_across_reset_positions[120]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_generated_policy_positive_preserves_quota_across_reset_positions[1799]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_generated_policy_positive_preserves_quota_across_reset_positions[1]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_generated_policy_positive_preserves_quota_across_reset_positions[3599]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_graphql_charges_whole_used_upper_bound_never_snapshot_difference",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_guard_does_not_require_dependent_job_to_have_been_scheduled[False]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_guard_does_not_require_dependent_job_to_have_been_scheduled[True]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_guard_fixed_ceiling_is_terminal_even_when_provider_completes_at_ceiling[False]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_guard_fixed_ceiling_is_terminal_even_when_provider_completes_at_ceiling[True]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_guard_positive_uses_two_complete_sweeps_and_no_dependent_job_cycle[False]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_guard_positive_uses_two_complete_sweeps_and_no_dependent_job_cycle[True]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_guard_terminal_fault_blocks_handoff_and_only_cancels_its_own_run[cancel-fails]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_guard_terminal_fault_blocks_handoff_and_only_cancels_its_own_run[expired]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_guard_terminal_fault_blocks_handoff_and_only_cancels_its_own_run[missed-tick]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_guard_terminal_fault_blocks_handoff_and_only_cancels_its_own_run[missing]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_guard_terminal_fault_blocks_handoff_and_only_cancels_its_own_run[skipped]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_guard_tick_is_global_across_source_and_publisher_start_positions",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_incomplete_response_body_is_terminal_even_when_json_looks_valid",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_long_generated_guards_share_one_grid_for_every_hour_boundary",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_ordinary_main_publication_still_resolves_its_original_positive_chain",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_pool_allocations_preserve_reviewed_whole_grant",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_primary_quota_headers_are_required_on_negative_absence_proof",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_protected_error_body_is_fully_accounted_after_terminal_status_without_retention[403]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_protected_error_body_is_fully_accounted_after_terminal_status_without_retention[429]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_protected_error_body_is_fully_accounted_after_terminal_status_without_retention[503]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_protected_incomplete_read_accounts_partial_bytes_and_unknown_outcome",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_publication_cli_refuses_without_printing_provider_exception_context[transport]",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_publication_cli_refuses_without_printing_provider_exception_context[validation]",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_forecast_does_not_assume_a_reset_or_ignore_background_consumption",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_snapshots_survive_steps_and_never_credit_out_of_order_response",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_daemon_owns_curl_observer_and_counts_redirect_legs",
+      "sourceModule": "conformance.test_ci_policy_transition_curl",
+      "sourcePath": "conformance/test_ci_policy_transition_curl.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_first_refusal_stays_terminal_after_restart[403]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_first_refusal_stays_terminal_after_restart[429]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_missing_completion_refuses_even_after_process_exit",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_rejects_changed_bootstrap_before_any_rpc",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_retains_late_end_after_terminal_status",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_success_drain_and_owned_cleanup",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_unknown_graphql_cost_cannot_pass[contradictory-used]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_unknown_graphql_cost_cannot_pass[excess]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_unknown_graphql_cost_cannot_pass[missing-prior]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_unknown_graphql_cost_cannot_pass[no-cost]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_unknown_graphql_cost_cannot_pass[window-change]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_unknown_transport_is_not_a_generic_proxy",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_single_fault_reaches_intended_live_refusal[<lambda>-duplicate comment]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_single_fault_reaches_intended_live_refusal[<lambda>-edited]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_single_fault_reaches_intended_live_refusal[<lambda>-job context]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_single_fault_reaches_intended_live_refusal[<lambda>-missing]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_single_fault_reaches_intended_live_refusal[<lambda>-new operator-created]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_single_fault_reaches_intended_live_refusal[<lambda>-operator0]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_single_fault_reaches_intended_live_refusal[<lambda>-operator1]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_single_fault_reaches_intended_live_refusal[<lambda>-version 4]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_source_comparison_is_recomputed_by_the_real_validator",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_start_output_failure_reaps_daemon_and_cleanup_handles_fresh_assets",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_supervisor_lifetime_matches_guard_and_binding_jobs",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_sweep_deadline_is_terminal_and_cannot_be_reset",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_terminal_completion_keeps_status_bytes_and_rejects_new_dispatch",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_transition_receipt_cannot_be_an_ordinary_main_receipt",
+      "sourceModule": "conformance.test_ci_policy_transition_publication",
+      "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_transport_redirect_that_bypasses_accounting_is_terminal",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unfinished_comment_pagination_refuses_before_any_authority_output",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unknown_job_cannot_join_the_guarded_inventory",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
       "nodeid": "kernel/tests/test_conformance.py::test_01_append_only",
       "sourceModule": "kernel.tests.test_conformance",
       "sourcePath": "kernel/tests/test_conformance.py"
@@ -26036,8 +27151,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "91528b572c31892567ec5b67a697100d0a6e5f26f9c70406c86c1f67355a0b7f",
-  "entryCount": 5207,
+  "entriesSha256": "80b6d1dbd768a1183eba7c35da96814ee368d933e21c7da11e81f6ccecd45167",
+  "entryCount": 5430,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
