@@ -588,8 +588,9 @@ def _tool_environment(job: str, assets: dict[str, bytes], *, node: bool) -> str:
         )
     else:
         result += '          NODE_OPTIONS: ""\n'
-    for key in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
-                'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy', 'NODE_PATH',
+    # Workflow mapping keys are case-insensitive. The literal bootstrap clears
+    # the four lowercase proxy names through the runner's environment file.
+    for key in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_PATH',
                 'NODE_EXTRA_CA_CERTS', 'NODE_TLS_REJECT_UNAUTHORIZED', 'SSL_CERT_FILE', 'SSL_CERT_DIR',
                 'GIT_SSL_CAINFO', 'GIT_SSL_CAPATH', 'GIT_SSL_NO_VERIFY'):
         result += f'          {key}: ""\n'
@@ -684,6 +685,11 @@ try:
         target.chmod(0o600)
     environment = {{"PATH": "/usr/bin:/bin", "HOME": str(control), "LANG": "C.UTF-8"}}
     environment.update({{key: digests[name] for name, key in {asset_env!r}.items()}})
+    # Linux environment keys are case-sensitive, unlike workflow YAML keys.
+    # Publish fixed empty values before starting any process or Action posts.
+    with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+        output.write("http_proxy=\\nhttps_proxy=\\nall_proxy=\\nno_proxy=\\n")
+        output.flush()
     start_attempted = True
     subprocess.run(["/usr/bin/python3", "-I", "-S", str(control / "tools.py"), "start",
         "--directory", str(control), "--job", os.environ["TRANSITION_TOOLS_JOB"],

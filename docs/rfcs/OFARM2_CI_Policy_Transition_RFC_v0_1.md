@@ -215,6 +215,33 @@ Retain these four version-3 controls within version 2's closed rewrite set. Vers
 
 Every other command, order, service, cleanup, test selection, comparison, artifact content, architecture, timeout and tool/Action/image pin stays version2's, including the sole already proposed conformance45→60 change. Ordinary workflows and substantive validators remain byte-identical to B. No new diagnostic artifact enters the closed source/publisher inventories. Unknown generator structure or unlisted differences still refuse parity.
 
+### Workflow environment compatibility correction
+
+The first replacement grant reached its one source push on 17 October, but
+GitHub rejected both generated workflows before jobs started: uppercase and
+lowercase proxy names collide in workflow environment mappings. The failed
+grant remains terminal, with one source attempt used and no publisher attempt.
+The provider's validation records were not substituted for a bindable source.
+
+The generator now retains uppercase clearing in each protected step and writes
+exactly four fixed empty lowercase proxy values through `GITHUB_ENV` from the
+literal trusted bootstrap. This write completes before supervisor startup and
+before the first Action; open or partial-write failure stops bootstrap and
+removes its created assets without starting a process. On Linux the runner
+preserves environment-key case and applies these values to subsequent steps
+and Action posts. All eight Node proxy refusal checks, isolated helper
+environments, loader selection and final disposition remain unchanged.
+
+GitHub's official workflow parser reproduced the old duplicate-key annotations
+and accepts the corrected source and publisher. Regression controls independently
+check case-insensitive key uniqueness for both consumers, execute the actual
+bootstrap/hook/final cleanup with hostile inherited proxies using a runner-order
+environment model, reject each later proxy override before dispatch, and cover
+open and partial-write failures. Local parser and process controls do not prove
+hosted execution. This correction remains inside the approved CI evidence
+policy boundary; it changes no coverage, budget, sunset or acceptance rule.
+Next: fresh exact-head review and a new explicit exact-root grant before use.
+
 ### Relay ownership and transport contract
 
 The existing trusted root T owns the new relay. No new principal, remote proxy, credential, signing root or publication authority is introduced. This is explicitly **transport mediation**: gh's built-in socket sends requests over the private local connection, and T's relay performs upstream HTTPS peer authentication. Do not claim that the original gh process still performs that TLS handshake. The relay sees already-authorized request credentials transiently in memory; it must never persist or print credentials, headers, bodies, signed URLs or private key material. It does not create a local certificate authority or alter cryptographic attestation/TUF roots.
