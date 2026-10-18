@@ -75,7 +75,8 @@ remain fixtures. Existing substantive validation code runs unchanged.
 | G09, G25 schedule | `test_ci_policy_transition_integration.py` | Complete source60/handoff10/publication45 sequence, reset positions, long guards and every inclusive hour-boundary placement retain fresh checks, a single120-second grid and at most31 sweeps. Exact135/60-minute guard ceilings refuse even when the provider completes at the ceiling. |
 | G25 remaining headroom | Core and integration controls | Replay measured conformance19 REST/21 conservative points and native2 REST each through their owning shared-tool ledgers into the same provider quota as policy calls. Complete positive chains include window ages1,60,120 seconds. An exact-boundary completed periodic sweep is not forecast twice; initial, unproven, foreign and future ticks cannot earn that exclusion. Tool-share overruns and insufficient fresh headroom still refuse. |
 | G25 protected tools | `ci_policy_transition_tools.py`, `ci_policy_transition_execution.py`, Node/Git hooks, curl observer and gh relay | Real supervisor startup/drain/cleanup, failed and late completion accounting, missing/changed configuration, route/identity/body failures, first403/429, unknown GraphQL cost, quota/pagination overruns and fixed pool conservation. External acceptance uses the same56/10 share, not a new450/200 allowance. |
-| G25 quota refusal diagnostics | Core CLI and shared accounting tests | Actual fictional source-gate reads reproduce reset regression, changed limit and both together, emit only bounded previous/incoming facts, drain the response and retain terminal refusal after reopening the ledger. REST/GraphQL completion controls preserve the same rule; accepted window paths, malformed/oversize facts, foreign exceptions and long chains prove that optional diagnostics add no requests, durable authority or recovery. They do not reconstruct the missing observations from a historical hosted run. |
+| G25 independently expiring quota | Actual Python reader, shared ledger and generated pipeline controls | The saved numeric pair in both orders retains both live constraints. Observing/concurrent/later work debits each one; shorter or later incoming resets cannot replace an older forecast or balance. Staggered windows renew only after a fresh post-expiry request, through complete source60/handoff10/publisher45 and source133/publisher57 chains with all23 REST/21-point tool traffic. Separate ledger controls cover135/60-minute horizons. Wrong/missing REST resources, limits, clock, associations, overflow and insufficient headroom refuse. |
+| G25 quota refusal diagnostics | Core CLI and shared accounting tests | Changed limit and combined limit/reset changes emit only bounded previous/incoming facts, drain the response and retain terminal refusal after reopening the ledger. Reset-only changes now retain separate constraints. REST/GraphQL completion controls, malformed/oversize facts, foreign exceptions and long chains prove that optional diagnostics add no requests, durable authority or recovery. They do not establish the historical provider cause. |
 | G11, G25 workflow environment | Generator and workflow/Node tests | Independent case-insensitive mapping-key checks cover both consumers. Fixed lowercase proxy clearing uses the trusted bootstrap environment file before supervisor startup; uppercase clearing stays in step mappings. Actual bootstrap, hook and final cleanup execute with a runner-order environment model. Every later proxy override refuses before dispatch; open and partial-write failure start no process and remove created assets. The official GitHub parser separately reproduced the old validation errors and accepts both corrected workflows; this is local syntax evidence, not hosted acceptance. |
 
 The [first exact-head implementation review](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5558535455)
@@ -135,6 +136,20 @@ permanent refusal, accounting and absence of authority output remain decisive.
 These corrections do not establish the historical refusal's cause or restore
 the failed grant. The changed root needs fresh review and a new exact-root grant.
 
+A later source gate at `bc3e1982fc5d628cf00400412a0b26ff605cbee6`
+retained REST remaining4990/reset1792329216/limit5000 and received
+remaining4996/reset1792328917/limit5000. The299-second earlier reset alone caused
+refusal. Those facts do not establish a provider cause or a preceding raw
+snapshot. Offline probes also show that the old larger-reset path could replace
+a still-live low balance and that a shorter reset could shorten its forecast.
+The correction retains independent constraints, request-start completed-cost
+watermarks and per-expiry forecasts as specified in the RFC. It supplies no
+capacity solely from reset ordering. The private job ledger uses schema2; each
+new selected root starts fresh ledgers, with no migration or reopening of failed
+grant journals. The six historical grants remain terminal FAILED. Original
+version4 quota sufficiency and every fixed pool, margin and deadline remain;
+local positive fixtures do not establish hosted acceptance or future capacity.
+
 The [focused re-review](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5558614492)
 resolved root binding and lifetime, then identified one remaining accounting
 case across quota reset. Structural same-window validation now retains the
@@ -192,8 +207,8 @@ supervisor as the full native command, with fixture liveness and quota facts.
 This is protocol/accounting composition, not one generated hosted workflow.
 The four curl fixtures prove transport and cleanup with small fictional bodies,
 not the final binary checks. Those checks remain unchanged in the workflows.
-Earlier real-provider attempts returned contradictory still-live quota windows
-and correctly refused. Their cause is unknown; no final shared positive with
+Earlier real-provider attempts returned differing still-live quota windows
+and refused under the former reset-ordering rule. Their cause is unknown; no final shared positive with
 unmodified provider quota facts is claimed. Dependency/provider/ambient totals
 remain unknown, not zero or proven inside the margin. Local observations do
 not establish future workflow-token headroom or reserve quota.

@@ -102,7 +102,7 @@ The complete live gate and immutable binding checks remain mandatory.
 
 On CLI refusal, a bounded diagnostic may report allowlisted T-owned source
 file/line locations and plain integer HTTP statuses from the exception chain.
-For the existing contradictory-quota-window refusal, it may additionally report
+For a changed-limit contradictory-quota-window refusal, it may additionally report
 one typed observation: fixed reason `QUOTA_WINDOW_CONTRADICTION`, bucket REST
 or GraphQL, reset-regressed/limit-changed booleans, and the previous and incoming
 remaining/reset/limit integers. Each integer must be nonnegative and below
@@ -219,6 +219,33 @@ There are at most 31 scheduled sweeps in any conservatively inclusive 3,600-seco
 The cheap binding gate must check the actual workflow token's returned remaining/reset headers for both buckets before releasing expensive work. A PAT observation is not a substitute for that bucket. The frozen protected schedule/call plan must fit the remaining current-window budget, including margin and all possibly coincident stages; do not assume a reset will occur before a call or that each job gets a new budget. A later stage rechecks available headroom and actual returned cost before proceeding. Unknown, contradictory or insufficient required quota state, protected pool overrun, a protected `403`/`429`, protected GraphQL errors or incomplete required data (including HTTP 200), primary/secondary throttling of a protected operation, incomplete scan or deadline failure refuses the attempt without ticket/receipt authority. Never wait through a protected rate limit and count the resumed attempt as success, switch credentials, retry a workflow or retain stale authority. Cancellation is bounded; if its request is refused the guard still fails and dependent handoff/seal cannot pass. A fresh remaining/reset response is a snapshot, not a reservation or an attributable traffic ledger. Subtracting snapshots cannot identify hidden callers. Ambient consumption may exhaust headroom immediately afterward and cause refusal; availability and all-traffic budget compliance are not guaranteed.
 
 The remaining schedule excludes a periodic tick only after this isolated guard completes its full live and producer-state sweep in its own current periodic pool. At an exact tick boundary that completed sweep is already charged, so it is not future work. Initial checks and unproven ticks earn no such exclusion. Active siblings retain their full allowances unless completion is independently established; their earlier admission is not a reservation or proof of current spend. Conservative refusal can therefore occur even when actual aggregate spending remains below the whole-grant ceiling.
+
+Primary reset timestamps need not arrive in increasing order. Each independently
+expiring observation remains a constraint in the same trusted accounting ledger;
+a changed reset or higher remaining value cannot replenish or erase a live one.
+REST responses require resource `core`; existing tool resource checks and the
+GraphQL document/cost checks remain mandatory. Missing facts, changed limits,
+expired observations and insufficient headroom still refuse.
+
+Before dispatch, associate the request with local bucket cost `S` already known
+complete, excluding every pending request. An observation of remaining `r` at
+expiry `e` records capacity `C = r + S`. Its balance at a later check is `C - U`,
+where `U` is all locally charged cost in that bucket. Thus observing, concurrent
+and later work cannot receive false completion credit; double counting the
+observing request is conservative. Same-expiry observations coalesce by minimum
+capacity. Every live expiry must separately support the unchanged remaining
+stage/sibling allowances, scheduled sweeps through its own expiry, and75/75
+margin. A shorter new expiry cannot shorten an older live forecast.
+
+An old constraint retires only on a valid response to an already-required request
+whose trusted start time is at or after that constraint's expiry. Clock passage
+alone supplies no renewal, and a request begun before expiry supplies none even
+if it finishes afterward. The clock cannot move backward. Existing2048-request,
+trace and ledger byte bounds cap state; overflow refuses without evicting live
+constraints. Raw last observations remain separate solely for the unchanged
+same-window GraphQL cost proof; an aggregate cannot prove an unknown query cost.
+This is a version4 implementation correction preserving required quota
+sufficiency, not an added traffic exception, quota reservation, wait or retry.
 
 These numbers define the protected-operation design envelope. The implementation's measured local controls and their limits are recorded in the [guarantee matrix](OFARM2_CI_Policy_Transition_Guarantee_Matrix_v0_1.md#local-implementation-verification); they are not hosted acceptance. Before any exact-root activation packet, mandatory cheap acceptance must instrument the actual complete generated source/publisher paths, pinned tool/action calls and original substantive validators, with every protected request/point/page cost attributable to its owning pool and separately disclosed dependency/provider coverage. It must prove one positive 60-minute source plus 10-minute handoff and complete publisher/seal chain within the envelope; also cover the existing 135-minute source-guard and 60-minute publisher-guard ceilings, every relative start/reset position and a source-to-publisher boundary inside one quota window. Add negative controls for low starting quota, background consumption, increased pagination/cost, unexpected protected API calls, forged exception labels, missed tick/deadline, and rate-limit/cancel failure. Keep fresh decisive checks in every control. If the complete positive path cannot fit these fixed ceilings, correct and re-review the design before activation; a refusal-only fixture is not proof of workable installation.
 

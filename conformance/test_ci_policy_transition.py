@@ -14,6 +14,7 @@ from unittest import mock
 import pytest
 
 from conformance import ci_policy_transition as transition
+from conformance.test_ci_policy_transition_tools import _observe_quota
 
 
 NOW = datetime(2030, 1, 1, 0, 0, 10, tzinfo=timezone.utc)
@@ -169,7 +170,7 @@ class Provider:
         else:
             self.rest += 1
         headers = {"X-RateLimit-Remaining": str(self.rest_remaining-self.rest),
-            "X-RateLimit-Reset": str(self.reset), "X-RateLimit-Limit": "1000"}
+            "X-RateLimit-Reset": str(self.reset), "X-RateLimit-Limit": "1000", "X-RateLimit-Resource": "core"}
         if self.fail_status is not None:
             raise urllib.error.HTTPError(request.full_url, self.fail_status, "fictional failure", headers, io.BytesIO(b""))
         if path == "/graphql":
@@ -568,7 +569,7 @@ def test_discovery_completion_preserves_time_and_immutable_record_refusals(role,
         if path == "/issues/413/comments":
             provider.now += timedelta(seconds=-1 if case == "backwards" else 2)
     provider.fault = after_read
-    with pytest.raises(transition.TransitionError, match="bounded gate|edited, premature or future-dated"):
+    with pytest.raises(transition.TransitionError, match="bounded gate|edited, premature or future-dated|clock moved backwards"):
         transition.discover_binding(provider.policy, provider.reader(role + "-gate"), role=role,
             event=provider.event, job_context=provider.context, clock=lambda: provider.now,
             sleep=lambda _seconds: pytest.fail("observed refusal must not wait"))
@@ -779,7 +780,7 @@ def test_artifact_redirect_charges_external_transport_without_spending_primary_r
     provider = Provider()
     calls = []
     payload = b"fictional archive payload"
-    headers = {"X-RateLimit-Remaining": "999", "X-RateLimit-Reset": str(provider.reset), "X-RateLimit-Limit": "1000"}
+    headers = {"X-RateLimit-Remaining": "999", "X-RateLimit-Reset": str(provider.reset), "X-RateLimit-Limit": "1000", "X-RateLimit-Resource": "core"}
     def open_request(request, timeout):
         calls.append(request)
         if len(calls) == 1:
@@ -798,7 +799,7 @@ def test_authenticated_source_reader_refuses_even_https_redirect():
     provider = Provider()
     def open_request(request, timeout):
         raise urllib.error.HTTPError(request.full_url, 302, "redirect",
-            {"X-RateLimit-Remaining": "999", "X-RateLimit-Reset": str(provider.reset), "X-RateLimit-Limit": "1000",
+            {"X-RateLimit-Remaining": "999", "X-RateLimit-Reset": str(provider.reset), "X-RateLimit-Limit": "1000", "X-RateLimit-Resource": "core",
              "Location": "https://fictional.blob.core.windows.net/input"}, io.BytesIO(b""))
     reader = transition.ApiReader("fictional-workflow-token", budget=transition.RequestBudget("publish", clock=lambda: provider.now.timestamp()), opener=open_request)
     with pytest.raises(transition.TransitionError, match="HTTP request refused"):
@@ -836,7 +837,7 @@ def test_incomplete_response_body_is_terminal_even_when_json_looks_valid():
     provider = Provider()
     def open_request(request, timeout):
         return Response(request.full_url, b"{}", {"Content-Length": "3", "X-RateLimit-Remaining": "999",
-            "X-RateLimit-Reset": str(provider.reset), "X-RateLimit-Limit": "1000"})
+            "X-RateLimit-Reset": str(provider.reset), "X-RateLimit-Limit": "1000", "X-RateLimit-Resource": "core"})
     reader = transition.ApiReader("fictional-workflow-token", budget=transition.RequestBudget("source-gate", clock=lambda: provider.now.timestamp()), opener=open_request)
     with pytest.raises(transition.TransitionError, match="body incomplete"):
         reader("/repos/fictional-farm/transition-fixture/pulls/413")
@@ -857,7 +858,7 @@ def test_transport_redirect_that_bypasses_accounting_is_terminal():
     provider = Provider()
     def open_request(request, timeout):
         return Response("https://api.github.com/other", b"{}", {"X-RateLimit-Remaining": "999",
-            "X-RateLimit-Reset": str(provider.reset), "X-RateLimit-Limit": "1000"})
+            "X-RateLimit-Reset": str(provider.reset), "X-RateLimit-Limit": "1000", "X-RateLimit-Resource": "core"})
     reader = transition.ApiReader("fictional-workflow-token", budget=transition.RequestBudget("source-gate", clock=lambda: provider.now.timestamp()), opener=open_request)
     with pytest.raises(transition.TransitionError, match="unobserved redirect"):
         reader("/repos/fictional-farm/transition-fixture/pulls/413")
@@ -898,7 +899,7 @@ def test_quota_forecast_does_not_assume_a_reset_or_ignore_background_consumption
     _live, reader = validate(provider, "source-gate")
     baseline = transition.require_quota_headroom(reader, provider.grant, "source-gate", now=provider.now)
     assert baseline["REST"] == 965  # 450 unspent pools - 10 reads + 30 ticks*15 +75.
-    reader.budget.observe_quota("REST", remaining=baseline["REST"]-1, reset=provider.reset, limit=1000)
+    _observe_quota(reader.budget, "REST", remaining=baseline["REST"]-1, reset=provider.reset, limit=1000)
     with pytest.raises(transition.TransitionError, match="headroom|quota"):
         transition.require_quota_headroom(reader, provider.grant, "source-gate", now=provider.now)
 
@@ -933,7 +934,7 @@ def test_completed_periodic_sweep_is_not_forecast_again_at_its_exact_tick(phase,
             [15, 5] if fraction == 0 else [0, 0])
         # A completed sweep removes only itself. Unknown siblings still retain
         # their full ceilings, and a fresh snapshot one below the forecast fails.
-        reader.budget.observe_quota("REST", remaining=complete["REST"]-1, reset=provider.reset, limit=1000)
+        _observe_quota(reader.budget, "REST", remaining=complete["REST"]-1, reset=provider.reset, limit=1000)
         with pytest.raises(transition.TransitionError, match="headroom|quota"):
             transition.require_quota_headroom(reader, provider.grant, phase,
                 now=provider.now, completed_tick=tick)
@@ -968,7 +969,7 @@ def test_protected_error_body_is_fully_accounted_after_terminal_status_without_r
         calls.append(request)
         raise urllib.error.HTTPError(request.full_url, status, "fictional", {
             "Content-Length": str(len(payload)), "X-RateLimit-Remaining": "999",
-            "X-RateLimit-Reset": str(provider.reset), "X-RateLimit-Limit": "1000"}, io.BytesIO(payload))
+            "X-RateLimit-Reset": str(provider.reset), "X-RateLimit-Limit": "1000", "X-RateLimit-Resource": "core"}, io.BytesIO(payload))
     budget = transition.RequestBudget("source-gate", clock=lambda: provider.now.timestamp())
     reader = transition.ApiReader("fictional-token", budget=budget, opener=opener)
     for _ in range(2):
@@ -990,7 +991,7 @@ def test_protected_incomplete_read_accounts_partial_bytes_and_unknown_outcome():
     reader = transition.ApiReader("fictional-token", budget=transition.RequestBudget("source-gate",
         clock=lambda: provider.now.timestamp()), opener=lambda request, timeout: Truncated(request.full_url,
             b"", {"Content-Length": "27", "X-RateLimit-Remaining": "999",
-                "X-RateLimit-Reset": str(provider.reset), "X-RateLimit-Limit": "1000"}))
+                "X-RateLimit-Reset": str(provider.reset), "X-RateLimit-Limit": "1000", "X-RateLimit-Resource": "core"}))
     with pytest.raises(transition.TransitionError, match="body unavailable"):
         reader("/repos/fictional-farm/transition-fixture/pulls/413")
     assert reader.budget._snapshot("transport")["bytes"] == 7
@@ -1058,6 +1059,51 @@ def test_graphql_failure_without_cost_keeps_uncertainty_explicit():
     assert budget.trace[-1] == {"bucket":"GraphQL", "costMode":"unknown", "actualCost":None, "chargedBound":None}
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+def test_overlapping_live_reset_observations_preserve_both_constraints(tmp_path, reverse):
+    now = 1792325619
+    values = [(4990, 1792329216), (4996, 1792328917)]
+    if reverse:
+        values.reverse()
+    pending = iter(values)
+    tmp_path.chmod(0o700)
+    budget = transition.RequestBudget("source-gate", path=tmp_path.resolve() / "quota.json", clock=lambda: now)
+    def opener(request, timeout):
+        remaining, reset = next(pending)
+        return Response(request.full_url, b"{}", {"X-RateLimit-Remaining": str(remaining),
+            "X-RateLimit-Reset": str(reset), "X-RateLimit-Limit": "5000", "X-RateLimit-Resource": "core"})
+    reader = transition.ApiReader("fictional-token", budget=budget, opener=opener)
+    for _ in range(2):
+        assert reader("/repos/fictional-farm/fixture/actions/runs/201") == {}
+    reopened = transition.RequestBudget("source-gate", path=budget.path, clock=lambda: now)
+    constraints = reopened.quota_constraints["REST"]
+    assert {item["reset"] for item in constraints} == {reset for _remaining, reset in values}
+    assert {item["reset"]: item["remaining"] for item in constraints} == {
+        values[0][1]: values[0][0] - 2, values[1][1]: values[1][0] - 1}
+    assert reopened.used == {"source-gate": [2, 0]}
+    assert reopened._snapshot("primaryRequests") == {}
+    reopened.assert_healthy()
+
+
+@pytest.mark.parametrize("resource", [None, "graphql", "search"])
+def test_python_primary_resource_must_match_the_selected_rest_route(resource):
+    headers = {"X-RateLimit-Remaining": "4990", "X-RateLimit-Reset": "2000", "X-RateLimit-Limit": "5000"}
+    if resource is not None:
+        headers["X-RateLimit-Resource"] = resource
+    budget = transition.RequestBudget("source-gate", clock=lambda: 1000)
+    calls = []
+    def opener(request, timeout):
+        calls.append(request.full_url)
+        return Response(request.full_url, b"{}", headers)
+    reader = transition.ApiReader("fictional-token", budget=budget, opener=opener)
+    for _ in range(2):
+        with pytest.raises(transition.TransitionError):
+            reader("/repos/fictional-farm/fixture/actions/runs/201")
+    assert len(calls) == 1
+    assert budget.used == {"source-gate": [1, 0]}
+    assert budget.trace[-1]["complete"] is True
+
+
 @pytest.mark.parametrize("change", ["reset", "limit", "both"])
 def test_cli_quota_contradiction_reports_bounded_facts_and_stays_terminal(tmp_path, capsys, change):
     provider = Provider()
@@ -1099,6 +1145,17 @@ def test_cli_quota_contradiction_reports_bounded_facts_and_stays_terminal(tmp_pa
             environment=environment, checkout=checkout, reader=reader, clock=lambda: provider.now)):
         assert transition.main(argv) == 1
     captured = capsys.readouterr()
+    if change == "reset":
+        # Reset variation is coherent, but this diagnostic fixture deliberately
+        # lacks a real selected Git root. It cannot manufacture authority output.
+        assert not captured.out and sensitive not in captured.err
+        assert not output.exists() and not evidence.exists()
+        assert "quotaWindow" not in captured.err
+        assert "ci_policy_transition_operator.py" in captured.err
+        assert {item["reset"] for item in budget.quota_constraints["REST"]} == {provider.reset, provider.reset-1}
+        with pytest.raises(transition.TransitionError, match="permanently refused"):
+            budget.assert_healthy()
+        return
     assert not captured.out and sensitive not in captured.err
     diagnostic = json.loads(captured.err.split("CI policy transition diagnostic: ")[1])
     assert diagnostic["quotaWindow"] == {"reason": "QUOTA_WINDOW_CONTRADICTION", "bucket": "REST",
@@ -1126,7 +1183,7 @@ def test_cli_refusal_diagnostics_locate_real_reader_failure_without_provider_tex
     def opener(request, timeout):
         calls.append(request)
         raise urllib.error.HTTPError("https://fictional.invalid/?signed=" + sensitive,
-            status, sensitive, {"X-RateLimit-Remaining": "999", "X-RateLimit-Limit": "1000",
+            status, sensitive, {"X-RateLimit-Remaining": "999", "X-RateLimit-Limit": "1000", "X-RateLimit-Resource": "core",
                 "X-RateLimit-Reset": str(provider.reset), "Private": sensitive},
             io.BytesIO(sensitive.encode()))
     reader._opener = opener
@@ -1261,9 +1318,9 @@ def test_quota_diagnostic_cannot_be_selected_by_foreign_exception_or_subclass():
 
 def test_diagnostic_numeric_ceiling_never_relaxes_quota_refusal():
     budget = transition.RequestBudget("source-gate", clock=lambda: 1000)
-    budget.observe_quota("REST", remaining=990, reset=10 ** 13, limit=1000)
+    _observe_quota(budget, "REST", remaining=990, reset=10 ** 13, limit=1000)
     with pytest.raises(transition.TransitionError, match="contradictory quota window") as error:
-        budget.observe_quota("REST", remaining=989, reset=10 ** 13 - 1, limit=1000)
+        _observe_quota(budget, "REST", remaining=989, reset=10 ** 13 - 1, limit=1001)
     assert "quotaWindow" not in transition._refusal_diagnostic(error.value)
     with pytest.raises(transition.TransitionError, match="permanently refused"):
         budget.assert_healthy()

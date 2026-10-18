@@ -5,6 +5,7 @@ from __future__ import annotations
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
 import hashlib
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -18,6 +19,21 @@ import pytest
 from conformance import ci_policy_transition_tools as tools
 
 ROOT = Path(__file__).resolve().parent
+
+
+def _observe_quota(budget, bucket, **values):
+    """Seed a fictional pre-existing response without inventing metered traffic.
+
+    Transport tests use begin_primary and actual reader/supervisor lifecycles.
+    This fixture supplies the request witness for isolated accounting controls.
+    """
+    identity = uuid.uuid4().hex
+    with budget._transaction() as state:
+        pending = sum(r["cost"] for r in state["primaryRequests"].values() if r["bucket"] == bucket)
+        state["primaryRequests"][identity] = {"bucket": bucket, "startedAt": budget._clock(state),
+            "settledBefore": budget._charged(state, bucket)-pending, "cost": 0,
+            "observed": False, "complete": True}
+    return budget.observe_quota(bucket, request_id=identity, **values)
 
 
 def _charge_separate_process(path, count):
@@ -73,11 +89,12 @@ def test_quota_snapshots_survive_steps_and_never_credit_out_of_order_response(tm
     tmp_path.chmod(0o700)
     path = tmp_path / "ledger.json"
     budget = tools.RequestBudget("conformance", path=path, clock=lambda: 1000)
-    budget.observe_quota("REST", remaining=990, reset=2000, limit=1000)
-    budget.observe_quota("REST", remaining=995, reset=2000, limit=1000)
+    _observe_quota(budget, "REST", remaining=990, reset=2000, limit=1000)
+    _observe_quota(budget, "REST", remaining=995, reset=2000, limit=1000)
     other = tools.RequestBudget("conformance", path=path, clock=lambda: 1000)
-    assert other.quota["REST"]["remaining"] == 990
-    other.observe_quota("GraphQL", remaining=900, reset=2000, limit=1000)
+    assert other.quota["REST"]["remaining"] == 995
+    assert other.quota_constraints["REST"][0]["remaining"] == 990
+    _observe_quota(other, "GraphQL", remaining=900, reset=2000, limit=1000)
     other.require_headroom(future_rest=990, future_graphql=900)
     with pytest.raises(tools.TransitionError, match="insufficient"):
         other.require_headroom(future_rest=991, future_graphql=900)
@@ -109,9 +126,9 @@ def test_quota_contradiction_carries_facts_without_changing_terminal_state(tmp_p
     tmp_path.chmod(0o700)
     path = tmp_path / "ledger.json"
     budget = tools.RequestBudget("source-gate", path=path, clock=lambda: 1000)
-    budget.observe_quota(bucket, remaining=990, reset=2000, limit=1000)
+    _observe_quota(budget, bucket, remaining=990, reset=2000, limit=1000)
     with pytest.raises(tools.QuotaWindowError, match="contradictory quota window") as error:
-        budget.observe_quota(bucket, remaining=989, reset=1999, limit=1001, completion=completion)
+        _observe_quota(budget, bucket, remaining=989, reset=1999, limit=1001, completion=completion)
     assert error.value.diagnostic() == {"reason": "QUOTA_WINDOW_CONTRADICTION", "bucket": bucket,
         "resetRegressed": True, "limitChanged": True,
         "previous": {"remaining": 990, "reset": 2000, "limit": 1000},
@@ -129,10 +146,137 @@ def test_quota_contradiction_carries_facts_without_changing_terminal_state(tmp_p
 @pytest.mark.parametrize("remaining,reset,expected", [(989, 2000, 989), (995, 2000, 990), (999, 5600, 999)])
 def test_quota_diagnostics_preserve_accepted_window_paths(bucket, remaining, reset, expected):
     budget = tools.RequestBudget("source-gate", clock=lambda: 1000)
-    budget.observe_quota(bucket, remaining=990, reset=2000, limit=1000)
-    budget.observe_quota(bucket, remaining=remaining, reset=reset, limit=1000)
+    _observe_quota(budget, bucket, remaining=990, reset=2000, limit=1000)
+    _observe_quota(budget, bucket, remaining=remaining, reset=reset, limit=1000)
     budget.assert_healthy()
-    assert budget.quota == {bucket: {"remaining": expected, "reset": reset, "limit": 1000}}
+    assert budget.quota == {bucket: {"remaining": remaining, "reset": reset, "limit": 1000}}
+    assert {q["reset"]: q["remaining"] for q in budget.quota_constraints[bucket]} == (
+        {2000: min(990, remaining)} if reset == 2000 else {2000: 990, reset: expected})
+
+
+def test_inflight_primary_requests_cannot_supply_completed_cost_credit(tmp_path):
+    tmp_path.chmod(0o700)
+    budget = tools.RequestBudget("source-gate", path=tmp_path / "ledger.json", clock=lambda: 1000)
+    first, second = uuid.uuid4().hex, uuid.uuid4().hex
+    budget.begin_primary(first, "REST", "first")
+    budget.begin_primary(second, "REST", "second")
+    assert all(r["settledBefore"] == 0 for r in budget._snapshot("primaryRequests").values())
+    budget.observe_quota("REST", remaining=998, reset=2000, limit=1000, request_id=second)
+    budget.record_outcome(second, status=200, complete=True)
+    budget.observe_quota("REST", remaining=999, reset=1999, limit=1000, request_id=first)
+    budget.record_outcome(first, status=200, complete=True)
+    reopened = tools.RequestBudget("source-gate", path=budget.path, clock=lambda: 1000)
+    assert reopened.quota_constraints["REST"] == [
+        {"remaining": 997, "reset": 1999, "limit": 1000},
+        {"remaining": 996, "reset": 2000, "limit": 1000}]
+    assert reopened._snapshot("primaryRequests") == {}
+
+
+@pytest.mark.parametrize("incoming_reset", [4300, 4900])
+def test_later_local_work_debits_every_live_constraint(incoming_reset):
+    budget = tools.RequestBudget("source-gate", clock=lambda: 1000)
+    _observe_quota(budget, "REST", remaining=960, reset=4600, limit=1000)
+    _observe_quota(budget, "GraphQL", remaining=1000, reset=4600, limit=1000)
+    budget.charge("REST", 30, "fictional later completed work")
+    _observe_quota(budget, "REST", remaining=999, reset=incoming_reset, limit=1000)
+    assert next(q for q in budget.quota_constraints["REST"] if q["reset"] == 4600)["remaining"] == 930
+    with pytest.raises(tools.TransitionError, match="insufficient"):
+        budget.require_headroom(future_rest=950, future_graphql=430)
+    with pytest.raises(tools.TransitionError, match="permanently"):
+        budget.begin_primary(uuid.uuid4().hex, "REST", "refused new dispatch")
+
+
+def test_shorter_new_reset_cannot_shorten_an_older_live_forecast():
+    budget = tools.RequestBudget("source-gate", clock=lambda: 1000)
+    _observe_quota(budget, "REST", remaining=700, reset=4600, limit=1000)
+    _observe_quota(budget, "REST", remaining=999, reset=1060, limit=1000)
+    _observe_quota(budget, "GraphQL", remaining=1000, reset=4600, limit=1000)
+    with pytest.raises(tools.TransitionError, match="insufficient"):
+        budget.require_headroom(future_rest=525, future_graphql=275, first_tick=1080, periodic_end=4600)
+
+
+@pytest.mark.parametrize("started", [1009, 1010, 1011])
+def test_each_expired_constraint_needs_a_fresh_post_expiry_request(started):
+    now = [1000]
+    budget = tools.RequestBudget("source-gate", clock=lambda: now[0])
+    _observe_quota(budget, "REST", remaining=990, reset=1010, limit=1000)
+    _observe_quota(budget, "REST", remaining=980, reset=1050, limit=1000)
+    _observe_quota(budget, "GraphQL", remaining=1000, reset=5000, limit=1000)
+    now[0] = started
+    identity = uuid.uuid4().hex
+    budget.begin_primary(identity, "REST", "overlapping renewal")
+    now[0] = 1012
+    budget.observe_quota("REST", remaining=999, reset=4610, limit=1000, request_id=identity)
+    budget.record_outcome(identity, status=200, complete=True)
+    assert {q["reset"] for q in budget.quota_constraints["REST"]} == (
+        {1010, 1050, 4610} if started < 1010 else {1050, 4610})
+    if started < 1010:
+        with pytest.raises(tools.TransitionError, match="insufficient"):
+            budget.require_headroom(future_rest=500, future_graphql=430)
+    else:
+        budget.require_headroom(future_rest=500, future_graphql=430)
+
+
+@pytest.mark.parametrize("minutes", [60, 135])
+@pytest.mark.parametrize("offset", [0, 1, 119, 300])
+def test_actual_ledger_renews_staggered_windows_through_full_guard_horizons(minutes, offset):
+    now = [7200 + offset]
+    budget = tools.RequestBudget("source-guard", clock=lambda: now[0])
+    history = {"REST": [], "GraphQL": []}
+    peak = 0
+    start = math.ceil(now[0] / 120) * 120
+    for tick in range(start, start + minutes * 60, 120):
+        now[0] = tick
+        budget.current_pool = f"periodic:{tick}"
+        for bucket, count, cost in (("REST", 15, 1), ("GraphQL", 1, 5)):
+            for number in range(count):
+                shift = 299 if (number + tick // 120) % 2 else 0
+                reset = ((tick - shift) // 3600 + 1) * 3600 + shift
+                identity = uuid.uuid4().hex
+                budget.begin_primary(identity, bucket, "fictional protected sweep")
+                if cost > 1:
+                    budget.charge(bucket, cost - 1, "actual fictional query cost", completion=True, request_id=identity)
+                history[bucket].append((tick, cost))
+                remaining = 1000 - sum(value for at, value in history[bucket] if reset - 3600 <= at < reset)
+                budget.observe_quota(bucket, remaining=remaining, reset=reset, limit=1000, request_id=identity)
+                budget.record_outcome(identity, status=200, complete=True)
+        budget.require_headroom(future_rest=525, future_graphql=275,
+            first_tick=tick + 120, periodic_end=tick + 3600)
+        peak = max(peak, sum(len(q) for q in budget.quota_constraints.values()))
+    assert peak <= 4
+    assert budget._snapshot("primaryRequests") == {}
+    assert all(used == [15, 5] for used in budget.used.values())
+    budget.assert_healthy()
+
+
+@pytest.mark.parametrize("fault", ["unassociated", "duplicate", "backwards", "nan"])
+def test_quota_request_and_clock_failures_are_terminal(fault):
+    now = [1000]
+    budget = tools.RequestBudget("source-gate", clock=lambda: now[0])
+    identity = uuid.uuid4().hex
+    budget.begin_primary(identity, "REST", "fixture")
+    if fault == "duplicate":
+        budget.observe_quota("REST", remaining=999, reset=2000, limit=1000, request_id=identity)
+    if fault in ("backwards", "nan"):
+        now[0] = 999 if fault == "backwards" else float("nan")
+    with pytest.raises(tools.TransitionError):
+        budget.observe_quota("REST", remaining=999, reset=2000, limit=1000,
+                            request_id=None if fault == "unassociated" else identity)
+    with pytest.raises(tools.TransitionError, match="permanently"):
+        budget.assert_healthy()
+
+
+def test_constraint_overflow_refuses_without_evicting_live_observations(monkeypatch):
+    monkeypatch.setattr(tools, "TRANSPORT_REQUEST_LIMIT", 2)
+    budget = tools.RequestBudget("source-gate", clock=lambda: 1000)
+    _observe_quota(budget, "REST", remaining=990, reset=2000, limit=1000)
+    _observe_quota(budget, "REST", remaining=980, reset=3000, limit=1000)
+    before = budget.quota_constraints
+    with pytest.raises(tools.TransitionError, match="constraint bound"):
+        _observe_quota(budget, "GraphQL", remaining=999, reset=4000, limit=1000)
+    assert budget.quota_constraints == before
+    with pytest.raises(tools.TransitionError, match="permanently"):
+        budget.assert_healthy()
 
 
 def test_completed_bytes_are_retained_after_failure_and_trace_omits_secrets():
@@ -330,9 +474,10 @@ def test_graphql_charges_whole_used_upper_bound_never_snapshot_difference():
     supervisor.budget = tools.RequestBudget("conformance")
     supervisor.budget.current_pool = "shared-tools"
     reset = int(time.time()) + 3600
-    supervisor.budget.observe_quota("GraphQL", remaining=999, reset=reset, limit=1000)
+    _observe_quota(supervisor.budget, "GraphQL", remaining=999, reset=reset, limit=1000)
     prior = supervisor.budget.quota["GraphQL"]
-    supervisor.budget.charge("GraphQL", 1, "dispatch")
+    identity = uuid.uuid4().hex
+    supervisor.budget.begin_primary(identity, "GraphQL", "dispatch")
     supervisor._observe_primary(
         "GraphQL",
         {
@@ -343,6 +488,7 @@ def test_graphql_charges_whole_used_upper_bound_never_snapshot_difference():
             "limit": 1000,
         },
         prior,
+        request_id=identity,
     )
     assert supervisor.budget.used == {"shared-tools": [0, 4]}
 
@@ -356,10 +502,11 @@ def test_real_supervisor_unknown_graphql_cost_cannot_pass(failure):
     supervisor.budget = budget = tools.RequestBudget("conformance")
     budget.current_pool = "shared-tools"
     reset = int(time.time()) + 3600
-    budget.charge("GraphQL", 1, "dispatch")
+    identity = uuid.uuid4().hex
+    budget.begin_primary(identity, "GraphQL", "dispatch")
     prior = None
     if failure != "missing-prior":
-        budget.observe_quota("GraphQL", remaining=999, reset=reset, limit=1000)
+        _observe_quota(budget, "GraphQL", remaining=999, reset=reset, limit=1000)
         prior = budget.quota["GraphQL"]
     quota = {
         "bucket": "GraphQL",
@@ -377,7 +524,7 @@ def test_real_supervisor_unknown_graphql_cost_cannot_pass(failure):
     elif failure == "excess":
         quota.update(remaining=959, used=41)
     with pytest.raises(tools.TransitionError):
-        supervisor._observe_primary("GraphQL", quota, prior)
+        supervisor._observe_primary("GraphQL", quota, prior, request_id=identity)
 
 
 def test_real_supervisor_rejects_changed_bootstrap_before_any_rpc():
@@ -563,7 +710,7 @@ def test_owned_graphql_settles_known_upper_bound_after_throttle_or_other_failure
     with _running_supervisor() as (control, config, _environment):
         supervisor = tools.Supervisor(control, config)
         reset = int(time.time()) + 3600
-        supervisor.budget.observe_quota("GraphQL", remaining=980, reset=reset, limit=1000)
+        _observe_quota(supervisor.budget, "GraphQL", remaining=980, reset=reset, limit=1000)
         process = str(uuid.uuid4())
         request = process + ":1"
         def send(sequence, operation, **fields):
@@ -592,7 +739,7 @@ def test_owned_graphql_settles_historical_bound_after_reset_without_headroom(sta
         reset = 1001
         now = [reset - 1]
         supervisor.budget.clock = lambda: now[0]
-        supervisor.budget.observe_quota("GraphQL", remaining=980, reset=reset, limit=1000)
+        _observe_quota(supervisor.budget, "GraphQL", remaining=980, reset=reset, limit=1000)
         prior = supervisor.budget.quota["GraphQL"]
         process = str(uuid.uuid4())
         request = process + ":1"
