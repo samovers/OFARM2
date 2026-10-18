@@ -242,6 +242,96 @@ def test_complete_live_positive_records_every_actual_primary_request(publisher, 
     assert required["REST"] <= 990
 
 
+def comment_representations(path, body, *, profile=False):
+    if path == "/issues/413/comments":
+        items, endpoint = body, "scan"
+    elif path.startswith("/issues/comments/"):
+        items, endpoint = [body], "exact"
+    else:
+        return []
+    for item in items:
+        item["user"]["avatar_url"] = f"https://example.invalid/avatar?view={endpoint}"
+        if profile:
+            item["user"]["login"] = "fictional-" + endpoint
+            if endpoint == "exact":
+                item["user"]["display_name"] = "Fictional display name"
+    return items
+
+
+@pytest.mark.parametrize("publisher,phase,calls", [(False, "source-gate", 10), (True, "publisher-gate", 12)])
+def test_comment_profile_presentation_preserves_pinned_authority(publisher, phase, calls, subtests):
+    for profile in (False, True):
+        with subtests.test(profile=profile):
+            provider = Provider(publisher=publisher)
+            provider.fault = lambda path, body: comment_representations(path, body, profile=profile)
+            result, reader = validate(provider, phase)
+            assert {key: result[key] for key in provider.bindings()} == provider.bindings()
+            assert provider.rest == calls and provider.points == 1
+            assert reader.budget.used[transition.PHASE_JOBS[phase]] == [calls, 1]
+            assert len(provider.graph_requests) == 1
+
+
+@pytest.mark.parametrize("publisher,phase", [(False, "source-gate"), (True, "publisher-gate")])
+def test_comment_author_pin_is_required_in_each_endpoint(publisher, phase, subtests):
+    for index in range(3 if publisher else 2):
+        for endpoint in ("scan", "exact", "both", "graph"):
+            for author in ({"id": 9999}, {}, "fictional-invalid-author"):
+                with subtests.test(comment=index, endpoint=endpoint, author=author):
+                    provider = Provider(publisher=publisher)
+                    target = provider.comments[index]["id"]
+
+                    def fault(path, body):
+                        items = comment_representations(path, body)
+                        matches = endpoint == "both" or (endpoint == "scan" and path == "/issues/413/comments") or (endpoint == "exact" and path.startswith("/issues/comments/"))
+                        if matches:
+                            for item in items:
+                                if item["id"] == target:
+                                    item["user"] = copy.deepcopy(author)
+                        if endpoint == "graph" and path == "/graphql":
+                            node = next(n for n in body["data"]["nodes"] if n["databaseId"] == target)
+                            node["author"] = {"databaseId": author.get("id")} if isinstance(author, dict) else author
+
+                    provider.fault = fault
+                    message = "GraphQL (operator identity|author)" if endpoint == "graph" else "comment author"
+                    with pytest.raises(transition.TransitionError, match=message):
+                        validate(provider, phase)
+
+
+@pytest.mark.parametrize("publisher,phase", [(False, "source-gate"), (True, "publisher-gate")])
+def test_immutable_comment_facts_stay_strict_when_profiles_differ(publisher, phase, subtests):
+    fields = {
+        "id": (9999, "record changed"),
+        "node_id": ("fictional-different-node", "record changed"),
+        "body": ("Fictional changed prose.\n", "record changed"),
+        "created_at": ("2030-01-01T00:00:06Z", "record changed|record edited"),
+        "updated_at": ("2030-01-01T00:00:06Z", "record changed|record edited"),
+        "author_association": ("COLLABORATOR", "record changed"),
+        "issue_url": ("https://api.github.com/repos/fictional-farm/transition-fixture/issues/999", "record changed|another PR"),
+    }
+    for index in range(3 if publisher else 2):
+        for endpoint in ("scan", "exact"):
+            for field, (value, message) in fields.items():
+                if field == "id" and endpoint == "scan":
+                    # A changed scan ID selects another endpoint; exercise the
+                    # independently fetched record ID at the original route.
+                    continue
+                with subtests.test(comment=index, endpoint=endpoint, field=field):
+                    provider = Provider(publisher=publisher)
+                    target = provider.comments[index]["id"]
+
+                    def fault(path, body):
+                        items = comment_representations(path, body)
+                        matches = path == "/issues/413/comments" if endpoint == "scan" else path.startswith("/issues/comments/")
+                        if matches:
+                            for item in items:
+                                if item["id"] == target:
+                                    item[field] = value + item[field] if field == "body" else value
+
+                    provider.fault = fault
+                    with pytest.raises(transition.TransitionError, match=message):
+                        validate(provider, phase)
+
+
 @pytest.mark.parametrize("count", ["missing", None, False, True, -1, 0.0, "0", 1, 101])
 def test_lifecycle_count_must_prove_the_complete_filtered_result(count):
     provider = Provider()
