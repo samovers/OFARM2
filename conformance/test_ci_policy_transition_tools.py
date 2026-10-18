@@ -102,6 +102,39 @@ def test_cancellation_counts_two_rest_requests_without_clearing_failure():
             budget.charge("REST", 1, "another cancellation")
 
 
+@pytest.mark.parametrize("bucket", ["REST", "GraphQL"])
+@pytest.mark.parametrize("completion", [False, True])
+def test_quota_contradiction_carries_facts_without_changing_terminal_state(tmp_path, bucket, completion):
+    tmp_path = tmp_path.resolve()
+    tmp_path.chmod(0o700)
+    path = tmp_path / "ledger.json"
+    budget = tools.RequestBudget("source-gate", path=path, clock=lambda: 1000)
+    budget.observe_quota(bucket, remaining=990, reset=2000, limit=1000)
+    with pytest.raises(tools.QuotaWindowError, match="contradictory quota window") as error:
+        budget.observe_quota(bucket, remaining=989, reset=1999, limit=1001, completion=completion)
+    assert error.value.diagnostic() == {"reason": "QUOTA_WINDOW_CONTRADICTION", "bucket": bucket,
+        "resetRegressed": True, "limitChanged": True,
+        "previous": {"remaining": 990, "reset": 2000, "limit": 1000},
+        "incoming": {"remaining": 989, "reset": 1999, "limit": 1001}}
+    reopened = tools.RequestBudget("source-gate", path=path, clock=lambda: 1000)
+    assert reopened.quota == {bucket: {"remaining": 990, "reset": 2000, "limit": 1000}}
+    assert reopened.used == {} and reopened.trace == []
+    with pytest.raises(tools.TransitionError, match="permanently refused"):
+        reopened.charge(bucket, 1, "fictional new request")
+    assert set(tools.decode(path.read_bytes())) == set(budget._state)
+    assert "quotaWindow" not in path.read_text()
+
+
+@pytest.mark.parametrize("bucket", ["REST", "GraphQL"])
+@pytest.mark.parametrize("remaining,reset,expected", [(989, 2000, 989), (995, 2000, 990), (999, 5600, 999)])
+def test_quota_diagnostics_preserve_accepted_window_paths(bucket, remaining, reset, expected):
+    budget = tools.RequestBudget("source-gate", clock=lambda: 1000)
+    budget.observe_quota(bucket, remaining=990, reset=2000, limit=1000)
+    budget.observe_quota(bucket, remaining=remaining, reset=reset, limit=1000)
+    budget.assert_healthy()
+    assert budget.quota == {bucket: {"remaining": expected, "reset": reset, "limit": 1000}}
+
+
 def test_completed_bytes_are_retained_after_failure_and_trace_omits_secrets():
     budget = tools.RequestBudget("conformance")
     budget.charge_transport("https://fixture.invalid/?token=DO-NOT-RETAIN", bytes=12)

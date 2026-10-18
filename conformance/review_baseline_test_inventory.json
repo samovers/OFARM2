@@ -976,6 +976,21 @@
       "sourcePath": "conformance/test_ci_policy_transition.py"
     },
     {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_cli_quota_contradiction_reports_bounded_facts_and_stays_terminal[both]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_cli_quota_contradiction_reports_bounded_facts_and_stays_terminal[limit]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_cli_quota_contradiction_reports_bounded_facts_and_stays_terminal[reset]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_cli_refusal_diagnostics_locate_real_reader_failure_without_provider_text[403]",
       "sourceModule": "conformance.test_ci_policy_transition",
       "sourcePath": "conformance/test_ci_policy_transition.py"
@@ -1089,6 +1104,11 @@
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_deleted_state_cannot_restart_budget",
       "sourceModule": "conformance.test_ci_policy_transition_tools",
       "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_diagnostic_numeric_ceiling_never_relaxes_quota_refusal",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
     },
     {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_completion_at_original_deadline_is_still_permitted[publisher]",
@@ -1679,6 +1699,71 @@
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_publication_cli_refuses_without_printing_provider_exception_context[validation]",
       "sourceModule": "conformance.test_ci_policy_transition_publication",
       "sourcePath": "conformance/test_ci_policy_transition_publication.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_contradiction_carries_facts_without_changing_terminal_state[False-GraphQL]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_contradiction_carries_facts_without_changing_terminal_state[False-REST]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_contradiction_carries_facts_without_changing_terminal_state[True-GraphQL]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_contradiction_carries_facts_without_changing_terminal_state[True-REST]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_diagnostic_cannot_be_selected_by_foreign_exception_or_subclass",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_diagnostic_chain_retains_at_most_one_bounded_observation",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_diagnostic_omits_malformed_or_unbounded_facts",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_diagnostics_preserve_accepted_window_paths[989-2000-989-GraphQL]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_diagnostics_preserve_accepted_window_paths[989-2000-989-REST]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_diagnostics_preserve_accepted_window_paths[995-2000-990-GraphQL]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_diagnostics_preserve_accepted_window_paths[995-2000-990-REST]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_diagnostics_preserve_accepted_window_paths[999-5600-999-GraphQL]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_diagnostics_preserve_accepted_window_paths[999-5600-999-REST]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
     },
     {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_quota_forecast_does_not_assume_a_reset_or_ignore_background_consumption",
@@ -27936,8 +28021,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "2a296e8fb7f000ea207c1892e2e4ea3ddda7690bc4d444df7d15e821446fa85d",
-  "entryCount": 5587,
+  "entriesSha256": "68a215d0a792e10a04d96dd352e51faf4545addd310f4c8726e3e017624ee514",
+  "entryCount": 5604,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -29,7 +29,37 @@ import uuid
 
 
 class TransitionError(RuntimeError):
-    """A refused transition; no provider-controlled details are retained."""
+    """A refused transition; arbitrary provider text is never retained."""
+
+
+class QuotaWindowError(TransitionError):
+    """Carry only the numeric observations behind an unchanged terminal rule."""
+
+    def __init__(self, bucket, previous, *, remaining, reset, limit):
+        super().__init__("contradictory quota window")
+        self._quota_facts = (bucket, previous["remaining"], previous["reset"],
+                             previous["limit"], remaining, reset, limit)
+
+    def diagnostic(self):
+        # Validate again at the logging boundary. Oversize or malformed facts
+        # omit this optional detail; they never change the original refusal.
+        facts = self._quota_facts
+        if (type(facts) is not tuple or len(facts) != 7
+                or type(facts[0]) is not str or facts[0] not in ("REST", "GraphQL")
+                or any(type(value) is not int or not 0 <= value < 10 ** 13 for value in facts[1:])):
+            return None
+        previous, incoming = (dict(zip(("remaining", "reset", "limit"), values))
+                              for values in (facts[1:4], facts[4:7]))
+        if any(not 0 <= item["remaining"] <= item["limit"] or item["limit"] < 1000
+               or item["reset"] == 0 for item in (previous, incoming)):
+            return None
+        reset_regressed = incoming["reset"] < previous["reset"]
+        limit_changed = incoming["limit"] != previous["limit"]
+        if not reset_regressed and not limit_changed:
+            return None
+        return {"reason": "QUOTA_WINDOW_CONTRADICTION", "bucket": facts[0],
+                "resetRegressed": reset_regressed, "limitChanged": limit_changed,
+                "previous": previous, "incoming": incoming}
 
 
 POOL_LIMITS = {
@@ -384,7 +414,7 @@ class RequestBudget:
             previous = state["quota"].get(bucket)
             if previous and (reset < previous["reset"] or limit != previous["limit"]):
                 state["failed"] = True
-                raise TransitionError("contradictory quota window")
+                raise QuotaWindowError(bucket, previous, remaining=remaining, reset=reset, limit=limit)
             # Concurrent responses may arrive out of order. Keeping the least
             # remaining within a window never credits unobserved capacity.
             if previous and reset == previous["reset"]:

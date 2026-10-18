@@ -1058,6 +1058,65 @@ def test_graphql_failure_without_cost_keeps_uncertainty_explicit():
     assert budget.trace[-1] == {"bucket":"GraphQL", "costMode":"unknown", "actualCost":None, "chargedBound":None}
 
 
+@pytest.mark.parametrize("change", ["reset", "limit", "both"])
+def test_cli_quota_contradiction_reports_bounded_facts_and_stays_terminal(tmp_path, capsys, change):
+    provider = Provider()
+    checkout = tmp_path / "trusted"
+    (checkout / "conformance").mkdir(parents=True)
+    (checkout / transition.ROOT_FILE).write_bytes(transition.canonical_json(provider.policy))
+    event = tmp_path / "event.json"
+    event.write_bytes(transition.canonical_json(provider.event))
+    output, evidence = tmp_path / "outputs", tmp_path / "evidence.json"
+    ledger = tmp_path.resolve() / "quota.json"
+    ledger.parent.chmod(0o700)
+    budget = transition.RequestBudget("source-gate", path=ledger, clock=lambda: provider.now.timestamp())
+    expected = {}
+    sensitive = "fictional-secret-sentinel"
+
+    def opener(request, timeout):
+        response = provider.opener(request, timeout)
+        if sum(path == "/actions/runs/201" for _method, path, _query in provider.calls) == 2:
+            expected["previous"] = budget.quota["REST"]
+            if change in ("reset", "both"):
+                response.headers["X-RateLimit-Reset"] = str(provider.reset - 1)
+            if change in ("limit", "both"):
+                response.headers["X-RateLimit-Limit"] = "1001"
+            expected["incoming"] = {name.lower(): int(response.headers["X-RateLimit-" + name])
+                                    for name in ("Remaining", "Reset", "Limit")}
+        response.headers["Private"] = sensitive
+        return response
+
+    reader = transition.ApiReader(sensitive, budget=budget, opener=opener)
+    argv = ["--operation", "admit", "--phase", "source-gate", "--event-name", "push",
+        "--event-path", str(event), "--github-sha", "1" * 40, "--workflow-sha", "1" * 40,
+        "--policy-sha", "1" * 40, "--workflow-ref", provider.context["workflowRef"],
+        "--repository", provider.grant["repository"], "--github-output", str(output),
+        "--evidence-output", str(evidence)]
+    environment = {"GITHUB_REPOSITORY_ID": "9100", "GITHUB_RUN_ID": "201", "GITHUB_RUN_ATTEMPT": "1",
+        "GITHUB_ACTOR_ID": "9200", "GITHUB_REF": provider.grant["sourceRef"]}
+    execute = transition.execute
+    with mock.patch.object(transition, "execute", side_effect=lambda args: execute(args,
+            environment=environment, checkout=checkout, reader=reader, clock=lambda: provider.now)):
+        assert transition.main(argv) == 1
+    captured = capsys.readouterr()
+    assert not captured.out and sensitive not in captured.err
+    diagnostic = json.loads(captured.err.split("CI policy transition diagnostic: ")[1])
+    assert diagnostic["quotaWindow"] == {"reason": "QUOTA_WINDOW_CONTRADICTION", "bucket": "REST",
+        "resetRegressed": change in ("reset", "both"), "limitChanged": change in ("limit", "both"), **expected}
+    assert len(captured.err.encode()) < 2048
+    assert diagnostic["httpStatus"] == []
+    assert provider.calls[-1][1] == "/actions/runs/201"
+    count = len(provider.calls)
+    assert budget.trace[-1]["status"] == 200 and budget.trace[-1]["complete"] is True
+    reopened = transition.RequestBudget("source-gate", path=ledger, clock=lambda: provider.now.timestamp())
+    assert reopened.quota["REST"] == expected["previous"]
+    with pytest.raises(transition.TransitionError, match="permanently refused"):
+        reopened.assert_healthy()
+    with pytest.raises(transition.TransitionError, match="permanently refused"):
+        reader("/repos/fictional-farm/transition-fixture/actions/runs/201")
+    assert len(provider.calls) == count and not output.exists() and not evidence.exists()
+
+
 @pytest.mark.parametrize("status", [403, 429, 500])
 def test_cli_refusal_diagnostics_locate_real_reader_failure_without_provider_text(tmp_path, capsys, status):
     provider = Provider()
@@ -1144,3 +1203,67 @@ def test_cli_diagnostic_failure_keeps_generic_refusal_and_nonzero_exit(capsys):
     captured = capsys.readouterr()
     assert not captured.out
     assert captured.err == "CI policy transition refused; no authority output accepted\n"
+
+
+def test_quota_diagnostic_omits_malformed_or_unbounded_facts(subtests):
+    kind = transition.tool_policy.QuotaWindowError
+    error = kind("REST", {"remaining": 990, "reset": 2000, "limit": 1000},
+                 remaining=989, reset=1999, limit=1000)
+    valid = error._quota_facts
+    malformed = [None, {}, list(valid), valid[:-1], (*valid, "fictional-secret-sentinel")]
+    malformed += [(value, *valid[1:]) for value in (None, True, "fictional-secret-sentinel", {})]
+    for index in range(1, 7):
+        for value in (True, -1, 1.0, "fictional-secret-sentinel", {}, 10 ** 13, 10 ** 100):
+            malformed.append((*valid[:index], value, *valid[index+1:]))
+    malformed += [("REST", 1001, 2000, 1000, 989, 1999, 1000),
+                  ("REST", 990, 0, 1000, 989, 1999, 1000),
+                  ("REST", 990, 2000, 1000, 1001, 1999, 1000),
+                  ("REST", 990, 2000, 1000, 989, 1999, 999),
+                  ("REST", 990, 2000, 1000, 989, 2000, 1000)]
+    for index, facts in enumerate(malformed):
+        with subtests.test(case=index):
+            error._quota_facts = facts
+            error.args = ("fictional-secret-sentinel",)
+            diagnostic = transition._refusal_diagnostic(error)
+            assert "quotaWindow" not in diagnostic
+            assert "fictional-secret-sentinel" not in json.dumps(diagnostic)
+
+
+def test_quota_diagnostic_chain_retains_at_most_one_bounded_observation():
+    kind = transition.tool_policy.QuotaWindowError
+    limit = 10 ** 13 - 1
+    previous = None
+    for _ in range(20):
+        error = kind("GraphQL", {"remaining": limit, "reset": limit, "limit": limit},
+                     remaining=limit-1, reset=limit-1, limit=limit)
+        error.__cause__ = previous
+        previous = error
+    error.__context__ = ValueError("fictional-secret-sentinel")
+    diagnostic = transition._refusal_diagnostic(error)
+    assert diagnostic["quotaWindow"]["previous"]["remaining"] == limit
+    assert diagnostic["quotaWindow"]["resetRegressed"] is True
+    assert diagnostic["quotaWindow"]["limitChanged"] is False
+    assert len(json.dumps(diagnostic).encode()) < 600
+    assert "fictional-secret-sentinel" not in json.dumps(diagnostic)
+
+
+def test_quota_diagnostic_cannot_be_selected_by_foreign_exception_or_subclass():
+    kind = transition.tool_policy.QuotaWindowError
+    class Foreign(kind):
+        def diagnostic(self):
+            raise AssertionError("untrusted diagnostic method was called")
+    for error in (ValueError("fictional-secret-sentinel"),
+                  Foreign("REST", {"remaining": 990, "reset": 2000, "limit": 1000},
+                          remaining=989, reset=1999, limit=1000)):
+        error._quota_facts = ("REST", 990, 2000, 1000, 989, 1999, 1000)
+        assert "quotaWindow" not in transition._refusal_diagnostic(error)
+
+
+def test_diagnostic_numeric_ceiling_never_relaxes_quota_refusal():
+    budget = transition.RequestBudget("source-gate", clock=lambda: 1000)
+    budget.observe_quota("REST", remaining=990, reset=10 ** 13, limit=1000)
+    with pytest.raises(transition.TransitionError, match="contradictory quota window") as error:
+        budget.observe_quota("REST", remaining=989, reset=10 ** 13 - 1, limit=1000)
+    assert "quotaWindow" not in transition._refusal_diagnostic(error.value)
+    with pytest.raises(transition.TransitionError, match="permanently refused"):
+        budget.assert_healthy()
