@@ -276,6 +276,7 @@ These controls are local evidence; the failed publisher is never accepted or
 retried, and its successful source cannot transfer to a new grant.
 
 Next: complete focused review at the corrected full commit, then prepare a new
-exact-root activation packet for unchanged, approved PR #413. All seven failed
-grants remain terminal; CI execution needs a later exact-root user grant and
+exact-root activation packet for unchanged, approved PR #413. All eight failed
+grants remain terminal. The eighth grant consumed both slots; neither retry nor
+source reuse is permitted. CI execution needs a later exact-root user grant and
 merge remains separate.
