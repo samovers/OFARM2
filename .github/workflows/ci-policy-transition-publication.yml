@@ -216,7 +216,7 @@ jobs:
     outputs:
       transition_grant: ${{ needs.publisher-binding.outputs.transition_grant }}
       transition_bindings: ${{ needs.publisher-binding.outputs.transition_bindings }}
-      publish: ${{ steps.resolve-source.outputs.publish }}
+      publish: ${{ steps.publication-start.outputs.publish }}
       publication_concurrency_group: >-
         ${{ steps.publication-start.outputs.publication_concurrency_group }}
       source_run_id: ${{ steps.publication-start.outputs.source_run_id }}
@@ -370,7 +370,6 @@ jobs:
           --policy-sha "${OFARM_PUBLICATION_POLICY_SHA}"
           --github-output "${GITHUB_OUTPUT}"
       - name: Download the trusted final handoff by artifact ID
-        if: steps.resolve-source.outputs.publish == 'true'
         env:
           OFARM_ARTIFACT_TOKEN: ${{ github.token }}
           ARTIFACT_ID: ${{ steps.resolve-source.outputs.ticket_artifact_id }}
@@ -388,7 +387,6 @@ jobs:
           --artifact-digest "$ARTIFACT_DIGEST"
           --output-directory "$OUTPUT_DIRECTORY"
       - name: Re-authenticate policy after the ticket download
-        if: steps.resolve-source.outputs.publish == 'true'
         run: |
           test "$(git -C .publication-policy rev-parse HEAD)" = \
             "${OFARM_PUBLICATION_POLICY_SHA}"
@@ -396,7 +394,6 @@ jobs:
           test -z "$(git -C .publication-policy status \
             --porcelain=v1 --untracked-files=all)"
       - name: Recheck live admission and authenticate the handoff
-        if: steps.resolve-source.outputs.publish == 'true'
         id: publication-start
         env:
           OFARM_ADMISSION_TOKEN: ${{ github.token }}
@@ -422,7 +419,6 @@ jobs:
           --evidence-output
           "${RUNNER_TEMP}/source-publication-admission.json"
       - name: Bind both source resolutions byte for byte
-        if: steps.resolve-source.outputs.publish == 'true'
         env:
           FIRST_SOURCE_RUN: ${{ steps.resolve-source.outputs.source_run_id }}
           SECOND_SOURCE_RUN: ${{ steps.publication-start.outputs.source_run_id }}

@@ -121,6 +121,19 @@ The new root closure binds the full T tree, B, input workflow blobs, generated w
 
 Expected new areas: `conformance/ci_policy_transition.py`, a small generation/parity helper, `conformance/test_ci_policy_transition.py`, a root Kernel test bridge and generated inventory, the two named workflows, and a versioned transition RFC. Existing procedure navigation is in-boundary. Avoid a new generic CI framework, new dependency or cloned substantive validator. Exact filenames are scope predictions, not a closed approval file list.
 
+### Preparation and publication permission wiring
+
+Transition `resolve` prepares immutable source/ticket coordinates and deliberately
+emits neither `publish` nor `eligible`. In the generated source-admission job,
+successful preparation continues through ticket download, policy re-authentication,
+full live admission and byte-for-byte source binding using the default successful
+prior-step condition. The job exposes `publish` only from `publication-start`,
+which performs the full live check and authenticates the downloaded ticket.
+Downstream publication still requires successful source admission and that
+permission; guard and fresh seal dependencies remain mandatory. Preparation alone
+cannot authorize publication. This is a correction to the transition admission
+adapter's closed transform; the ordinary workflow remains byte-identical.
+
 ## Grant, single-use state and revocation
 
 Each exact-root packet fixes: decision/card/approval references; repository; P and T/full tree/closure and coverage-declaration digests; trusted B; one consumer PR and reviewed head H; exact current base B and GitHub execution merge M/parents; review identity; actual workflow paths/names and source/publisher refs; one unique grant ID; authorized operator identity; approved 60-minute envelope; fixed creation/expiry times; and the external verifier hash plus journal location, format version and immutable genesis hash. It permits at most one source attempt and one publisher attempt, both attempt 1. The grant expires after at most 24 hours and cannot extend beyond a fixed transition sunset written into the reviewed root (at most seven days after the first activation). The fixed sunset is chosen before freezing the first root, belongs to this one transition campaign and remains identical in T1; it is never reset by a new root or grant. Exact grant timestamps are filled only when implementation exists and must be visible before approval. No default or open-ended time is accepted.

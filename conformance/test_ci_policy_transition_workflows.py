@@ -285,6 +285,25 @@ class TransitionWorkflowTests(unittest.TestCase):
             self.assertIn(f"needs.{job}.result == 'success'", seal)
         self.assertNotIn("publication-seal", publication_jobs["publisher-guard"])
 
+    def test_publication_permission_requires_successful_full_source_admission(self) -> None:
+        generated = jobs(self.generated.publication)
+        admission = generated["source-admission"]
+        self.assertIn("publish: ${{ steps.publication-start.outputs.publish }}", admission)
+        self.assertNotIn("steps.resolve-source.outputs.publish", admission)
+        entries = steps(admission)
+        for name in (
+            "Download the trusted final handoff by artifact ID",
+            "Re-authenticate policy after the ticket download",
+            "Recheck live admission and authenticate the handoff",
+            "Bind both source resolutions byte for byte",
+        ):
+            # No explicit condition overrides GitHub's default success() gate.
+            self.assertNotRegex(entries[name], r"(?m)^        (?:if|continue-on-error):")
+        for name in ("publish", "publisher-guard"):
+            self.assertIn("needs.source-admission.outputs.publish == 'true'", generated[name])
+        self.assertIn("needs.source-admission.result == 'success'", generated["publish"])
+        self.assertIn("needs.source-admission.result == 'success'", generated["publication-seal"])
+
     def test_only_conformance_substantive_timeout_increases(self) -> None:
         source_jobs = jobs(self.generated.source)
         publisher_jobs = jobs(self.generated.publication)

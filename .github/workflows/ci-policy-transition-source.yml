@@ -16,7 +16,7 @@ concurrency:
 env:
   OFARM_BASELINE_ADMISSION_POLICY_SHA: ${{ github.workflow_sha }}
   OFARM_EVIDENCE_PUBLICATION_WORKFLOW_SHA256: >-
-    sha256:82cc75068d152d5511d03316a29bc0ffef4c84ab6c79f576ac6e2296965c706e
+    sha256:b42fdbbad6570c590b491a223ef6f892197de53ba6c417b80dec76bfda4a2f91
 
 jobs:
   baseline-admission:
