@@ -524,6 +524,97 @@ def test_binding_discovery_expires_without_starting_a_producer():
     assert provider.points == 0
 
 
+@pytest.mark.parametrize("role", ["source", "publisher"])
+@pytest.mark.parametrize("paged", [False, True])
+def test_discovery_observes_binding_created_during_complete_scan(role, paged):
+    provider = Provider(publisher=role == "publisher")
+    binding = provider.comments[-1]
+    created = stamp(provider.now + timedelta(seconds=1))
+    binding.update(created_at=created, updated_at=created)
+    if paged:
+        provider.comments[-1:-1] = [{"id": 1000 + index, "node_id": f"unrelated-{index}",
+                                    "body": "unrelated discussion"}
+                                    for index in range(100 - len(provider.comments) + 1)]
+    observed = False
+    def after_read(path, _body):
+        nonlocal observed
+        if path == "/issues/413/comments" and not observed:
+            observed = True
+            provider.now += timedelta(seconds=2)
+    provider.fault = after_read
+    reader = provider.reader(role + "-gate")
+    grant, live = transition.discover_binding(provider.policy, reader, role=role,
+        event=provider.event, job_context=provider.context, clock=lambda: provider.now,
+        sleep=lambda _seconds: pytest.fail("complete binding must not wait"))
+    assert grant == provider.grant
+    assert live[role + "Binding"] == provider.identity(binding)
+    assert provider.rest == (12 if role == "source" else 14) + (2 if paged else 0)
+    assert provider.points == 1
+    reader.budget.assert_healthy()
+
+
+@pytest.mark.parametrize("role", ["source", "publisher"])
+@pytest.mark.parametrize("case", ["late", "backwards", "future", "edited"])
+def test_discovery_completion_preserves_time_and_immutable_record_refusals(role, case):
+    provider = Provider(publisher=role == "publisher")
+    if case == "late":
+        provider.now = transition.timestamp(provider.run(role)["created_at"]) + timedelta(seconds=299)
+    if case in {"future", "edited"}:
+        created = stamp(provider.now + timedelta(seconds=3 if case == "future" else 1))
+        provider.comments[-1].update(created_at=created, updated_at=created)
+        if case == "edited":
+            provider.comments[-1]["updated_at"] = stamp(provider.now + timedelta(seconds=2))
+    def after_read(path, _body):
+        if path == "/issues/413/comments":
+            provider.now += timedelta(seconds=-1 if case == "backwards" else 2)
+    provider.fault = after_read
+    with pytest.raises(transition.TransitionError, match="bounded gate|edited, premature or future-dated"):
+        transition.discover_binding(provider.policy, provider.reader(role + "-gate"), role=role,
+            event=provider.event, job_context=provider.context, clock=lambda: provider.now,
+            sleep=lambda _seconds: pytest.fail("observed refusal must not wait"))
+    assert provider.rest == 2
+    assert provider.points == 0
+
+
+@pytest.mark.parametrize("role", ["source", "publisher"])
+def test_discovery_completion_at_original_deadline_is_still_permitted(role):
+    provider = Provider(publisher=role == "publisher")
+    deadline = transition.timestamp(provider.run(role)["created_at"]) + timedelta(minutes=5)
+    provider.now = deadline - timedelta(seconds=1)
+    def after_read(path, _body):
+        if path == "/issues/413/comments":
+            provider.now = deadline
+    provider.fault = after_read
+    _grant, live = transition.discover_binding(provider.policy, provider.reader(role + "-gate"), role=role,
+        event=provider.event, job_context=provider.context, clock=lambda: provider.now)
+    assert live[role + "Binding"] == provider.identity(provider.comments[-1])
+    assert provider.points == 1
+
+
+@pytest.mark.parametrize("role", ["source", "publisher"])
+def test_discovery_refuses_grant_expiring_while_scan_is_in_flight(role):
+    provider = Provider(publisher=role == "publisher")
+    provider.grant["expiresAt"] = stamp(provider.now + timedelta(seconds=1))
+    provider.comments[0]["body"] = transition.record_body("admission", {
+        "grant": provider.grant, "grantDigest": transition.digest(provider.grant)})
+    for name, comment in zip(("source", "publisher"), provider.comments[1:]):
+        payload = transition.parse_record(comment["body"], name)
+        payload.update(grantDigest=transition.digest(provider.grant),
+                       admission=provider.identity(provider.comments[0]))
+        if name == "publisher":
+            payload["sourceBinding"] = provider.identity(provider.comments[1])
+        comment["body"] = transition.record_body(name, payload)
+    transition.validate_grant(provider.policy, provider.grant, now=provider.now)
+    def after_read(path, _body):
+        if path == "/issues/413/comments":
+            provider.now += timedelta(seconds=2)
+    provider.fault = after_read
+    with pytest.raises(transition.TransitionError, match="expired|outside.*lifetime"):
+        transition.discover_binding(provider.policy, provider.reader(role + "-gate"), role=role,
+            event=provider.event, job_context=provider.context, clock=lambda: provider.now)
+    assert provider.rest == 2 and provider.points == 0
+
+
 @pytest.mark.parametrize("publisher", [False, True])
 def test_guard_positive_uses_two_complete_sweeps_and_no_dependent_job_cycle(publisher):
     provider = Provider(publisher=publisher)
@@ -965,3 +1056,91 @@ def test_graphql_failure_without_cost_keeps_uncertainty_explicit():
         reader.graphql("fixture", {})
     assert budget.used == {"source-gate":[0,1]}
     assert budget.trace[-1] == {"bucket":"GraphQL", "costMode":"unknown", "actualCost":None, "chargedBound":None}
+
+
+@pytest.mark.parametrize("status", [403, 429, 500])
+def test_cli_refusal_diagnostics_locate_real_reader_failure_without_provider_text(tmp_path, capsys, status):
+    provider = Provider()
+    reader = provider.reader("source-gate")
+    calls = []
+    sensitive = "fictional-secret-sentinel"
+    def opener(request, timeout):
+        calls.append(request)
+        raise urllib.error.HTTPError("https://fictional.invalid/?signed=" + sensitive,
+            status, sensitive, {"X-RateLimit-Remaining": "999", "X-RateLimit-Limit": "1000",
+                "X-RateLimit-Reset": str(provider.reset), "Private": sensitive},
+            io.BytesIO(sensitive.encode()))
+    reader._opener = opener
+    event = tmp_path / "event.json"
+    event.write_bytes(transition.canonical_json(provider.event))
+    output = tmp_path / "authority-output"
+    policy = json.loads((ROOT / transition.ROOT_FILE).read_text())
+    argv = ["--operation", "admit", "--phase", "source-gate", "--event-name", "push",
+        "--event-path", str(event), "--github-sha", "1" * 40, "--workflow-sha", "1" * 40,
+        "--policy-sha", "1" * 40, "--workflow-ref", provider.context["workflowRef"],
+        "--repository", policy["repository"]["name"], "--github-output", str(output)]
+    environment = {"GITHUB_REPOSITORY_ID": "9100", "GITHUB_RUN_ID": "201",
+        "GITHUB_RUN_ATTEMPT": "1", "GITHUB_ACTOR_ID": "9200", "GITHUB_REF": provider.grant["sourceRef"]}
+    with mock.patch.dict(transition.os.environ, environment, clear=True), mock.patch.object(
+            transition, "make_reader", return_value=reader):
+        assert transition.main(argv) == 1
+    captured = capsys.readouterr()
+    assert not captured.out and sensitive not in captured.err
+    assert "no authority output accepted" in captured.err
+    diagnostic = json.loads(captured.err.split("CI policy transition diagnostic: ")[1])
+    assert diagnostic["httpStatus"] == [status]
+    locations = diagnostic["locations"]
+    assert 0 < len(locations) <= 12
+    assert all(item["file"] == "ci_policy_transition.py" for item in locations)
+    source = (ROOT / "conformance/ci_policy_transition.py").read_text().splitlines()
+    assert any('raise TransitionError("HTTP request refused; attempt cannot retry")' in source[item["line"] - 1]
+               for item in locations)
+    assert len(calls) == 1 and reader.budget.used == {"source-gate": [1, 0]}
+    with pytest.raises(transition.TransitionError, match="permanently refused"):
+        reader.budget.assert_healthy()
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("status", [True, "fictional-secret-sentinel", 99, 600])
+def test_refusal_diagnostics_exclude_hostile_names_status_and_nested_text(status):
+    sensitive = "fictional-secret-sentinel"
+    namespace = {}
+    exec(compile("def fail():\n    raise ValueError('fictional-secret-sentinel')\n",
+                 "/untrusted/" + sensitive, "exec"), namespace)
+    try:
+        namespace["fail"]()
+    except ValueError as cause:
+        error = urllib.error.HTTPError("https://fictional.invalid/" + sensitive, status,
+                                       sensitive, {"private": sensitive}, None)
+        error.__context__ = cause
+        cause.__cause__ = error  # Cyclic hostile exception chain must terminate.
+        diagnostic = transition._refusal_diagnostic(error)
+    assert diagnostic["locations"] == [] and diagnostic["httpStatus"] == []
+    assert sensitive not in json.dumps(diagnostic)
+
+
+def test_refusal_diagnostics_bound_chain_depth_and_trusted_locations():
+    previous = None
+    for index in range(20):
+        error = urllib.error.HTTPError("https://fictional.invalid", 400 + index, "private", {}, None)
+        error.__cause__ = previous
+        try:
+            transition.validate_policy({})
+        except transition.TransitionError as location:
+            error = error.with_traceback(location.__traceback__)
+        previous = error
+    diagnostic = transition._refusal_diagnostic(previous)
+    assert diagnostic["httpStatus"] == list(range(419, 411, -1))
+    assert len(diagnostic["locations"]) == 12
+    assert "private" not in json.dumps(diagnostic)
+
+
+def test_cli_diagnostic_failure_keeps_generic_refusal_and_nonzero_exit(capsys):
+    with mock.patch.object(transition, "execute", side_effect=ValueError("fictional-secret-sentinel")), \
+            mock.patch.object(transition, "_refusal_diagnostic", side_effect=ValueError("fictional-secret-sentinel")):
+        assert transition.main(["--operation", "admit", "--phase", "source-gate", "--event-name", "push",
+            "--event-path", "fictional", "--github-sha", "1" * 40, "--workflow-sha", "1" * 40,
+            "--policy-sha", "1" * 40, "--workflow-ref", "fictional", "--repository", "fictional"]) == 1
+    captured = capsys.readouterr()
+    assert not captured.out
+    assert captured.err == "CI policy transition refused; no authority output accepted\n"

@@ -93,6 +93,19 @@ Before T is frozen, its policy manifest pins the repository numeric ID and full 
 
 The comment-list and exact-comment REST representations must each independently match that pinned numeric author ID. Their comment ID, node ID, body, creation/update timestamps, repository standing and issue route must agree. Optional author profile presentation, such as an endpoint-specific avatar URL, is not authority and need not be identical. The separate GraphQL author and immutable-comment checks remain required.
 
+Discovery judges new bindings at the trusted clock sampled after its complete
+bounded comment scan. A binding created during the read is not future-dated
+merely because the read started earlier. Scan completion must remain within
+the original five-minute discovery window, with no backwards clock, and the
+grant must still be active. No timestamp grace, extra request or retry is added.
+The complete live gate and immutable binding checks remain mandatory.
+
+On CLI refusal, a bounded diagnostic may report only allowlisted T-owned source
+file/line locations and plain integer HTTP statuses from the exception chain.
+It excludes exception text, source lines, locals, arbitrary paths and provider
+content. Diagnostic formatting failure retains the generic refusal. This adds
+no provider reads, authority output or recovery route; the attempt still fails.
+
 The new root closure binds the full T tree, B, input workflow blobs, generated workflows, adapter, external verifier, grant schema, immutable version-4 coverage declaration, new tests and every imported helper/config/tool pin. It separately records the unchanged ordinary native-currentness record and six authority files, and asserts that native substantive steps match their canonical source. The transition closure is additional CI provenance; it cannot relabel or expand the native release/currentness claim. If implementation needs to alter that accepted native-currentness contract, stop and propose its separate boundary before editing it. A full-tree digest alone is not a substitute for the declared executable dependency closure and parity proof.
 
 Expected new areas: `conformance/ci_policy_transition.py`, a small generation/parity helper, `conformance/test_ci_policy_transition.py`, a root Kernel test bridge and generated inventory, the two named workflows, and a versioned transition RFC. Existing procedure navigation is in-boundary. Avoid a new generic CI framework, new dependency or cloned substantive validator. Exact filenames are scope predictions, not a closed approval file list.

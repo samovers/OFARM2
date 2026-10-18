@@ -114,6 +114,26 @@ fixtures reproduce it and cover every required record in both gate phases.
 The failed grant remains terminal with one source used and no publisher used;
 the repair requires fresh exact-head review and a new exact-root grant.
 
+A further source-gate failure at root `b00c303b4d49125205a4715b1ff8abb577b71502`
+remains unexplained by its generic log. Mixed-time provider-fact replay and an
+offline core replay pass; the latter uses fictional event/context, quota and
+transport inputs and does not reconstruct the hosted runner or token. Separate
+fictional controls reproduce a discovery-clock defect: a scan starting at
+second10 can return a binding created at second11 at second12, then falsely
+reject it against the old time. Discovery now samples time after the complete
+scan, retaining the original window and grant expiry. Source and publisher
+controls cover arrivals during one- and two-page scans, the exact deadline,
+late/backwards completion, grant expiry, edits and genuinely future records.
+Existing immutable-binding and full-gate controls remain required.
+
+Bounded refusal diagnostics identify only allowlisted T-owned source file/line
+locations and validated integer HTTP statuses. Controls exercise the real
+reader/CLI failure path, secret text in exception chains and filenames, malformed
+status values, cycles, depth/frame bounds and formatting failure. Nonzero exit,
+permanent refusal, accounting and absence of authority output remain decisive.
+These corrections do not establish the historical refusal's cause or restore
+the failed grant. The changed root needs fresh review and a new exact-root grant.
+
 The [focused re-review](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5558614492)
 resolved root binding and lifetime, then identified one remaining accounting
 case across quota reset. Structural same-window validation now retains the
