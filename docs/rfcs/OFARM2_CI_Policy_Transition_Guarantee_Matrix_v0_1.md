@@ -68,6 +68,7 @@ remain fixtures. Existing substantive validation code runs unchanged.
 | Guarantees | Owning implementation | Focused local evidence |
 | --- | --- | --- |
 | G01–G10, G21 | `ci_policy_transition.py`, `ci_policy_transition_operator.py` | Core and operator tests cover original exact approval, actor/root/closure selection, one-use binding, journal intent/reconciliation, torn writes and rollback, mutable or revoked authority, guarded cancellation and typed output. |
+| G01, G06 comment identity | Core source/publisher gate tests | Complete positives allow endpoint-specific avatar/profile presentation while both REST responses and GraphQL independently retain the pinned numeric author. Each bound record has wrong/missing/malformed author controls and immutable-field disagreement controls which reach their intended refusal. Request counts remain unchanged. |
 | G11, G25 coverage | `ci_policy_transition_coverage.py`, `ci_policy_transition_workflows.py` | Coverage cannot be widened by input or receipt. Exact canonical/generated workflow parity checks every allowed rewrite, all five bootstrap asset hashes, lifecycle entry/post steps, job isolation and retained command ordering. |
 | G12–G20 | `ci_policy_transition_publication.py` | Publication tests reconstruct complete baseline/platform/native fixtures through the original validators, detect targeted source/artifact substitutions, preserve ordinary-main receipt behavior and refuse provider exceptions without printing their context. |
 | G21, G23–G24 | Operator and external publication verifier | Acceptance test creates a real isolated selected Git root and durable journal, loads that root's actual authority modules, executes the generated policy sequence, verifies the complete receipt, consumes the exact tuple, retires it and audits the archived roots. A verifier from another checkout, foreign cached validator or changed executing source refuses before provider work. Low headroom, forged coverage, generic approval and mismatched journal receipt each reach their intended refusal. |
@@ -100,6 +101,18 @@ Both admission positives failed before the fix; controls cover every lifecycle
 type, missing/invalid/positive counts with empty nodes, incomplete pagination,
 malformed pages and inconsistent timestamps. The failed old grant is terminal;
 the corrected root requires fresh review and a new exact-root user grant.
+
+The [B7 finding](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5561838042)
+followed a source-gate failure on 18 October. Authenticated list and exact-comment
+responses differed only in the admission and source-binding authors' avatar URLs.
+An offline replay of saved provider responses reproduces the frozen root's
+whole-author-object comparison failure; the corrected validator accepts those
+same responses while retaining numeric identity and immutable-field checks.
+This mixed-time diagnostic establishes a sufficient defect, not the precise
+internal branch behind the hosted gate's generic refusal. Fictional complete
+fixtures reproduce it and cover every required record in both gate phases.
+The failed grant remains terminal with one source used and no publisher used;
+the repair requires fresh exact-head review and a new exact-root grant.
 
 The [focused re-review](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5558614492)
 resolved root binding and lifetime, then identified one remaining accounting

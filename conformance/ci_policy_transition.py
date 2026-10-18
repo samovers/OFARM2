@@ -835,12 +835,13 @@ def _validate_live(policy, grant, reader, *, phase, now=None, event=None, job_co
     identities = {}
     for role in sorted(required):
         old, payload = records[role]
+        _comment_identity(old, grant, now=now)
         comment = _object(reader(f"/repos/{grant['repository']}/issues/comments/{old['id']}"), "bound record")
-        if comment != old:
-            # REST may add optional presentation fields, which are not authority.
-            for k in ("id", "node_id", "body", "created_at", "updated_at", "author_association", "issue_url", "user"):
-                if comment.get(k) != old.get(k):
-                    raise TransitionError("record changed between scan and exact fetch")
+        # Endpoint-specific author profiles are presentation, not authority.
+        # Both representations must independently name the root-pinned user ID.
+        for k in ("id", "node_id", "body", "created_at", "updated_at", "author_association", "issue_url"):
+            if comment.get(k) != old.get(k):
+                raise TransitionError("record changed between scan and exact fetch")
         identities[role] = _comment_identity(comment, grant, now=now)
         authenticated[role] = comment
         records[role] = (comment, payload)
