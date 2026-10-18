@@ -876,6 +876,11 @@
       "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
     },
     {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_publication_permission_requires_successful_full_source_admission",
+      "sourceModule": "conformance.test_ci_policy_transition_workflows",
+      "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionWorkflowTests::test_retry_rewrite_is_exactly_four_execution_invocations",
       "sourceModule": "conformance.test_ci_policy_transition_workflows",
       "sourcePath": "conformance/test_ci_policy_transition_workflows.py"
@@ -1567,6 +1572,26 @@
     },
     {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_generated_policy_preserves_each_staggered_window_with_all_tool_traffic[3599-60-45]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_generated_source_admission_cannot_publish_on_failed_prerequisite[live-revocation]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_generated_source_admission_cannot_publish_on_failed_prerequisite[preparation]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_generated_source_admission_cannot_publish_on_failed_prerequisite[ticket-digest]",
+      "sourceModule": "conformance.test_ci_policy_transition_integration",
+      "sourcePath": "conformance/test_ci_policy_transition_integration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_generated_source_admission_requires_live_permission_after_preparation",
       "sourceModule": "conformance.test_ci_policy_transition_integration",
       "sourcePath": "conformance/test_ci_policy_transition_integration.py"
     },
@@ -28201,8 +28226,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "39d51e8c66fdf21d86d1420f4b064a519a7a16961efa335543a34c2cd8de4416",
-  "entryCount": 5640,
+  "entriesSha256": "8d3204cf65c56c2cea1e610bfcb4e6e3ccb49c4396544a4d150067e5336030de",
+  "entryCount": 5645,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

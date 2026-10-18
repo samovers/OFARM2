@@ -427,6 +427,26 @@ def _publication(publication: str, consumer: int) -> str:
         "      transition_bindings: ${{ needs.publisher-binding.outputs.transition_bindings }}\n",
         "publisher source admission retains frozen binding",
     )
+    # Transition resolve only prepares immutable artifact coordinates. Unlike
+    # the ordinary workflow's resolve, it intentionally emits no permission.
+    # Successful preparation must reach the separate full live admission;
+    # only that later step can release the publication jobs.
+    admission_head = _replace(
+        admission_head, "      publish: ${{ steps.resolve-source.outputs.publish }}\n",
+        "      publish: ${{ steps.publication-start.outputs.publish }}\n",
+        "publication permission comes from full live admission",
+    )
+    for name in (
+        "Download the trusted final handoff by artifact ID",
+        "Re-authenticate policy after the ticket download",
+        "Recheck live admission and authenticate the handoff",
+        "Bind both source resolutions byte for byte",
+    ):
+        index = _named_step(admission_steps, name)
+        admission_steps[index] = _replace(
+            admission_steps[index], "        if: steps.resolve-source.outputs.publish == 'true'\n",
+            "", "continue successful preparation to full live admission",
+        )
     publish_head, publish_steps = _publication_steps(
         jobs["publish"], ("publisher-resolve", "publisher-start", "prepublish", "preindex", "seal"),
         "source-admission",

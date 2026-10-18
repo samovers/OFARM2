@@ -316,7 +316,8 @@ def complete_fixture(directory, *, provider=None, policy_root=None):
     return provider, chain, publisher_comment
 
 
-def operation(provider, directory, op, phase, chain, *, guard_seconds=0):
+def operation(provider, directory, op, phase, chain, *, guard_seconds=0,
+              github_output=None, ticket=None):
     reader = provider.reader(phase)
     if op == "admit":
         if phase in {"source-gate", "publisher-gate"}:
@@ -343,8 +344,8 @@ def operation(provider, directory, op, phase, chain, *, guard_seconds=0):
             provider.publisher_guard_complete = True
         return live
     args = argparse.Namespace(operation=op, phase=phase, event=provider.event, job_context=provider.context,
-        transition_bindings=provider.bindings(), github_output=None, evidence_output=None,
-        ticket_output=directory / "actual-ticket.json", ticket=directory / "actual-ticket.json",
+        transition_bindings=provider.bindings(), github_output=github_output, evidence_output=None,
+        ticket_output=directory / "actual-ticket.json", ticket=ticket or directory / "actual-ticket.json",
         publication_receipt_output=directory / "actual-receipt.json",
         published_artifacts_input=directory / "upload-outputs.json")
     with mock.patch.object(transition, "utcnow", lambda: provider.now):
@@ -362,6 +363,81 @@ def download(provider, phase, reference, directory, label):
             api_url="https://api.github.com", token=reader.token, output_directory=output,
             archive_path=directory / (label + ".zip"), response_factory=reader.artifact_response)
     return output
+
+
+def source_admission(provider, directory, chain):
+    """Exercise generated output conditions, real preparation/download/admission.
+
+    This covers the connection between those steps, not runner setup, policy
+    checkout or shell execution; their separate controls remain necessary.
+    """
+    root = Path(__file__).resolve().parents[1]
+    generated = workflows.generate((root / workflows.SOURCE_INPUT).read_bytes(),
+        (root / workflows.PUBLICATION_INPUT).read_bytes(), consumer_pr=413)
+    _prefix, jobs = workflows._jobs(generated.publication.decode(),
+        ("publisher-binding", "source-admission", "publish", "publisher-guard", "publication-seal"))
+    header, steps = workflows._steps(jobs["source-admission"])
+    outputs = {}
+    ticket = directory / "source-admission-ticket" / publication.TICKET_FILE
+    for step in steps:
+        command = re.search(r"--operation (resolve|publish)\s", step)
+        is_download = "      - name: Download the trusted final handoff by artifact ID\n" in step
+        if not command and not is_download:
+            continue
+        condition = re.search(r"^        if: (.+)$", step, re.M)
+        if condition:
+            match = re.fullmatch(r"steps\.([\w-]+)\.outputs\.([\w_]+) == 'true'", condition[1])
+            assert match, "unmodeled admission step condition"
+            if outputs.get(match[1], {}).get(match[2], "") != "true":
+                continue
+        if command:
+            identifier = re.search(r"^        id: ([\w-]+)$", step, re.M)[1]
+            output = directory / (identifier + ".outputs")
+            phase = re.search(r"--phase ([^\n]+)", step)[1].strip()
+            operation(provider, directory, command[1], phase, chain,
+                      github_output=output, ticket=ticket)
+            outputs[identifier] = dict(line.split("=", 1) for line in output.read_text().splitlines())
+        else:
+            prepared = outputs["resolve-source"]
+            reference = next(ref for ref in chain["source_refs"]
+                             if str(ref["artifactId"]) == prepared["ticket_artifact_id"])
+            assert reference["digest"] == prepared["ticket_artifact_digest"]
+            download(provider, "source-admission", reference, directory, "source-admission-ticket")
+    selected = re.search(r"publish: \$\{\{ steps\.([\w-]+)\.outputs\.([\w_]+) \}\}", header)
+    assert selected, "unmodeled publication permission output"
+    return outputs.get(selected[1], {}).get(selected[2], ""), outputs
+
+
+def test_generated_source_admission_requires_live_permission_after_preparation(tmp_path):
+    provider, chain, comment = complete_fixture(tmp_path / "fixtures")
+    provider.source_artifacts = chain["source_refs"]
+    provider.now += timedelta(minutes=10)
+    provider.bind_publisher(comment)
+    permission, outputs = source_admission(provider, tmp_path, chain)
+    assert permission == "true"
+    assert "publish" not in outputs["resolve-source"]
+    assert "eligible" not in outputs["resolve-source"]
+    assert outputs["publication-start"]["publish"] == "true"
+    assert outputs["resolve-source"]["ticket_artifact_id"] == outputs["publication-start"]["ticket_artifact_id"]
+
+
+@pytest.mark.parametrize("fault", ["preparation", "ticket-digest", "live-revocation"])
+def test_generated_source_admission_cannot_publish_on_failed_prerequisite(tmp_path, fault):
+    provider, chain, comment = complete_fixture(tmp_path / "fixtures")
+    provider.source_artifacts = copy.deepcopy(chain["source_refs"])
+    provider.now += timedelta(minutes=10)
+    provider.bind_publisher(comment)
+    if fault == "preparation":
+        provider.source_artifacts.pop(0)
+    elif fault == "ticket-digest":
+        provider.payloads[chain["source_refs"][-1]["artifactId"]] = b"wrong ticket bytes"
+    else:
+        provider.comments.append(provider.comment(109, "revocation",
+            {"grantId": provider.grant["grantId"]}, 5))
+    with pytest.raises((publication.TransitionPublicationError, transition.TransitionError)):
+        source_admission(provider, tmp_path, chain)
+    assert not (tmp_path / "publication-start.outputs").exists()
+    assert not provider.published_artifacts
 
 
 def run_pipeline(directory, *, offset=0, source_seconds=3600, publish_seconds=2700,
@@ -395,10 +471,8 @@ def run_pipeline(directory, *, offset=0, source_seconds=3600, publish_seconds=27
     # source ticket never depends on that future publisher binding.
     for op, phase in operations["publisher-binding"]:
         operation(provider, directory, op, phase, chain)
-    for op, phase in operations["source-admission"]:
-        operation(provider, directory, op, phase, chain)
-        if op == "resolve":
-            download(provider, "source-admission", chain["source_refs"][-1], directory, "source-admission-ticket")
+    permission, _outputs = source_admission(provider, directory, chain)
+    assert permission == "true", "generated source admission did not release publication"
     published_ran = False
     def publication_work():
         nonlocal published_ran

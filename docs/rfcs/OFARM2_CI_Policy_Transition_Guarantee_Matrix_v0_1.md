@@ -250,6 +250,31 @@ the other three allowed curl selections, gh module imports and unexpected-path
 refusal. These are local lifecycle controls, not hosted native acceptance or
 proof of the historical hosted cause.
 
+### Publisher condition correction, 18 October 2026
+
+Source run39153185709 at root80746e14032e90cf939bd5afa66fb388b063414d
+passed all required jobs, including both complete baseline steps, comparison,
+platform lane, both native lanes, final cleanup, guard and handoff. Publisher
+run39157044888 completed green overall but skipped its required publication,
+guard and seal jobs; its complete artifact inventory was empty. The one-use
+grant is terminal FAILED with both slots consumed and no accepted receipt.
+
+The generated workflow incorrectly required preparation's intentionally absent
+`publish` output before executing full admission. A local regression using the
+actual generated conditions and real preparation outputs reproduces the empty
+permission and skipped admission. The correction uses ordinary successful-step
+sequencing for those four admission steps and derives the job's publication
+permission from the full live admission step. Existing downstream success,
+permission, guard and seal gates remain. No preparation permission is added.
+
+The integration harness now follows those generated conditions and output
+selection, downloads the actual fictional ticket and runs full admission before
+continuing its substantive validation chain. Missing preparation inputs, corrupt
+ticket bytes and live revocation all refuse without publication permission.
+Separate workflow checks retain default failure propagation and job gates.
+These controls are local evidence; the failed publisher is never accepted or
+retried, and its successful source cannot transfer to a new grant.
+
 Next: complete focused review at the corrected full commit, then prepare a new
 exact-root activation packet for unchanged, approved PR #413. All seven failed
 grants remain terminal; CI execution needs a later exact-root user grant and
