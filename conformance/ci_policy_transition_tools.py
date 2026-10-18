@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import importlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -33,7 +34,7 @@ class TransitionError(RuntimeError):
 
 
 class QuotaWindowError(TransitionError):
-    """Carry only the numeric observations behind an unchanged terminal rule."""
+    """Carry bounded facts when the selected primary limit changes."""
 
     def __init__(self, bucket, previous, *, remaining, reset, limit):
         super().__init__("contradictory quota window")
@@ -199,7 +200,8 @@ class RequestBudget:
         self.deadline = None
         self.current_pool = "shared-tools" if job == "external-acceptance" else job
         self._cancellation = False
-        self._state = {"schema": 1, "job": job, "used": {}, "quota": {},
+        self._state = {"schema": 2, "job": job, "used": {}, "quota": {},
+                       "quotaConstraints": {}, "primaryRequests": {}, "clock": 0,
                        "trace": [], "transport": {"requests": 0, "bytes": 0},
                        "failed": False, "cancellationRequests": 0}
         if self.path is not None:
@@ -252,7 +254,7 @@ class RequestBudget:
 
     def _validate(self, state):
         if (not isinstance(state, dict) or set(state) != set(self._state)
-                or state["schema"] != 1 or state["job"] != self.job
+                or state["schema"] != 2 or state["job"] != self.job
                 or type(state["failed"]) is not bool
                 or not isinstance(state["used"], dict)
                 or not isinstance(state["quota"], dict)
@@ -273,6 +275,76 @@ class RequestBudget:
         integer(state["cancellationRequests"])
         for bucket, quota in state["quota"].items():
             self._quota(bucket, **quota, check_time=False)
+        if (not isinstance(state["quotaConstraints"], dict)
+                or set(state["quotaConstraints"]) != set(state["quota"])
+                or not isinstance(state["primaryRequests"], dict)
+                or len(state["primaryRequests"]) > TRANSPORT_REQUEST_LIMIT):
+            raise TransitionError("invalid primary observation state")
+        self._time(state["clock"])
+        count = 0
+        for bucket, constraints in state["quotaConstraints"].items():
+            if not isinstance(constraints, list) or not constraints:
+                raise TransitionError("missing primary constraints")
+            resets = []
+            for item in constraints:
+                if not isinstance(item, dict) or set(item) != {"reset", "capacity"}:
+                    raise TransitionError("invalid primary constraint")
+                resets.append(integer(item["reset"], 1))
+                integer(item["capacity"])
+                if item["capacity"] > state["quota"][bucket]["limit"] + self._charged(state, bucket):
+                    raise TransitionError("primary constraint exceeds observed capacity")
+            if resets != sorted(set(resets)):
+                raise TransitionError("duplicated or unordered primary constraints")
+            count += len(constraints)
+        if count > TRANSPORT_REQUEST_LIMIT:
+            raise TransitionError("primary constraint bound exceeded")
+        for identity, request in state["primaryRequests"].items():
+            self._request_identity(identity)
+            if (not isinstance(request, dict) or set(request) != {
+                    "bucket", "startedAt", "settledBefore", "cost", "observed", "complete"}
+                    or request["bucket"] not in ("REST", "GraphQL")
+                    or type(request["observed"]) is not bool or type(request["complete"]) is not bool
+                    or request["observed"] and request["complete"]):
+                raise TransitionError("invalid primary request association")
+            self._time(request["startedAt"])
+            if request["startedAt"] > state["clock"]:
+                raise TransitionError("future primary request association")
+            integer(request["settledBefore"])
+            integer(request["cost"])
+        for bucket in ("REST", "GraphQL"):
+            total = self._charged(state, bucket)
+            pending = sum(r["cost"] for r in state["primaryRequests"].values() if r["bucket"] == bucket)
+            if pending > total or any(r["settledBefore"] > total for r in state["primaryRequests"].values()
+                                      if r["bucket"] == bucket):
+                raise TransitionError("primary cost association exceeds ledger")
+
+    @staticmethod
+    def _time(value):
+        if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
+            raise TransitionError("invalid trusted clock")
+        return value
+
+    def _clock(self, state):
+        try:
+            now = self._time(self.clock())
+        except TransitionError:
+            state["failed"] = True
+            raise
+        if now < state["clock"]:
+            state["failed"] = True
+            raise TransitionError("trusted clock moved backwards")
+        state["clock"] = now
+        return now
+
+    @staticmethod
+    def _request_identity(identity):
+        if not isinstance(identity, str) or not re.fullmatch(r"[0-9a-f]{32}(?::[1-9][0-9]*)?", identity):
+            raise TransitionError("invalid primary request identity")
+
+    @staticmethod
+    def _charged(state, bucket):
+        index = 0 if bucket == "REST" else 1
+        return sum(counts[index] for counts in state["used"].values())
 
     def _snapshot(self, key):
         with self._transaction() as state:
@@ -284,7 +356,17 @@ class RequestBudget:
 
     @property
     def quota(self):
+        # Raw last observations are witnesses for the tool GraphQL cost proof,
+        # never a synthesized window or the headroom authority.
         return self._snapshot("quota")
+
+    @property
+    def quota_constraints(self):
+        with self._transaction() as state:
+            return {bucket: [{"remaining": item["capacity"] - self._charged(state, bucket),
+                              "reset": item["reset"], "limit": state["quota"][bucket]["limit"]}
+                             for item in constraints]
+                    for bucket, constraints in state["quotaConstraints"].items()}
 
     @property
     def trace(self):
@@ -344,6 +426,11 @@ class RequestBudget:
             raise TransitionError("invalid outcome")
         with self._transaction() as state:
             self._trace(state, {"requestId": request_id, "status": status, "complete": complete})
+            request = state["primaryRequests"].get(request_id)
+            if request is not None and complete:
+                request["complete"] = True
+                if request["observed"]:
+                    del state["primaryRequests"][request_id]
             if status is None or not complete:
                 state["failed"] = True
 
@@ -353,29 +440,55 @@ class RequestBudget:
                                 "actualCost": None, "chargedBound": None})
             state["failed"] = True
 
-    def charge(self, bucket, cost, label, *, completion=False):
+    def charge(self, bucket, cost, label, *, completion=False, request_id=None):
         integer(cost)
         if bucket not in ("REST", "GraphQL"):
             raise TransitionError("unknown primary bucket")
         with self._transaction() as state:
-            if not completion:
-                self._healthy(state)
-            if self._cancellation and cost:
-                if bucket != "REST" or self.current_pool != "shared-tools":
-                    raise TransitionError("invalid cancellation accounting")
-                state["cancellationRequests"] += cost
-                if state["cancellationRequests"] > 2:
-                    state["failed"] = True
-                    raise TransitionError("cancellation allowance exceeded")
-            index = 0 if bucket == "REST" else 1
-            pool = "shared-tools" if self.job == "external-acceptance" else self.current_pool
-            counts = state["used"].setdefault(pool, [0, 0])
-            counts[index] += cost
-            self._trace(state, {"pool": pool, "bucket": bucket, "cost": cost,
-                                "labelDigest": hashlib.sha256(str(label).encode()).hexdigest()})
-            if counts[index] > self.limits(pool)[index]:
+            self._charge(state, bucket, cost, label, completion=completion, request_id=request_id)
+
+    def _charge(self, state, bucket, cost, label, *, completion=False, request_id=None):
+        if request_id is not None:
+            request = state["primaryRequests"].get(request_id)
+            if request is None or request["bucket"] != bucket or request["observed"]:
                 state["failed"] = True
-                raise TransitionError("owned request allowance exceeded")
+                raise TransitionError("primary charge lacks request association")
+        if not completion:
+            self._healthy(state)
+        if self._cancellation and cost:
+            if bucket != "REST" or self.current_pool != "shared-tools":
+                raise TransitionError("invalid cancellation accounting")
+            state["cancellationRequests"] += cost
+            if state["cancellationRequests"] > 2:
+                state["failed"] = True
+                raise TransitionError("cancellation allowance exceeded")
+        index = 0 if bucket == "REST" else 1
+        pool = "shared-tools" if self.job == "external-acceptance" else self.current_pool
+        counts = state["used"].setdefault(pool, [0, 0])
+        counts[index] += cost
+        if request_id is not None:
+            request["cost"] += cost
+        self._trace(state, {"pool": pool, "bucket": bucket, "cost": cost,
+                            "labelDigest": hashlib.sha256(str(label).encode()).hexdigest()})
+        if counts[index] > self.limits(pool)[index]:
+            state["failed"] = True
+            raise TransitionError("owned request allowance exceeded")
+
+    def begin_primary(self, request_id, bucket, label):
+        self._request_identity(request_id)
+        if bucket not in ("REST", "GraphQL"):
+            raise TransitionError("unknown primary bucket")
+        with self._transaction() as state:
+            self._healthy(state)
+            if request_id in state["primaryRequests"] or len(state["primaryRequests"]) >= TRANSPORT_REQUEST_LIMIT:
+                state["failed"] = True
+                raise TransitionError("primary request association bound exceeded")
+            pending = sum(r["cost"] for r in state["primaryRequests"].values() if r["bucket"] == bucket)
+            state["primaryRequests"][request_id] = {
+                "bucket": bucket, "startedAt": self._clock(state),
+                "settledBefore": self._charged(state, bucket) - pending,
+                "cost": 0, "observed": False, "complete": False}
+            self._charge(state, bucket, 1, label, request_id=request_id)
 
     def charge_transport(self, label, *, requests=1, bytes=0, completion=False):
         integer(requests)
@@ -402,7 +515,7 @@ class RequestBudget:
                 or (check_time and reset <= self.clock())):
             raise TransitionError("unknown or contradictory primary quota")
 
-    def observe_quota(self, bucket, *, remaining, reset, limit, completion=False):
+    def observe_quota(self, bucket, *, remaining, reset, limit, completion=False, request_id=None):
         try:
             self._quota(bucket, remaining=remaining, reset=reset, limit=limit)
         except TransitionError:
@@ -411,25 +524,58 @@ class RequestBudget:
         with self._transaction() as state:
             if not completion:
                 self._healthy(state)
+            now = self._clock(state)
+            request = state["primaryRequests"].get(request_id)
+            if (request is None or request["bucket"] != bucket or request["observed"]
+                    or request["startedAt"] > now):
+                state["failed"] = True
+                raise TransitionError("quota lacks its primary request association")
             previous = state["quota"].get(bucket)
-            if previous and (reset < previous["reset"] or limit != previous["limit"]):
+            if previous and limit != previous["limit"]:
                 state["failed"] = True
                 raise QuotaWindowError(bucket, previous, remaining=remaining, reset=reset, limit=limit)
-            # Concurrent responses may arrive out of order. Keeping the least
-            # remaining within a window never credits unobserved capacity.
-            if previous and reset == previous["reset"]:
-                remaining = min(remaining, previous["remaining"])
+            # Only a valid response to a fresh post-expiry request retires an
+            # old constraint. A different reset never supplies renewal credit.
+            constraints = {item["reset"]: item["capacity"] for item in state["quotaConstraints"].get(bucket, [])
+                           if item["reset"] > request["startedAt"]}
+            capacity = remaining + request["settledBefore"]
+            constraints[reset] = min(capacity, constraints.get(reset, capacity))
+            count = len(constraints) + sum(len(items) for name, items in state["quotaConstraints"].items() if name != bucket)
+            if count > TRANSPORT_REQUEST_LIMIT:
+                state["failed"] = True
+                raise TransitionError("primary constraint bound exceeded")
+            state["quotaConstraints"][bucket] = [{"reset": end, "capacity": value} for end, value in sorted(constraints.items())]
             state["quota"][bucket] = {"remaining": remaining, "reset": reset, "limit": limit}
+            request["observed"] = True
+            if request["complete"]:
+                del state["primaryRequests"][request_id]
 
-    def require_headroom(self, *, future_rest, future_graphql):
+    def require_headroom(self, *, future_rest, future_graphql, first_tick=None, periodic_end=None):
         with self._transaction() as state:
             self._healthy(state)
+            now = self._clock(state)
+            if first_tick is not None and (type(first_tick) is not int or first_tick % 120
+                                           or periodic_end is None or self._time(periodic_end) < now):
+                raise TransitionError("invalid periodic headroom horizon")
+            result = {}
             for bucket, required in (("REST", future_rest), ("GraphQL", future_graphql)):
                 integer(required)
-                quota = state["quota"].get(bucket)
-                if quota is None or quota["reset"] <= self.clock() or quota["remaining"] < required:
+                constraints = state["quotaConstraints"].get(bucket)
+                if not constraints:
                     state["failed"] = True
                     raise TransitionError("insufficient current-window primary quota")
+                result[bucket] = required
+                for item in constraints:
+                    demand = required
+                    if first_tick is not None:
+                        end = min(item["reset"], periodic_end)
+                        ticks = max(0, min(31, math.floor(end / 120) - first_tick // 120 + 1))
+                        demand += ticks * (15 if bucket == "REST" else 5)
+                    result[bucket] = max(result[bucket], demand)
+                    if item["reset"] <= now or item["capacity"] - self._charged(state, bucket) < demand:
+                        state["failed"] = True
+                        raise TransitionError("insufficient current-window primary quota")
+            return result
 
     @contextmanager
     def cancellation(self):
@@ -748,7 +894,7 @@ class Supervisor:
                     "ended": False, "status": None, "priorQuota": self.budget.quota.get(bucket)}
                 self.budget.charge_transport(bucket)
                 if bucket in ("REST", "GraphQL"):
-                    self.budget.charge(bucket, 1, "tool request")
+                    self.budget.begin_primary(request_id.replace("-", ""), bucket, "tool request")
             elif operation in ("response", "end"):
                 request = client["requests"].get(frame["requestId"])
                 if request is None or request["ended"]:
@@ -764,7 +910,8 @@ class Supervisor:
                         # quota/cost for this already-started request.
                         self.budget.fail("provider refused tool request")
                     if request["bucket"] in ("REST", "GraphQL"):
-                        self._observe_primary(request["bucket"], frame["quota"], request["priorQuota"])
+                        self._observe_primary(request["bucket"], frame["quota"], request["priorQuota"],
+                                              request_id=frame["requestId"].replace("-", ""))
                     elif frame["quota"] is not None:
                         raise TransitionError("unknown applicable quota")
                 else:
@@ -791,7 +938,7 @@ class Supervisor:
                 self.stopping = True
             return {"accepted": False, "reason": "terminal-refusal"}
 
-    def _observe_primary(self, bucket, quota, prior=None):
+    def _observe_primary(self, bucket, quota, prior=None, *, request_id=None):
         known = False
         try:
             if (not isinstance(quota, dict) or quota.get("bucket") != bucket
@@ -816,7 +963,8 @@ class Supervisor:
                     cost = used
                 known = True
                 try:
-                    self.budget.charge(bucket, cost - 1, "conservative tool GraphQL points", completion=True)
+                    self.budget.charge(bucket, cost - 1, "conservative tool GraphQL points", completion=True,
+                                       request_id=request_id)
                 finally:
                     with self.budget._transaction() as state:
                         self.budget._trace(state, {"bucket": bucket,
@@ -825,7 +973,7 @@ class Supervisor:
                             "responseUsed": quota.get("used"), "reset": quota["reset"],
                             "limit": quota["limit"], "responseRemaining": quota["remaining"]})
             self.budget.observe_quota(bucket, remaining=quota["remaining"], reset=quota["reset"],
-                limit=quota["limit"], completion=True)
+                limit=quota["limit"], completion=True, request_id=request_id)
         except (TransitionError, ValueError, KeyError, TypeError):
             if bucket == "GraphQL" and not known:
                 self.budget.record_unknown_graphql_cost()

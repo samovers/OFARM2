@@ -177,7 +177,7 @@ class PipelineProvider(core_fixture.Provider):
 
     def _headers(self):
         return {"X-RateLimit-Remaining": str(self.rest_remaining-self.rest),
-            "X-RateLimit-Reset": str(self.reset), "X-RateLimit-Limit": "1000"}
+            "X-RateLimit-Reset": str(self.reset), "X-RateLimit-Limit": "1000", "X-RateLimit-Resource": "core"}
 
     def replay_tools(self, phase):
         """Charge recorded primary costs once, before sibling guard observations."""
@@ -208,6 +208,64 @@ class PipelineProvider(core_fixture.Provider):
         comment["created_at"] = comment["updated_at"] = core_fixture.stamp(self.now)
         self.comments.append(comment)
         self.event, self.context = self.push("publisher")
+
+
+class StaggeredPipelineProvider(PipelineProvider):
+    """Two fictional quota windows, each charged for all observed work.
+
+    This models nonmonotonic reset observations without claiming a provider
+    cause. It neither reserves quota nor assumes that another caller is quiet.
+    """
+    def __init__(self):
+        self._restart_quota_history()
+        super().__init__()
+
+    def _restart_quota_history(self):
+        self.quota_history = {"REST": [], "GraphQL": []}
+        self.quota_seen = {"REST": 0, "GraphQL": 0}
+        self.quota_observations = {"REST": [], "GraphQL": []}
+
+    def restart_observations(self, *, offset=0):
+        super().restart_observations(offset=offset)
+        self._restart_quota_history()
+
+    def quota_facts(self, bucket):
+        now = int(self.now.timestamp())
+        total = self.rest if bucket == "REST" else self.points
+        self.quota_history[bucket].append((now, total-self.quota_seen[bucket]))
+        self.quota_seen[bucket] = total
+        shift = 299 if len(self.quota_observations[bucket]) % 2 else 0
+        anchor = int(self.origin.timestamp())-self.window_offset
+        reset = anchor + ((now-anchor-shift)//3600+1)*3600+shift
+        remaining = 1000-sum(cost for at, cost in self.quota_history[bucket]
+                             if reset-3600 <= at < reset)
+        self.quota_observations[bucket].append({"remaining": remaining, "reset": reset})
+        return remaining, reset
+
+    def route(self, request, timeout, job):
+        try:
+            response = super().route(request, timeout, job)
+        except urllib.error.HTTPError as error:
+            remaining, reset = self.quota_facts("REST")
+            error.headers.update({"X-RateLimit-Remaining": str(remaining), "X-RateLimit-Reset": str(reset)})
+            raise
+        url = urllib.parse.urlsplit(request.full_url)
+        if url.netloc != "api.github.com":
+            return response
+        payload = response.getvalue()
+        headers = dict(response.headers)
+        if url.path == "/graphql":
+            remaining, reset = self.quota_facts("GraphQL")
+            body = json.loads(payload)
+            body["data"]["rateLimit"].update(remaining=remaining,
+                resetAt=core_fixture.stamp(datetime.fromtimestamp(reset, timezone.utc)))
+            payload = transition.canonical_json(body)
+            headers.pop("Content-Length", None)
+        else:
+            remaining, reset = self.quota_facts("REST")
+            headers.update({"X-RateLimit-Remaining": str(remaining), "X-RateLimit-Reset": str(reset)})
+        response.close()
+        return core_fixture.Response(request.full_url, payload, headers, status=response.status)
 
 
 def generated_operations():
@@ -416,6 +474,25 @@ def test_generated_policy_positive_preserves_quota_across_reset_positions(tmp_pa
         job: list(counts) for job, counts in MEASURED_TOOL_PRIMARY.items()}
     assert sum(row["path"].startswith("/fixture-tool/") for row in provider.observations) == 23
     assert all(reader.budget.quota["REST"]["remaining"] >= 0 for reader in provider.readers.values())
+
+
+@pytest.mark.parametrize("offset,source_minutes,publisher_minutes", [(1, 60, 45), (120, 60, 45),
+    (3599, 60, 45), (1799, 133, 57)])
+def test_generated_policy_preserves_each_staggered_window_with_all_tool_traffic(
+        tmp_path, offset, source_minutes, publisher_minutes):
+    provider, chain, _operations = run_pipeline(tmp_path, offset=offset,
+        source_seconds=source_minutes*60, publish_seconds=publisher_minutes*60,
+        provider=StaggeredPipelineProvider())
+    assert chain["actual-receipt"] == chain["receipt"]
+    assert sum(row["path"].startswith("/fixture-tool/") for row in provider.observations) == 23
+    assert provider.tool_replays["conformance"] == [19, 21]
+    for bucket, observations in provider.quota_observations.items():
+        assert any(new["reset"] < old["reset"] for old, new in zip(observations, observations[1:]))
+        assert len({row["reset"] for row in observations}) >= 4
+        for reader in provider.readers.values():
+            assert len(reader.budget.quota_constraints[bucket]) <= 2
+            assert reader.budget._snapshot("primaryRequests") == {}
+            reader.budget.assert_healthy()
 
 
 @pytest.mark.parametrize("counts", [(21, 21), (19, 41)])

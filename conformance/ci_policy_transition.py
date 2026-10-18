@@ -414,7 +414,8 @@ class ApiReader:
         label = ("api-graphql" if graphql else "api-rest" if api else "artifact-blob") + ":" + request_id
         self.budget.assert_healthy()
         if api:
-            self.budget.charge("GraphQL" if graphql else "REST", 1, label)
+            self.budget.begin_primary(request_id, "GraphQL" if graphql else "REST", label)
+            request._transition_primary_id = request_id
         self.budget.charge_transport(label, requests=1, bytes=len(request.data or b""))
         if graphql:
             request._transition_graphql_settlement = "pending"
@@ -427,7 +428,7 @@ class ApiReader:
                 self.budget.fail("HTTP request refused")
             try:
                 if api and not graphql:
-                    self._quota_headers(exc.headers, "REST", completion=not permitted)
+                    self._quota_headers(exc.headers, "REST", request_id=request_id, completion=not permitted)
             finally:
                 payload = self._drain(exc, label, request_id, capture=graphql)
                 if graphql and payload is not None:
@@ -449,7 +450,7 @@ class ApiReader:
             raise TransitionError("unexpected HTTP response status")
         if api and not graphql:
             try:
-                self._quota_headers(response.headers, "REST")
+                self._quota_headers(response.headers, "REST", request_id=request_id)
             except Exception:
                 self._drain(response, label, request_id)
                 raise
@@ -488,14 +489,17 @@ class ApiReader:
         return self._open(urllib.request.Request(location, headers={"User-Agent": "ofarm2-ci-policy-transition"}),
                           timeout, artifact=True)
 
-    def _quota_headers(self, headers, bucket, *, completion=False):
+    def _quota_headers(self, headers, bucket, *, request_id, completion=False):
         try:
+            if headers.get("X-RateLimit-Resource") != "core":
+                raise ValueError("unexpected primary resource")
             raw = {k: headers["X-RateLimit-"+k] for k in ("Remaining", "Reset", "Limit")}
             if any(not re.fullmatch(r"[0-9]+", str(value)) for value in raw.values()):
                 raise ValueError("invalid quota")
             values = {k: int(value) for k, value in raw.items()}
             if not completion:
-                self.budget.observe_quota(bucket, remaining=values["Remaining"], reset=values["Reset"], limit=values["Limit"])
+                self.budget.observe_quota(bucket, remaining=values["Remaining"], reset=values["Reset"],
+                    limit=values["Limit"], request_id=request_id)
             else:
                 self.budget._quota(bucket, remaining=values["Remaining"], reset=values["Reset"], limit=values["Limit"])
         except (ValueError, TypeError, KeyError) as exc:
@@ -530,13 +534,15 @@ class ApiReader:
         # request. Record it before validating the remaining quota facts.
         request._transition_graphql_settlement = "known"
         try:
-            self.budget.charge("GraphQL", cost-1, "actual GraphQL points", completion=True)
+            self.budget.charge("GraphQL", cost-1, "actual GraphQL points", completion=True,
+                               request_id=request._transition_primary_id)
         finally:
             with self.budget._transaction() as state:
                 self.budget._trace(state, {"bucket": "GraphQL", "costMode": "actual",
                     "actualCost": cost, "chargedBound": cost})
         self.budget.observe_quota("GraphQL", remaining=quota.get("remaining"),
-            reset=int(timestamp(quota.get("resetAt")).timestamp()), limit=quota.get("limit"), completion=True)
+            reset=int(timestamp(quota.get("resetAt")).timestamp()), limit=quota.get("limit"), completion=True,
+            request_id=request._transition_primary_id)
         return data
 
     def graphql(self, query, variables):
@@ -1172,17 +1178,10 @@ def require_quota_headroom(reader, grant, phase, *, now=None, guard_complete=Fal
     for pool, spent in reader.budget.used.items():
         if (job in future and pool in {job, "shared-tools"}) or (pool == "source-reader" and "publish" in future):
             remaining = [max(0, remaining[index]-spent[index]) for index in (0, 1)]
-    for index, bucket in enumerate(("REST", "GraphQL")):
-        quota = reader.budget.quota.get(bucket)
-        if quota is None:
-            raise TransitionError("both actual workflow-token primary quotas are required")
-        if future & {"source-guard", "publisher-guard"}:
-            end = min(quota["reset"], timestamp(grant["expiresAt"]).timestamp(), now+3600)
-            ticks = max(0, min(31, math.floor(end/120)-first_tick//120+1))
-            remaining[index] += ticks * (15 if bucket == "REST" else 5)
-        remaining[index] += 75
-    reader.budget.require_headroom(future_rest=remaining[0], future_graphql=remaining[1])
-    return {"REST": remaining[0], "GraphQL": remaining[1]}
+    periodic = bool(future & {"source-guard", "publisher-guard"})
+    return reader.budget.require_headroom(future_rest=remaining[0]+75, future_graphql=remaining[1]+75,
+        first_tick=first_tick if periodic else None,
+        periodic_end=min(timestamp(grant["expiresAt"]).timestamp(), now+3600) if periodic else None)
 
 
 def _producer_state(reader, grant, live, role):
