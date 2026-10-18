@@ -1071,6 +1071,12 @@ def discover_binding(policy, reader, *, role, event, job_context, clock=utcnow, 
                 break
         else:
             raise TransitionError("binding discovery cannot prove a complete bounded scan")
+        observed_at = clock()
+        if not now <= observed_at <= deadline:
+            raise TransitionError("first binding did not arrive within the bounded gate")
+        # A binding may be created while the complete scan is in flight. Judge
+        # its timestamp at observation, without extending discovery or expiry.
+        now = observed_at
         records = _record_set(comments, grant_id)
         if "admission" not in records:
             raise TransitionError("source admission must predate activation and remain present")
@@ -1371,6 +1377,35 @@ def execute(args, *, environment=None, reader=None, checkout=None, clock=utcnow,
         raise
 
 
+def _refusal_diagnostic(exc):
+    """Bounded code locations only; never format exceptions or provider data."""
+    names = ("ci_policy_transition.py", "ci_policy_transition_tools.py",
+             "ci_policy_transition_operator.py", "ci_policy_transition_workflows.py",
+             "ci_policy_transition_publication.py")
+    allowed = {str(_TRUSTED_ROOT / "conformance" / name): name for name in names}
+    locations, statuses, seen = [], [], set()
+    for _ in range(8):
+        if exc is None or id(exc) in seen:
+            break
+        seen.add(id(exc))
+        if isinstance(exc, urllib.error.HTTPError):
+            status = exc.code
+            if type(status) is int and 100 <= status <= 599 and status not in statuses:
+                statuses.append(status)
+        frame = exc.__traceback__
+        for _ in range(32):
+            if frame is None:
+                break
+            name = allowed.get(os.path.abspath(frame.tb_frame.f_code.co_filename))
+            if name is not None and type(frame.tb_lineno) is int and 0 < frame.tb_lineno <= 100_000:
+                locations.append({"file": name, "line": frame.tb_lineno})
+            frame = frame.tb_next
+        exc = exc.__cause__ if exc.__cause__ is not None else (
+            None if exc.__suppress_context__ else exc.__context__)
+    return {"schemaVersion": "ofarm.ci-transition-refusal-diagnostic.v1",
+            "locations": locations[-12:], "httpStatus": statuses}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--operation", choices=("admit", "guard", "resolve", "publish", "handoff", "seal"), required=True)
@@ -1387,10 +1422,17 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         execute(args)
-    except (TransitionError, ValueError, OSError):
+    except (TransitionError, ValueError, OSError) as exc:
         # Runtime messages describe policy conditions, never provider bodies or
         # arbitrary exception text that could contain credentials/signed URLs.
         print("CI policy transition refused; no authority output accepted", file=sys.stderr)
+        try:
+            print("CI policy transition diagnostic: " + json.dumps(_refusal_diagnostic(exc),
+                sort_keys=True, separators=(",", ":")), file=sys.stderr)
+        except Exception:
+            # Diagnostics cannot replace the original refusal, even when a
+            # malformed exception or unavailable stderr prevents formatting.
+            pass
         return 1
     print("CI policy transition: authenticated bounded operation complete")
     return 0

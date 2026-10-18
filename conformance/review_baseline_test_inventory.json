@@ -971,6 +971,26 @@
       "sourcePath": "conformance/test_ci_policy_transition_tools.py"
     },
     {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_cli_diagnostic_failure_keeps_generic_refusal_and_nonzero_exit",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_cli_refusal_diagnostics_locate_real_reader_failure_without_provider_text[403]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_cli_refusal_diagnostics_locate_real_reader_failure_without_provider_text[429]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_cli_refusal_diagnostics_locate_real_reader_failure_without_provider_text[500]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_comment_author_pin_is_required_in_each_endpoint[False-source-gate]",
       "sourceModule": "conformance.test_ci_policy_transition",
       "sourcePath": "conformance/test_ci_policy_transition.py"
@@ -1069,6 +1089,86 @@
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_deleted_state_cannot_restart_budget",
       "sourceModule": "conformance.test_ci_policy_transition_tools",
       "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_completion_at_original_deadline_is_still_permitted[publisher]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_completion_at_original_deadline_is_still_permitted[source]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_completion_preserves_time_and_immutable_record_refusals[backwards-publisher]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_completion_preserves_time_and_immutable_record_refusals[backwards-source]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_completion_preserves_time_and_immutable_record_refusals[edited-publisher]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_completion_preserves_time_and_immutable_record_refusals[edited-source]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_completion_preserves_time_and_immutable_record_refusals[future-publisher]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_completion_preserves_time_and_immutable_record_refusals[future-source]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_completion_preserves_time_and_immutable_record_refusals[late-publisher]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_completion_preserves_time_and_immutable_record_refusals[late-source]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_observes_binding_created_during_complete_scan[False-publisher]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_observes_binding_created_during_complete_scan[False-source]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_observes_binding_created_during_complete_scan[True-publisher]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_observes_binding_created_during_complete_scan[True-source]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_refuses_grant_expiring_while_scan_is_in_flight[publisher]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_discovery_refuses_grant_expiring_while_scan_is_in_flight[source]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
     },
     {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_dispatch_rejects_cross_phase_operation_before_reading_candidate_inputs",
@@ -1654,6 +1754,31 @@
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_unknown_transport_is_not_a_generic_proxy",
       "sourceModule": "conformance.test_ci_policy_transition_tools",
       "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_refusal_diagnostics_bound_chain_depth_and_trusted_locations",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_refusal_diagnostics_exclude_hostile_names_status_and_nested_text[600]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_refusal_diagnostics_exclude_hostile_names_status_and_nested_text[99]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_refusal_diagnostics_exclude_hostile_names_status_and_nested_text[True]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_refusal_diagnostics_exclude_hostile_names_status_and_nested_text[fictional-secret-sentinel]",
+      "sourceModule": "conformance.test_ci_policy_transition",
+      "sourcePath": "conformance/test_ci_policy_transition.py"
     },
     {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_replayed_tool_traffic_cannot_exceed_its_owning_share[counts0]",
@@ -27546,8 +27671,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "155fee2ecbdb94877b236c5cb6735e759c5ad982e8f6e30114aad987e8c2b35f",
-  "entryCount": 5509,
+  "entriesSha256": "d3273649648b711bed79d5ed20ceca3bcfb9f0c0cb090786804eb9f5f8894dc0",
+  "entryCount": 5534,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
