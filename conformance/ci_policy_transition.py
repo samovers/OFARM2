@@ -1378,16 +1378,19 @@ def execute(args, *, environment=None, reader=None, checkout=None, clock=utcnow,
 
 
 def _refusal_diagnostic(exc):
-    """Bounded code locations only; never format exceptions or provider data."""
+    """Allowlisted locations/statuses and typed quota facts, never arbitrary text."""
     names = ("ci_policy_transition.py", "ci_policy_transition_tools.py",
              "ci_policy_transition_operator.py", "ci_policy_transition_workflows.py",
              "ci_policy_transition_publication.py")
     allowed = {str(_TRUSTED_ROOT / "conformance" / name): name for name in names}
     locations, statuses, seen = [], [], set()
+    quota_window = None
     for _ in range(8):
         if exc is None or id(exc) in seen:
             break
         seen.add(id(exc))
+        if quota_window is None and type(exc) is tool_policy.QuotaWindowError:
+            quota_window = tool_policy.QuotaWindowError.diagnostic(exc)
         if isinstance(exc, urllib.error.HTTPError):
             status = exc.code
             if type(status) is int and 100 <= status <= 599 and status not in statuses:
@@ -1402,8 +1405,11 @@ def _refusal_diagnostic(exc):
             frame = frame.tb_next
         exc = exc.__cause__ if exc.__cause__ is not None else (
             None if exc.__suppress_context__ else exc.__context__)
-    return {"schemaVersion": "ofarm.ci-transition-refusal-diagnostic.v1",
-            "locations": locations[-12:], "httpStatus": statuses}
+    result = {"schemaVersion": "ofarm.ci-transition-refusal-diagnostic.v1",
+              "locations": locations[-12:], "httpStatus": statuses}
+    if quota_window is not None:
+        result["quotaWindow"] = quota_window
+    return result
 
 
 def main(argv=None):

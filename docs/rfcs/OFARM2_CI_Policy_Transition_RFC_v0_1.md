@@ -100,11 +100,22 @@ the original five-minute discovery window, with no backwards clock, and the
 grant must still be active. No timestamp grace, extra request or retry is added.
 The complete live gate and immutable binding checks remain mandatory.
 
-On CLI refusal, a bounded diagnostic may report only allowlisted T-owned source
+On CLI refusal, a bounded diagnostic may report allowlisted T-owned source
 file/line locations and plain integer HTTP statuses from the exception chain.
-It excludes exception text, source lines, locals, arbitrary paths and provider
-content. Diagnostic formatting failure retains the generic refusal. This adds
-no provider reads, authority output or recovery route; the attempt still fails.
+For the existing contradictory-quota-window refusal, it may additionally report
+one typed observation: fixed reason `QUOTA_WINDOW_CONTRADICTION`, bucket REST
+or GraphQL, reset-regressed/limit-changed booleans, and the previous and incoming
+remaining/reset/limit integers. Each integer must be nonnegative and below
+10^13; both snapshots must retain valid remaining/limit relationships, a
+positive reset and a limit of at least1000. Malformed or larger facts omit this
+optional detail without relaxing the underlying refusal. Only the exact
+T-owned quota exception type supplies these facts; arbitrary exception text,
+source lines, locals, paths, raw headers and response bodies remain excluded.
+The diagnostic reads no provider or ledger state and creates no authority output
+or artifact. Formatting failure retains the generic refusal. This records only
+the exception reaching the CLI; it does not reconstruct discarded supervisor
+exceptions or establish a provider cause. No budget, deadline, retry or
+acceptance rule changes; the attempt still fails.
 
 The new root closure binds the full T tree, B, input workflow blobs, generated workflows, adapter, external verifier, grant schema, immutable version-4 coverage declaration, new tests and every imported helper/config/tool pin. It separately records the unchanged ordinary native-currentness record and six authority files, and asserts that native substantive steps match their canonical source. The transition closure is additional CI provenance; it cannot relabel or expand the native release/currentness claim. If implementation needs to alter that accepted native-currentness contract, stop and propose its separate boundary before editing it. A full-tree digest alone is not a substitute for the declared executable dependency closure and parity proof.
 
