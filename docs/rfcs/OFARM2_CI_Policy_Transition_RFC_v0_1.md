@@ -324,6 +324,16 @@ Before freezing T, focused controls must cover complete positive tool paths and 
 
 ## Execution and publication state machine
 
+The standalone supervisor disables bytecode writes in its own interpreter
+launch. Its dynamic imports must leave only the authenticated assets and
+explicitly owned runtime files in the private directory. Final cleanup retains
+its closed path inventory: unknown files, directories and symlinks refuse,
+including unexpected bytecode caches. Complete curl lifecycle controls must
+assert final supervisor cleanup, not only the tool-specific drain. This is an
+implementation correction within the approved CI evidence policy boundary;
+it adds no cleanup authority or recovery exception. See the guarantee matrix
+for the reproduced defect and the limits of the hosted diagnosis.
+
 Source DAG:
 
 ```text

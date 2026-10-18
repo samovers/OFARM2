@@ -75,6 +75,7 @@ remain fixtures. Existing substantive validation code runs unchanged.
 | G09, G25 schedule | `test_ci_policy_transition_integration.py` | Complete source60/handoff10/publication45 sequence, reset positions, long guards and every inclusive hour-boundary placement retain fresh checks, a single120-second grid and at most31 sweeps. Exact135/60-minute guard ceilings refuse even when the provider completes at the ceiling. |
 | G25 remaining headroom | Core and integration controls | Replay measured conformance19 REST/21 conservative points and native2 REST each through their owning shared-tool ledgers into the same provider quota as policy calls. Complete positive chains include window ages1,60,120 seconds. An exact-boundary completed periodic sweep is not forecast twice; initial, unproven, foreign and future ticks cannot earn that exclusion. Tool-share overruns and insufficient fresh headroom still refuse. |
 | G25 protected tools | `ci_policy_transition_tools.py`, `ci_policy_transition_execution.py`, Node/Git hooks, curl observer and gh relay | Real supervisor startup/drain/cleanup, failed and late completion accounting, missing/changed configuration, route/identity/body failures, first403/429, unknown GraphQL cost, quota/pagination overruns and fixed pool conservation. External acceptance uses the same56/10 share, not a new450/200 allowance. |
+| G25 standalone import and final cleanup | Actual child supervisor, curl and gh lifecycle controls | All four allowed curl selections make a real fictional TLS redirect/download, settle both requests and remove the complete control directory. Empty gh setup loads both sibling modules, refuses missing traffic and still removes owned resources. Unexpected files, bytecode directories and symlinks remain refusals and are not deleted. |
 | G25 independently expiring quota | Actual Python reader, shared ledger and generated pipeline controls | The saved numeric pair in both orders retains both live constraints. Observing/concurrent/later work debits each one; shorter or later incoming resets cannot replace an older forecast or balance. Staggered windows renew only after a fresh post-expiry request, through complete source60/handoff10/publisher45 and source133/publisher57 chains with all23 REST/21-point tool traffic. Separate ledger controls cover135/60-minute horizons. Wrong/missing REST resources, limits, clock, associations, overflow and insufficient headroom refuse. |
 | G25 quota refusal diagnostics | Core CLI and shared accounting tests | Changed limit and combined limit/reset changes emit only bounded previous/incoming facts, drain the response and retain terminal refusal after reopening the ledger. Reset-only changes now retain separate constraints. REST/GraphQL completion controls, malformed/oversize facts, foreign exceptions and long chains prove that optional diagnostics add no requests, durable authority or recovery. They do not establish the historical provider cause. |
 | G11, G25 workflow environment | Generator and workflow/Node tests | Independent case-insensitive mapping-key checks cover both consumers. Fixed lowercase proxy clearing uses the trusted bootstrap environment file before supervisor startup; uppercase clearing stays in step mappings. Actual bootstrap, hook and final cleanup execute with a runner-order environment model. Every later proxy override refuses before dispatch; open and partial-write failure start no process and remove created assets. The official GitHub parser separately reproduced the old validation errors and accepts both corrected workflows; this is local syntax evidence, not hosted acceptance. |
@@ -220,7 +221,36 @@ commands. Exact-head independent implementation review remains a separate
 gate; all hosted provenance, substantive jobs and final acceptance obligations
 above remain required before their corresponding use or merge.
 
-Next: complete exact-head implementation review, clear the separate #413
-test-harness prerequisite and consumer amendment, then prepare the distinct
-exact-root activation packet. No activation or hosted acceptance is recorded
-by this local verification section.
+### Standalone cleanup correction, 18 October 2026
+
+The authorized source run39143644844 at root047ea695 passed admission, then
+both native jobs failed their final protected-tool cleanup. The source guard
+cancelled the run. Its grant is terminal FAILED; no publisher, ticket, receipt
+or complete acceptance resulted. The hosted diagnostic reports only
+`transition tool controls refused`; its precise internal cause is unconfirmed.
+
+A local reproduction using the frozen five bootstrap assets, the real child
+supervisor and real curl against fictional loopback TLS proves a sufficient
+defect: dynamic imports create `__pycache__`, which the closed final cleanup
+correctly refuses. The previous real-curl test checked curl-specific cleanup
+but its fixture swallowed final supervisor cleanup errors. The historical
+Action/accounting compositions above did not prove this combined standalone
+import and final-cleanup path.
+Apple's system Python also disables bytecode by default. Generated-action
+controls using that interpreter cannot expose this defect; the regression
+and its negative control use CPython 3.12 with bytecode enabled by default.
+
+The actual supervisor child now receives Python's `-B` flag. Parent flags and
+environment variables cannot supply that guarantee through its isolated launch
+and sanitized environment. The cleanup allowlist, source authentication,
+process identity checks, drain requirements and failure disposition remain
+unchanged. No generated cache is accepted or recursively deleted. The
+regression now requires complete directory removal; the added controls cover
+the other three allowed curl selections, gh module imports and unexpected-path
+refusal. These are local lifecycle controls, not hosted native acceptance or
+proof of the historical hosted cause.
+
+Next: complete focused review at the corrected full commit, then prepare a new
+exact-root activation packet for unchanged, approved PR #413. All seven failed
+grants remain terminal; CI execution needs a later exact-root user grant and
+merge remains separate.

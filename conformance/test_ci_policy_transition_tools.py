@@ -302,7 +302,7 @@ def test_sweep_deadline_is_terminal_and_cannot_be_reset():
 
 
 @contextmanager
-def _running_supervisor(job="conformance"):
+def _running_supervisor(job="conformance", *, root_sha="a" * 40):
     # Unix socket pathname limits are shorter than pytest's macOS temp paths.
     with tempfile.TemporaryDirectory(prefix="of-t-", dir="/tmp") as temporary:
         root = Path(temporary).resolve()
@@ -340,7 +340,7 @@ def _running_supervisor(job="conformance"):
                 "--run-attempt",
                 "1",
                 "--root-sha",
-                "a" * 40,
+                root_sha,
                 "--github-env",
                 str(github_env),
             ],
@@ -429,6 +429,51 @@ def test_real_supervisor_success_drain_and_owned_cleanup():
         assert budget._snapshot("transport") == {"requests": 1, "bytes": 123}
         tools.finish(environment)
         assert not control.exists()
+
+
+def test_real_supervisor_empty_gh_refuses_but_removes_owned_resources():
+    root = ROOT.parent
+    sha = subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+    ).strip()
+    with _running_supervisor(root_sha=sha) as (control, config, environment):
+        base = {"schema": 1, "nonce": config["nonce"]}
+        tools._exchange(control, {**base, "operation": "gh-start",
+            "policyRoot": str(root), "token": "fictional-test-token"})
+        tools._exchange(control, {**base, "operation": "gh-check"})
+        # No provider request is fabricated: an empty gh lifecycle must refuse,
+        # then remove its owned resources despite loading both sibling modules.
+        with pytest.raises(tools.TransitionError, match="supervisor permanently refused"):
+            tools._exchange(control, {**base, "operation": "gh-finish"})
+        assert tools.decode(tools.private_file(control / "ledger.json"))["failed"]
+        with pytest.raises(tools.TransitionError, match="tool cleanup cannot establish success"):
+            tools.finish(environment)
+        assert not control.exists()
+
+
+@pytest.mark.parametrize("kind", ["file", "directory", "symlink"])
+def test_real_supervisor_cleanup_refuses_unowned_paths_without_deleting_them(kind):
+    with _running_supervisor() as (control, _config, environment):
+        target = control.parent / "outside"
+        target.write_bytes(b"preserve external bytes")
+        unexpected = control / ("__pycache__" if kind == "directory" else "unexpected")
+        if kind == "directory":
+            unexpected.mkdir()
+            (unexpected / "curl.pyc").write_bytes(b"unowned bytecode")
+        elif kind == "symlink":
+            unexpected.symlink_to(target)
+        else:
+            unexpected.write_bytes(b"unowned bytes")
+        with pytest.raises(tools.TransitionError, match="unowned cleanup paths"):
+            tools.finish(environment)
+        assert unexpected.exists() and (control / "tools.py").is_file()
+        assert target.read_bytes() == b"preserve external bytes"
+        if kind == "directory":
+            assert (unexpected / "curl.pyc").read_bytes() == b"unowned bytecode"
+        elif kind == "symlink":
+            assert unexpected.is_symlink()
+        else:
+            assert unexpected.read_bytes() == b"unowned bytes"
 
 
 @pytest.mark.parametrize("status", [403, 429])

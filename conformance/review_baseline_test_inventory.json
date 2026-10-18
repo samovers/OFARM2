@@ -1916,9 +1916,44 @@
       "sourcePath": "conformance/test_ci_policy_transition_tools.py"
     },
     {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_daemon_buildx_download_and_final_cleanup[conformance-buildx-amd64]",
+      "sourceModule": "conformance.test_ci_policy_transition_curl",
+      "sourcePath": "conformance/test_ci_policy_transition_curl.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_daemon_buildx_download_and_final_cleanup[native-amd64-buildx-amd64]",
+      "sourceModule": "conformance.test_ci_policy_transition_curl",
+      "sourcePath": "conformance/test_ci_policy_transition_curl.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_daemon_buildx_download_and_final_cleanup[native-arm64-buildx-arm64]",
+      "sourceModule": "conformance.test_ci_policy_transition_curl",
+      "sourcePath": "conformance/test_ci_policy_transition_curl.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_daemon_owns_curl_observer_and_counts_redirect_legs",
       "sourceModule": "conformance.test_ci_policy_transition_curl",
       "sourcePath": "conformance/test_ci_policy_transition_curl.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_cleanup_refuses_unowned_paths_without_deleting_them[directory]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_cleanup_refuses_unowned_paths_without_deleting_them[file]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_cleanup_refuses_unowned_paths_without_deleting_them[symlink]",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_empty_gh_refuses_but_removes_owned_resources",
+      "sourceModule": "conformance.test_ci_policy_transition_tools",
+      "sourcePath": "conformance/test_ci_policy_transition_tools.py"
     },
     {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_real_supervisor_first_refusal_stays_terminal_after_restart[403]",
@@ -28166,8 +28201,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "6309b334b844b04bf7f253e1d8f14a357079a96855e910b9ee7538a189ef889a",
-  "entryCount": 5633,
+  "entriesSha256": "39d51e8c66fdf21d86d1420f4b064a519a7a16961efa335543a34c2cd8de4416",
+  "entryCount": 5640,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

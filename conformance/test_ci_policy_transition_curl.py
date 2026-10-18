@@ -166,20 +166,20 @@ def test_actual_curl_truncated_body_cannot_succeed():
         assert frames[-1]["bytes"] == 7
 
 
-def test_real_daemon_owns_curl_observer_and_counts_redirect_legs():
+def _supervised_curl_cleanup(job, name):
     from conformance.test_ci_policy_transition_tools import _running_supervisor
     from conformance import ci_policy_transition_tools as tools
 
     with (
         fixture() as (root, port, calls),
-        _running_supervisor() as (control, config, environment),
+        _running_supervisor(job) as (control, config, environment),
     ):
         base = {"schema": 1, "nonce": config["nonce"]}
         selected = tools._exchange(
-            control, {**base, "operation": "curl-start", "name": "gh-amd64"}
+            control, {**base, "operation": "curl-start", "name": name}
         )
         result = subprocess.run(
-            command_for(root, port),
+            command_for(root, port, name=name),
             env={**environment, **selected["environment"]},
             capture_output=True,
             timeout=10,
@@ -190,4 +190,20 @@ def test_real_daemon_owns_curl_observer_and_counts_redirect_legs():
         ledger = tools.decode(tools.private_file(control / "ledger.json"))
         assert ledger["transport"] == {"requests": 2, "bytes": 7}
         assert not ledger["used"] and not ledger["failed"]
-        assert not (control / "curl-gh-amd64").exists()
+        assert len(calls) == 2
+        assert not (control / ("curl-" + name)).exists()
+        tools.finish(environment)
+        assert not control.exists()
+
+
+def test_real_daemon_owns_curl_observer_and_counts_redirect_legs():
+    _supervised_curl_cleanup("conformance", "gh-amd64")
+
+
+@pytest.mark.parametrize("job,name", [
+    ("conformance", "buildx-amd64"),
+    ("native-amd64", "buildx-amd64"),
+    ("native-arm64", "buildx-arm64"),
+])
+def test_real_daemon_buildx_download_and_final_cleanup(job, name):
+    _supervised_curl_cleanup(job, name)

@@ -1043,7 +1043,9 @@ def start(args):
               "rootSha": args.root_sha, "digests": digests}
     write_new(directory / "config.json", canonical(config))
     RequestBudget(args.job, path=directory / "ledger.json")
-    process = subprocess.Popen([sys.executable, "-I", "-S", str(directory / "tools.py"), "serve", "--directory", str(directory), "--await-start"],
+    # Dynamic imports must not add bytecode files to the closed cleanup root.
+    # The child has its own interpreter flags and a sanitized environment.
+    process = subprocess.Popen([sys.executable, "-I", "-S", "-B", str(directory / "tools.py"), "serve", "--directory", str(directory), "--await-start"],
                                stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                env={"PATH": "/usr/bin:/bin", "HOME": str(directory), "LANG": "C.UTF-8"},
                                start_new_session=True, close_fds=True)
