@@ -1,15 +1,15 @@
 # OFARM2 Conformance Execution Capacity RFC v0.1
 
-**Status:** Version 1 implementation retained; version 2 consumer evidence amendment proposed, not approved. PR #411 is draft pending amendment review and the later user decision. CI activation and merge remain separate.
+**Status:** Version 2 consumer evidence amendment approved; version 1 implementation retained. PR #411 remains draft pending fresh exact-head review and a separate exact-root CI grant. Complete acceptance and later human merge authorization remain required.
 **Delivery:** [#410](https://github.com/samovers/OFARM2/issues/410), child of #167.
 **PR:** [#411](https://github.com/samovers/OFARM2/pull/411), the single live implementation PR for Delivery #410.
-**Decision:** `OFARM2-CONFORMANCE-EXECUTION-CAPACITY-001`, approved version `1`; proposed version `2` below.
+**Decision:** `OFARM2-CONFORMANCE-EXECUTION-CAPACITY-001`, approved version `2`; version `1` retained below as history.
 **Primary boundary:** trusted CI execution-resource policy/currentness.
 **Design path:** `docs/rfcs/OFARM2_Conformance_Execution_Capacity_RFC_v0_1.md`.
 
-Sections 1–7 retain the approved version-1 design and its original evidence
-route. Section 8 proposes the only changes to that route. It has no effect
-until a complete version-2 card is reviewed and later approved by the task user.
+Sections 1–7 retain the version-1 design and original evidence route as history.
+The separately approved section 8 replaces only the consumer evidence route.
+Its semantic approval is not a grant to activate CI or merge.
 
 ## 1. Problem and confirmed evidence
 
@@ -144,11 +144,23 @@ Next: complete focused checks, exact-head implementation review, required hosted
 evidence and publication, then present the final packet for separate human merge
 authorization. This decision does not authorize merge or deployment.
 
-## 8. Proposed consumer evidence amendment, version 2
+## 8. Approved consumer evidence amendment, version 2
+
+The task user approved version 2 on 19 October 2026 at 06:14:39 UTC, after
+the complete card at 04:57:53 UTC in this coordinating chat
+`01a14a01-ece2-7bd1-ba2e-efb4fd96c0f0`: card
+`msg_08cb29efe0a907b2016ad5a3415ba88191bca6c743b976a1e1`, then user message
+`msg_01a152cc-3e59-7450-9fca-0aee8e77e8ab`. Both originals were retrieved
+directly in order. The original messages remain authority; this committed
+reference is navigation only. The proposed amendment received
+[zero-Blocker focused review](https://github.com/samovers/OFARM2/pull/411#pullrequestreview-5567069606)
+before the card. That review names the earlier proposal head; this approval
+record changes the head and requires fresh focused review. No exact-root grant
+or merge authority is supplied by this decision.
 
 ### Recommendation, problem and capability
 
-Make this same PR #411 eligible for complete pre-merge acceptance through the
+The approved amendment makes this same PR #411 eligible for complete pre-merge acceptance through the
 separately approved [PR #417](https://github.com/samovers/OFARM2/pull/417)
 version-4 transition, subject to a later, separate exact-root grant. Retain the
 approved finite 60-minute conformance ceiling and its mechanical currentness
@@ -179,7 +191,7 @@ The raw original text hashes match the retained approval record; the earlier
 record used a different normalized user-message identifier. These references
 are navigation, not approval. Version 1 explicitly required this PR's own
 checks under main's 45-minute policy. It does not authorize this amendment;
-the later version-2 decision must explicitly replace that requirement.
+version 2 separately and explicitly replaces that requirement.
 
 ### Boundary, authority and exact replacement
 
@@ -219,7 +231,7 @@ guarantee. Every test/SQL/signing deadline, substantive validator, inventory,
 dependency/image/action pin and unrelated job budget remains mandatory.
 
 The additional risk is relying on reviewed but unmerged T1 before PR417's own
-complete hosted acceptance. The proposed decision knowingly accepts only that
+complete hosted acceptance. The approved decision knowingly accepts only that
 temporary bootstrap reliance, bounded by local controls, exact-head review,
 independent root selection, one-use grants and fresh live verification. Shared
 account identity, operator/credential/workspace custody and delegated journal
@@ -257,11 +269,11 @@ or validation failure, or incomplete protected-tool cleanup refuses use.
 ### Verification, sequence and reapproval
 
 Before use require the complete refreshed PR411, mandatory and focused local
-checks, fresh exact-head zero-Blocker content and amendment design reviews,
-and the later complete version-2 card and user approval. Require PR417's current
+checks and fresh exact-head zero-Blocker content review. The amendment design
+review and later original version-2 card/approval are recorded above. Require PR417's current
 root checks and exact-head review, followed by a separately prepared concrete
 packet and later original exact-root user grant. Every new commit needs fresh
-review. This proposal supplies no grant, admission, timestamped slot or CI trigger.
+review. This semantic approval supplies no grant, admission, timestamped slot or CI trigger.
 
 The required source must run two complete unfiltered baselines sequentially on
 the same runner and actual database clusters/system IDs, the unchanged fixed
@@ -294,6 +306,6 @@ invariants, irreversible behavior, named PR or deployment posture requires a
 new version and approval. Changed execution coordinates require fresh checks,
 review/evidence and a new exact-root grant, never an inherited grant or sunset.
 
-Next: obtain focused review of this proposed amendment and refreshed head, then
-present the complete version-2 decision card for the user's later approval.
-CI activation and merge remain separate and unapproved.
+Next: obtain fresh focused review of this approval-record commit, then prepare
+and review the separate exact-root packet for a later user grant. Complete
+acceptance and later exact-head merge authorization remain separate.
