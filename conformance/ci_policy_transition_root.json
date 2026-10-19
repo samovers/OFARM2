@@ -1,5 +1,5 @@
 {
-  "baseSha": "301bf4aa3196b503ec114ebfa0f455be818627a4",
+  "baseSha": "73647ddb0037188f723c806f3689e617eec77630",
   "campaign": {
     "id": "ci-policy-transition-20261017",
     "notBefore": "2026-10-17T00:00:00Z",
@@ -101,7 +101,7 @@
       ]
     }
   },
-  "consumerPullRequest": 413,
+  "consumerPullRequest": 411,
   "coverageDigest": "sha256:dba2be9a1bbb641337e665853fb84ef1748d597c67a1f9418b3b22377e576c3e",
   "operatorId": 263070375,
   "repository": {

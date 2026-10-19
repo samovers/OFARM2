@@ -275,8 +275,36 @@ Separate workflow checks retain default failure propagation and job gates.
 These controls are local evidence; the failed publisher is never accepted or
 retried, and its successful source cannot transfer to a new grant.
 
-Next: complete focused review at the corrected full commit, then prepare a new
-exact-root activation packet for unchanged, approved PR #413. All eight failed
-grants remain terminal. The eighth grant consumed both slots; neither retry nor
-source reuse is permitted. CI execution needs a later exact-root user grant and
-merge remains separate.
+That corrected root later received its own review and a new exact-root grant;
+its complete #413 acceptance and retirement are recorded below. All eight
+failed grants remain terminal. The eighth consumed both slots; neither retry
+nor source reuse is permitted.
+
+
+## T1 preparation after the #413 merge
+
+The refreshed base is `73647ddb0037188f723c806f3689e617eec77630`; the prepared
+consumer is #411. The canonical source and publication workflow input pins are
+unchanged. Regeneration updates the trusted base and consumer selection while
+preserving fixed operation coverage, source/publisher separation, request shares,
+first-protected-error refusal and the sunset of 24 October 2026 00:00 UTC.
+Committed-output parity now selects #411; generic controls retain both named
+consumers. The inventory is 5,645 entries, retaining every entry from the
+5,592-case previous root and 5,260-case new main.
+
+The successful #413 source 39163908073 and publisher 39168173122 completed all
+required jobs, including two complete 5,260-case baselines, equivalence, all 23
+platform cases and both native architectures. External acceptance preceded the
+separate native merge. Grant `pr413-20261018-490994e8c63b6b8d` is retired;
+its root bundle, all ten raw artifact archives and receipt-bound hashes remain
+preserved. Historical verification confirms archive integrity, never fresh live
+acceptance. The eight failed grants and 40 frozen record hashes remain unchanged.
+
+This preparation does not transfer #413's accepted evidence or retired grant.
+The independent reviews of the old root are historical; the refreshed exact
+head needs focused review. PR411 needs its own version-2 consumer decision and
+later concrete one-use grant. PR417 still needs its own normal acceptance after
+capacity installation and retirement of active bootstrap entry points.
+
+Next: complete refreshed-root controls and focused review, then present PR411's
+reviewed proposed consumer amendment. CI activation and merge remain separate.

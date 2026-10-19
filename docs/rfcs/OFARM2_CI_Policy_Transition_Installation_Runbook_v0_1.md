@@ -113,7 +113,7 @@ T1 must retain the original campaign sunset; a fresh root/grant does not restart
 
 ## Implemented entry points
 
-`conformance/ci_policy_transition_prepare.py` writes the fixed root manifest and both generated workflows. It requires an explicit consumer, campaign ID, not-before and sunset; it creates no grant, journal or activation. The prepared first root selects #413 and campaign `ci-policy-transition-20261017`, bounded by `2026-10-17T00:00:00Z` and `2026-10-24T00:00:00Z`. Later T1 must retain that sunset. Preparation dates do not supply permission to use the root.
+`conformance/ci_policy_transition_prepare.py` writes the fixed root manifest and both generated workflows. It requires an explicit consumer, campaign ID, not-before and sunset; it creates no grant, journal or activation. The first root selected #413. After its separately authorized merge, the prepared T1 selects #411 at base `73647ddb0037188f723c806f3689e617eec77630`. Campaign `ci-policy-transition-20261017` retains its original bounds, `2026-10-17T00:00:00Z` through `2026-10-24T00:00:00Z`. Preparation dates do not supply permission to use the root.
 
 The generated workflows invoke `ci_policy_transition.py` for binding, live checks, guards, handoff, publication and seal. `ci_policy_transition_tools.py` owns the private accounting supervisor and exact Node/Git, curl and gh lifecycles. The root manifest fixes the coverage digest and disjoint request shares. Regenerate after any embedded asset changes and require the committed parity test to pass.
 
@@ -121,4 +121,6 @@ The isolated operator uses `TransitionJournal` and the closure/archive functions
 
 `ci_policy_transition_publication.py --operation verify-for-acceptance` takes the independently selected policy checkout, root manifest, grant, closure, expected root/closure, original-message projection and external journal/checkpoint/genesis paths. It reconstructs and revalidates the complete chain, checks fresh live facts, then consumes the exact tuple. Run it from the isolated selected T environment; never execute a receipt-selected or candidate verifier. Providing `--policy-root` does not relocate the executing verifier: its own module and imported authority/validator modules must come from that checkout and match the selected closure. A mismatch refuses before provider work. Its `audit-consumed` operation requires a retired journal and archived root bundle and returns historical integrity only. No verifier output authorizes a native merge.
 
-Next: complete exact-head implementation review and the separate #413 repair/amendment prerequisites before presenting a concrete activation packet. Activation and each merge retain their later original-user gates.
+The successful #413 grant `pr413-20261018-490994e8c63b6b8d` is retired after native merge and historical archive verification. Its original T remains immutable. Its source, publisher, receipt and acceptance are historical evidence, never transferable #411 authority. All earlier failed grants remain terminal and preserved.
+
+Next: review refreshed T1 and #411's proposed consumer amendment, then obtain the later version-2 semantic approval before preparing a separate concrete #411 packet. Activation and each merge retain their later original-user gates.

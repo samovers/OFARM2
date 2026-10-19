@@ -414,7 +414,7 @@ The paired invariants/negative cases in [the guarantee matrix](OFARM2_CI_Policy_
 
 EXC-001: one external user root grant and one authoritative substantive validator path. EXC-002: generated transition workflows with parity, not independently maintained workload copies; no duplicated comparison/native validators. EXC-003: each grant, state transition and evidence guarantee maps to an entry point and hostile control. EXC-004: hard sunset, spent grants and removal of active workflows in P's final revision. EXC-005: adapters serve the current two consumers and external verifier only, not a generic policy registry. EXC-006: the simplest credible alternative is an explicit, one-time exception permitting the small #411 resource/currentness change to merge after cheap checks, exact-head review and its existing partial hosted evidence, then obtain full acceptance from the automatic main push. Its failure or missing complete publication would stop dependent work and trigger preparation of a separately authorized native revert; rollback would not erase the period of unverified main or supply the missing pre-merge evidence. That alternative requires a new evidence-sufficiency decision and violates the invariant retained here: every change reaching main first has its own complete authenticated acceptance. The user asked to preserve acceptance guarantees, so this proposal does not select or authorize that exception. The selected route instead explicitly relies on reviewed temporary CI authority before P's own full hosted acceptance, while preserving every consumer's pre-merge acceptance; that added authority and machinery are the cost of preserving this invariant. A default-main-only start cannot install this unmerged policy, and split baselines add cluster/custody changes. There is no merge-first fallback on refusal or expiry.
 
-The initial local reviews were followed by review 5552055721's B1 (API budget) and B2 (simpler alternative), then B3 concerning tool recovery. Versions 2 and 3 were approved historically, but [review 5557825199](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5557825199) extended B3 to retained dependency/provider traffic after version-3 implementation began. The version-4 design received [zero-Blocker review 5558211359](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5558211359), followed by the original complete card and exact implementation approval recorded above. This corrected contract does not retroactively validate the preceding universal guarantee or unfinished code. F1 shared identity/custody and F2 future capacity remain. The current implementation adds the bounded tool lifecycles, immutable coverage, generated workflows, complete local validator chain, durable journal and live/historical external verifier. Local evidence and its limits are recorded in the guarantee matrix; exact-head implementation review remains independently required. The separate #413 test-harness Blocker must clear before its grant. Scope stays inside CI evidence policy selection, bounded use, revocation and recognition.
+The initial local reviews were followed by review 5552055721's B1 (API budget) and B2 (simpler alternative), then B3 concerning tool recovery. Versions 2 and 3 were approved historically, but [review 5557825199](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5557825199) extended B3 to retained dependency/provider traffic after version-3 implementation began. The version-4 design received [zero-Blocker review 5558211359](https://github.com/samovers/OFARM2/pull/417#pullrequestreview-5558211359), followed by the original complete card and exact implementation approval recorded above. This corrected contract does not retroactively validate the preceding universal guarantee or unfinished code. F1 shared identity/custody and F2 future capacity remain. The current implementation adds the bounded tool lifecycles, immutable coverage, generated workflows, complete local validator chain, durable journal and live/historical external verifier. Local evidence and its limits are recorded in the guarantee matrix; exact-head implementation review remains independently required. The separate #413 test-harness Blocker cleared before its completed grant; the current post-merge stage is recorded below. Scope stays inside CI evidence policy selection, bounded use, revocation and recognition.
 
 ## Historical provenance and present limitations
 
@@ -422,4 +422,54 @@ The first draft was a publication adaptation of the independently reviewed local
 
 Reference repository snapshot: `2026-10-16 17:20:22 UTC`. Main `301bf4aa3196b503ec114ebfa0f455be818627a4`; PR411 head `3a378c6030f711ea8f8da3966971a4bd59177613`, base `301bf4aa3196b503ec114ebfa0f455be818627a4`, open/non-draft/unmerged. Main protection was disabled, required status checks were off with empty checks/contexts, repository/parent rulesets were empty and main branch rules were empty. These are dated observations, not an authorization or a claim about future settings. Recheck them at the stages required by this design.
 
-The preparation record for version 4 binds the preceding exception assessment (`aa7df7861586a31334cc732377de57fbb797eea1126e8ccf1f7859a8fdf815f6`), its provider/scanner reports and focused review. Existing pip and BuildKit probes demonstrate recovery/status-independent content acceptance and bad-content refusal only for their recorded cases. Provider/bootstrap/scanner source inspection is not current hosted measurement. The local five-file proposal received focused independent AI review with zero design Blockers, two retained Follow-ups and no Preferences; review report SHA-256 `6a7d6a2b3ee80d02ae2da33c0c66c0a604b6b0e3f7663f58f1a12ea4727aab4b`. Publication, exact-head design review and the original semantic approval followed on 17 October 2026. These historical records remain distinct from implementation review and hosted acceptance. Next: complete exact-head implementation review, then satisfy the consumer prerequisites before preparing a separate exact-root activation packet.
+The preparation record for version 4 binds the preceding exception assessment (`aa7df7861586a31334cc732377de57fbb797eea1126e8ccf1f7859a8fdf815f6`), its provider/scanner reports and focused review. Existing pip and BuildKit probes demonstrate recovery/status-independent content acceptance and bad-content refusal only for their recorded cases. Provider/bootstrap/scanner source inspection is not current hosted measurement. The local five-file proposal received focused independent AI review with zero design Blockers, two retained Follow-ups and no Preferences; review report SHA-256 `6a7d6a2b3ee80d02ae2da33c0c66c0a604b6b0e3f7663f58f1a12ea4727aab4b`. Publication, exact-head design review and the original semantic approval followed on 17 October 2026. These historical records remain distinct from implementation review and hosted acceptance. The next-step statement in that historical stage did not grant activation authority.
+
+
+## Post-#413 refresh for the #411 consumer, 19 October 2026
+
+PR413 merged natively as `73647ddb0037188f723c806f3689e617eec77630` after
+its complete acceptance and later exact-head human merge authorization.
+At immutable root `d8cbb82c7cf09cc5600cc0c18ba13330328d4111`, source
+[39163908073](https://github.com/samovers/OFARM2/actions/runs/39163908073)
+and separate publisher
+[39168173122](https://github.com/samovers/OFARM2/actions/runs/39168173122),
+both attempt 1, completed their required jobs. The accepted chain includes two
+complete 5,260-test baselines, equivalence, 23 platform cases and both native
+architectures. Grant `pr413-20261018-490994e8c63b6b8d` is retired; the external
+journal records the accepted tuple and native merge. The original root bundle
+was verified by fetching into an empty repository, and all ten raw archives
+and their receipt-bound hashes were preserved. Historical verification reports
+archive integrity only, never a fresh live acceptance or another use grant.
+The eight earlier failed grants and their 40 frozen record hashes remain intact.
+
+PR413's automatic advisory run completed successfully without a new published
+review comment. Its full review text was not exposed and it recorded one
+permission denial. That workflow result is not a newly inspected zero-Blocker
+content review; the independent exact-head review remains separate evidence.
+
+The refreshed preparation branch is based on that new main and selects PR411.
+The two canonical workflow blobs and their SHA-256 pins are unchanged. The
+manifest's base/consumer coordinates and generated workflow provenance are
+refreshed; the additive inventory preserves all 5,260 new-main cases and all
+5,592 prior-root cases, for 5,645 entries. Existing fixtures still exercise both
+named consumers, while committed-output parity now checks the selected #411.
+No protected operation, coverage exception, request budget, substantive validator,
+currentness contract or native authority is changed by this refresh.
+
+The campaign remains `ci-policy-transition-20261017`, with the original fixed
+sunset **2026-10-24T00:00:00Z**. The earlier T and its consumed authority cannot
+be rebound. The prospective T1 is not selected authority until its own current
+checks, exact-head review, concrete packet and later original user grant.
+PR411's version-2 consumer amendment is proposed separately; its original
+version-1 approval required the old 45-minute route and cannot authorize the
+replacement. PR417's own complete ordinary hosted acceptance remains pending.
+
+Retain F1 shared identity/custody, F2 capacity uncertainty, F4's load-sensitive
+first-refusal fixture before PR417's own normal acceptance, and P3 completed-tick
+age coverage. F3's full quiet hour before admission and expected cheap chain
+plus 240 seconds before source remain binding. This refresh adds no CI use,
+renewal, grant, scheduled work, native merge or production authority.
+
+Next: complete focused review of T1 and PR411's proposed amendment, obtain the
+later consumer version-2 approval, then prepare a separate exact-root packet.
+CI activation and each merge remain separate.

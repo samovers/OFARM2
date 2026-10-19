@@ -21,7 +21,7 @@ import sys
 import zlib
 
 
-TRUSTED_BASE = "301bf4aa3196b503ec114ebfa0f455be818627a4"
+TRUSTED_BASE = "73647ddb0037188f723c806f3689e617eec77630"
 SOURCE_INPUT = ".github/workflows/conformance.yml"
 PUBLICATION_INPUT = ".github/workflows/evidence-publication.yml"
 SOURCE_OUTPUT = ".github/workflows/ci-policy-transition-source.yml"

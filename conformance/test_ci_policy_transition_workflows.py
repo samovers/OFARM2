@@ -110,11 +110,10 @@ class TransitionWorkflowTests(unittest.TestCase):
         result = workflows.check_parity(
             self.source, self.publication,
             (ROOT / workflows.SOURCE_OUTPUT).read_bytes(),
-            (ROOT / workflows.PUBLICATION_OUTPUT).read_bytes(), consumer_pr=413,
+            (ROOT / workflows.PUBLICATION_OUTPUT).read_bytes(), consumer_pr=411,
         )
-        self.assertEqual(result, self.generated)
         self.assertEqual(
-            result, workflows.generate(self.source, self.publication, consumer_pr=413),
+            result, workflows.generate(self.source, self.publication, consumer_pr=411),
         )
 
     def test_only_two_named_consumers_and_fixed_concurrency(self) -> None:
