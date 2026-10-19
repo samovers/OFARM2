@@ -1,11 +1,15 @@
 # OFARM2 Conformance Execution Capacity RFC v0.1
 
-**Status:** Decision version 1 approved; implemented in PR #411, pending required verification and final human merge acceptance.
+**Status:** Version 1 implementation retained; version 2 consumer evidence amendment proposed, not approved. PR #411 is draft pending amendment review and the later user decision. CI activation and merge remain separate.
 **Delivery:** [#410](https://github.com/samovers/OFARM2/issues/410), child of #167.
 **PR:** [#411](https://github.com/samovers/OFARM2/pull/411), the single live implementation PR for Delivery #410.
-**Decision:** `OFARM2-CONFORMANCE-EXECUTION-CAPACITY-001`, version `1`.
+**Decision:** `OFARM2-CONFORMANCE-EXECUTION-CAPACITY-001`, approved version `1`; proposed version `2` below.
 **Primary boundary:** trusted CI execution-resource policy/currentness.
 **Design path:** `docs/rfcs/OFARM2_Conformance_Execution_Capacity_RFC_v0_1.md`.
+
+Sections 1–7 retain the approved version-1 design and its original evidence
+route. Section 8 proposes the only changes to that route. It has no effect
+until a complete version-2 card is reviewed and later approved by the task user.
 
 ## 1. Problem and confirmed evidence
 
@@ -139,3 +143,157 @@ behavior, or deployment posture; uncertain preservation also stops work.
 Next: complete focused checks, exact-head implementation review, required hosted
 evidence and publication, then present the final packet for separate human merge
 authorization. This decision does not authorize merge or deployment.
+
+## 8. Proposed consumer evidence amendment, version 2
+
+### Recommendation, problem and capability
+
+Make this same PR #411 eligible for complete pre-merge acceptance through the
+separately approved [PR #417](https://github.com/samovers/OFARM2/pull/417)
+version-4 transition, subject to a later, separate exact-root grant. Retain the
+approved finite 60-minute conformance ceiling and its mechanical currentness
+refresh. This amendment changes the permitted consumer evidence route only.
+It adds no transition implementation to #411.
+
+PR411 source [38734136285](https://github.com/samovers/OFARM2/actions/runs/38734136285)
+passed its first 5,207-case baseline but exhausted 45 minutes during the repeat.
+Source [38740690045](https://github.com/samovers/OFARM2/actions/runs/38740690045)
+failed the existing test-owned password-rejection proxy before the time limit.
+Both native architectures passed in both sources; neither source completed
+accepted publication. These partial results cannot transfer to a fresh use.
+
+The separate proxy repair [PR #413](https://github.com/samovers/OFARM2/pull/413)
+merged as `73647ddb0037188f723c806f3689e617eec77630` after complete transition
+acceptance and separate native merge authorization. Its grant
+`pr413-20261018-490994e8c63b6b8d` is retired and its evidence archived.
+Neither its successful runs nor its unused authority can transfer to #411.
+This candidate is refreshed onto that main; the 53 added proxy controls come
+from main, not a new capacity implementation or an inventory reduction.
+
+The original version-1 card and approval were retrieved directly from chat
+`01a0aab4-3ce9-7540-abf2-41bc78b859b3`: card
+`msg_0a76f8c31f710916016ad0bea2c66887d2a78f152bd7b4d8f3` at
+15 October 2026 11:53:18 UTC, then original user message
+`msg_01a13f74-f7ae-7030-9ba3-367291fb6a0b` at 12:06:32 UTC.
+The raw original text hashes match the retained approval record; the earlier
+record used a different normalized user-message identifier. These references
+are navigation, not approval. Version 1 explicitly required this PR's own
+checks under main's 45-minute policy. It does not authorize this amendment;
+the later version-2 decision must explicitly replace that requirement.
+
+### Boundary, authority and exact replacement
+
+The primary boundary remains **trusted CI execution-resource policy/currentness**.
+PR411 owns the permanent budget and existing currentness record. PR417 alone
+owns CI evidence policy selection, bounded use, revocation and recognition.
+PR413's test transport repair is already on main. No runtime, tenant/database,
+signing/key custody, credential, audit, release or deployment change joins #411.
+
+The task user owns semantic approval, each exact-root grant, cancellation,
+final acceptance and later exact-head merge authorization. The existing
+executor owns the budget; the existing generator and validator own currentness.
+The isolated operator retrieves original authority and maintains the external
+single-writer journal. The selected root enforces admission and revocation;
+CI produces mechanical evidence; the separate publisher owns evidence custody;
+the external verifier authenticates the complete chain against the independently
+selected root. Reviewers assess content, not human approval. GitHub retains
+native merge. Candidate code, comments and artifacts cannot select their policy.
+
+For PR411 alone, after version-2 approval and a separate valid exact-root grant,
+replace three provenance requirements: default-main admission and same-main
+policy selection; the default-main `workflow_run` publisher; and ordinary
+receipt recognition. Their sole replacement is #417 v4's created transition
+admission, externally selected reviewed T1, a real push source, a separate push
+publisher at the same T1, distinct transition receipt and isolated external
+verification. This permits the finite 60-minute conformance route before #411
+merges. The candidate cannot authorize its own budget. Ordinary main policy
+and ordinary receipts stay unchanged; no other PR acquires consumer permission.
+
+### Risks, invariants and limits
+
+The capacity risk remains up to 15 extra configured runner-minutes per affected
+job and endorsing unrelated verifier bytes. Preserve the single scalar change,
+the two generated hash fields, the other five authority entries and the frozen
+receipt/release-identity bytes. Sixty minutes remains provisional, not a pass
+guarantee. Every test/SQL/signing deadline, substantive validator, inventory,
+dependency/image/action pin and unrelated job budget remains mandatory.
+
+The additional risk is relying on reviewed but unmerged T1 before PR417's own
+complete hosted acceptance. The proposed decision knowingly accepts only that
+temporary bootstrap reliance, bounded by local controls, exact-head review,
+independent root selection, one-use grants and fresh live verification. Shared
+account identity, operator/credential/workspace custody and delegated journal
+custody remain provisional limitations. An AI COMMENT is not independent human
+approval. T1's private gh relay performs upstream TLS authentication and handles
+forwarded credentials transiently; pinned configuration, isolation and cleanup
+remain required. Revocation detection can take 135 seconds plus provider
+cancellation latency; decisive stages must recheck live state.
+
+Use #417's fixed version-4 operation coverage. Protected Python policy/evidence
+reads, trusted Node/Git after bootstrap, four curl executions and five gh phases
+retain first-403/429 and GraphQL-error refusal and complete protected accounting.
+Existing recovery, fallback and valid content received under an error status
+may succeed only in the enumerated provider setup/control/reporting, archive
+installer/pip bootstrap and four canonical pip installs, Docker/Buildx/BuildKit
+image/ADD/fallback, and pinned-scanner paths, with their original final checks.
+Provider activity before observation is part of the disclosed exception. Bad or
+incomplete content and failed final checks still fail. Candidate/unrelated
+traffic is untrusted ambient activity. The 990 REST / 430 GraphQL-point envelope
+is protected-operation planning with margin, not an all-traffic ceiling, quota
+reservation or universal throttle guarantee. Unknown ambient use is not zero.
+The immutable coverage declaration must bind T1 through receipt acceptance.
+
+Any later grant must freeze full T1/tree/closure/coverage, reviewed PR411 head H,
+current base B and execution merge M/parents, reviews, operator, unique grant ID,
+exact source/publisher refs, external verifier, external journal/checkpoint
+locations and format, immutable genesis hash and concrete creation/expiry times.
+Its tail advances monotonically. Allow at most one source and one publisher,
+both attempt 1; expiry is within 24 hours and no later than the unchanged
+campaign sunset, **24 October 2026 00:00 UTC**. No renewal, automatic retry,
+reuse of partial evidence or transfer from an earlier grant. Expiry, revocation,
+head/base/history drift, missing authority, uncertain state, any required test
+or validation failure, or incomplete protected-tool cleanup refuses use.
+
+### Verification, sequence and reapproval
+
+Before use require the complete refreshed PR411, mandatory and focused local
+checks, fresh exact-head zero-Blocker content and amendment design reviews,
+and the later complete version-2 card and user approval. Require PR417's current
+root checks and exact-head review, followed by a separately prepared concrete
+packet and later original exact-root user grant. Every new commit needs fresh
+review. This proposal supplies no grant, admission, timestamped slot or CI trigger.
+
+The required source must run two complete unfiltered baselines sequentially on
+the same runner and actual database clusters/system IDs, the unchanged fixed
+comparison, all 23 platform cases and both complete native architectures.
+Require the complete successful source, guarded handoff, separate successful
+publisher, exact authenticated artifact inventories and receipt last, external
+verification, and current unrevoked authority. No filtering, test retry, relaxed
+assertion, partial acceptance, main write, protection change or merge bypass.
+Only then present the final packet and await separate exact-head native merge
+authorization. Semantic approval and a root grant never authorize merge.
+
+After separately authorized #411 merge, retire the bootstrap, rebase #417 onto
+main60, remove its active activation/issuance paths while retaining historical
+audit, and require #417's own complete ordinary acceptance before its merge.
+PR409 then needs its own fresh admission and complete verification; neither
+this amendment nor #413's results supply it.
+
+EXC-001–006 remain satisfied: one permanent executor/currentness owner; consume
+the separately owned temporary route without copying its logic; trace the
+bootstrap failure to exact provenance and unchanged substantive validators;
+retire the temporary route after use; add no abstraction or fallback. The simpler
+unchanged-45-minute attempt already failed. Partial-evidence merge is excluded
+by the retained acceptance invariant. No cross-boundary implementation is added.
+
+Review actual sizing after the first complete PR409 run under later authorized
+policy; no automatic increase or schedule is created. Before deployment replace
+the shared-account approval arrangement with independently human-controlled,
+verifiable approval/signing. Changed capability, boundary, authority, effects,
+invariants, irreversible behavior, named PR or deployment posture requires a
+new version and approval. Changed execution coordinates require fresh checks,
+review/evidence and a new exact-root grant, never an inherited grant or sunset.
+
+Next: obtain focused review of this proposed amendment and refreshed head, then
+present the complete version-2 decision card for the user's later approval.
+CI activation and merge remain separate and unapproved.
