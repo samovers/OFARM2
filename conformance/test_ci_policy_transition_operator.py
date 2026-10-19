@@ -3,11 +3,60 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
 from conformance import ci_policy_transition_operator as operator
+
+
+class TransitionReportShapeTests(unittest.TestCase):
+    def test_closure_controls_produce_publishable_test_results(self):
+        """Use the real reporter and publisher contract on the affected cases."""
+        from conformance import evidence_publication_policy as publication
+        from conformance import run_review_baseline as baseline
+
+        repository = Path(__file__).resolve().parents[1]
+        names = (
+            "test_missing_dependency_symlink_unknown_declaration_and_skip_ci_refuse",
+            "test_receipt_selected_root_base_digest_or_tree_is_rejected",
+        )
+        nodeids = [
+            f"kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::{name}"
+            for name in names
+        ]
+        inventory = json.loads(
+            (repository / "conformance/review_baseline_test_inventory.json").read_text()
+        )
+        selected = [entry for entry in inventory["entries"] if entry["nodeid"] in nodeids]
+        self.assertEqual({entry["nodeid"] for entry in selected}, set(nodeids))
+        expected = baseline._inventory_document("kernel/tests", selected)
+        environment = {
+            key: value for key, value in os.environ.items()
+            if key not in {"PYTEST_ADDOPTS", "PYTEST_PLUGINS", "PYTHONPATH", "PYTHONOPTIMIZE"}
+            and not key.startswith("OFARM_")
+        }
+        environment.update(
+            PYTEST_DISABLE_PLUGIN_AUTOLOAD="1",
+            PYTHONDONTWRITEBYTECODE="1",
+            OFARM_DISABLE_PLATFORM_MVP_EVIDENCE="1",
+        )
+        with tempfile.TemporaryDirectory(prefix="fictional-report-contract-") as directory:
+            report = Path(directory) / "results.json"
+            process = subprocess.run(
+                [sys.executable, "-B", "-m", "pytest", *nodeids, "-q",
+                 "-p", "no:cacheprovider", "-p", "conformance.review_baseline_pytest",
+                 "--review-baseline-results", str(report)],
+                cwd=repository, env=environment, capture_output=True, text=True, timeout=60,
+            )
+            self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+            publication._validate_test_results(
+                json.loads(report.read_text()), expected_inventory=expected,
+                warning_policy={"mode": "exact-inventory", "expected": []},
+            )
 
 
 def _write_root_archive(repo, roots, archive):
@@ -93,7 +142,9 @@ class TransitionPolicyClosureTests(unittest.TestCase):
         for index, wrong in ((2, self.base), (3, self.head), (4, "sha256:" + "0" * 64)):
             changed = list(arguments)
             changed[index] = wrong
-            with self.subTest(index=index), self.assertRaisesRegex(operator.OperatorError, "externally selected"):
+            with self.assertRaisesRegex(
+                operator.OperatorError, "externally selected", msg=f"argument {index}"
+            ):
                 operator._verify_archived_policy_closure(*changed)
         with self.assertRaisesRegex(operator.OperatorError, "external pin"):
             operator._verify_archived_policy_closure(*arguments, expected_tree="0" * 40)
@@ -156,10 +207,9 @@ class TransitionPolicyClosureTests(unittest.TestCase):
             self.closure()
 
     def test_missing_dependency_symlink_unknown_declaration_and_skip_ci_refuse(self):
-        with self.subTest(case="missing"):
-            self.spec["dependencies"]["policy.py"] = ["missing.py"]
-            with self.assertRaisesRegex(operator.OperatorError, "not a regular"):
-                self.closure()
+        self.spec["dependencies"]["policy.py"] = ["missing.py"]
+        with self.assertRaisesRegex(operator.OperatorError, "not a regular"):
+            self.closure()
         self.spec["dependencies"] = {}
         self.write("policy-link", "fixture")
         (self.repo / "policy-link").unlink()

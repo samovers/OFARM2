@@ -401,6 +401,11 @@
       "sourcePath": "conformance/test_ci_policy_transition_operator.py"
     },
     {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionReportShapeTests::test_closure_controls_produce_publishable_test_results",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::test_changed_acceptance_record_refuses[closure-closure differs]",
       "sourceModule": "conformance.test_ci_policy_transition_audit",
       "sourcePath": "conformance/test_ci_policy_transition_audit.py"
@@ -26631,8 +26636,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "13f8414b2b1db6d5e070f677478e390f592eb8f3306aa8a8ab24ec1f01ac2a76",
-  "entryCount": 5326,
+  "entriesSha256": "4198d7df305eafc7b8f73358e57c4fde34b63732028751cae534d664e4bfcd9f",
+  "entryCount": 5327,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

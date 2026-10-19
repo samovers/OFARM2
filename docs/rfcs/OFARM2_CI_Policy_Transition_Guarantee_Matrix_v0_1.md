@@ -18,6 +18,7 @@ that their tests establish acceptance of this final revision.
 | Provider facts and human authority stay distinct | Offline/missing facts remain unavailable; optional provider mismatch is explicit; all results deny execution/live acceptance/merge authority |
 | Campaign has no unfinished consumer | Recorded fixture contains exactly the two consumed consumers, eight failed grants, original fixed sunset and installed main |
 | Ordinary acceptance is unchanged | All existing main tests/workflows/validator and native-authority bytes are preserved; regenerate the complete inventory and obtain this PR's own ordinary acceptance |
+| Historical controls produce one complete test lifecycle | `TransitionReportShapeTests` executes the affected closure controls through the real pytest reporter and unchanged publisher result validator; extra call phases refuse |
 
 F1/F2 remain as recorded limits. F4 and P3 concern removed live paths and are
 retained as historical findings, not claimed fixed. Their former execution
@@ -28,7 +29,8 @@ provenance checks only; they are not new conformance or provider evidence.
 
 ### Executed retirement checks, 19 October 2026
 
-The focused retained controls passed: 66 tests and four subtests. The unchanged
+At retirement head `2195e3ee05a90f3801bdfbdc1f8c0bbc28f2e2fc`, the focused
+retained controls passed: 66 tests and four subtests. The unchanged
 ordinary admission, execution, publication and workflow suite passed all 81
 tests. The package contract check, architecture check and Python lint passed.
 Both real consumed histories (#413 and #411) passed the isolated read-only
@@ -43,9 +45,32 @@ live implementation and 57 historical controls are new. All 631 other tracked
 main paths, including ordinary workflows, validators and native currentness,
 remain byte- and mode-identical. The extracted Delivery procedure is unchanged.
 
-These are local checks and audits of previously consumed evidence. This
-revision has no ordinary hosted acceptance yet. Next: obtain focused exact-head
-review and prepare its separately authorized ordinary admission and acceptance.
+### Ordinary publication refusal and reporting repair
+
+[Ordinary source 39276420969](https://github.com/samovers/OFARM2/actions/runs/39276420969)
+passed both 5,326-test executions, equivalence, platform and native steps.
+[Publisher 39284588155](https://github.com/samovers/OFARM2/actions/runs/39284588155)
+correctly refused its conformance evidence: two closure controls used
+`unittest.subTest`, adding four extra call-phase records per baseline. The
+authenticated source archive reproduces the unchanged validator's refusal,
+`review baseline outcome is not one complete pass`. There are no authoritative
+artifacts or final receipt. Passing test summaries and equivalence did not make
+that evidence acceptable.
+
+The repair removes only those reporting wrappers, preserving every existing
+case, assertion and test identity. One new regression runs the two affected
+controls with the actual result writer, then applies the unchanged publisher
+validator to that explicitly focused fixture inventory. It fails before the
+repair and passes afterward. All 67 retained controls now pass with canonical
+setup/call/teardown records, independently checked with main's result validator.
+The full inventory is 5,327: all 5,326 prior tests, including every one of main's
+5,260 tests, plus the new regression. No collector, comparator, warning policy,
+publication rule, native authority or workflow is relaxed.
+
+These focused results are not complete hosted acceptance of the repaired head.
+Next: obtain focused exact-head review and prepare a fresh separately authorized
+ordinary admission; complete publication and external receipt acceptance remain
+required before final human merge review.
 
 ## Historical live guarantees and executed controls
 
