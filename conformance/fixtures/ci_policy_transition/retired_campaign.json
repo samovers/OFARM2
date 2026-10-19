@@ -1,0 +1,156 @@
+{
+  "schemaVersion": "ofarm.ci-transition-retired-campaign.v1",
+  "purpose": "historical-navigation-only",
+  "repository": "samovers/OFARM2",
+  "decision": "OFARM2-CI-POLICY-TRANSITION-001 version 4",
+  "campaignId": "ci-policy-transition-20261017",
+  "fixedSunset": "2026-10-24T00:00:00Z",
+  "grantIssuanceClosedAt": "2026-10-19T09:00:39Z",
+  "installedMain": "bf85f9721302ef74a33a92280ae8d498950510bf",
+  "consumers": [
+    {
+      "consumerPr": 413,
+      "grantId": "pr413-20261018-490994e8c63b6b8d",
+      "state": "RETIRED",
+      "consumedTuple": {
+        "baseSha": "301bf4aa3196b503ec114ebfa0f455be818627a4",
+        "closureDigest": "sha256:a0da423bda4ab5a215f53df896fbb49ce385366feb1ff74e84ae33febd5c2682",
+        "consumerPr": 413,
+        "coverageDigest": "sha256:dba2be9a1bbb641337e665853fb84ef1748d597c67a1f9418b3b22377e576c3e",
+        "grantId": "pr413-20261018-490994e8c63b6b8d",
+        "headSha": "aeeacf5f29b6d6f3f10b230bd1d89eb58979a67c",
+        "mergeSha": "8328114e52c3b834b3f65282704577be4b829951",
+        "publisherRunAttempt": 1,
+        "publisherRunId": 39168173122,
+        "receiptArtifactId": 12151049943,
+        "receiptDigest": "sha256:d9eb9c928e811765a23142b2559630755ed64dcf4554a88567900f04366677a9",
+        "rootSha": "d8cbb82c7cf09cc5600cc0c18ba13330328d4111",
+        "rootTree": "c083d77e9412dfdb29186259d243981f20cfaf52",
+        "sourceRunAttempt": 1,
+        "sourceRunId": 39163908073,
+        "ticketArtifactId": 12151386883,
+        "ticketDigest": "sha256:48cc4c24ff24507f6442a3f336e23d5260a9cee08585895ecf0be4507d4c23c6"
+      },
+      "nativeMerge": {
+        "mergeCommit": "73647ddb0037188f723c806f3689e617eec77630",
+        "mergedAt": "2026-10-19T04:27:34Z",
+        "headSha": "aeeacf5f29b6d6f3f10b230bd1d89eb58979a67c",
+        "finalPacketRef": "msg_08cb29efe0a907b2016ad541126ec481919b03f214dd6883d7",
+        "authorizationRef": "msg_01a1525d-ac4d-7031-bd50-8861bd229353"
+      },
+      "journalGenesis": "sha256:03c869d722f05babb73c8e7bea8118921ba3bdbccb44af28f91be3b22c1aaf80",
+      "journalTail": "sha256:247e9198e1d360efdab769ba4c7b06a3c157ee47235e0428986b27d841416299",
+      "acceptanceSha256": "sha256:63d16976413998b79be419b755c7a8ab5f4abb00010d49b63f4664fef20c633a",
+      "rootBundleDigest": "sha256:10a1581ed68660c1da7cbc67c5978e98285bf25e68f5c398c42d7443981283de",
+      "sourceUrl": "https://github.com/samovers/OFARM2/actions/runs/39163908073",
+      "publisherUrl": "https://github.com/samovers/OFARM2/actions/runs/39168173122"
+    },
+    {
+      "consumerPr": 411,
+      "grantId": "pr411-20261019-f74ea236c1461105",
+      "state": "RETIRED",
+      "consumedTuple": {
+        "baseSha": "73647ddb0037188f723c806f3689e617eec77630",
+        "closureDigest": "sha256:ef301d36517634e387e0918ac7ad087e5b9205ed4dc47dbc6d525e7f2c697ba2",
+        "consumerPr": 411,
+        "coverageDigest": "sha256:dba2be9a1bbb641337e665853fb84ef1748d597c67a1f9418b3b22377e576c3e",
+        "grantId": "pr411-20261019-f74ea236c1461105",
+        "headSha": "1331e7b4b13efb6193119b6915331b52b8438a5c",
+        "mergeSha": "4d46b46d6e12437b8aa33e32a1fdf4c357f57a2e",
+        "publisherRunAttempt": 1,
+        "publisherRunId": 39222088914,
+        "receiptArtifactId": 12172442144,
+        "receiptDigest": "sha256:364d65c749318b2e96b7dbba2a55e4583c025418922e23a56febfabbd57e6f00",
+        "rootSha": "e05232933e6ba793adda16318f13eb8c9d13a97f",
+        "rootTree": "3020bb4756a6bf68e7d1d83c07af4afbb780026d",
+        "sourceRunAttempt": 1,
+        "sourceRunId": 39215921451,
+        "ticketArtifactId": 12171474233,
+        "ticketDigest": "sha256:14e2c6c184e3b038ba6ed77f32a71928231911fa2708a1cb3d9fc503866b2ee6"
+      },
+      "nativeMerge": {
+        "mergeCommit": "bf85f9721302ef74a33a92280ae8d498950510bf",
+        "mergedAt": "2026-10-19T09:00:39Z",
+        "headSha": "1331e7b4b13efb6193119b6915331b52b8438a5c",
+        "finalPacketRef": "msg_08cb29efe0a907b2016ad5d6c79754819180e34d7802361828",
+        "authorizationRef": "msg_01a1535d-9de3-7200-add1-0210b6dc3728"
+      },
+      "journalGenesis": "sha256:f3e2c31ecabfc13a2381b0cfc77c797838110764315cee51ff822d8e3d84a880",
+      "journalTail": "sha256:a0511668d1a47bc32e553836e91f2d40eafba6ac3df9208d160b2de62583b6e8",
+      "acceptanceSha256": "sha256:f69bb2365b95b004fbb4db0c67e66918f5193e8c44cb76508cd462f6d477c043",
+      "rootBundleDigest": "sha256:3266ca48a442f6fcdf6fe03d0934724f7b050085fcea51ae4816359d8ea84695",
+      "sourceUrl": "https://github.com/samovers/OFARM2/actions/runs/39215921451",
+      "publisherUrl": "https://github.com/samovers/OFARM2/actions/runs/39222088914"
+    }
+  ],
+  "failedGrants": [
+    {
+      "grantId": "pr413-20261017-c2494480a9b74663",
+      "rootSha": "f13a526077a56bec99b333c9cfbd53452cde0e46",
+      "consumerPr": 413,
+      "state": "FAILED",
+      "journalGenesis": "sha256:715b292aaacb0ac88b02293fdf0111ade029337289b50cca909a78b2d9824b31",
+      "journalTail": "sha256:ff6385da34623451d27f2e5935fd2e2a9bac156f8be2e1849c74b15fe92465bc"
+    },
+    {
+      "grantId": "pr413-20261017-dd7623e8fe7646bd",
+      "rootSha": "c7c7881b0d3309f902362ff9ce3d810501eaf873",
+      "consumerPr": 413,
+      "state": "FAILED",
+      "journalGenesis": "sha256:fb47d527f668ad35a3d7829f3e69eb6622a1caf84f4a127fef88944aab782ef9",
+      "journalTail": "sha256:7c0b01492f86bf4c03dea2f8cf5409a8381a6b0a9ec8f65d119354e2e3cf8317"
+    },
+    {
+      "grantId": "pr413-20261017-d0b402a7b7418784",
+      "rootSha": "b04bb9e66459fef1bed88c7a1132a766e8c2f0b0",
+      "consumerPr": 413,
+      "state": "FAILED",
+      "journalGenesis": "sha256:4c217bf54b5914468b9ccf1916640ed26df6c0d44cbfb2b2525cfaa90a9283f3",
+      "journalTail": "sha256:de60d971acf8a8642ceb191f47c556e1e3e45dce215e91b0ad1bba5baceda4e5"
+    },
+    {
+      "grantId": "pr413-20261018-88e58a9a1164eb23",
+      "rootSha": "047ea695b67c46099e4b2037f3aaa158c0ef346a",
+      "consumerPr": 413,
+      "state": "FAILED",
+      "journalGenesis": "sha256:3bb8eeb08950941e1734a2a83991a1c8573bfc5ec56108d31ee1aaa2ac84c181",
+      "journalTail": "sha256:a9a84ba22937df98e2212727e4d6838abc9c57d0116d946774a28122fe093864"
+    },
+    {
+      "grantId": "pr413-20261018-37292d34c533a41b",
+      "rootSha": "80746e14032e90cf939bd5afa66fb388b063414d",
+      "consumerPr": 413,
+      "state": "FAILED",
+      "journalGenesis": "sha256:2ddd4a9db7ca032d6f809b18a88b20d31fdb275411713e814351f55b019c17bb",
+      "journalTail": "sha256:0fb9e1ba15376da4bcba543187af54186410eac97366125c84b5beba76a0bd5b"
+    },
+    {
+      "grantId": "pr413-20261018-087a5f3a33757a37",
+      "rootSha": "b00c303b4d49125205a4715b1ff8abb577b71502",
+      "consumerPr": 413,
+      "state": "FAILED",
+      "journalGenesis": "sha256:f76b2c1399a0d60ee1f6a1f67a0771c5dbe1e67dccac560203f0ce773def9da5",
+      "journalTail": "sha256:97bced5da4f52cb491bdaf36344d0c5629c727a8a1fc375e6eac3562a3d434ee"
+    },
+    {
+      "grantId": "pr413-20261018-30f99942be1519ee",
+      "rootSha": "0be695f53c55ce3ccf2708bf484b21071b4079f9",
+      "consumerPr": 413,
+      "state": "FAILED",
+      "journalGenesis": "sha256:ae583d881edc0d793bc3cd6d13f2a43c69aeee1ec136e05b26c947132f63383e",
+      "journalTail": "sha256:d8241c656686328043c52be674d1a90ca5e71d47609e44f5a52cbf34ac3d5ff7"
+    },
+    {
+      "grantId": "pr413-20261018-4069f9009dac9a88",
+      "rootSha": "bc3e1982fc5d628cf00400412a0b26ff605cbee6",
+      "consumerPr": 413,
+      "state": "FAILED",
+      "journalGenesis": "sha256:3e786212722b753c0d7df8559ac8918387430cb83ed47c57075b8563472ce453",
+      "journalTail": "sha256:ef4a5a12595dd8b0e75404b1382bc72edf2d0b3c81e50463d40ce49e19d7bb16"
+    }
+  ],
+  "executionAuthority": false,
+  "liveAcceptanceAuthority": false,
+  "mergeAuthority": false,
+  "evidenceLocation": "Complete raw archives, original messages, provider snapshots, consumed journals and verified Git bundles remain in independently retained operator storage. This navigation record is not that evidence and supplies no provider reauthentication."
+}

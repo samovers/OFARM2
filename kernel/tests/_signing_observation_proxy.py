@@ -87,6 +87,7 @@ class WireFaultProxy:
         self.result_packets = []
         self.failure: BaseException | None = None
         self.sockets: list[socket.socket] = []
+        self._lock = threading.Lock()
         self.listener = socket.socket()
         self.listener.bind(("127.0.0.1", 0))
         self.listener.listen()
@@ -110,19 +111,67 @@ class WireFaultProxy:
 
     def __exit__(self, *_exc):
         self.stop.set()
-        self.listener.close()
-        for connection in self.sockets:
-            try:
-                connection.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
-            connection.close()
-        self.thread.join(2)
-        assert not self.thread.is_alive(), "test proxy worker survived cleanup"
+        failures = []
+        try:
+            self.listener.close()
+        except BaseException as failure:
+            failures.append(failure)
+        with self._lock:
+            for connection in self.sockets:
+                try:
+                    self._shutdown(connection)
+                except BaseException as failure:
+                    failures.append(failure)
+        try:
+            self.thread.join(2)
+        except BaseException as failure:
+            failures.append(failure)
+        if self.thread.is_alive():
+            failures.append(AssertionError("test proxy worker survived cleanup"))
+        else:
+            for connection in self.sockets:
+                try:
+                    self._close(connection)
+                except BaseException as failure:
+                    failures.append(failure)
         if self.failure is not None:
-            raise AssertionError("test proxy failed") from self.failure
+            failures.insert(0, self.failure)
+        if failures:
+            if _exc[1] is not None:
+                failures.insert(0, _exc[1])
+            raise BaseExceptionGroup("test proxy failed", failures)
+
+    def _remember(self, connection):
+        with self._lock:
+            self.sockets.append(connection)
+            if self.stop.is_set():
+                self._shutdown(connection)
+
+    @staticmethod
+    def _shutdown(connection):
+        try:
+            # Wake the I/O owner without clearing an active SSLSocket's state.
+            socket.socket.shutdown(connection, socket.SHUT_RDWR)
+        except OSError:
+            pass
+
+    @staticmethod
+    def _close(connection):
+        try:
+            WireFaultProxy._shutdown(connection)
+        finally:
+            connection.close()
+
+    def _retain_failure(self, failure):
+        if self.failure is None:
+            self.failure = failure
+        else:
+            self.failure = BaseExceptionGroup(
+                "test proxy worker failed", [self.failure, failure],
+            )
 
     def _serve(self):
+        client = upstream = None
         try:
             while not self.stop.is_set():
                 try:
@@ -133,7 +182,7 @@ class WireFaultProxy:
             else:
                 return
             self.accepted += 1
-            self.sockets.append(client)
+            self._remember(client)
             client.settimeout(2)
             startup = _startup(client)
             if struct.unpack("!I", startup[4:8])[0] == 80877103:
@@ -142,26 +191,38 @@ class WireFaultProxy:
                 if self.mode == "tls-handshake":
                     self.withheld.set()
                     return self.stop.wait(10)
-                client = self.tls.wrap_socket(client, server_side=True)
-                self.sockets.append(client)
+                client = self.tls.wrap_socket(
+                    client, server_side=True, do_handshake_on_connect=False,
+                )
+                self._remember(client)
+                client.do_handshake()
                 self.tls_version = client.version()
                 startup = _startup(client)
             host = self.source.get("hostaddr") or self.source["host"]
             port = int(self.source["port"])
             if host.startswith("/"):
                 upstream = socket.socket(socket.AF_UNIX)
+                self._remember(upstream)
                 upstream.settimeout(2)
                 upstream.connect(f"{host}/.s.PGSQL.{port}")
             else:
                 upstream = socket.create_connection((host, port), timeout=2)
-            self.sockets.append(upstream)
+                self._remember(upstream)
             upstream.sendall(startup)
             self._relay(client, upstream)
         except (OSError, EOFError) as exc:
             if not self.stop.is_set() and not self.withheld.is_set():
-                self.failure = exc
+                self._retain_failure(exc)
         except BaseException as exc:
-            self.failure = exc
+            self._retain_failure(exc)
+        finally:
+            for connection in (upstream, client):
+                if connection is None:
+                    continue
+                try:
+                    self._close(connection)
+                except BaseException as failure:
+                    self._retain_failure(failure)
 
     def _relay(self, client, upstream):
         buffers = {client: bytearray(), upstream: bytearray()}
