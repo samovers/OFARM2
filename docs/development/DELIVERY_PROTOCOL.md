@@ -12,6 +12,23 @@ governed action or claim to have verified its missing requirements.
 Paths mentioned below are repository-root-relative. Code-excellence
 invariants and review classifications remain in [root AGENTS.md](../../AGENTS.md).
 
+## Retired exact-action CI transition
+
+[Decision `OFARM2-CI-POLICY-TRANSITION-001` version 4](../rfcs/OFARM2_CI_Policy_Transition_RFC_v0_1.md),
+implemented by [Delivery #416 / PR #417](https://github.com/samovers/OFARM2/pull/417),
+provided the temporary evidence route used by PRs #413 and #411. Both consumers
+completed their own acceptance and separately authorized native merges. The
+route is now retired: no further transition grants, activation, publication or
+live acceptance are permitted. Its used roots and consumed evidence remain
+historical records under the [retirement runbook](../rfcs/OFARM2_CI_Policy_Transition_Installation_Runbook_v0_1.md).
+
+Only read-only `audit-consumed` verification remains. It checks the retained
+journal, archived Git closure, receipt and raw archive hashes. It cannot create
+execution, live acceptance or merge authority. This closed historical amendment
+never changes ordinary admission, substantive validators or the final
+human/native merge procedure below. PR #417 must obtain its own complete
+ordinary-main acceptance; neither consumer's evidence substitutes for it.
+
 ## Extraction provenance
 
 The procedure below is extracted from `samovers/OFARM2` root `AGENTS.md`, Git
