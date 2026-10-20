@@ -164,7 +164,8 @@ def test_reason_cases_are_exact_and_exhaustive():
     mapped = {outcome for outcome, _ in ROUTER_CASES}
 
     assert mapped == set(TenantBoundaryOutcome) - {
-        TenantBoundaryOutcome.FINALIZATION_UNKNOWN
+        TenantBoundaryOutcome.FINALIZATION_UNKNOWN,
+        TenantBoundaryOutcome.TRANSACTION_FAILED,
     }
     assert tuple(reason for _, reason in ROUTER_CASES) == ROUTER_PRODUCER.reasons
 
@@ -229,8 +230,12 @@ def test_stored_and_overflow_results_complete_before_denial(result):
     assert sink.completed is True
 
 
-def test_finalization_outcome_on_entry_is_not_a_pretenant_reason():
-    denial = TenantBoundaryError(TenantBoundaryOutcome.FINALIZATION_UNKNOWN)
+@pytest.mark.parametrize(
+    "outcome",
+    (TenantBoundaryOutcome.FINALIZATION_UNKNOWN, TenantBoundaryOutcome.TRANSACTION_FAILED),
+)
+def test_finalization_outcome_on_entry_is_not_a_pretenant_reason(outcome):
+    denial = TenantBoundaryError(outcome)
     sink = _Sink()
 
     with pytest.raises(TenantBoundaryError) as raised:
@@ -245,6 +250,7 @@ def test_finalization_outcome_on_entry_is_not_a_pretenant_reason():
     (
         ("body", TenantBoundaryOutcome.BINDING_REFUSED),
         ("exit", TenantBoundaryOutcome.FINALIZATION_UNKNOWN),
+        ("exit", TenantBoundaryOutcome.TRANSACTION_FAILED),
     ),
 )
 def test_post_binding_failure_never_uses_isolated_audit(phase, outcome):

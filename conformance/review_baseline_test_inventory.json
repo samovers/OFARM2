@@ -7016,32 +7016,32 @@
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f1_swallowed_sql_failure_retains_existing_ordinary_return[ofarm_app]",
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f1_swallowed_sql_failure_refuses_normal_exit[ofarm_app]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f1_swallowed_sql_failure_retains_existing_ordinary_return[ofarm_worker]",
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f1_swallowed_sql_failure_refuses_normal_exit[ofarm_worker]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit[ofarm_app-False]",
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_rolls_back_before_commit[ofarm_app-False]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit[ofarm_app-True]",
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_rolls_back_before_commit[ofarm_app-True]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit[ofarm_worker-False]",
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_rolls_back_before_commit[ofarm_worker-False]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit[ofarm_worker-True]",
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_rolls_back_before_commit[ofarm_worker-True]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
@@ -14786,7 +14786,12 @@
       "sourcePath": "kernel/tests/test_request_router_audit.py"
     },
     {
-      "nodeid": "kernel/tests/test_request_router_audit.py::test_finalization_outcome_on_entry_is_not_a_pretenant_reason",
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_finalization_outcome_on_entry_is_not_a_pretenant_reason[FINALIZATION_UNKNOWN]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_finalization_outcome_on_entry_is_not_a_pretenant_reason[TRANSACTION_FAILED]",
       "sourceModule": "kernel.tests.test_request_router_audit",
       "sourcePath": "kernel/tests/test_request_router_audit.py"
     },
@@ -14822,6 +14827,11 @@
     },
     {
       "nodeid": "kernel/tests/test_request_router_audit.py::test_post_binding_failure_never_uses_isolated_audit[exit-FINALIZATION_UNKNOWN]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_post_binding_failure_never_uses_isolated_audit[exit-TRANSACTION_FAILED]",
       "sourceModule": "kernel.tests.test_request_router_audit",
       "sourcePath": "kernel/tests/test_request_router_audit.py"
     },
@@ -26366,6 +26376,566 @@
       "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selector.py"
     },
     {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[CancelledError-cached]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[CancelledError-uncalled]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[KeyboardInterrupt-cached]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[KeyboardInterrupt-uncalled]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[RuntimeError-cached]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[RuntimeError-uncalled]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[SystemExit-cached]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[SystemExit-uncalled]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[CancelledError-False-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[CancelledError-False-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[CancelledError-True-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[CancelledError-True-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[KeyboardInterrupt-False-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[KeyboardInterrupt-False-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[KeyboardInterrupt-True-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[KeyboardInterrupt-True-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[RuntimeError-False-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[RuntimeError-False-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[RuntimeError-True-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[RuntimeError-True-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[SystemExit-False-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[SystemExit-False-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[SystemExit-True-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[SystemExit-True-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[CancelledError-close]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[CancelledError-return]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[CancelledError-rollback]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[KeyboardInterrupt-close]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[KeyboardInterrupt-return]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[KeyboardInterrupt-rollback]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[SystemExit-close]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[SystemExit-return]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[SystemExit-rollback]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[False-False-False-inerror]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[False-False-False-rollback-only]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[False-False-True-inerror]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[False-False-True-rollback-only]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[True-False-False-inerror]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[True-False-False-rollback-only]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[True-True-False-inerror]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[True-True-False-rollback-only]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[True-True-True-inerror]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[True-True-True-rollback-only]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_rollback_only_remains_known_when_status_is_unreadable",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_gate_closes_facade_before_classifying[ACTIVE]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_gate_closes_facade_before_classifying[IDLE]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_gate_closes_facade_before_classifying[INERROR]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_gate_closes_facade_before_classifying[INTRANS]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_gate_closes_facade_before_classifying[UNKNOWN]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_read_process_control_preserves_identity[CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_read_process_control_preserves_identity[KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_read_process_control_preserves_identity[SystemExit]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_unreadable_state_discards_without_commit_or_observer",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf08_wrong_type_and_duplicate_guards_preserve_valid_batch",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_app-False-batch_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_app-False-request_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_app-True-batch_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_app-True-request_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_worker-False-batch_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_worker-False-request_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_worker-True-batch_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_worker-True-request_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf03_post_insert_return_failure_blocks_cached_selection_and_commit[ofarm_app-malformed]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf03_post_insert_return_failure_blocks_cached_selection_and_commit[ofarm_app-missing]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf03_post_insert_return_failure_blocks_cached_selection_and_commit[ofarm_app-timestamp]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf03_post_insert_return_failure_blocks_cached_selection_and_commit[ofarm_worker-malformed]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf03_post_insert_return_failure_blocks_cached_selection_and_commit[ofarm_worker-missing]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf03_post_insert_return_failure_blocks_cached_selection_and_commit[ofarm_worker-timestamp]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_app-False-CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_app-False-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_app-True-CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_app-True-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_worker-False-CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_worker-False-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_worker-True-CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_worker-True-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_ordinary_cleanup_failure_preserves_failed_exit_and_one_return[ofarm_app-close]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_ordinary_cleanup_failure_preserves_failed_exit_and_one_return[ofarm_app-rollback]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_ordinary_cleanup_failure_preserves_failed_exit_and_one_return[ofarm_worker-close]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_ordinary_cleanup_failure_preserves_failed_exit_and_one_return[ofarm_worker-rollback]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_app-CancelledError-after-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_app-CancelledError-before-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_app-KeyboardInterrupt-after-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_app-KeyboardInterrupt-before-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_app-OSError-after-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_app-OSError-before-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_worker-CancelledError-after-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_worker-CancelledError-before-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_worker-KeyboardInterrupt-after-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_worker-KeyboardInterrupt-before-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_worker-OSError-after-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_worker-OSError-before-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_app-after-batch]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_app-expected]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_app-reentry]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_app-unexpected]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_worker-after-batch]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_worker-expected]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_worker-reentry]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_worker-unexpected]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_precommit_state_read_process_control_keeps_original_identity[ofarm_app-CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_precommit_state_read_process_control_keeps_original_identity[ofarm_app-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_precommit_state_read_process_control_keeps_original_identity[ofarm_worker-CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_precommit_state_read_process_control_keeps_original_identity[ofarm_worker-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_app-ACTIVE]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_app-IDLE]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_app-UNKNOWN]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_app-read-error]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_worker-ACTIVE]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_worker-IDLE]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_worker-UNKNOWN]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_worker-read-error]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_tenant_uow.py::test_ambiguous_commit_discards_connection",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
@@ -26396,7 +26966,12 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     },
     {
-      "nodeid": "kernel/tests/test_tenant_uow.py::test_caught_unexpected_selector_failure_still_forces_rollback",
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_caught_unexpected_selector_failure_still_forces_rollback[KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_caught_unexpected_selector_failure_still_forces_rollback[RuntimeError]",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     },
@@ -26636,8 +27211,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "4198d7df305eafc7b8f73358e57c4fde34b63732028751cae534d664e4bfcd9f",
-  "entryCount": 5327,
+  "entriesSha256": "84eb9ae41f073e860b64da4cd45b6e84cf13cc237e4732e6a771909e5a1ca89c",
+  "entryCount": 5442,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

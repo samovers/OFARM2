@@ -58,6 +58,7 @@ class TenantBoundaryOutcome(str, Enum):
     UNAVAILABLE = "UNAVAILABLE"
     CAPABILITY_REFUSED = "CAPABILITY_REFUSED"
     BINDING_REFUSED = "BINDING_REFUSED"
+    TRANSACTION_FAILED = "TRANSACTION_FAILED"
     FINALIZATION_UNKNOWN = "FINALIZATION_UNKNOWN"
 
 
@@ -330,14 +331,18 @@ class TenantUnitOfWork:
             raise RuntimeError("tenant UnitOfWork is rollback-only")
         if type(request) is not GovernedBatchRequest or self.__batch is not None:
             raise RuntimeError("governed batch already exists")
-        self.__batch = self.__allocate_batch(request)
+        try:
+            self.__batch = self.__allocate_batch(request)
+        except BaseException:
+            self.__rollback_only = True
+            raise
         return self.__batch
 
     def resolve_commit_operation_claim_draft_runtime_bundle(
         self,
     ) -> TrustedCommandRuntimeBundle:
         self._require_active()
-        if self.__batch is not None:
+        if self.__batch is not None or self.__rollback_only:
             self._refuse_selection()
             raise CommandRuntimeBundleSelectionRefused from None
         if self.__selector_state is _SelectorState.RESOLVED:
@@ -491,18 +496,22 @@ class TenantUnitOfWorkManager:
                 _discard(connection)
             try:
                 self._pool.putconn(connection)
-            except BaseException:
-                if original_error is None:
+            except BaseException as exc:
+                if original_error is None or (
+                    original_error.outcome is TenantBoundaryOutcome.TRANSACTION_FAILED
+                    and not isinstance(exc, Exception)
+                ):
                     raise
                 returned = False
         if original_error is not None:
-            original_error._physical_observation = (
-                observe_physical_outcome(self._pool, self._bind, principal, capture)
-                if returned else PhysicalObservation(
-                    original_batch=capture[0][1] if capture else None,
-                    observer_failure="ORIGINAL_RETURN_UNAVAILABLE",
+            if original_error.outcome is TenantBoundaryOutcome.FINALIZATION_UNKNOWN:
+                original_error._physical_observation = (
+                    observe_physical_outcome(self._pool, self._bind, principal, capture)
+                    if returned else PhysicalObservation(
+                        original_batch=capture[0][1] if capture else None,
+                        observer_failure="ORIGINAL_RETURN_UNAVAILABLE",
+                    )
                 )
-            )
             raise original_error from None
 
     def _run(
@@ -546,9 +555,16 @@ class TenantUnitOfWorkManager:
             _rollback_or_discard(connection)
             raise
         rollback_only = unit._finish()
-        if rollback_only:
+        try:
+            status = connection.info.transaction_status if not rollback_only else None
+        except Exception:
+            status = None
+        if rollback_only or status == TransactionStatus.INERROR:
             _rollback_or_discard(connection)
-            return
+            return TenantBoundaryError(TenantBoundaryOutcome.TRANSACTION_FAILED)
+        if status != TransactionStatus.INTRANS:
+            _discard(connection)
+            raise TenantBoundaryError(TenantBoundaryOutcome.FINALIZATION_UNKNOWN)
         try:
             connection.commit()
         except Exception:
