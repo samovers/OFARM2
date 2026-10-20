@@ -82,9 +82,9 @@ process-memory corruption, hostile interpreter replacement and an unresponsive
 host are outside this fixture's existing model.
 
 The primary risk is acknowledging a genuine proxy defect as expected refusal.
-Containment is a completed-worker snapshot plus proof of actual native hostname
-rejection and a narrow, single-error predicate. Failed guards retain the original
-failure; grouped failures are never filtered.
+Containment is the existing context manager's completed teardown, proof of actual
+native hostname rejection, and identity of its one retained worker error. Any
+unexpected or combined failure is re-raised unchanged; groups are never filtered.
 
 ## Smallest complete correction
 
@@ -96,19 +96,30 @@ Change the certificate consumer, not `WireFaultProxy`'s general behavior:
    boolean proof needed by the assertion; do not expose driver text publicly.
 2. Keep the safe public exception, one native handle, one accepted connection,
    no query or downgrade, and native-handle disposal assertions.
-3. For the certificate case, join the proxy worker using the existing two-second
-   bound before inspecting its terminal failure. A surviving worker is a failure;
-   do not set stop early to manufacture a passing outcome.
-4. Require actual native wrong-hostname refusal and no upstream owner or protocol
-   traffic. The existing ownership list must contain only the accepted socket and
-   its TLS wrapper. Do not add a second ownership ledger.
-5. Acknowledge only no failure, one expected `ssl.SSLError`, or one `EOFError`
-   after a completed TLS 1.2/1.3 handshake. EOF before completed TLS, another
-   failure type, an exception group, extra ownership or protocol traffic fails.
-   Clear the single acknowledged error only after all guards pass and the worker
-   has terminated. Existing context-manager exit still owns final disposal and
-   propagation of any cleanup failure.
+3. Remove the in-body read and clear of `proxy.failure`. Let the existing
+   context-manager exit perform its single stop, bounded join and disposal.
+   Do not add another join or a second completion/ownership state.
+4. Outside that context, acknowledge a raised group only for the certificate
+   case and only if it contains exactly one child, that child is the identical
+   object held in `proxy.failure`, and it is one `ssl.SSLError` or an `EOFError`
+   after a completed TLS 1.2/1.3 handshake. The worker must be terminated and
+   all fixture sockets/listener closed. Require actual native wrong-hostname
+   refusal, one native handle/accepted connection, no forwarded PostgreSQL
+   frames/query, and only the accepted socket and TLS wrapper in the existing
+   ownership list. Existing normal exit also retains these final assertions.
+5. Re-raise the original group unchanged if any guard fails. A body failure,
+   a teardown-only failure, an extra cleanup failure, a nested group or a
+   surviving worker cannot match the identity/single-child predicate. Do not
+   flatten a group, remove selected leaves, clear `proxy.failure`, or replace
+   its traceback. For the password case, every group propagates unchanged.
 
+The existing helper may retain a peer EOF before stop or suppress stop-driven
+I/O afterwards. Both schedules become valid only when the real certificate
+refusal and disposal assertions hold. The consumer does not need to force one
+schedule or modify that existing helper rule. Controlled tests still exercise
+both orderings, including a late-retained worker error after the old in-body
+inspection point. This uses the current two-second teardown join only; it adds
+no extra wait budget.
 The production entry remains `SigningAuthorityReader.current`. No production
 method, verification setting, timeout, retry, credential decision, driver
 implementation or database behavior changes. The shared proxy still retains
@@ -116,16 +127,16 @@ unexpected running-state EOF; its existing stop/withholding exception remains.
 
 No new proxy mode, exception hierarchy, lifecycle state, framework, general
 error whitelist or alternate authority path is proposed. The existing
-unsynchronized consumer assertion/clear sequence is replaced, not retained as
-a fallback.
+unsynchronized consumer assertion/clear sequence is deleted; no replacement
+mutation of the worker result or compatibility fallback is introduced.
 
 ## Invariants and focused evidence
 
 | Invariant | Owning assertion and required evidence |
 | --- | --- |
 | EC01 — Actual credential refusal | Real wrong-hostname TLS reaches the unchanged reader, records native hostname rejection, returns only safe `SigningAuthorityUnavailable`, opens one client and emits no query, plaintext retry or upstream connection. A non-certificate native failure cannot justify EOF acknowledgement. |
-| EC02 — Completed observation | Read/acknowledge worker failure only after bounded join. Exercise worker-first and client-first schedules with events at existing seams, for TLS 1.2 and TLS 1.3. The pre-change assertion must fail the deterministic worker-first control. No sleeps or retry-until-pass oracle. |
-| EC03 — Narrow acknowledgement | A single post-handshake EOF or TLS alert is acknowledged only under EC01/EC02 and no extra socket ownership/traffic. Pre-TLS EOF, absent hostname proof, extra ownership or traffic, and unrelated exception types fail. |
+| EC02 — Completed observation | Acknowledge worker failure only after the existing context-manager teardown has joined and disposed its owners. Exercise worker-first and client-first schedules with events at existing seams, for TLS 1.2 and TLS 1.3. The pre-change assertion must fail the deterministic worker-first control. No extra join, sleeps or retry-until-pass oracle. |
+| EC03 — Narrow acknowledgement | A raised group must have exactly one child identical to the retained worker failure, and that child must be a post-handshake EOF or TLS alert under EC01/EC02 and no extra ownership/traffic. Pre-TLS EOF, absent hostname proof, unrelated errors, an extra child or a nested group propagate unchanged. |
 | EC04 — Honest failures | Original unexpected startup/relay EOF, framing errors, and body/worker/cleanup groups remain visible. Do not extract an expected leaf and discard the rest of a group. Keep the existing shared-proxy failure tests. |
 | EC05 — Ownership and real consumers | Every native handle is disposed; every test socket is closed; the worker is joined. Keep real password rejection, successful TLS forwarding, signing database and physical-outcome consumer assertions. A surviving worker or cleanup error cannot pass. |
 | EC06 — Complete acceptance | Regenerate the exact inventory without exclusions. Require package/focused checks, fresh exact-head content review, both complete sequential baselines and their unchanged equivalence comparison, all platform/native evidence, isolated publication and external receipt validation. |
@@ -145,14 +156,16 @@ design and will carry its complete implementation; it is not an enabling-only PR
 
 EXC-001: native verification is the sole credential decision and the joined
 worker's existing failure slot is the sole proxy result. EXC-002: reuse existing
-ownership and teardown facts; no shadow ledger or duplicated driver. EXC-003:
+ownership and teardown; no second join, shadow ledger or duplicated driver. EXC-003:
 EC01–EC06 trace to the consumer guards, controlled schedules and existing full
-acceptance. EXC-004: remove the unsynchronized assertion/clear path. EXC-005:
+acceptance. EXC-004: delete the unsynchronized assertion/clear path without a new result mutation. EXC-005:
 no new shared abstraction; any compact test helper must serve these actual
 controls. EXC-006: merely adding EOF to the current assertion leaves the race;
 globally suppressing EOF hides defects; forcing one TLS version or retrying
 removes required evidence. A new proxy configuration flag adds an unnecessary
-general policy for one consumer. EXC-007 preferences do not delay acceptance.
+general policy for one consumer. Joining and clearing the worker result inside
+the body duplicates completion handling already owned by context-manager exit;
+consume that completed result instead. EXC-007 preferences do not delay acceptance.
 
 No production signing, identity, custody, tenant/database, runtime readiness,
 audit, workflow, publication or approval authority change is included. No test
