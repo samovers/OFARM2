@@ -8531,6 +8531,86 @@
       "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[dependency-failure-amd64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[dependency-failure-arm64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[empty-log-amd64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[empty-log-arm64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[expected-rejection-amd64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[expected-rejection-arm64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[hostile-expected-rejection-amd64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[hostile-expected-rejection-arm64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[hostile-refusal-amd64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[hostile-refusal-arm64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[other-failure-no-newline-amd64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[other-failure-no-newline-arm64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[success-with-message-amd64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[success-with-message-arm64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[unexpected-success-amd64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output[unexpected-success-arm64]",
+      "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
+      "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_wrapper_refuses_raw_oversize_before_any_detoast",
       "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
       "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
@@ -27451,8 +27531,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "4c748f3ae8fab3874b0929da1f88d900f228925367a23276d4dc582014585fdd",
-  "entryCount": 5490,
+  "entriesSha256": "56c5f8ca1e83d821ca948bd531555bf8bd711a4357868bf1167c0dac849f0d3f",
+  "entryCount": 5506,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

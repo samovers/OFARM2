@@ -755,10 +755,17 @@ jobs:
             2>&1
           status=$?
           set -e
+          # Build output is data, including any workflow-command-shaped text.
+          diagnostic_token="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+          trap 'printf "\n::%s::\n" "${diagnostic_token}"' EXIT
+          printf '::stop-commands::%s\n' "${diagnostic_token}"
+          LC_ALL=C cat -v \
+            ".artifacts/native/${{ matrix.architecture }}/invalid-sanitizer.log"
           test "$status" -ne 0
           grep --fixed-strings \
             'SANITIZER must be exactly address or undefined' \
-            ".artifacts/native/${{ matrix.architecture }}/invalid-sanitizer.log"
+            ".artifacts/native/${{ matrix.architecture }}/invalid-sanitizer.log" \
+            > /dev/null
       - name: Run AddressSanitizer and UndefinedBehaviorSanitizer
         shell: bash
         run: |

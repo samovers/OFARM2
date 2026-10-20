@@ -4,16 +4,126 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
+
+import pytest
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 EXTENSION_ROOT = REPOSITORY_ROOT / "deployment/postgresql/ofarm_ed25519"
 CONTAINERFILE = (EXTENSION_ROOT / "Containerfile").read_text(encoding="ascii")
+
+
+@pytest.mark.parametrize("architecture", ("amd64", "arm64"))
+@pytest.mark.parametrize(
+    ("build_status", "message", "step_status"),
+    (
+        (64, b"SANITIZER must be exactly address or undefined\n", 0),
+        (0, b"unexpected build success\n", 1),
+        (0, b"SANITIZER must be exactly address or undefined\n", 1),
+        (1, b"lookup download.libsodium.org: server misbehaving\n", 1),
+        (64, b"independent build failure without a final newline", 1),
+        (64, b"", 1),
+        (
+            64,
+            b"::error::untrusted diagnostic\n##[error]legacy command\n"
+            b"::stop-commands::predictable\n::predictable::\n"
+            b"$(touch shell-injection) `touch shell-injection`\n"
+            b"\x1b[31mred\x1b[0m\rrewritten\x00tail\n",
+            1,
+        ),
+        (
+            64,
+            b"::error::SANITIZER must be exactly address or undefined\n"
+            b"::add-mask::SANITIZER\n::set-output name=accepted::true\n"
+            b"\x1b[31mred\x1b[0m\rrewritten\x00tail\n",
+            0,
+        ),
+    ),
+    ids=(
+        "expected-rejection", "unexpected-success", "success-with-message",
+        "dependency-failure", "other-failure-no-newline", "empty-log",
+        "hostile-refusal", "hostile-expected-rejection",
+    ),
+)
+def test_unsupported_sanitizer_diagnostics_preserve_gate_and_inert_output(
+    tmp_path: Path, architecture: str, build_status: int,
+    message: bytes, step_status: int,
+) -> None:
+    """Run the owned shell with a controlled build process, without Docker."""
+    workflow = (REPOSITORY_ROOT / ".github/workflows/conformance.yml").read_text()
+    start = "      - name: Refuse every unsupported sanitizer selector\n        run: |\n"
+    end = "      - name: Run AddressSanitizer and UndefinedBehaviorSanitizer\n"
+    assert workflow.count(start) == workflow.count(end) == 1
+    script = textwrap.dedent(workflow.split(start, 1)[1].split(end, 1)[0])
+    script = script.replace("${{ matrix.architecture }}", architecture)
+    script_path = tmp_path / "step.sh"
+    script_path.write_text(script)
+    log_path = tmp_path / f".artifacts/native/{architecture}/invalid-sanitizer.log"
+    log_path.parent.mkdir(parents=True)
+    (tmp_path / "build-output.bin").write_bytes(message)
+    buildx = tmp_path / "controlled buildx"
+    buildx.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys\n"
+        "from pathlib import Path\n"
+        "with Path('observed-argv.jsonl').open('a') as calls:\n"
+        "    calls.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "os.write(1, b'controlled build stdout\\n')\n"
+        "os.write(2, Path('build-output.bin').read_bytes())\n"
+        "raise SystemExit(int(os.environ['DIAGNOSTIC_TEST_STATUS']))\n"
+    )
+    buildx.chmod(0o755)
+    env = {
+        "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.defpath}",
+        "LC_ALL": "C", "PYTHONDONTWRITEBYTECODE": "1",
+        "ISSUE174_BUILDX": str(buildx), "ISSUE174_BUILDER": "controlled-builder",
+        "DIAGNOSTIC_TEST_STATUS": str(build_status),
+    }
+    for name in ("GITHUB_ENV", "GITHUB_OUTPUT", "GITHUB_PATH", "GITHUB_STEP_SUMMARY"):
+        path = tmp_path / name
+        path.write_bytes(b"unchanged\n")
+        env[name] = str(path)
+
+    result = subprocess.run(
+        ["/bin/bash", "-e", str(script_path)], cwd=tmp_path, env=env,
+        capture_output=True, check=False, timeout=10,
+    )
+
+    assert result.returncode == step_status
+    assert result.stderr == b""
+    calls = (tmp_path / "observed-argv.jsonl").read_text().splitlines()
+    assert len(calls) == 1
+    assert json.loads(calls[0]) == [
+        "build", "--builder", "controlled-builder",
+        "--file", "deployment/postgresql/ofarm_ed25519/Containerfile",
+        "--platform", f"linux/{architecture}", "--target", "sanitizer",
+        "--pull", "--no-cache", "--provenance=false", "--sbom=false",
+        "--build-arg", "SOURCE_DATE_EPOCH=0", "--build-arg", "SANITIZER=memory",
+        "--progress=plain", "deployment/postgresql/ofarm_ed25519",
+    ]
+    captured = b"controlled build stdout\n" + message
+    assert log_path.read_bytes() == captured
+    envelope = re.fullmatch(
+        rb"::stop-commands::([0-9a-f]{64})\n(.*)\n::\1::\n",
+        result.stdout, re.DOTALL,
+    )
+    assert envelope is not None
+    token, displayed = envelope.groups()
+    assert token not in captured
+    assert b"::" + token + b"::" not in displayed
+    assert displayed == captured.replace(b"\x1b", b"^[").replace(
+        b"\r", b"^M"
+    ).replace(b"\x00", b"^@")
+    assert not (tmp_path / "shell-injection").exists()
+    for name in ("GITHUB_ENV", "GITHUB_OUTPUT", "GITHUB_PATH", "GITHUB_STEP_SUMMARY"):
+        assert Path(env[name]).read_bytes() == b"unchanged\n"
 
 
 def test_native_build_uses_only_the_accepted_pinned_images() -> None:
