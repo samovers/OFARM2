@@ -1,7 +1,8 @@
 # Signing certificate-refusal evidence — Phase A v0.1
 
 Decision: `OFARM2-SIGNING-TEST-CERTIFICATE-REFUSAL-001`, version 1.
-Status: proposed; implementation, CI activation and merge are not approved.
+Status: approved for implementation on 20 October 2026; ordinary CI activation
+and merge remain separate.
 Delivery: [#418](https://github.com/samovers/OFARM2/issues/418). The named draft
 PR is identified by its description and the later same-task decision card.
 
@@ -149,7 +150,7 @@ implementation and review. No local diagnostic substitutes for it.
 ## Scope and code excellence
 
 Expected areas: `kernel/tests/test_signing_observation_database.py`, focused
-controls in `kernel/tests/test_signing_observation_proxy.py`, the mechanically
+controls in `kernel/tests/test_signing_certificate_refusal.py`, the mechanically
 regenerated `conformance/review_baseline_test_inventory.json`, and this durable
 correction to the earlier explicit consumer contract. This draft begins with
 design and will carry its complete implementation; it is not an enabling-only PR.
@@ -182,10 +183,49 @@ diagnosis rather than broadening the predicate silently. Before deployment,
 the existing approval arrangement still requires independently human-controlled
 and verifiable authority.
 
-Prepare the one Delivery issue and draft PR, review Phase A to zero Blockers,
-then present the exact new decision card. Only its later exact task-user approval
-permits implementation. CI admission and merge remain separate later actions.
+The reviewed Phase A and complete card were followed by the task user's exact
+version-1 approval in the coordinating Codex task. The original card is message
+`msg_08cb29efe0a907b2016ad71d83438c819198dc877e80ff3cfd`; its later approval is
+message `01a15879-4f4f-7e43-b286-36c0a5bab259`, both in task
+`01a14a01-ece2-7bd1-ba2e-efb4fd96c0f0`. These identifiers are navigation; the
+directly retrievable original task-user message supplies authority.
+CI admission and merge remain separate later actions.
 Reapproval is required for a changed capability, boundary, authority map, effect,
 non-effect, invariant, irreversible behavior, named PR or deployment posture.
 
-Next: review and publish this prepared Phase A, then obtain its semantic decision.
+## Implementation and regression trace
+
+The certificate consumer now observes native hostname rejection at real owner
+disposal and reads the proxy result after its existing context manager exits.
+Its single-child identity guard preserves the original group and traceback on
+refusal. The helper `_certificate_refusal_complete` reads existing ownership
+facts and the one native observation; it adds no proxy state or completion path.
+Normal teardown must prove the same refusal and disposal facts.
+
+The shared proxy and production reader/I/O files remain unchanged. The original
+certificate and password test node IDs and every existing inventory entry remain.
+The dedicated certificate-refusal module adds 28 cases:
+
+- EC02 exercises TLS 1.2 and TLS 1.3 with worker-first, client-first stop, and
+  client-first late retention, using events at the existing disposal/join seams.
+  Against the unchanged consumer, four schedules failed and two passed.
+- EC01/EC05 remove native proof, client uniqueness, absence of traffic/upstream
+  ownership, or completed disposal and require the original group to propagate.
+- EC03/EC04 cover pre-handshake EOF, another error object, nested groups, real
+  body/worker-cleanup/teardown-cleanup failures and unrelated worker errors.
+  Expected peer-alert handling retains actual native hostname-refusal proof.
+- Normal exit without native proof refuses. A failed diagnostic observation
+  still calls real native disposal.
+
+The new loopback upstream listener is a connection trap and never supplies
+PostgreSQL results. The existing database credential, successful TLS and
+physical-outcome consumer cases retain their real roles and database authority.
+These focused checks do not replace either complete ordinary baseline or its
+publication and external-verification gates.
+
+The new module keeps the original proxy test file byte-identical and satisfies
+the package's 800-line test-module limit. This replaces the predicted addition
+to that existing file, without changing the capability, evidence requirements
+or primary trust boundary.
+
+Next: obtain fresh exact-head content review and prepare ordinary CI admission.
