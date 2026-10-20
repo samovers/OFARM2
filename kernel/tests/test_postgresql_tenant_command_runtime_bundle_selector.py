@@ -39,10 +39,11 @@ from kernel.tenant_uow import (
 )
 from kernel.tests.postgresql_audit_support import audit_service_fixture  # noqa: F401
 from kernel.tests.postgresql_audit_support import role_dsn
+from kernel.tests.postgresql_tenant_support import TenantTarget
+from kernel.tests.postgresql_tenant_support import tenant_target  # noqa: F401
 from kernel.tests.test_postgresql_tenant_migration import (
     CapabilityKeyAuthority,
     TenantAuthority,
-    TenantTarget,
     _extended_command_selection_bundle,
     _insert_batch,
     _install_test_bound_context,
@@ -51,7 +52,6 @@ from kernel.tests.test_postgresql_tenant_migration import (
     capability_key,  # noqa: F401 - imported fixture
     command_selection_bundle,  # noqa: F401 - imported fixture
     other_authority,  # noqa: F401 - imported fixture
-    tenant_target,  # noqa: F401 - imported fixture
 )
 from kernel.tests.test_postgresql_tenant_uow import _FixtureMinter, _principal
 

@@ -23,12 +23,13 @@ from kernel.tenant_uow import (
     create_tenant_connection_pool,
 )
 from kernel.tests.tenant_capability_fixture import sign_capability
+from kernel.tests.postgresql_tenant_support import TenantTarget
+from kernel.tests.postgresql_tenant_support import tenant_target  # noqa: F401
 from kernel.tests.test_postgresql_tenant_migration import (
     ISSUER,
     PARTY_KIND,
     CapabilityKeyAuthority,
     TenantAuthority,
-    TenantTarget,
     _canonical_json,
     _compute_act_digest,
     _compute_binding_digest,
@@ -37,7 +38,6 @@ from kernel.tests.test_postgresql_tenant_migration import (
     _transition,
     authority,  # noqa: F401 - imported fixture
     capability_key,  # noqa: F401 - imported fixture
-    tenant_target,  # noqa: F401 - imported fixture
 )
 
 

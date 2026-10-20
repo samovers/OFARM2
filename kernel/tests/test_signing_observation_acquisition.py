@@ -15,8 +15,9 @@ from kernel import postgres_wait as mechanical
 from kernel import signing_authority as authority_module
 from kernel import signing_authority_io as transport
 from kernel.tests._signing_observation_support import reader
+from kernel.tests.postgresql_tenant_support import tenant_target  # noqa: F401
 from kernel.tests.test_postgresql_tenant_migration import (
-    authority, capability_key, tenant_target,  # noqa: F401 - real fixtures
+    authority, capability_key,  # noqa: F401 - real fixtures
 )
 from kernel.tests.test_signing_observation_database import (
     _assert_native_handles_disposed, _retain_native_handles,
