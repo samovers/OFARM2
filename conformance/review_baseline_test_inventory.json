@@ -22906,6 +22906,146 @@
       "sourcePath": "kernel/tests/test_signing_authority.py"
     },
     {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[closed-listener]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[closed-socket]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[completed-stop]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[hostname]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[native-handle]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[no-backend]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[no-frontend]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[no-query]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[no-statement]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[no-upstream-owner]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[single-client]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[terminated-worker]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_normal_teardown_cannot_replace_native_refusal_proof",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec02_certificate_refusal_is_independent_of_worker_schedule[client-first-late-retain-771]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec02_certificate_refusal_is_independent_of_worker_schedule[client-first-late-retain-772]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec02_certificate_refusal_is_independent_of_worker_schedule[client-first-stop-771]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec02_certificate_refusal_is_independent_of_worker_schedule[client-first-stop-772]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec02_certificate_refusal_is_independent_of_worker_schedule[worker-first-771]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec02_certificate_refusal_is_independent_of_worker_schedule[worker-first-772]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[body]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[different-object]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[nested]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[pre-tls-eof]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[teardown-cleanup]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[unrelated-worker]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[worker-cleanup]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_tls_alert_still_requires_real_native_hostname_refusal",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec05_failed_native_diagnostic_observation_still_disposes_real_handle",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
       "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_process_control_before_acquisition_handles_empty_owner_slots[connect]",
       "sourceModule": "kernel.tests.test_signing_observation_acquisition",
       "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
@@ -27211,8 +27351,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "84eb9ae41f073e860b64da4cd45b6e84cf13cc237e4732e6a771909e5a1ca89c",
-  "entryCount": 5442,
+  "entriesSha256": "122fa9caea8213dc7b50ef5c2b16ed969d9eeccde6fbf5b5a3d0fdef0b9a510b",
+  "entryCount": 5470,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

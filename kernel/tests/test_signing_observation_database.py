@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import dataclasses
+import socket
+import ssl
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -519,31 +521,75 @@ def test_real_connect_completion_is_disposed_if_wrapper_creation_or_transfer_sto
     _assert_native_handles_disposed(retained)
 
 
+def _certificate_refusal_complete(proxy, retained, hostname_refusals):
+    """Read the existing owners only after the context manager has finished."""
+    return (
+        hostname_refusals == [True]
+        and len(retained) == 1 and retained[0][0].status == psycopg.pq.ConnStatus.BAD
+        and proxy.stop.is_set() and not proxy.thread.is_alive()
+        and proxy.accepted == 1 and not proxy.query_seen.is_set()
+        and proxy.frontend_types == proxy.backend_types == proxy.statements == []
+        and len(proxy.sockets) == 2
+        and type(proxy.sockets[0]) is socket.socket
+        and isinstance(proxy.sockets[1], ssl.SSLSocket)
+        and proxy.listener.fileno() == -1
+        and all(connection.fileno() == -1 for connection in proxy.sockets)
+    )
+
+
 @pytest.mark.parametrize("failure", ("certificate", "password"))
 def test_actual_tls_credential_failure_does_not_downgrade_or_expose_driver(
     observation, monkeypatch, tmp_path, failure,
 ):
     from psycopg.conninfo import make_conninfo
+    from kernel import signing_authority_io as transport
+
     dsn, authority_value, path = observation
     context, certificate = tls_context(tmp_path)
     retained = _retain_native_handles(monkeypatch)
-    with WireFaultProxy(dsn, "forward", tls=context, certificate=certificate) as proxy:
-        supplied = make_conninfo(proxy.dsn, **(
-            {"host": "wrong-identity.test"} if failure == "certificate" else {"password": "wrong-fixture-password"}
-        ))
-        with pytest.raises(SigningAuthorityUnavailable) as raised:
-            reader(supplied, path).current(authority_value.kid)
-        assert_safe_refusal(raised.value)
-        assert proxy.accepted == 1 and len(retained) == 1
-        assert proxy.statements == []
-        _assert_native_handles_disposed(retained)
-        # Certificate mismatch is an expected TLS peer alert, not a proxy defect.
-        if failure == "certificate":
-            import ssl
-            assert proxy.failure is None or isinstance(proxy.failure, ssl.SSLError)
-            proxy.failure = None
-        else:
-            assert proxy.tls_version in ("TLSv1.2", "TLSv1.3")
+    hostname_refusals = []
+    if failure == "certificate":
+        close = transport.ObservationConnectionOwner.close
+        def observe_close(owner):
+            try:
+                hostname_refusals.append(
+                    owner.pgconn is not None
+                    and b'does not match host name "wrong-identity.test"'
+                    in owner.pgconn.error_message
+                )
+            finally:
+                close(owner)
+        monkeypatch.setattr(transport.ObservationConnectionOwner, "close", observe_close)
+    proxy = WireFaultProxy(dsn, "forward", tls=context, certificate=certificate)
+    try:
+        with proxy:
+            supplied = make_conninfo(proxy.dsn, **(
+                {"host": "wrong-identity.test"} if failure == "certificate" else {"password": "wrong-fixture-password"}
+            ))
+            with pytest.raises(SigningAuthorityUnavailable) as raised:
+                reader(supplied, path).current(authority_value.kid)
+            assert_safe_refusal(raised.value)
+            assert proxy.accepted == 1 and len(retained) == 1
+            assert proxy.statements == []
+            _assert_native_handles_disposed(retained)
+            if failure == "password":
+                assert proxy.tls_version in ("TLSv1.2", "TLSv1.3")
+    except BaseExceptionGroup as error:
+        # Retain the worker object and every original combined/cleanup failure.
+        if not (
+            failure == "certificate"
+            and len(error.exceptions) == 1
+            and error.exceptions[0] is proxy.failure
+            and (
+                isinstance(proxy.failure, ssl.SSLError)
+                or isinstance(proxy.failure, EOFError)
+                and proxy.tls_version in ("TLSv1.2", "TLSv1.3")
+            )
+            and _certificate_refusal_complete(proxy, retained, hostname_refusals)
+        ):
+            raise
+    if failure == "certificate":
+        assert _certificate_refusal_complete(proxy, retained, hostname_refusals)
 
 
 def test_eight_real_tenant_callers_cancel_before_signing_and_release_their_leases(
