@@ -328,5 +328,3 @@ def test_ec05_failed_native_diagnostic_observation_still_disposes_real_handle(
         certificate_case.run(TLS_VERSIONS[1])
     credential_consumer._assert_native_handles_disposed(handles)
     assert finished == [native for native, _descriptor in handles]
-
-
