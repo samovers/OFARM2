@@ -351,6 +351,341 @@
       "sourcePath": "kernel/tests/test_authentication_read_api.py"
     },
     {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_closure_covers_static_imports_inputs_tests_and_exact_tree",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_closure_must_match_the_committed_manifest_declarations",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_exact_root_bundle_verifies_in_empty_repository_and_stays_historical",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_missing_dependency_symlink_unknown_declaration_and_skip_ci_refuse",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_modified_closure_cannot_hide_a_changed_dependency",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_native_currentness_retains_exact_six_ordinary_authority_files",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_preserved_ordinary_source_cannot_be_allowlisted_for_changes",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_receipt_selected_root_base_digest_or_tree_is_rejected",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_runtime_loaded_module_must_have_an_explicit_dependency_edge",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_undeclared_new_module_or_config_is_not_hidden_by_full_tree_digest",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionReportShapeTests::test_closure_controls_produce_publishable_test_results",
+      "sourceModule": "conformance.test_ci_policy_transition_operator",
+      "sourcePath": "conformance/test_ci_policy_transition_operator.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_changed_acceptance_record_refuses[closure-closure differs]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_changed_acceptance_record_refuses[grant-grant differs]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_changed_acceptance_record_refuses[original-message-original exact-root activation approval differs]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_changed_acceptance_record_refuses[tuple-acceptance differs]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_cli_historical_audit_works_offline_and_is_read_only",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_complete_historical_audit_never_grants_authority_or_executes_archived_code",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_current_tree_contains_only_historical_transition_entrypoints",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_damaged_or_missing_independent_journal_refuses[checkpoint]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_damaged_or_missing_independent_journal_refuses[hash]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_damaged_or_missing_independent_journal_refuses[missing-checkpoint]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_damaged_or_missing_independent_journal_refuses[missing-journal]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_damaged_or_missing_independent_journal_refuses[missing-lock]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_damaged_or_missing_independent_journal_refuses[symlink]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_damaged_or_missing_independent_journal_refuses[torn]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_deleted_live_cli_operations_refuse_without_credentials_or_provider_work[download]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_deleted_live_cli_operations_refuse_without_credentials_or_provider_work[prepare]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_deleted_live_cli_operations_refuse_without_credentials_or_provider_work[publisher-gate]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_deleted_live_cli_operations_refuse_without_credentials_or_provider_work[source-gate]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_deleted_live_cli_operations_refuse_without_credentials_or_provider_work[stage-conformance]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_deleted_live_cli_operations_refuse_without_credentials_or_provider_work[verify-for-acceptance]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_journal_reader_has_no_creation_or_mutation_api",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_optional_provider_observation_is_separate_from_historical_integrity[mismatch]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_optional_provider_observation_is_separate_from_historical_integrity[missing]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_optional_provider_observation_is_separate_from_historical_integrity[valid]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_raw_archive_inventory_digests_and_root_bundle_refuse_corruption[corrupt-artifact-historical artifact digest differs]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_raw_archive_inventory_digests_and_root_bundle_refuse_corruption[corrupt-bundle-root bundle digest differs]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_raw_archive_inventory_digests_and_root_bundle_refuse_corruption[corrupt-receipt-receipt archive digest differs]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_raw_archive_inventory_digests_and_root_bundle_refuse_corruption[extra-artifact-raw archive inventory is not exact]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_raw_archive_inventory_digests_and_root_bundle_refuse_corruption[missing-artifact-raw archive inventory is not exact]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_raw_archive_inventory_digests_and_root_bundle_refuse_corruption[symlink-artifact-inventory contains a symlink]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_raw_archive_inventory_digests_and_root_bundle_refuse_corruption[wrong-bundle-root-consumed root is absent]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_receipt_extraction_refuses_hostile_zip_even_with_recorded_digest[duplicate-entry is duplicated]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_receipt_extraction_refuses_hostile_zip_even_with_recorded_digest[expanded-expanded size exceeds]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_receipt_extraction_refuses_hostile_zip_even_with_recorded_digest[extra-archive inventory is not exact]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_receipt_extraction_refuses_hostile_zip_even_with_recorded_digest[symlink-not a regular file or directory]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_receipt_extraction_refuses_hostile_zip_even_with_recorded_digest[traversal-archive entry path is unsafe]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_receipt_semantics_are_checked_even_with_matching_archive_digest[attempt-run tuple differs]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_receipt_semantics_are_checked_even_with_matching_archive_digest[authority-receipt authority differs]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_receipt_semantics_are_checked_even_with_matching_archive_digest[inventory-inventories are incomplete]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_receipt_semantics_are_checked_even_with_matching_archive_digest[run-run tuple differs]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_receipt_semantics_are_checked_even_with_matching_archive_digest[ticket-ticket differs]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_rechained_semantically_invalid_history_refuses[after-retired-terminal journal]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_rechained_semantically_invalid_history_refuses[native-merge-differs from the consumed consumer]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_rechained_semantically_invalid_history_refuses[order-acceptance differs]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_rechained_semantically_invalid_history_refuses[run-attempt-first run attempt]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_recorded_campaign_contains_only_terminal_named_consumers",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unconsumed_or_failed_history_cannot_audit_as_accepted[ACCEPTED]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unconsumed_or_failed_history_cannot_audit_as_accepted[APPROVED]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unconsumed_or_failed_history_cannot_audit_as_accepted[FAILED]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unconsumed_or_failed_history_cannot_audit_as_accepted[GENESIS]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unconsumed_or_failed_history_cannot_audit_as_accepted[PUBLISHER_BOUND]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unconsumed_or_failed_history_cannot_audit_as_accepted[PUBLISHER_RESERVED]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unconsumed_or_failed_history_cannot_audit_as_accepted[SEALED]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unconsumed_or_failed_history_cannot_audit_as_accepted[SOURCE_BOUND]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unconsumed_or_failed_history_cannot_audit_as_accepted[SOURCE_PASSED]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_ci_policy_transition.py::test_unconsumed_or_failed_history_cannot_audit_as_accepted[SOURCE_RESERVED]",
+      "sourceModule": "conformance.test_ci_policy_transition_audit",
+      "sourcePath": "conformance/test_ci_policy_transition_audit.py"
+    },
+    {
       "nodeid": "kernel/tests/test_conformance.py::test_01_append_only",
       "sourceModule": "kernel.tests.test_conformance",
       "sourcePath": "kernel/tests/test_conformance.py"
@@ -6681,32 +7016,32 @@
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f1_swallowed_sql_failure_retains_existing_ordinary_return[ofarm_app]",
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f1_swallowed_sql_failure_refuses_normal_exit[ofarm_app]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f1_swallowed_sql_failure_retains_existing_ordinary_return[ofarm_worker]",
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f1_swallowed_sql_failure_refuses_normal_exit[ofarm_worker]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit[ofarm_app-False]",
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_rolls_back_before_commit[ofarm_app-False]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit[ofarm_app-True]",
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_rolls_back_before_commit[ofarm_app-True]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit[ofarm_worker-False]",
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_rolls_back_before_commit[ofarm_worker-False]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit[ofarm_worker-True]",
+      "nodeid": "kernel/tests/test_physical_outcome_runtime.py::test_ps17_f2_post_insert_validation_failure_rolls_back_before_commit[ofarm_worker-True]",
       "sourceModule": "kernel.tests.test_physical_outcome_runtime",
       "sourcePath": "kernel/tests/test_physical_outcome_runtime.py"
     },
@@ -14551,7 +14886,12 @@
       "sourcePath": "kernel/tests/test_request_router_audit.py"
     },
     {
-      "nodeid": "kernel/tests/test_request_router_audit.py::test_finalization_outcome_on_entry_is_not_a_pretenant_reason",
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_finalization_outcome_on_entry_is_not_a_pretenant_reason[FINALIZATION_UNKNOWN]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_finalization_outcome_on_entry_is_not_a_pretenant_reason[TRANSACTION_FAILED]",
       "sourceModule": "kernel.tests.test_request_router_audit",
       "sourcePath": "kernel/tests/test_request_router_audit.py"
     },
@@ -14587,6 +14927,11 @@
     },
     {
       "nodeid": "kernel/tests/test_request_router_audit.py::test_post_binding_failure_never_uses_isolated_audit[exit-FINALIZATION_UNKNOWN]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_post_binding_failure_never_uses_isolated_audit[exit-TRANSACTION_FAILED]",
       "sourceModule": "kernel.tests.test_request_router_audit",
       "sourcePath": "kernel/tests/test_request_router_audit.py"
     },
@@ -22661,6 +23006,146 @@
       "sourcePath": "kernel/tests/test_signing_authority.py"
     },
     {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[closed-listener]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[closed-socket]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[completed-stop]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[hostname]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[native-handle]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[no-backend]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[no-frontend]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[no-query]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[no-statement]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[no-upstream-owner]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[single-client]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_ec05_incomplete_refusal_proof_preserves_original_group[terminated-worker]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec01_normal_teardown_cannot_replace_native_refusal_proof",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec02_certificate_refusal_is_independent_of_worker_schedule[client-first-late-retain-771]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec02_certificate_refusal_is_independent_of_worker_schedule[client-first-late-retain-772]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec02_certificate_refusal_is_independent_of_worker_schedule[client-first-stop-771]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec02_certificate_refusal_is_independent_of_worker_schedule[client-first-stop-772]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec02_certificate_refusal_is_independent_of_worker_schedule[worker-first-771]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec02_certificate_refusal_is_independent_of_worker_schedule[worker-first-772]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[body]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[different-object]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[nested]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[pre-tls-eof]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[teardown-cleanup]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[unrelated-worker]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_ec04_unexpected_or_combined_failure_is_never_filtered[worker-cleanup]",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec03_tls_alert_still_requires_real_native_hostname_refusal",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_certificate_refusal.py::test_ec05_failed_native_diagnostic_observation_still_disposes_real_handle",
+      "sourceModule": "kernel.tests.test_signing_certificate_refusal",
+      "sourcePath": "kernel/tests/test_signing_certificate_refusal.py"
+    },
+    {
       "nodeid": "kernel/tests/test_signing_observation_acquisition.py::test_process_control_before_acquisition_handles_empty_owner_slots[connect]",
       "sourceModule": "kernel.tests.test_signing_observation_acquisition",
       "sourcePath": "kernel/tests/test_signing_observation_acquisition.py"
@@ -23224,6 +23709,271 @@
       "nodeid": "kernel/tests/test_signing_observation_files.py::test_symlink_to_healthy_local_regular_file_is_read",
       "sourceModule": "kernel.tests.test_signing_observation_files",
       "sourcePath": "kernel/tests/test_signing_observation_files.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp01_neutral_wake_seam_preserves_tls_and_forwards_plaintext[771]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp01_neutral_wake_seam_preserves_tls_and_forwards_plaintext[772]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_acquisition_failure_keeps_previous_owner[tcp]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_acquisition_failure_keeps_previous_owner[wrap]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_failed_registration_retains_local_owner[accepted]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_failed_registration_retains_local_owner[upstream]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_failed_registration_retains_local_owner[wrapped]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_late_registration_is_woken_and_closed[accepted]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_late_registration_is_woken_and_closed[upstream]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_late_registration_is_woken_and_closed[wrapped]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_normal_forwarding_and_owned_disposal[False-771]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_normal_forwarding_and_owned_disposal[False-772]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_normal_forwarding_and_owned_disposal[False-None]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_normal_forwarding_and_owned_disposal[True-771]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_normal_forwarding_and_owned_disposal[True-772]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_normal_forwarding_and_owned_disposal[True-None]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_stop_interrupts_each_owned_blocking_stage[accept]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_stop_interrupts_each_owned_blocking_stage[handshake]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_stop_interrupts_each_owned_blocking_stage[relay]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_stop_interrupts_each_owned_blocking_stage[startup]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_unix_connect_failure_closes_created_socket",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_withholding_remains_stop_driven[ready]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_withholding_remains_stop_driven[reply]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_withholding_remains_stop_driven[startup]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_withholding_remains_stop_driven[tls-handshake]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_worker_reenters_select_before_final_close[771]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_worker_reenters_select_before_final_close[772]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp02_worker_reenters_select_before_final_close[None]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_body_only_propagates_unchanged[body0]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_body_only_propagates_unchanged[body1]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_body_worker_and_cleanup_failures_are_all_retained",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_failed_worker_wake_still_closes_owned_socket",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_malformed_input_retains_original_worker_traceback[frame-771]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_malformed_input_retains_original_worker_traceback[frame-772]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_malformed_input_retains_original_worker_traceback[frame-None]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_malformed_input_retains_original_worker_traceback[startup-771]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_malformed_input_retains_original_worker_traceback[startup-772]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_malformed_input_retains_original_worker_traceback[startup-None]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[running-EOFError]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[running-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[running-OSError]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[stop-EOFError]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[stop-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[stop-OSError]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[withheld-EOFError]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[withheld-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_only_existing_stop_io_is_suppressed[withheld-OSError]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_simultaneous_wake_and_close_failures_keep_context_and_later_owners",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_stop_precedes_blocking_registration_lock",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_teardown_failure_cannot_skip_remaining_disposal[close]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_teardown_failure_cannot_skip_remaining_disposal[join]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_teardown_failure_cannot_skip_remaining_disposal[listener]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_signing_observation_proxy.py::test_sp03_teardown_failure_cannot_skip_remaining_disposal[wake]",
+      "sourceModule": "kernel.tests.test_signing_observation_proxy",
+      "sourcePath": "kernel/tests/test_signing_observation_proxy.py"
     },
     {
       "nodeid": "kernel/tests/test_signing_observation_wait.py::test_cancel_during_first_poll_or_success_disposes_owned_completion[1]",
@@ -25866,6 +26616,566 @@
       "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selector.py"
     },
     {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[CancelledError-cached]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[CancelledError-uncalled]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[KeyboardInterrupt-cached]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[KeyboardInterrupt-uncalled]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[RuntimeError-cached]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[RuntimeError-uncalled]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[SystemExit-cached]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[SystemExit-uncalled]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[CancelledError-False-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[CancelledError-False-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[CancelledError-True-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[CancelledError-True-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[KeyboardInterrupt-False-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[KeyboardInterrupt-False-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[KeyboardInterrupt-True-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[KeyboardInterrupt-True-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[RuntimeError-False-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[RuntimeError-False-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[RuntimeError-True-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[RuntimeError-True-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[SystemExit-False-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[SystemExit-False-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[SystemExit-True-allocator]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf04_escaping_error_identity_survives_ordinary_rollback_failure[SystemExit-True-body]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[CancelledError-close]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[CancelledError-return]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[CancelledError-rollback]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[KeyboardInterrupt-close]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[KeyboardInterrupt-return]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[KeyboardInterrupt-rollback]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[SystemExit-close]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[SystemExit-return]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_cleanup_process_control_keeps_existing_precedence[SystemExit-rollback]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[False-False-False-inerror]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[False-False-False-rollback-only]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[False-False-True-inerror]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[False-False-True-rollback-only]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[True-False-False-inerror]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[True-False-False-rollback-only]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[True-True-False-inerror]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[True-True-False-rollback-only]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[True-True-True-inerror]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf05_known_failure_survives_ordinary_cleanup_errors[True-True-True-rollback-only]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_rollback_only_remains_known_when_status_is_unreadable",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_gate_closes_facade_before_classifying[ACTIVE]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_gate_closes_facade_before_classifying[IDLE]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_gate_closes_facade_before_classifying[INERROR]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_gate_closes_facade_before_classifying[INTRANS]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_gate_closes_facade_before_classifying[UNKNOWN]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_read_process_control_preserves_identity[CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_read_process_control_preserves_identity[KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_state_read_process_control_preserves_identity[SystemExit]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf07_unreadable_state_discards_without_commit_or_observer",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf08_wrong_type_and_duplicate_guards_preserve_valid_batch",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_app-False-batch_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_app-False-request_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_app-True-batch_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_app-True-request_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_worker-False-batch_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_worker-False-request_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_worker-True-batch_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf01_tf03_real_unique_violation_poisoning_preserves_committed_row[ofarm_worker-True-request_id]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf03_post_insert_return_failure_blocks_cached_selection_and_commit[ofarm_app-malformed]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf03_post_insert_return_failure_blocks_cached_selection_and_commit[ofarm_app-missing]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf03_post_insert_return_failure_blocks_cached_selection_and_commit[ofarm_app-timestamp]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf03_post_insert_return_failure_blocks_cached_selection_and_commit[ofarm_worker-malformed]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf03_post_insert_return_failure_blocks_cached_selection_and_commit[ofarm_worker-missing]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf03_post_insert_return_failure_blocks_cached_selection_and_commit[ofarm_worker-timestamp]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_app-False-CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_app-False-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_app-True-CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_app-True-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_worker-False-CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_worker-False-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_worker-True-CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf02_tf04_post_insert_process_control_keeps_identity_or_failed_exit[ofarm_worker-True-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_ordinary_cleanup_failure_preserves_failed_exit_and_one_return[ofarm_app-close]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_ordinary_cleanup_failure_preserves_failed_exit_and_one_return[ofarm_app-rollback]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_ordinary_cleanup_failure_preserves_failed_exit_and_one_return[ofarm_worker-close]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_ordinary_cleanup_failure_preserves_failed_exit_and_one_return[ofarm_worker-rollback]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_app-CancelledError-after-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_app-CancelledError-before-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_app-KeyboardInterrupt-after-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_app-KeyboardInterrupt-before-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_app-OSError-after-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_app-OSError-before-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_worker-CancelledError-after-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_worker-CancelledError-before-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_worker-KeyboardInterrupt-after-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_worker-KeyboardInterrupt-before-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_worker-OSError-after-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf05_original_return_failure_is_once_without_claiming_capacity[ofarm_worker-OSError-before-native]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_app-after-batch]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_app-expected]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_app-reentry]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_app-unexpected]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_worker-after-batch]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_worker-expected]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_worker-reentry]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf06_tf10_caught_selector_refusal_is_failed_runtime_exit_without_audit[ofarm_worker-unexpected]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_precommit_state_read_process_control_keeps_original_identity[ofarm_app-CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_precommit_state_read_process_control_keeps_original_identity[ofarm_app-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_precommit_state_read_process_control_keeps_original_identity[ofarm_worker-CancelledError]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_precommit_state_read_process_control_keeps_original_identity[ofarm_worker-KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_app-ACTIVE]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_app-IDLE]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_app-UNKNOWN]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_app-read-error]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_worker-ACTIVE]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_worker-IDLE]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_worker-UNKNOWN]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_transaction_failure_runtime.py::test_tf07_tf09_precommit_unreadable_or_unexpected_status_never_observes[ofarm_worker-read-error]",
+      "sourceModule": "kernel.tests.test_tenant_transaction_failure_runtime",
+      "sourcePath": "kernel/tests/test_tenant_transaction_failure_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_tenant_uow.py::test_ambiguous_commit_discards_connection",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
@@ -25896,7 +27206,12 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     },
     {
-      "nodeid": "kernel/tests/test_tenant_uow.py::test_caught_unexpected_selector_failure_still_forces_rollback",
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_caught_unexpected_selector_failure_still_forces_rollback[KeyboardInterrupt]",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_caught_unexpected_selector_failure_still_forces_rollback[RuntimeError]",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     },
@@ -26136,8 +27451,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "74e15a44c54b40a4525f081bb168dc878ebd604db68924782cab49ad4aacf2d2",
-  "entryCount": 5227,
+  "entriesSha256": "4c748f3ae8fab3874b0929da1f88d900f228925367a23276d4dc582014585fdd",
+  "entryCount": 5490,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

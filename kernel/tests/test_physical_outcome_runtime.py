@@ -299,20 +299,26 @@ def test_ps12_every_tuple_field_participates_in_association(
     assert observation.observed_batch[field] != expected[field]
 
 
-def test_ps17_f1_swallowed_sql_failure_retains_existing_ordinary_return(
-    harness, authority, tenant_target,
+def test_ps17_f1_swallowed_sql_failure_refuses_normal_exit(
+    harness, authority, tenant_target, monkeypatch,
 ):
-    with harness.runtime.tenant_unit_of_work(harness.principal) as unit:
-        batch = unit.begin_batch(request(authority))
-        with pytest.raises(psycopg.errors.DivisionByZero):
-            harness.pool.acquired[0].execute("SELECT 1/0")
+    commits = lose_commit_reply(monkeypatch, harness)
+    with pytest.raises(TenantBoundaryError) as caught:
+        with harness.runtime.tenant_unit_of_work(harness.principal) as unit:
+            batch = unit.begin_batch(request(authority))
+            # Explicit raw-SQL gate seam: production duplicate-INSERT paths
+            # are covered separately by TF01 actual allocator controls.
+            with pytest.raises(psycopg.errors.DivisionByZero):
+                harness.pool.acquired[0].execute("SELECT 1/0")
+    assert caught.value.outcome is TenantBoundaryOutcome.TRANSACTION_FAILED
+    assert caught.value.physical_observation is None and commits == []
     assert _stored(tenant_target, batch) == 0
-    assert len(harness.pool.acquired) == 1
+    assert len(harness.pool.acquired) == 1 and harness.audit.reasons == []
     harness.pool.assert_released()
 
 
 @pytest.mark.parametrize("ambiguous", (False, True))
-def test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit(
+def test_ps17_f2_post_insert_validation_failure_rolls_back_before_commit(
     harness, authority, tenant_target, monkeypatch, ambiguous,
 ):
     timestamp = tenant_uow._time
@@ -321,23 +327,18 @@ def test_ps17_f2_post_insert_validation_failure_retains_missing_return_limit(
             raise ValueError("fixture lost validated allocator return")
         return timestamp(value, label)
     monkeypatch.setattr(tenant_uow, "_time", refuse)
-    if ambiguous:
-        lose_commit_reply(monkeypatch, harness)
+    commits = lose_commit_reply(monkeypatch, harness) if ambiguous else []
     authored = request(authority)
-    def work(unit):
-        with pytest.raises(ValueError, match="lost validated"):
-            unit.begin_batch(authored)
-        assert unit.batch is None
-    if ambiguous:
-        observation = _caught(harness, work).physical_observation
-        assert observation.physical_status == "UNKNOWN"
-        assert observation.batch_observation == "UNAVAILABLE"
-        assert observation.original_batch is None
-    else:
+    with pytest.raises(TenantBoundaryError) as caught:
         with harness.runtime.tenant_unit_of_work(harness.principal) as unit:
-            work(unit)
-    assert _stored(tenant_target, authored) == 1
-    assert len(harness.pool.acquired) == 1
+            with pytest.raises(ValueError, match="lost validated"):
+                unit.begin_batch(authored)
+            assert unit.batch is None
+    assert caught.value.outcome is TenantBoundaryOutcome.TRANSACTION_FAILED
+    assert caught.value.physical_observation is None and commits == []
+    assert _stored(tenant_target, authored) == 0
+    assert len(harness.pool.acquired) == 1 and harness.audit.reasons == []
+    harness.pool.assert_released()
 
 
 def test_ps08_real_roles_cannot_forge_xid_mutate_batches_or_read_other_tenant(

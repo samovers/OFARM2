@@ -145,4 +145,46 @@ These are local diagnostic records, not canonical baseline evidence. Their retai
 
 The implementation remains provisional. The failed local run and unavailable crash coverage are open evidence limitations, not waived gates or demonstrated fixture defects. Any required signing, transport or execution-capacity repair stays in separate Delivery work under its own boundary. No changes from PRs #409, #411 or #413 were imported. An independent exact-head content review must precede admission; both complete hosted baselines, fixed equivalence, native/platform checks and authenticated publication remain required before final acceptance.
 
-Next: complete the exact-head implementation review, then apply the existing hosted gates if review clears the implementation; keep every failed or unavailable result visible.
+The next step at that historical checkpoint was exact-head implementation review
+and, if cleared, the existing hosted gates, retaining every failed or unavailable
+result.
+
+## Current-main refresh — 20 October 2026
+
+The task user requested a refresh of this same PR, focused re-review and ordinary
+CI admission preparation. CI activation and merge remain separate. The refresh
+merges main `97f2f208d9f4191bbdbafa8466c9402e89325c0d` into the previously reviewed
+head `4de50d91f29f916ba357f0d97c5eac7b87ec03b3`. The decision, capability and
+**test-fixture construction and evidence fidelity** boundary are unchanged.
+
+Main now contains the separately accepted capacity, proxy, transaction and
+certificate-refusal changes. This PR inherits those changes from main without
+modifying their implementations or policies. The earlier 45-minute source
+`38899396539` remains cancelled and incomplete, with no authenticated publication.
+The separate capacity prerequisite is merged; its evidence does not supply this
+PR's outstanding acceptance. The temporary CI transition route is retired.
+Fresh verification must use the existing ordinary admission and publisher.
+
+The only merge conflict was the generated full test inventory. The ordinary
+collection command regenerated **5,490 cases**: all **5,470 main entries** remain
+identical, with exactly this PR's existing **20 fixture controls** added. The
+shared helper, staged owner and control module are byte-identical to their
+previously reviewed versions. All fourteen consumer import edits remain the
+same, while all 320 consumer functions and all consumer classes match current
+main structurally. The 631 main files outside this PR's existing nineteen paths
+retain their exact blobs and modes, including production code, workflows,
+publication policy, shared proxy, certificate regressions and the manual crash
+route. The cross-slice module remains at its 800-line budget.
+
+All twenty cheap fixture controls passed again, with no failed, error, skipped,
+deselected, unavailable or collection-error outcomes and one existing Starlette
+warning. These are local controls, not new real-database acceptance or performance
+measurements. The earlier local failures, unavailable crash coverage, timing
+limits and qualified component-saving claims above remain historical evidence;
+none is relabelled by this refresh. The full pinned hosted baselines, exact
+inventory/warnings, fixed equivalence, all platform/native evidence and
+authenticated publication remain required.
+
+Next: obtain focused review of this refresh at its final exact head and prepare
+ordinary admission. Activate CI only after the task user's separate authorization;
+final acceptance and exact-head merge authorization remain later steps.

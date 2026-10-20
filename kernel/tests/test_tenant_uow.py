@@ -224,6 +224,7 @@ def test_tenant_boundary_outcomes_are_exact_and_unique():
         "UNAVAILABLE",
         "CAPABILITY_REFUSED",
         "BINDING_REFUSED",
+        "TRANSACTION_FAILED",
         "FINALIZATION_UNKNOWN",
     )
     assert tuple(TenantBoundaryOutcome.__members__) == expected
@@ -554,37 +555,44 @@ def test_caught_selector_refusal_is_terminal_and_forces_rollback(
         "_resolve_commit_operation_claim_draft_runtime_bundle",
         refuse,
     )
-    with manager.unit_of_work(principal) as unit:
-        for _attempt in range(2):
-            with pytest.raises(CommandRuntimeBundleSelectionRefused) as raised:
-                unit.resolve_commit_operation_claim_draft_runtime_bundle()
-            assert raised.value.outcome == (
-                "RUNTIME_BUNDLE_SELECTION_REFUSED_NO_WRITE"
-            )
-            assert raised.value.__cause__ is None
-        with pytest.raises(RuntimeError, match="rollback-only"):
-            unit.begin_batch(
-                GovernedBatchRequest(
-                    "batch-fallback",
-                    "TEST_OPERATION",
-                    "request-fallback",
-                    "sha256:" + "7" * 64,
+    with pytest.raises(TenantBoundaryError) as failed:
+        with manager.unit_of_work(principal) as unit:
+            for _attempt in range(2):
+                with pytest.raises(CommandRuntimeBundleSelectionRefused) as raised:
+                    unit.resolve_commit_operation_claim_draft_runtime_bundle()
+                assert raised.value.outcome == (
+                    "RUNTIME_BUNDLE_SELECTION_REFUSED_NO_WRITE"
                 )
-            )
+                assert raised.value.__cause__ is None
+            with pytest.raises(RuntimeError, match="rollback-only"):
+                unit.begin_batch(
+                    GovernedBatchRequest(
+                        "batch-fallback",
+                        "TEST_OPERATION",
+                        "request-fallback",
+                        "sha256:" + "7" * 64,
+                    )
+                )
 
+    assert failed.value.outcome is TenantBoundaryOutcome.TRANSACTION_FAILED
+    assert failed.value.physical_observation is None
     assert calls == [principal.authority.tenant_id]
     assert connection.events[-1] == ("ROLLBACK", ())
 
 
+@pytest.mark.parametrize("failure_type", (RuntimeError, KeyboardInterrupt))
 def test_caught_unexpected_selector_failure_still_forces_rollback(
     principal,
     monkeypatch,
+    failure_type,
 ):
     connection = _Connection(principal)
     manager = TenantUnitOfWorkManager(_Pool(connection), _Minter())
-    failure = KeyboardInterrupt()
+    failure = failure_type()
+    calls = []
 
     def crash(_connection, _tenant_id):
+        calls.append(_tenant_id)
         raise failure
 
     monkeypatch.setattr(
@@ -592,11 +600,17 @@ def test_caught_unexpected_selector_failure_still_forces_rollback(
         "_resolve_commit_operation_claim_draft_runtime_bundle",
         crash,
     )
-    with manager.unit_of_work(principal) as unit:
-        with pytest.raises(KeyboardInterrupt) as raised:
-            unit.resolve_commit_operation_claim_draft_runtime_bundle()
-        assert raised.value is failure
+    with pytest.raises(TenantBoundaryError) as failed:
+        with manager.unit_of_work(principal) as unit:
+            with pytest.raises(failure_type) as raised:
+                unit.resolve_commit_operation_claim_draft_runtime_bundle()
+            assert raised.value is failure
+            with pytest.raises(CommandRuntimeBundleSelectionRefused):
+                unit.resolve_commit_operation_claim_draft_runtime_bundle()
 
+    assert failed.value.outcome is TenantBoundaryOutcome.TRANSACTION_FAILED
+    assert failed.value.physical_observation is None
+    assert calls == [principal.authority.tenant_id]
     assert connection.events[-1] == ("ROLLBACK", ())
 
 
@@ -616,25 +630,31 @@ def test_resolver_after_batch_and_reentrant_resolution_refuse(
         "_resolve_commit_operation_claim_draft_runtime_bundle",
         reenter,
     )
-    with manager.unit_of_work(principal) as unit:
-        unit_holder.append(unit)
-        with pytest.raises(CommandRuntimeBundleSelectionRefused):
-            unit.resolve_commit_operation_claim_draft_runtime_bundle()
+    with pytest.raises(TenantBoundaryError) as failed:
+        with manager.unit_of_work(principal) as unit:
+            unit_holder.append(unit)
+            with pytest.raises(CommandRuntimeBundleSelectionRefused):
+                unit.resolve_commit_operation_claim_draft_runtime_bundle()
+    assert failed.value.outcome is TenantBoundaryOutcome.TRANSACTION_FAILED
+    assert failed.value.physical_observation is None
     assert connection.events[-1] == ("ROLLBACK", ())
 
     connection = _Connection(principal)
     manager = TenantUnitOfWorkManager(_Pool(connection), _Minter())
-    with manager.unit_of_work(principal) as unit:
-        unit.begin_batch(
-            GovernedBatchRequest(
-                "batch-before-selector",
-                "TEST_OPERATION",
-                "request-before-selector",
-                "sha256:" + "7" * 64,
+    with pytest.raises(TenantBoundaryError) as failed:
+        with manager.unit_of_work(principal) as unit:
+            unit.begin_batch(
+                GovernedBatchRequest(
+                    "batch-before-selector",
+                    "TEST_OPERATION",
+                    "request-before-selector",
+                    "sha256:" + "7" * 64,
+                )
             )
-        )
-        with pytest.raises(CommandRuntimeBundleSelectionRefused):
-            unit.resolve_commit_operation_claim_draft_runtime_bundle()
+            with pytest.raises(CommandRuntimeBundleSelectionRefused):
+                unit.resolve_commit_operation_claim_draft_runtime_bundle()
+    assert failed.value.outcome is TenantBoundaryOutcome.TRANSACTION_FAILED
+    assert failed.value.physical_observation is None
     assert connection.events[-1] == ("ROLLBACK", ())
 
 
