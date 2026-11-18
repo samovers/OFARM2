@@ -11541,6 +11541,326 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_challenge_observation.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_attempt_must_match_live_batch[ofarm_app-batch_id-other-batch]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_attempt_must_match_live_batch[ofarm_app-binding_nonce-value0]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_attempt_must_match_live_batch[ofarm_app-full_xid-0]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_attempt_must_match_live_batch[ofarm_app-full_xid-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_attempt_must_match_live_batch[ofarm_app-intent_bytes-None]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_attempt_must_match_live_batch[ofarm_worker-batch_id-other-batch]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_attempt_must_match_live_batch[ofarm_worker-binding_nonce-value0]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_attempt_must_match_live_batch[ofarm_worker-full_xid-0]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_attempt_must_match_live_batch[ofarm_worker-full_xid-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_attempt_must_match_live_batch[ofarm_worker-intent_bytes-None]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_failure_after_marker_forces_rollback[ofarm_app-return-error-ValueError-2]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_failure_after_marker_forces_rollback[ofarm_app-sql-error-UniqueViolation-3]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_failure_after_marker_forces_rollback[ofarm_app-writer-error-KeyboardInterrupt-2]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_failure_after_marker_forces_rollback[ofarm_app-wrong-type-RuntimeError-2]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_failure_after_marker_forces_rollback[ofarm_worker-return-error-ValueError-2]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_failure_after_marker_forces_rollback[ofarm_worker-sql-error-UniqueViolation-3]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_failure_after_marker_forces_rollback[ofarm_worker-writer-error-KeyboardInterrupt-2]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_failure_after_marker_forces_rollback[ofarm_worker-wrong-type-RuntimeError-2]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_nested_or_duplicate_refusal_is_terminal[ofarm_app-duplicate]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_nested_or_duplicate_refusal_is_terminal[ofarm_app-projection-error]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_nested_or_duplicate_refusal_is_terminal[ofarm_app-projection-reentry]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_nested_or_duplicate_refusal_is_terminal[ofarm_app-writer-reentry]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_nested_or_duplicate_refusal_is_terminal[ofarm_worker-duplicate]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_nested_or_duplicate_refusal_is_terminal[ofarm_worker-projection-error]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_nested_or_duplicate_refusal_is_terminal[ofarm_worker-projection-reentry]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_caught_nested_or_duplicate_refusal_is_terminal[ofarm_worker-writer-reentry]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_checked_return_is_provisional[ofarm_app-commit]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_checked_return_is_provisional[ofarm_app-rollback]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_checked_return_is_provisional[ofarm_worker-commit]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_checked_return_is_provisional[ofarm_worker-rollback]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_app-action-OTHER-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_app-bundle_digest-sha256:9999999999999999999999999999999999999999999999999999999999999999-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_app-contract_digest-sha256:9999999999999999999999999999999999999999999999999999999999999999-False]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_app-contract_id-other-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_app-contract_version-9-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_app-result_schema-other-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_app-result_schema_digest-sha256:9999999999999999999999999999999999999999999999999999999999999999-False]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_app-tenant_id-value0-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_worker-action-OTHER-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_worker-bundle_digest-sha256:9999999999999999999999999999999999999999999999999999999999999999-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_worker-contract_digest-sha256:9999999999999999999999999999999999999999999999999999999999999999-False]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_worker-contract_id-other-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_worker-contract_version-9-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_worker-result_schema-other-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_worker-result_schema_digest-sha256:9999999999999999999999999999999999999999999999999999999999999999-False]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_claim_requires_the_selected_assertion_command[ofarm_worker-tenant_id-value0-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_foreign_thread_refuses_without_poisoning_owner[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_foreign_thread_refuses_without_poisoning_owner[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_lost_commit_reply_never_repeats_dispatch[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_lost_commit_reply_never_repeats_dispatch[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_production_manager_has_no_enabled_claim_operation[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_production_manager_has_no_enabled_claim_operation[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_unavailable_claim_never_dispatches[ofarm_app-absent-selection]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_unavailable_claim_never_dispatches[ofarm_app-batch-action]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_unavailable_claim_never_dispatches[ofarm_app-draft]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_unavailable_claim_never_dispatches[ofarm_app-malformed]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_unavailable_claim_never_dispatches[ofarm_app-missing-batch]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_unavailable_claim_never_dispatches[ofarm_app-prior-latch]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_unavailable_claim_never_dispatches[ofarm_worker-absent-selection]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_unavailable_claim_never_dispatches[ofarm_worker-batch-action]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_unavailable_claim_never_dispatches[ofarm_worker-draft]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_unavailable_claim_never_dispatches[ofarm_worker-malformed]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_unavailable_claim_never_dispatches[ofarm_worker-missing-batch]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_claim_write_guard.py::test_unavailable_claim_never_dispatches[ofarm_worker-prior-latch]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_claim_write_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_claim_write_guard.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py::test_application_runtime_resolves_exact_bundle_once_without_a_write",
       "sourceModule": "kernel.tests.test_postgresql_tenant_command_runtime_bundle_selector",
       "sourcePath": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py"
@@ -16636,6 +16956,51 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_caller_supplied_writer_at_dispatch",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_database_handles_and_new_port_methods[    def commit(self): pass/n-operation surface differs]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_database_handles_and_new_port_methods[import psycopg/n-imports outside]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_database_handles_and_new_port_methods[writer.rollback()/n-finalization handle]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_manager_writer_overrides[def close(self): pass-def set_writer(self, writer): pass-public surface differs]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_manager_writer_overrides[return None-return self.writer-must be unavailable]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_manager_writer_overrides[self, pool, minter-self, pool, minter, *, writer=None-accepts an override]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_manager_writer_overrides[unit_of_work(self, principal)-unit_of_work(self, principal, writer=None)-accepts an override]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_second_production_claim_factory",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_hidden_and_cache_sources_are_excluded",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -16717,6 +17082,16 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_post_inventory_limit_retains_resource_limit_meaning",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_claim_fixture_import[kernel/__init__.py]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_claim_fixture_import[kernel/application_runtime.py]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -27451,8 +27826,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "4c748f3ae8fab3874b0929da1f88d900f228925367a23276d4dc582014585fdd",
-  "entryCount": 5490,
+  "entriesSha256": "7121bd67f03c04b8f892f7dc5aa35c071d0b2be72af3a8300cc0c8edd55db126",
+  "entryCount": 5565,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

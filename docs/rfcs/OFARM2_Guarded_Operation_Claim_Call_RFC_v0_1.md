@@ -27,8 +27,8 @@ The manager creates an **available** guard per live unit. Only the thread that e
 | From and event | Result |
 | --- | --- |
 | Closed unit, or a call from another thread | Refuse before access to the bound operation, SQL or mutation of the owning unit. A returned lease stays inaccessible. |
-| Live owner, existing rollback-only latch or selector `REFUSED_ROLLBACK_ONLY` | Refuse with zero dispatches and keep the latch set. |
-| Available and selector `UNRESOLVED`, `RESOLVING`, `CLOSED` or resolved only for the draft command | Refuse before staging, set the latch on the active unit and perform no new lookup. |
+| Live owner and existing rollback-only latch, including after a terminal selector refusal | Refuse with zero dispatches and keep the latch set. |
+| Available and the fixed projection yields no assertion binding | Refuse before staging, set the latch on the active unit and perform no new lookup. #427 owns the underlying selector states. |
 | Available and operation absent, input malformed, selected binding wrong, or batch missing or mismatched | Refuse before staging and set the latch. An error while reading the cached projection also sets it. |
 | Available and all checks pass | Reserve the call as **in progress** before invoking any owner operation that can stage bytes. |
 | In progress and called again by the owner, or **used** and called again | Refuse, set the latch and never dispatch again. Before yielding success, the outer call rechecks the latch even if the nested refusal was caught. |
@@ -59,4 +59,6 @@ Use the real tenant manager, allocator and finalizer on pinned, disposable Postg
 
 This is provisional repository development. An unbound production call fails closed. If a supported caller must transfer an open context between threads, the result check must use a second transaction, or the selector cannot furnish the required per-unit binding, stop before enabling the call. The respective owner must redesign the lease, readback or selection interface, followed by review and a new decision for any changed boundary or invariant. Production activation and deployment require their own authority.
 
-Next, obtain the implementation decision for #425, then verify its guard and failure behavior on the real transaction manager.
+The implementation consumes the bound operation before reading its projection. In-progress and spent operations have identical refusal behavior. The existing unit tracks closure and rollback-only. The application and worker role use the same production manager.
+
+Next, when #178 wires the real operation, prove that its projection reads exactly that live unit’s #427 cache and that an empty cache prevents dispatch.

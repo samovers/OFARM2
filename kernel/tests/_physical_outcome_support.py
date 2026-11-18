@@ -135,12 +135,15 @@ class PhysicalHarness:
 
 
 @contextmanager
-def physical_harness(target, authority, key, tmp_path, role, *, dsn=None, configure=None):
+def physical_harness(
+    target, authority, key, tmp_path, role, *, dsn=None, configure=None,
+    manager_type=TenantUnitOfWorkManager,
+):
     signing = live_signing(target, key.kid, tmp_path)
     pool = TrackingPool(create_tenant_connection_pool(dsn or target.role_dsn(role)))
     if configure is not None:
         pool.inner._configure = configure
-    manager = TenantUnitOfWorkManager(pool, signing.issuer)
+    manager = manager_type(pool, signing.issuer)
     audit = RecordingAuditSink()
     actual_mint = signing.issuer.mint
     def record_mint(identity, principal_authority, challenge, **kwargs):
