@@ -428,6 +428,7 @@ def test_sql_surface_is_absent_and_later_refusal_rolls_back(principal):
                 "begin_batch",
                 "binding",
                 "resolve_commit_operation_claim_draft_runtime_bundle",
+                "stage_operation_claim",
             }
             assert not hasattr(unit, "__dict__")
             assert not hasattr(unit, "_connection")
@@ -517,6 +518,7 @@ def test_resolved_bundle_has_no_public_install_or_transfer_path(
             "begin_batch",
             "binding",
             "resolve_commit_operation_claim_draft_runtime_bundle",
+            "stage_operation_claim",
         }
         with pytest.raises(TypeError):
             second_unit.resolve_commit_operation_claim_draft_runtime_bundle(first)
@@ -526,6 +528,7 @@ def test_resolved_bundle_has_no_public_install_or_transfer_path(
             "batch",
             "binding",
             "resolve_commit_operation_claim_draft_runtime_bundle",
+            "stage_operation_claim",
         ):
             with pytest.raises(AttributeError):
                 setattr(second_unit, public_member, first)

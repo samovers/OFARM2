@@ -78,6 +78,7 @@ MODULE_BUDGETS = {
     "kernel/tenant_capability_issuer.py": 180,
     "kernel/key_control.py": 350,
     "kernel/tenant_command_runtime_bundle_selector.py": 420,
+    "kernel/tenant_claim_write_guard.py": 120,
     "kernel/tenant_uow.py": 600,
     "kernel/tenant_physical_outcome.py": 260,
     "kernel/api.py": 120,
@@ -167,8 +168,10 @@ GROUP_BUDGETS = {
         ),
     ),
     "tenant transaction": (
-        1_280,
+        # Delivery #424 includes the claim guard and keeps the existing file caps.
+        1_388,
         (
+            "kernel/tenant_claim_write_guard.py",
             "kernel/tenant_command_runtime_bundle_selector.py",
             "kernel/tenant_uow.py",
             "kernel/tenant_physical_outcome.py",
@@ -441,6 +444,7 @@ TEST_GLOBS = (
     "kernel/tests/*application_runtime*.py",
     "kernel/tests/*runtime_config*.py",
     "kernel/tests/*tenant_uow*.py",
+    "kernel/tests/*tenant_claim_write_guard*.py",
     "kernel/tests/*physical_outcome*.py",
     "kernel/tests/*tenant_command_runtime_bundle_selector*.py",
     "kernel/tests/*security_audit_client*.py",
@@ -456,6 +460,7 @@ TEST_GLOBS = (
     "kernel/tests/*security_audit_store_loss*.py",
 )
 DIRECT_IMPORT_BOUNDS = {
+    "kernel/tenant_claim_write_guard.py": frozenset(),
     "kernel/profile_selection_validation.py": frozenset(),
     "kernel/runtime_bundle.py": frozenset(
         {"kernel.profile_selection_validation"}
@@ -732,6 +737,7 @@ _TENANT_UOW_PUBLIC_SURFACE = frozenset(
         "binding",
         "batch",
         "begin_batch",
+        "stage_operation_claim",
         "resolve_commit_operation_claim_draft_runtime_bundle",
     }
 )
@@ -740,6 +746,7 @@ _TENANT_UOW_INIT_PARAMETERS = (
     "binding",
     "allocate_batch",
     "resolve_bundle",
+    "claim_operation",
 )
 _TENANT_UOW_SLOTS = frozenset(
     {
@@ -751,6 +758,7 @@ _TENANT_UOW_SLOTS = frozenset(
         "__selector_state",
         "__selected_bundle",
         "__rollback_only",
+        "__claim_guard",
     }
 )
 _LEGACY_TENANT_UOW_SHAPE = (
@@ -3202,6 +3210,10 @@ def _tenant_uow_class_violations(
             violations.append(
                 (initializer.lineno, "TenantUnitOfWork accepts a non-facade dependency")
             )
+    if "stage_operation_claim" in expected_public_surface and not _has_fixed_method(
+        unit, "stage_operation_claim", ("self", "attempt"),
+    ):
+        violations.append((unit.lineno, "claim staging accepts a non-transaction argument"))
     slots = None
     for member in unit.body:
         if not isinstance(member, ast.Assign) or not any(
@@ -3252,17 +3264,116 @@ def _check_tenant_uow_architecture(
             trees[_TENANT_UOW_MODULE], _TENANT_UOW_SHAPE
         )
     ]
+    failures.extend(_claim_manager_violations(trees[_TENANT_UOW_MODULE]))
+    failures.extend(_claim_operation_violations(trees["kernel.tenant_claim_write_guard"]))
+    fixture = "kernel.tests.test_postgresql_tenant_claim_write_guard"
+    if fixture in execution_closures.production:
+        path = _render_import_execution_path(snapshot, execution_closures.production[fixture])
+        failures.append(f"production tenant path reaches test code: {path}")
     for module in sorted(execution_closures.production):
-        if module == _TENANT_UOW_MODULE or not (
-            module == "kernel" or module.startswith("kernel.")
-        ):
+        for owner in (node for node in ast.walk(trees[module]) if isinstance(node, ast.ClassDef)):
+            if module == _TENANT_UOW_MODULE and owner.name == "TenantUnitOfWorkManager":
+                continue
+            if any(
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == "_bind_claim_operation"
+                for node in owner.body
+            ):
+                failures.append(
+                    f"{module}:{owner.lineno}: production class overrides the claim writer factory"
+                )
+        if module == _TENANT_UOW_MODULE or not (module == "kernel" or module.startswith("kernel.")):
             continue
         relative = snapshot.modules_by_name[module].relative_path
         for line, attribute in _tenant_handle_escape_accesses(trees[module]):
-            failures.append(
-                f"{relative}:{line}: tenant UnitOfWork private-state access "
-                f"{attribute!r}"
-            )
+            failures.append(f"{relative}:{line}: tenant UnitOfWork private-state access {attribute!r}")
+    return failures
+
+
+def _has_fixed_method(owner: ast.ClassDef, name: str, parameters: tuple[str, ...]) -> bool:
+    matches = [node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == name]
+    if len(matches) != 1:
+        return False
+    args = matches[0].args
+    return tuple(arg.arg for arg in (*args.posonlyargs, *args.args)) == parameters and not (
+        args.kwonlyargs or args.vararg or args.kwarg or args.defaults
+    )
+
+
+def _claim_operation_violations(tree: ast.Module) -> list[str]:
+    ports = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "BoundClaimOperation"
+    ]
+    if len(ports) != 1 or len(ports[0].body) != 2:
+        return ["claim write operation surface differs"]
+    if not (
+        _has_fixed_method(ports[0], "selected_claim_command", ("self",))
+        and _has_fixed_method(ports[0], "stage_and_verify_operation_claim", ("self", "attempt"))
+    ):
+        return ["claim write operation signature differs"]
+    allowed_modules = {
+        "__future__",
+        "collections.abc",
+        "dataclasses",
+        "re",
+        "threading",
+        "typing",
+        "uuid",
+    }
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import) and any(
+            alias.name not in allowed_modules for alias in node.names
+        ):
+            return ["claim write guard imports outside its transaction interface"]
+        if isinstance(node, ast.ImportFrom) and (node.level or node.module not in allowed_modules):
+            return ["claim write guard imports outside its transaction interface"]
+        if isinstance(node, ast.Attribute) and node.attr in {
+            "connection",
+            "cursor",
+            "pool",
+            "connect",
+            "getconn",
+            "execute",
+            "commit",
+            "rollback",
+        }:
+            return ["claim write guard uses a raw database or finalization handle"]
+    return []
+
+
+def _claim_manager_violations(tree: ast.Module) -> list[str]:
+    managers = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "TenantUnitOfWorkManager"
+    ]
+    if len(managers) != 1:
+        return ["kernel/tenant_uow.py: expected one tenant manager"]
+    methods = {
+        node.name: node
+        for node in managers[0].body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    failures = []
+    if {name for name in methods if not name.startswith("_")} != {"initialize", "close", "unit_of_work"}:
+        failures.append("kernel/tenant_uow.py: tenant manager public surface differs")
+    for name, expected in (
+        ("__init__", ("self", "pool", "minter")),
+        ("unit_of_work", ("self", "principal")),
+        ("_bind_claim_operation", ("self", "connection", "binding")),
+    ):
+        if not _has_fixed_method(managers[0], name, expected):
+            failures.append(f"kernel/tenant_uow.py: tenant manager {name} accepts an override")
+    factory = methods.get("_bind_claim_operation")
+    if factory is None or not (
+        len(factory.body) == 1
+        and isinstance(factory.body[0], ast.Return)
+        and isinstance(factory.body[0].value, ast.Constant)
+        and factory.body[0].value.value is None
+    ):
+        failures.append("kernel/tenant_uow.py: production claim operation must be unavailable")
     return failures
 
 

@@ -20,6 +20,9 @@ from .authentication import VerifiedIdentity
 from .principal import AuthenticatedPrincipal, PrincipalAuthority
 from .postgres_wait import checkpoint
 from .tenant_capability_issuer import CapabilityMintError, TenantChallenge
+from .tenant_claim_write_guard import (
+    BoundClaimOperation, CheckedClaimResult, ClaimWriteAttempt, ClaimWriteGuard,
+)
 from .tenant_command_runtime_bundle_selector import (
     CommandRuntimeBundleSelectionRefused, TrustedCommandRuntimeBundle,
     _resolve_commit_operation_claim_draft_runtime_bundle,
@@ -224,6 +227,10 @@ def _allocate_governed_batch(
     binding: TenantBinding,
     request: GovernedBatchRequest,
 ) -> tuple[GovernedWriteBatch, bool]:
+    expected = (
+        binding.tenant_id, request.batch_id, binding.party_ref,
+        request.operation, request.request_id, request.runtime_bundle_digest,
+    )
     row = connection.execute(
         """
         INSERT INTO ofarm.governed_write_batch (
@@ -237,25 +244,10 @@ def _allocate_governed_batch(
                   pg_catalog.current_setting('synchronous_commit') = 'on'
                   AND pg_catalog.current_setting('fsync') = 'on'
         """,
-        (
-            binding.tenant_id,
-            request.batch_id,
-            binding.party_ref,
-            request.operation,
-            request.request_id,
-            request.runtime_bundle_digest,
-        ),
+        expected,
     ).fetchone()
     if row is None or len(row) < 9:
         raise RuntimeError("governed batch allocation failed")
-    expected = (
-        binding.tenant_id,
-        request.batch_id,
-        binding.party_ref,
-        request.operation,
-        request.request_id,
-        request.runtime_bundle_digest,
-    )
     if (row[0], row[1], *row[3:7]) != expected:
         raise RuntimeError("governed batch authority differs")
     full_xid = int(row[2])
@@ -286,12 +278,13 @@ class TenantUnitOfWork:
     __slots__ = (
         "__binding", "__active", "__allocate_batch", "__batch",
         "__resolve_bundle", "__selector_state", "__selected_bundle",
-        "__rollback_only",
+        "__rollback_only", "__claim_guard",
     )
 
     def __init__(
         self, binding: TenantBinding, allocate_batch: _BatchAllocator,
         resolve_bundle: _BundleResolver,
+        claim_operation: BoundClaimOperation | None = None,
     ) -> None:
         self.__binding = binding
         self.__active = True
@@ -301,6 +294,7 @@ class TenantUnitOfWork:
         self.__selector_state = _SelectorState.UNRESOLVED
         self.__selected_bundle: TrustedCommandRuntimeBundle | None = None
         self.__rollback_only = False
+        self.__claim_guard = ClaimWriteGuard(claim_operation)
 
     @property
     def binding(self) -> TenantBinding:
@@ -314,8 +308,13 @@ class TenantUnitOfWork:
         if not self.__active:
             raise RuntimeError("tenant UnitOfWork is closed")
 
+    def _require_writable(self) -> None:
+        if self.__rollback_only:
+            raise RuntimeError("tenant UnitOfWork is rollback-only")
+
     def _finish(self) -> bool:
         self.__active = False
+        self.__claim_guard.close()
         self.__allocate_batch = _closed_batch_allocator
         self.__resolve_bundle = _closed_bundle_resolver
         self.__selector_state = _SelectorState.CLOSED
@@ -327,8 +326,7 @@ class TenantUnitOfWork:
 
     def begin_batch(self, request: GovernedBatchRequest) -> GovernedWriteBatch:
         self._require_active()
-        if self.__rollback_only:
-            raise RuntimeError("tenant UnitOfWork is rollback-only")
+        self._require_writable()
         if type(request) is not GovernedBatchRequest or self.__batch is not None:
             raise RuntimeError("governed batch already exists")
         try:
@@ -337,6 +335,23 @@ class TenantUnitOfWork:
             self.__rollback_only = True
             raise
         return self.__batch
+
+    def stage_operation_claim(self, attempt: ClaimWriteAttempt) -> CheckedClaimResult:
+        self._require_active()
+        self.__claim_guard.require_owner()
+        try:
+            batch = self.__batch
+            self._require_writable()
+            if batch is None:
+                raise RuntimeError("claim write requires an active governed batch")
+            return self.__claim_guard.stage(
+                attempt, self.__binding.tenant_id, self.__binding.capability_nonce,
+                batch.batch_id, batch.full_xid, batch.operation, batch.runtime_bundle_digest,
+                self._require_writable,
+            )
+        except BaseException:
+            self.__rollback_only = True
+            raise
 
     def resolve_commit_operation_claim_draft_runtime_bundle(
         self,
@@ -429,6 +444,11 @@ class TenantUnitOfWorkManager:
     def __init__(self, pool: ConnectionPool, minter: CapabilityMinter) -> None:
         self._pool = pool
         self._minter = minter
+
+    def _bind_claim_operation(
+        self, connection: Connection, binding: TenantBinding,
+    ) -> BoundClaimOperation | None:
+        return None
 
     def initialize(self) -> None:
         try:
@@ -547,6 +567,7 @@ class TenantUnitOfWorkManager:
                 connection,
                 binding.tenant_id,
             ),
+            self._bind_claim_operation(connection, binding),
         )
         try:
             yield unit

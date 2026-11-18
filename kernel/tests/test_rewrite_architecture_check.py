@@ -2346,10 +2346,10 @@ class TenantUnitOfWork:
     __slots__ = (
         "__binding", "__active", "__allocate_batch", "__batch",
         "__resolve_bundle", "__selector_state", "__selected_bundle",
-        "__rollback_only",
+        "__rollback_only", "__claim_guard",
     )
 
-    def __init__(self, binding, allocate_batch, resolve_bundle):
+    def __init__(self, binding, allocate_batch, resolve_bundle, claim_operation=None):
         self.__binding = binding
         self.__active = False
         self.__allocate_batch = allocate_batch
@@ -2358,6 +2358,7 @@ class TenantUnitOfWork:
         self.__selector_state = None
         self.__selected_bundle = None
         self.__rollback_only = False
+        self.__claim_guard = claim_operation
 
     @property
     def binding(self):
@@ -2373,6 +2374,23 @@ class TenantUnitOfWork:
 
     def resolve_commit_operation_claim_draft_runtime_bundle(self):
         return self.__resolve_bundle()
+
+    def stage_operation_claim(self, attempt):
+        pass
+
+class TenantUnitOfWorkManager:
+    def __init__(self, pool, minter): pass
+    def initialize(self): pass
+    def close(self): pass
+    def unit_of_work(self, principal): pass
+    def _bind_claim_operation(self, connection, binding):
+        return None
+"""
+
+_VALID_CLAIM_PORT = """\
+class BoundClaimOperation:
+    def selected_claim_command(self): ...
+    def stage_and_verify_operation_claim(self, attempt): ...
 """
 
 
@@ -2398,6 +2416,7 @@ def test_tenant_policy_scans_reached_kernel_initializers(
         "kernel/__init__.py": "",
         "kernel/api.py": api_source,
         "kernel/tenant_uow.py": _VALID_TENANT_UOW_SOURCE,
+        "kernel/tenant_claim_write_guard.py": _VALID_CLAIM_PORT,
         **extra_sources,
     }
     sources[initializer] = "probe = holder._TenantUnitOfWork__connection\n"
@@ -2412,6 +2431,88 @@ def test_tenant_policy_scans_reached_kernel_initializers(
         f"{initializer}:1: tenant UnitOfWork private-state access "
         "'_TenantUnitOfWork__connection'"
     ]
+
+
+@pytest.mark.parametrize("entry", ("kernel/__init__.py", "kernel/application_runtime.py"))
+def test_production_paths_reject_claim_fixture_import(tmp_path, entry):
+    root = _snapshot_tree(
+        tmp_path,
+        {
+            "kernel/tenant_uow.py": _VALID_TENANT_UOW_SOURCE,
+            "kernel/tenant_claim_write_guard.py": _VALID_CLAIM_PORT,
+            "kernel/tests/test_postgresql_tenant_claim_write_guard.py": "class MarkerManager: pass\n",
+            entry: "from kernel.tests.test_postgresql_tenant_claim_write_guard import MarkerManager\n",
+        },
+    )
+    snapshot, trees, closures = _execution_state(root)
+    failures = rewrite_architecture_check._check_tenant_uow_architecture(snapshot, trees, closures)
+    assert any(
+        "production tenant path reaches test code" in line
+        and "kernel.tests.test_postgresql_tenant_claim_write_guard" in line
+        for line in failures
+    )
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "reason"),
+    (
+        ("self, pool, minter", "self, pool, minter, *, writer=None", "accepts an override"),
+        (
+            "unit_of_work(self, principal)",
+            "unit_of_work(self, principal, writer=None)",
+            "accepts an override",
+        ),
+        ("def close(self): pass", "def set_writer(self, writer): pass", "public surface differs"),
+        ("return None", "return self.writer", "must be unavailable"),
+    ),
+)
+def test_guard_rejects_manager_writer_overrides(before, after, reason):
+    tree = ast.parse(_VALID_TENANT_UOW_SOURCE.replace(before, after))
+    assert any(reason in error for error in rewrite_architecture_check._claim_manager_violations(tree))
+
+
+def test_guard_rejects_caller_supplied_writer_at_dispatch():
+    tree = ast.parse(
+        _VALID_TENANT_UOW_SOURCE.replace(
+            "stage_operation_claim(self, attempt)",
+            "stage_operation_claim(self, attempt, writer=None)",
+        )
+    )
+    violations = rewrite_architecture_check._tenant_uow_class_violations(
+        tree,
+        rewrite_architecture_check._TENANT_UOW_SHAPE,
+    )
+    assert any("non-transaction argument" in error for _line, error in violations)
+
+
+def test_guard_rejects_second_production_claim_factory(tmp_path):
+    root = _snapshot_tree(
+        tmp_path,
+        {
+            "kernel/tenant_uow.py": _VALID_TENANT_UOW_SOURCE,
+            "kernel/tenant_claim_write_guard.py": _VALID_CLAIM_PORT,
+            "kernel/application_runtime.py": (
+                "from .tenant_uow import TenantUnitOfWorkManager\n"
+                "class ExtraManager(TenantUnitOfWorkManager):\n"
+                "    def _bind_claim_operation(self, connection, binding): return None\n"
+            ),
+        },
+    )
+    errors = rewrite_architecture_check._check_tenant_uow_architecture(*_execution_state(root))
+    assert any("overrides the claim writer factory" in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    ("extra", "reason"),
+    (
+        ("    def commit(self): pass\n", "operation surface differs"),
+        ("writer.rollback()\n", "finalization handle"),
+        ("import psycopg\n", "imports outside"),
+    ),
+)
+def test_guard_rejects_database_handles_and_new_port_methods(extra, reason):
+    errors = rewrite_architecture_check._claim_operation_violations(ast.parse(_VALID_CLAIM_PORT + extra))
+    assert any(reason in error for error in errors)
 
 
 def _tenant_selector_execution_state(
