@@ -2434,21 +2434,22 @@ def test_tenant_policy_scans_reached_kernel_initializers(
 
 
 @pytest.mark.parametrize("entry", ("kernel/__init__.py", "kernel/application_runtime.py"))
-def test_production_paths_reject_claim_fixture_import(tmp_path, entry):
+@pytest.mark.parametrize("fixture", ("test_postgresql_tenant_claim_write_guard", "_operation_claim_collector"))
+def test_production_paths_reject_claim_fixture_import(tmp_path, entry, fixture):
     root = _snapshot_tree(
         tmp_path,
         {
             "kernel/tenant_uow.py": _VALID_TENANT_UOW_SOURCE,
             "kernel/tenant_claim_write_guard.py": _VALID_CLAIM_PORT,
-            "kernel/tests/test_postgresql_tenant_claim_write_guard.py": "class MarkerManager: pass\n",
-            entry: "from kernel.tests.test_postgresql_tenant_claim_write_guard import MarkerManager\n",
+            f"kernel/tests/{fixture}.py": "class FixtureManager: pass\n",
+            entry: f"from kernel.tests.{fixture} import FixtureManager\n",
         },
     )
     snapshot, trees, closures = _execution_state(root)
     failures = rewrite_architecture_check._check_tenant_uow_architecture(snapshot, trees, closures)
     assert any(
         "production tenant path reaches test code" in line
-        and "kernel.tests.test_postgresql_tenant_claim_write_guard" in line
+        and f"kernel.tests.{fixture}" in line
         for line in failures
     )
 

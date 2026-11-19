@@ -3266,10 +3266,13 @@ def _check_tenant_uow_architecture(
     ]
     failures.extend(_claim_manager_violations(trees[_TENANT_UOW_MODULE]))
     failures.extend(_claim_operation_violations(trees["kernel.tenant_claim_write_guard"]))
-    fixture = "kernel.tests.test_postgresql_tenant_claim_write_guard"
-    if fixture in execution_closures.production:
-        path = _render_import_execution_path(snapshot, execution_closures.production[fixture])
-        failures.append(f"production tenant path reaches test code: {path}")
+    for fixture in (
+        "kernel.tests.test_postgresql_tenant_claim_write_guard",
+        "kernel.tests._operation_claim_collector",
+    ):
+        if fixture in execution_closures.production:
+            path = _render_import_execution_path(snapshot, execution_closures.production[fixture])
+            failures.append(f"production tenant path reaches test code: {path}")
     for module in sorted(execution_closures.production):
         for owner in (node for node in ast.walk(trees[module]) if isinstance(node, ast.ClassDef)):
             if module == _TENANT_UOW_MODULE and owner.name == "TenantUnitOfWorkManager":
