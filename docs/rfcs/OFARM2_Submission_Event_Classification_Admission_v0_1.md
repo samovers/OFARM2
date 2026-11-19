@@ -47,4 +47,12 @@ Run the real admission operation through the existing guard in an isolated Postg
 
 Expected implementation areas are a private Kernel admission component, its focused tests and inventory, and the conditional manifest-backed extraction described above. The smallest complete change is one verifier inside an already guarded call. It grants no source write, new manager method, migration, new credentials or public route. [#457](https://github.com/samovers/OFARM2/issues/457) owns proof custody, #178 owns production composition, command identity, receipt and replay, #422 owns domain validation and #428 owns promotion evidence. A change to the boundary, effects, ownership, timing, named PR or deployment posture requires a new decision. The package and architecture checks, focused tests and scoped implementation review precede the later delivery gates.
 
-Next, review the three fixes and affected invariants on the revised design head before any implementation decision.
+## Implementation status
+
+The project owner approved version 2 after the [design re-check](https://github.com/samovers/OFARM2/pull/456#pullrequestreview-5981524272). The original card and reply are identified in the [delivery record](https://github.com/samovers/OFARM2/pull/456#approval-and-delivery-record).
+
+The [private admission check](../../kernel/_submission_event_admission.py) compares the guarded attempt and original intent, request, event selector and producer against the independently selected source. It checks raw byte identities for the request, envelope, profile and context. It compares the selected proof and contract digests with the custody record. Recomputing the whole-proof JCS digest, verifying the extracted contract and qualifying the classification require the [accepted canonical checker](https://github.com/samovers/OFARM/pull/49). Passing the source comparisons still ends in a refusal.
+
+The [unit cases](../../kernel/tests/test_submission_event_admission.py) cover both event routes and changed source inputs. The [PostgreSQL cases](../../kernel/tests/test_postgresql_submission_event_admission.py) supply a private test reader with previously committed fictional originals. They check what survives when either role catches a refusal after batch allocation, including after savepoint recovery. [#457](https://github.com/samovers/OFARM2/issues/457) owns the production reader. [#178](https://github.com/samovers/OFARM2/issues/178) owns its binding to the original command, receipt and replay.
+
+Next, once an eligible checker reaches canonical main, verify its source and manifest as specified above and complete the positive admission and readback cases on both roles.
