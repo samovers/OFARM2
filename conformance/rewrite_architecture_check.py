@@ -3287,6 +3287,7 @@ def _check_tenant_uow_architecture(
     for fixture in (
         "kernel.tests.test_postgresql_tenant_claim_write_guard",
         "kernel.tests.test_postgresql_tenant_promotion_guard",
+        "kernel.tests._operation_claim_collector",
     ):
         if fixture in execution_closures.production:
             path = _render_import_execution_path(snapshot, execution_closures.production[fixture])

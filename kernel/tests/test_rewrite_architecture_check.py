@@ -2479,6 +2479,11 @@ def test_production_paths_reject_promotion_fixture_import(tmp_path, entry):
     _assert_fixture_unreachable(tmp_path, entry, "test_postgresql_tenant_promotion_guard")
 
 
+@pytest.mark.parametrize("entry", ("kernel/__init__.py", "kernel/application_runtime.py"))
+def test_production_paths_reject_operation_claim_collector_import(tmp_path, entry):
+    _assert_fixture_unreachable(tmp_path, entry, "_operation_claim_collector")
+
+
 @pytest.mark.parametrize(
     ("before", "after", "reason"),
     (
