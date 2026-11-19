@@ -86,7 +86,7 @@ def test_runtime_uses_full_source_public_migration_and_distinct_verified_noop(se
         first, noop = service.calls
         assert first["migration_set"] is noop["migration_set"] is target.migration_set
         assert tuple(item.version for item in target.migration_set.migrations) == tuple(
-            range(1, 12)
+            range(1, 13)
         )
         assert first["execution_id"] != noop["execution_id"]
         assert {
@@ -104,7 +104,7 @@ def test_runtime_uses_full_source_public_migration_and_distinct_verified_noop(se
         assert service.events == [
             ("clean", ADMIN_DSN),
             ("provision", ADMIN_DSN),
-            ("migrate", tuple(range(1, 12))),
+            ("migrate", tuple(range(1, 13))),
             ("migrate", ()),
         ]
     finally:
@@ -282,7 +282,7 @@ def test_staged_manual_route_keeps_patched_admin_and_every_schedule_step(
             (5,),
             (6,),
             (7,),
-            (8, 9, 10, 11),
+            (8, 9, 10, 11, 12),
             (),
         ]
         assert reports[-1].observed_head_execution_id == reports[-2].execution_id
@@ -299,7 +299,7 @@ def test_staged_manual_route_keeps_patched_admin_and_every_schedule_step(
             ("migrate", (6,)),
             ("probe", "v6_admission_evidence"),
             ("migrate", (7,)),
-            ("migrate", (8, 9, 10, 11)),
+            ("migrate", (8, 9, 10, 11, 12)),
             ("migrate", ()),
         ]
     finally:

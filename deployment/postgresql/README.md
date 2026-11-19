@@ -345,6 +345,20 @@ two-column creator and binder are unchanged. See the
 The issuer must consume this metadata in a separate change before audit K-01
 can be closed; this migration alone does not repair capability issuance.
 
+Tenant migration `0012` requires every `ofarm.assertionrecord.v0.2` to commit
+with one `PROMOTION_EMITS` edge from a promotion trace in its tenant, batch
+and full transaction. The trace must list the assertion ID as a string in
+`emittedAssertionRecordRefs`. A writer can insert the edge before its endpoints.
+Missing proof raises `23514` at commit and rolls back the save.
+
+Before upgrading a deployment target, obtain an authorized assessment of its
+history. During upgrade, the runner locks both ledger tables, confirms that the
+owner can see every tenant and checks the existing graphs. If visibility is
+incomplete or a graph fails the check, the migration raises `55000` and the
+target stays at version 11. Keep the original records and transaction stamps,
+retain aggregate counts where available, and refer the exception to the ledger
+owner for a separate decision. [Migration decision and acceptance cases](../../docs/rfcs/OFARM2_Assertion_V02_Promotion_Reachability_RFC_v0_3.md)
+
 The additive `0002` migration exposes three read-only issue #172 entry points:
 the pinned authentication runtime contract, exact active principal authority,
 and current signing authority. They are owned by the unreachable schema owner

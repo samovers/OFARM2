@@ -339,8 +339,8 @@ def test_tenant_structural_report_is_independent_and_has_no_service_decision(
     assert report.manifest() == {
         "schemaVersion": "ofarm.postgresql-structural-compatibility.v1",
         "serviceIdentity": TENANT_SERVICE.identity,
-        "supportedVersion": 11,
-        "observedVersion": 11,
+        "supportedVersion": 12,
+        "observedVersion": 12,
     }
     assert not hasattr(report, "ready")
     assert not hasattr(report, "runtime_ready")
@@ -416,8 +416,8 @@ def test_promoted_physical_clone_observation_has_no_promotion_result(
     assert report.manifest() == {
         "schemaVersion": "ofarm.postgresql-structural-compatibility.v1",
         "serviceIdentity": TENANT_SERVICE.identity,
-        "supportedVersion": 11,
-        "observedVersion": 11,
+        "supportedVersion": 12,
+        "observedVersion": 12,
     }
     serialized = json.dumps(report.manifest(), sort_keys=True).lower()
     for prohibited in (
