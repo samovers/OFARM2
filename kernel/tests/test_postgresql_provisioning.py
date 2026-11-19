@@ -1528,6 +1528,7 @@ def _transition_acl_observation(
     extra_family: tuple[object, ...] | None = None,
     extra_inventory: tuple[object, ...] | None = None,
     activation_acl: list[tuple[object, ...]] | None = None,
+    submit_grantor: str | None = None,
 ) -> _AdmissionConnection:
     controller = "ofarm_command_runtime_bundle_selection_controller"
     family_rows = [
@@ -1572,17 +1573,39 @@ def _transition_acl_observation(
     ]
     if extra_inventory is not None:
         inventory_rows.append(extra_inventory)
+    observed_acl = (
+        activation_acl if activation_acl is not None
+        else [(controller, "ofarm_owner", "EXECUTE", False)]
+    )
+    inventory = [(*row, None) for row in inventory_rows]
+    acls = [(activation_family[1], *row) for row in observed_acl]
+    if submit_grantor is not None:
+        submit_name = "activate_submit_operation_claim_runtime_bundle_selection"
+        family_rows.append(("ofarm", submit_name, *activation_family[2:]))
+        inventory.append(("ofarm", submit_name, "text", True))
+        acls.append((submit_name, controller, submit_grantor, "EXECUTE", False))
     return _AdmissionConnection(
         [
             _AdmissionCursor(rows=family_rows),
-            _AdmissionCursor(rows=inventory_rows),
-            _AdmissionCursor(
-                rows=activation_acl
-                if activation_acl is not None
-                else [(controller, "ofarm_owner", "EXECUTE", False)]
-            ),
+            _AdmissionCursor(rows=inventory),
+            _AdmissionCursor(rows=acls),
         ]
     )
+
+
+def test_submit_acl_compares_the_grantor_independently():
+    classification = provisioning_module._TenantBindingAdmissionClassification(
+        provisioning_module._TENANT_BINDING_ADMISSION_A4,
+        provisioning_module._SelectionControllerAclSubstate.STABLE_SUBMIT,
+    )
+    for grantor, expected in (
+        ("ofarm_owner", []),
+        ("ofarm_app", ["tenant Submit selection activation routine ACL differs"]),
+    ):
+        assert provisioning_module._tenant_binding_selection_admission_acl_differences(
+            _transition_acl_observation(submit_grantor=grantor),
+            TENANT_PROVISIONING_SPEC, classification=classification,
+        ) == expected
 
 
 def test_transition_acl_observations_accept_only_the_exact_closed_shape() -> None:
