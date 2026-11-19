@@ -52,6 +52,14 @@ _TENANT_SELECTION_ACTIVATION_ROUTINE = (
     "activate_commit_operation_claim_draft_runtime_bundle_selection"
 )
 _TENANT_SELECTION_ACTIVATION_ARGUMENTS = "text"
+_SUBMIT_SELECTION_ROUTINE = "activate_submit_operation_claim_runtime_bundle_selection"
+_SUBMIT_SELECTION_MIGRATION = "0013_tenant_submit_operation_claim_runtime_bundle_selection.sql"
+_SUBMIT_PREDECESSOR_DIGEST = (
+    "sha256:c37dc025bd65b6d2700f6e0d0d38919506cacbc257e3a02f7951664c9b251b2c"
+)
+_SUBMIT_PROVISIONING_DIGEST = (
+    "sha256:2ac8487b64d4fb09d7576ef1ee09ac1f2a3cc5b20558f0d2137620b897c7157c"
+)
 _CONTROL_DATABASE = "postgres"
 _BASE_DATABASE_INVENTORY = frozenset({"postgres", "template0", "template1"})
 _ROUTINE_ARGUMENT_SQL = {
@@ -2864,6 +2872,8 @@ class _SelectionControllerAclSubstate(Enum):
     STABLE_V7 = "STABLE_V7"
     V8_POST_SOURCE_PRE_LEDGER_APPEND = "V8_POST_SOURCE_PRE_LEDGER_APPEND"
     STABLE_V8 = "STABLE_V8"
+    SUBMIT_POST_SOURCE_PRE_LEDGER_APPEND = "SUBMIT_POST_SOURCE_PRE_LEDGER_APPEND"
+    STABLE_SUBMIT = "STABLE_SUBMIT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -2914,14 +2924,14 @@ _TENANT_BINDING_ADMISSION_A4 = _TenantBindingAdmissionPhase(
 
 def _authoritative_tenant_selection_activation_migration(
 ) -> AuthoritativeMigration | None:
-    """Return the literal eighth tenant binding from exact R8 through R12."""
+    """Return the historical binding only within the closed tenant release family."""
 
     authority = TENANT_AUTHORITATIVE_MIGRATION_SET
     migrations = authority.migrations
     if (
         authority.service.identity
         != TENANT_PROVISIONING_SPEC.migration_service.identity
-        or len(migrations) not in (8, 9, 10, 11, 12)
+        or len(migrations) not in (8, 9, 10, 11, 12, 13)
         or tuple(migration.version for migration in migrations)
         != tuple(range(1, len(migrations) + 1))
     ):
@@ -2941,7 +2951,7 @@ def _authoritative_tenant_selection_activation_migration(
             != "0009_runtime_bundle_global_content_retention.sql"
         ):
             return None
-    if len(migrations) in (10, 11, 12):
+    if len(migrations) >= 10:
         migration_v10 = migrations[9]
         if (
             migration_v10.version != 10
@@ -2957,8 +2967,15 @@ def _authoritative_tenant_selection_activation_migration(
             != "0011_tenant_challenge_observation.sql"
         ):
             return None
-    if len(migrations) == 12 and (
+    if len(migrations) >= 12 and (
         migrations[11].filename != "0012_assertion_promotion_reachability.sql"
+    ):
+        return None
+    if len(migrations) == 13 and (
+        migrations[11].applied_prefix_digest != _SUBMIT_PREDECESSOR_DIGEST
+        or migrations[12].filename != _SUBMIT_SELECTION_MIGRATION
+        or migrations[12].applied_prefix_digest != authority.digest
+        or TENANT_PROVISIONING_SPEC.digest != _SUBMIT_PROVISIONING_DIGEST
     ):
         return None
     return migration_v8
@@ -2966,11 +2983,11 @@ def _authoritative_tenant_selection_activation_migration(
 
 def _authoritative_tenant_global_content_retention_migration(
 ) -> AuthoritativeMigration | None:
-    """Return the literal ninth tenant binding for exact R9 through R12."""
+    """Return the literal ninth binding within the supported releases."""
 
     migrations = TENANT_AUTHORITATIVE_MIGRATION_SET.migrations
     if (
-        len(migrations) not in (9, 10, 11, 12)
+        len(migrations) < 9
         or _authoritative_tenant_selection_activation_migration() is None
     ):
         return None
@@ -2979,11 +2996,11 @@ def _authoritative_tenant_global_content_retention_migration(
 
 def _authoritative_tenant_runtime_bundle_selector_migration(
 ) -> AuthoritativeMigration | None:
-    """Return the literal tenth tenant binding for exact R10 through R12."""
+    """Return the literal tenth binding within the supported releases."""
 
     migrations = TENANT_AUTHORITATIVE_MIGRATION_SET.migrations
     if (
-        len(migrations) not in (10, 11, 12)
+        len(migrations) < 10
         or _authoritative_tenant_global_content_retention_migration() is None
     ):
         return None
@@ -2992,11 +3009,11 @@ def _authoritative_tenant_runtime_bundle_selector_migration(
 
 def _authoritative_tenant_challenge_observation_migration(
 ) -> AuthoritativeMigration | None:
-    """Return the literal eleventh tenant binding for exact R11 or R12."""
+    """Return the literal eleventh binding within the supported releases."""
 
     migrations = TENANT_AUTHORITATIVE_MIGRATION_SET.migrations
     if (
-        len(migrations) not in (11, 12)
+        len(migrations) < 11
         or _authoritative_tenant_runtime_bundle_selector_migration() is None
     ):
         return None
@@ -3007,7 +3024,7 @@ def _tenant_binding_admission_classification(
     target: psycopg.Connection,
     spec: ProvisioningSpec,
 ) -> tuple[_TenantBindingAdmissionClassification | None, list[str]]:
-    """Classify one durable V5-V12 phase and subordinate selection ACL state."""
+    """Classify the durable admission phase and its selection ACL state."""
 
     selection_sealer = spec.tenant_binding_selection_control_admission_sealer
     context_sealer = (
@@ -3041,7 +3058,7 @@ def _tenant_binding_admission_classification(
         _authoritative_tenant_challenge_observation_migration()
     )
     migrations = TENANT_AUTHORITATIVE_MIGRATION_SET.migrations
-    authoritative_v12 = migrations[11] if len(migrations) == 12 else None
+    authoritative_v12 = migrations[11] if len(migrations) >= 12 else None
     ledger_present = target.execute(
         "SELECT pg_catalog.to_regclass(%s) IS NOT NULL",
         (spec.migration_service.qualified_ledger,),
@@ -3193,6 +3210,13 @@ def _tenant_binding_admission_classification(
         v12_service,
         v12_provisioning_spec_digest,
     ) = tuple(row or ())
+    if (count, minimum, maximum) == (13, 1, 13) and _submit_ledger_matches(
+        target, spec, 13
+    ):
+        return _TenantBindingAdmissionClassification(
+            _TENANT_BINDING_ADMISSION_A4,
+            _SelectionControllerAclSubstate.STABLE_SUBMIT,
+        ), []
     if count == 0 and minimum is None and maximum is None:
         return _TenantBindingAdmissionClassification(
             _TENANT_BINDING_ADMISSION_A0,
@@ -3470,6 +3494,32 @@ def _tenant_binding_admission_classification(
     return None, ["tenant binding admission phase differs"]
 
 
+def _submit_ledger_matches(
+    target: psycopg.Connection, spec: ProvisioningSpec, head: int,
+) -> bool:
+    """Compare every row against the accepted release, including versions 1–7."""
+    migrations = TENANT_AUTHORITATIVE_MIGRATION_SET.migrations
+    # Both callers have already validated the closed release family, fixed
+    # ledger columns and tenant service in the durable classifier.
+    if len(migrations) != 13:
+        return False
+    rows = target.execute(
+        sql.SQL(
+            "SELECT version, filename, source_sha256, source_byte_length, "
+            "applied_prefix_digest, service_identity, provisioning_spec_digest "
+            "FROM {} ORDER BY version LIMIT 14"
+        ).format(sql.Identifier(spec.schema_name, spec.migration_service.ledger_name))
+    ).fetchall()
+    spec_digest = spec.digest
+    return rows == [
+        (
+            entry.version, entry.filename, entry.source_sha256, entry.byte_length,
+            entry.applied_prefix_digest, spec.migration_service.identity, spec_digest,
+        )
+        for entry in migrations[:head]
+    ]
+
+
 def _tenant_binding_v8_post_source_classification(
     target: psycopg.Connection,
     spec: ProvisioningSpec,
@@ -3567,7 +3617,14 @@ def _tenant_binding_selection_admission_acl_differences(
                 False,
             ),
         }
-    activation_required = (
+    submit_required = (
+        classification is not None
+        and classification.selection_acl_substate in {
+            _SelectionControllerAclSubstate.SUBMIT_POST_SOURCE_PRE_LEDGER_APPEND,
+            _SelectionControllerAclSubstate.STABLE_SUBMIT,
+        }
+    )
+    draft_required = submit_required or (
         classification is not None
         and classification.selection_acl_substate
         in {
@@ -3575,45 +3632,31 @@ def _tenant_binding_selection_admission_acl_differences(
             _SelectionControllerAclSubstate.STABLE_V8,
         }
     )
-    if activation_required:
-        expected_family.add(
-            (
-                _TENANT_SELECTION_ACTIVATION_SCHEMA,
-                _TENANT_SELECTION_ACTIVATION_ROUTINE,
-                _TENANT_SELECTION_ACTIVATION_ARGUMENTS,
-                sealer.controller_role,
-                "ofarm_owner",
-                "EXECUTE",
-                False,
-            )
-        )
-
+    activation_names = [_TENANT_SELECTION_ACTIVATION_ROUTINE, _SUBMIT_SELECTION_ROUTINE]
     activation_inventory = target.execute(
         """
         SELECT namespace.nspname::text,
                routine.proname::text,
-               pg_catalog.oidvectortypes(routine.proargtypes)
+               pg_catalog.oidvectortypes(routine.proargtypes),
+               CASE WHEN routine.proname = %s THEN
+                   routine.pronargs = 1
+                   AND routine.proargtypes[0] = 'pg_catalog.text'::pg_catalog.regtype
+                   AND routine.prokind = 'f' AND routine.prosecdef
+                   AND pg_catalog.pg_get_userbyid(routine.proowner) = 'ofarm_owner'
+               END AS submit_identity
         FROM pg_catalog.pg_proc AS routine
         JOIN pg_catalog.pg_namespace AS namespace
              ON namespace.oid = routine.pronamespace
-        WHERE routine.proname = %s
+        WHERE routine.proname = ANY (%s::text[])
         ORDER BY 1, 2, 3
         """,
-        (_TENANT_SELECTION_ACTIVATION_ROUTINE,),
+        (_SUBMIT_SELECTION_ROUTINE, activation_names),
     ).fetchall()
-    expected_inventory: set[tuple[object, ...]] = set()
-    if activation_required:
-        expected_inventory.add(
-            (
-                _TENANT_SELECTION_ACTIVATION_SCHEMA,
-                _TENANT_SELECTION_ACTIVATION_ROUTINE,
-                _TENANT_SELECTION_ACTIVATION_ARGUMENTS,
-            )
-        )
 
     activation_acl_rows = target.execute(
         """
-        SELECT CASE WHEN acl.grantee = 0 THEN 'PUBLIC'
+        SELECT routine.proname::text,
+               CASE WHEN acl.grantee = 0 THEN 'PUBLIC'
                     ELSE pg_catalog.pg_get_userbyid(acl.grantee) END,
                pg_catalog.pg_get_userbyid(acl.grantor),
                acl.privilege_type,
@@ -3628,32 +3671,38 @@ def _tenant_binding_selection_admission_acl_differences(
             )
         ) AS acl
         WHERE namespace.nspname = %s
-          AND routine.proname = %s
+          AND routine.proname = ANY (%s::text[])
           AND pg_catalog.oidvectortypes(routine.proargtypes) = %s
           AND acl.grantee <> routine.proowner
-        ORDER BY 1, 2, 3, 4
+        ORDER BY 1, 2, 3, 4, 5
         """,
         (
             _TENANT_SELECTION_ACTIVATION_SCHEMA,
-            _TENANT_SELECTION_ACTIVATION_ROUTINE,
+            activation_names,
             _TENANT_SELECTION_ACTIVATION_ARGUMENTS,
         ),
     ).fetchall()
-    expected_activation_acl: set[tuple[object, ...]] = set()
-    if activation_required:
-        expected_activation_acl.add(
-            (sealer.controller_role, "ofarm_owner", "EXECUTE", False)
-        )
-
     differences: list[str] = []
+    grant = (sealer.controller_role, "ofarm_owner", "EXECUTE", False)
+    for name, required, identity, label in (
+        (_TENANT_SELECTION_ACTIVATION_ROUTINE, draft_required, None, "tenant selection activation"),
+        (_SUBMIT_SELECTION_ROUTINE, submit_required, True, "tenant Submit selection activation"),
+    ):
+        signature = (
+            _TENANT_SELECTION_ACTIVATION_SCHEMA, name, _TENANT_SELECTION_ACTIVATION_ARGUMENTS,
+        )
+        if required:
+            expected_family.add((*signature, *grant))
+        inventory = {tuple(row) for row in activation_inventory if row[1] == name}
+        if inventory != ({(*signature, identity)} if required else set()):
+            differences.append(f"{label} routine inventory differs")
+        acl = {tuple(row[1:]) for row in activation_acl_rows if row[0] == name}
+        if acl != ({grant} if required else set()):
+            differences.append(f"{label} routine ACL differs")
     if {tuple(row) for row in family_rows} != expected_family:
         differences.append(
             "tenant binding selection-control admission ACL differs"
         )
-    if {tuple(row) for row in activation_inventory} != expected_inventory:
-        differences.append("tenant selection activation routine inventory differs")
-    if {tuple(row) for row in activation_acl_rows} != expected_activation_acl:
-        differences.append("tenant selection activation routine ACL differs")
     return differences
 
 
@@ -4631,6 +4680,32 @@ def _tenant_selection_v8_post_source_locked_differences(
         spec,
         admission=admission,
         admission_differences=admission_differences,
+    )
+
+
+def _tenant_submit_post_source_locked_differences(
+    target: psycopg.Connection, spec: ProvisioningSpec,
+) -> list[str]:
+    """Only the production runner calls this after executing the bound V13 source."""
+    _require_fixed_spec(spec)
+    previous, differences = _tenant_binding_admission_classification(target, spec)
+    admission = None
+    if (
+        spec == TENANT_PROVISIONING_SPEC
+        and previous is not None
+        and previous.phase == _TENANT_BINDING_ADMISSION_A4
+        and previous.selection_acl_substate is _SelectionControllerAclSubstate.STABLE_V8
+        and not differences
+        and _submit_ledger_matches(target, spec, 12)
+    ):
+        admission = _TenantBindingAdmissionClassification(
+            _TENANT_BINDING_ADMISSION_A4,
+            _SelectionControllerAclSubstate.SUBMIT_POST_SOURCE_PRE_LEDGER_APPEND,
+        )
+    else:
+        differences.append("tenant Submit selection activation transition differs")
+    return _migration_locked_differences_for_admission(
+        target, spec, admission=admission, admission_differences=differences,
     )
 
 
