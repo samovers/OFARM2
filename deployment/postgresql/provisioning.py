@@ -2914,14 +2914,14 @@ _TENANT_BINDING_ADMISSION_A4 = _TenantBindingAdmissionPhase(
 
 def _authoritative_tenant_selection_activation_migration(
 ) -> AuthoritativeMigration | None:
-    """Return the literal eighth tenant binding from exact R8 through R11."""
+    """Return the literal eighth tenant binding from exact R8 through R12."""
 
     authority = TENANT_AUTHORITATIVE_MIGRATION_SET
     migrations = authority.migrations
     if (
         authority.service.identity
         != TENANT_PROVISIONING_SPEC.migration_service.identity
-        or len(migrations) not in (8, 9, 10, 11)
+        or len(migrations) not in (8, 9, 10, 11, 12)
         or tuple(migration.version for migration in migrations)
         != tuple(range(1, len(migrations) + 1))
     ):
@@ -2941,7 +2941,7 @@ def _authoritative_tenant_selection_activation_migration(
             != "0009_runtime_bundle_global_content_retention.sql"
         ):
             return None
-    if len(migrations) in (10, 11):
+    if len(migrations) in (10, 11, 12):
         migration_v10 = migrations[9]
         if (
             migration_v10.version != 10
@@ -2949,7 +2949,7 @@ def _authoritative_tenant_selection_activation_migration(
             != "0010_tenant_command_runtime_bundle_selector.sql"
         ):
             return None
-    if len(migrations) == 11:
+    if len(migrations) >= 11:
         migration_v11 = migrations[10]
         if (
             migration_v11.version != 11
@@ -2957,16 +2957,20 @@ def _authoritative_tenant_selection_activation_migration(
             != "0011_tenant_challenge_observation.sql"
         ):
             return None
+    if len(migrations) == 12 and (
+        migrations[11].filename != "0012_assertion_promotion_reachability.sql"
+    ):
+        return None
     return migration_v8
 
 
 def _authoritative_tenant_global_content_retention_migration(
 ) -> AuthoritativeMigration | None:
-    """Return the literal ninth tenant binding for exact R9 through R11."""
+    """Return the literal ninth tenant binding for exact R9 through R12."""
 
     migrations = TENANT_AUTHORITATIVE_MIGRATION_SET.migrations
     if (
-        len(migrations) not in (9, 10, 11)
+        len(migrations) not in (9, 10, 11, 12)
         or _authoritative_tenant_selection_activation_migration() is None
     ):
         return None
@@ -2975,11 +2979,11 @@ def _authoritative_tenant_global_content_retention_migration(
 
 def _authoritative_tenant_runtime_bundle_selector_migration(
 ) -> AuthoritativeMigration | None:
-    """Return the literal tenth tenant binding for exact R10 or R11."""
+    """Return the literal tenth tenant binding for exact R10 through R12."""
 
     migrations = TENANT_AUTHORITATIVE_MIGRATION_SET.migrations
     if (
-        len(migrations) not in (10, 11)
+        len(migrations) not in (10, 11, 12)
         or _authoritative_tenant_global_content_retention_migration() is None
     ):
         return None
@@ -2988,11 +2992,11 @@ def _authoritative_tenant_runtime_bundle_selector_migration(
 
 def _authoritative_tenant_challenge_observation_migration(
 ) -> AuthoritativeMigration | None:
-    """Return the literal eleventh tenant binding only for exact R11."""
+    """Return the literal eleventh tenant binding for exact R11 or R12."""
 
     migrations = TENANT_AUTHORITATIVE_MIGRATION_SET.migrations
     if (
-        len(migrations) != 11
+        len(migrations) not in (11, 12)
         or _authoritative_tenant_runtime_bundle_selector_migration() is None
     ):
         return None
@@ -3003,7 +3007,7 @@ def _tenant_binding_admission_classification(
     target: psycopg.Connection,
     spec: ProvisioningSpec,
 ) -> tuple[_TenantBindingAdmissionClassification | None, list[str]]:
-    """Classify one durable V5-V11 phase and subordinate selection ACL state."""
+    """Classify one durable V5-V12 phase and subordinate selection ACL state."""
 
     selection_sealer = spec.tenant_binding_selection_control_admission_sealer
     context_sealer = (
@@ -3036,6 +3040,8 @@ def _tenant_binding_admission_classification(
     authoritative_v11 = (
         _authoritative_tenant_challenge_observation_migration()
     )
+    migrations = TENANT_AUTHORITATIVE_MIGRATION_SET.migrations
+    authoritative_v12 = migrations[11] if len(migrations) == 12 else None
     ledger_present = target.execute(
         "SELECT pg_catalog.to_regclass(%s) IS NOT NULL",
         (spec.migration_service.qualified_ledger,),
@@ -3129,7 +3135,15 @@ def _tenant_binding_admission_classification(
             "FILTER (WHERE version = 11), "
             "pg_catalog.max(service_identity) FILTER (WHERE version = 11), "
             "pg_catalog.max(provisioning_spec_digest) "
-            "FILTER (WHERE version = 11) "
+            "FILTER (WHERE version = 11), "
+            "pg_catalog.max(filename) FILTER (WHERE version = 12), "
+            "pg_catalog.max(source_sha256) FILTER (WHERE version = 12), "
+            "pg_catalog.max(source_byte_length) FILTER (WHERE version = 12), "
+            "pg_catalog.max(applied_prefix_digest) "
+            "FILTER (WHERE version = 12), "
+            "pg_catalog.max(service_identity) FILTER (WHERE version = 12), "
+            "pg_catalog.max(provisioning_spec_digest) "
+            "FILTER (WHERE version = 12) "
             "FROM {}"
         ).format(
             sql.Identifier(
@@ -3172,6 +3186,12 @@ def _tenant_binding_admission_classification(
         v11_applied_prefix_digest,
         v11_service,
         v11_provisioning_spec_digest,
+        v12_filename,
+        v12_source_sha256,
+        v12_source_byte_length,
+        v12_applied_prefix_digest,
+        v12_service,
+        v12_provisioning_spec_digest,
     ) = tuple(row or ())
     if count == 0 and minimum is None and maximum is None:
         return _TenantBindingAdmissionClassification(
@@ -3355,12 +3375,11 @@ def _tenant_binding_admission_classification(
             _TENANT_BINDING_ADMISSION_A4,
             _SelectionControllerAclSubstate.STABLE_V8,
         ), []
-    stable_v10_or_v11 = (count, minimum, maximum) == (10, 1, 10) or (
-        authoritative_v11 is not None
-        and (
-            count,
-            minimum,
-            maximum,
+    # Versions 11 and 12 inherit the stable V10 permissions only after
+    # every intervening migration's own immutable ledger evidence matches.
+    stable_tail = (count, minimum, maximum) == (10, 1, 10)
+    if (count, minimum, maximum) in ((11, 1, 11), (12, 1, 12)):
+        stable_tail = authoritative_v11 is not None and (
             v11_filename,
             v11_source_sha256,
             v11_source_byte_length,
@@ -3368,9 +3387,6 @@ def _tenant_binding_admission_classification(
             v11_service,
             v11_provisioning_spec_digest,
         ) == (
-            11,
-            1,
-            11,
             authoritative_v11.filename,
             authoritative_v11.source_sha256,
             authoritative_v11.byte_length,
@@ -3378,8 +3394,23 @@ def _tenant_binding_admission_classification(
             spec.migration_service.identity,
             spec.digest,
         )
-    )
-    if stable_v10_or_v11 and authoritative_v9 is not None and (
+        if count == 12:
+            stable_tail = stable_tail and authoritative_v12 is not None and (
+                v12_filename,
+                v12_source_sha256,
+                v12_source_byte_length,
+                v12_applied_prefix_digest,
+                v12_service,
+                v12_provisioning_spec_digest,
+            ) == (
+                authoritative_v12.filename,
+                authoritative_v12.source_sha256,
+                authoritative_v12.byte_length,
+                authoritative_v12.applied_prefix_digest,
+                spec.migration_service.identity,
+                spec.digest,
+            )
+    if stable_tail and authoritative_v9 is not None and (
         authoritative_v10 is not None
     ) and (
         v5_filename,

@@ -85,7 +85,7 @@ def test_challenge_migration_rollback_upgrade_replay_and_drift_refusal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     migration_set = load_authoritative_migration_set(_PACKAGE_ROOT, TENANT_SERVICE)
-    assert len(migration_set.migrations) == 11
+    assert len(migration_set.migrations) == 12
     original_insert = migration_runner._insert_ledger_row
     reached_version_11: list[int] = []
 
@@ -145,23 +145,28 @@ def test_challenge_migration_rollback_upgrade_replay_and_drift_refusal(
         True, 0, 10, _V10_PREFIX, 10, False, _V10_VERIFIER_SOURCE
     )
 
-    upgraded = _run(tenant_target, migration_set)
-    assert upgraded.previous_version == 10
-    assert upgraded.applied_versions == (11,)
-    assert upgraded.final_version == 11
-    assert upgraded.verified_noop is False
-    assert _state(tenant_target)[:6] == (
-        True, 0, 11, migration_set.digest, 11, True
-    )
-    v11_history = _ledger_rows(tenant_target)
-    assert v11_history[:10] == v10_history
+    # Park this public runner immediately after the real version-11 commit.
+    # Observe the historical catalog and exercise its drift controls before
+    # version 12 succeeds on the same target and release.
+    class Version11Committed(Exception):
+        pass
 
-    replay = _run(tenant_target, migration_set)
-    assert replay.previous_version == replay.final_version == 11
-    assert replay.applied_versions == ()
-    assert replay.verified_noop is True
-    assert replay.observed_head_execution_id == upgraded.execution_id
-    assert _ledger_rows(tenant_target) == v11_history
+    original_commit = migration_runner._commit
+
+    def stop_after_version_11(connection, migration, execution_id):
+        original_commit(connection, migration, execution_id)
+        if migration.version == 11:
+            raise Version11Committed
+
+    with monkeypatch.context() as patch:
+        patch.setattr(migration_runner, "_commit", stop_after_version_11)
+        with pytest.raises(Version11Committed):
+            _run(tenant_target, migration_set)
+    v11_prefix = migration_set.prefix_digest(11)
+    assert _state(tenant_target)[:6] == (True, 0, 11, v11_prefix, 11, True)
+    v11_history = _ledger_rows(tenant_target)
+    assert [row[0] for row in v11_history] == list(range(1, 12))
+    assert v11_history[:10] == v10_history
 
     for change, restore in (
         (
@@ -177,15 +182,32 @@ def test_challenge_migration_rollback_upgrade_replay_and_drift_refusal(
     ):
         _execute_admin(tenant_target, change)
         try:
-            with pytest.raises(MigrationDirtyError):
+            with pytest.raises((MigrationDirtyError, MigrationExecutionError)):
                 _run(tenant_target, migration_set)
             drifted = _state(tenant_target)
             assert drifted[0] is False
             assert drifted[1] > 0
-            assert drifted[2:6] == (11, migration_set.digest, 11, True)
+            assert drifted[2:6] == (11, v11_prefix, 11, True)
             assert _ledger_rows(tenant_target) == v11_history
         finally:
             _execute_admin(tenant_target, restore)
         assert _state(tenant_target)[:6] == (
-            True, 0, 11, migration_set.digest, 11, True
+            True, 0, 11, v11_prefix, 11, True
         )
+
+    upgraded = _run(tenant_target, migration_set)
+    assert upgraded.previous_version == 11
+    assert upgraded.applied_versions == (12,)
+    assert upgraded.final_version == 12
+    assert upgraded.verified_noop is False
+    assert _state(tenant_target)[:6] == (
+        True, 0, 12, migration_set.digest, 12, True
+    )
+    v12_history = _ledger_rows(tenant_target)
+    assert v12_history[:11] == v11_history
+    replay = _run(tenant_target, migration_set)
+    assert replay.previous_version == replay.final_version == 12
+    assert replay.applied_versions == ()
+    assert replay.verified_noop is True
+    assert replay.observed_head_execution_id == upgraded.execution_id
+    assert _ledger_rows(tenant_target) == v12_history
