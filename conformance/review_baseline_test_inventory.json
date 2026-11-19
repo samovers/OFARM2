@@ -10386,6 +10386,121 @@
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_capture_one_submission[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_capture_one_submission[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_foreign_tenant_and_thread[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_foreign_tenant_and_thread[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_incorrect_set_or_authorization_refuses_the_handoff[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_incorrect_set_or_authorization_refuses_the_handoff[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_lost_commit_reply_withholds_custody[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_lost_commit_reply_withholds_custody[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_prestart_lock_transfers_to_the_bound_backend[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_prestart_lock_transfers_to_the_bound_backend[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_refuse_changed_originals_and_missing_guard[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_refuse_changed_originals_and_missing_guard[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_rollback_caught_failure_and_wrong_binding[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_rollback_caught_failure_and_wrong_binding[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_saved_assertion_act_belongs_to_another_submission",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_stale_binding_nonce_refuses_the_open_lease[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_stale_binding_nonce_refuses_the_open_lease[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_writer_waits_until_release[ofarm_app-absence]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_writer_waits_until_release[ofarm_app-set]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_writer_waits_until_release[ofarm_app-source]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_writer_waits_until_release[ofarm_worker-absence]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_writer_waits_until_release[ofarm_worker-set]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_operation_claim_evidence.py::test_writer_waits_until_release[ofarm_worker-source]",
+      "sourceModule": "kernel.tests.test_postgresql_operation_claim_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_operation_claim_evidence.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_physical_clone.py::test_promoted_physical_clone_yields_only_structural_compatibility",
       "sourceModule": "kernel.tests.test_postgresql_physical_clone",
       "sourcePath": "kernel/tests/test_postgresql_physical_clone.py"
@@ -18187,6 +18302,16 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_claim_fixture_import[kernel/application_runtime.py]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_operation_claim_collector_import[kernel/__init__.py]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_operation_claim_collector_import[kernel/application_runtime.py]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -28961,8 +29086,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "7b923248f2c5c3b4ccd43da1153f95c248f6f3864a72a8b6ddc47b7cf687ddbd",
-  "entryCount": 5792,
+  "entriesSha256": "f5b0f9cd8fbdea9a2051b69adcbe75c95962242255bee3c881075dc6d17d4eec",
+  "entryCount": 5817,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
