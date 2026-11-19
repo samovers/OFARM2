@@ -38,9 +38,11 @@ from deployment.postgresql.migration_sets import (
 from deployment.postgresql.provisioning import (
     ProvisioningError,
     ProvisioningInfrastructureReport,
+    _SUBMIT_SELECTION_MIGRATION,
     _StoreLossLiveWitness,
     _assert_security_audit_store_loss_witness,
     _tenant_selection_v8_post_source_locked_differences,
+    _tenant_submit_post_source_locked_differences,
     _verify_security_audit_service_infrastructure_for_store_loss,
     migration_locked_differences,
     verify_service_infrastructure,
@@ -166,6 +168,7 @@ class _TargetIdentity:
 class _HistoryObservation:
     version: int
     head_execution_id: UUID | None
+    head_release_identity: str | None
 
 
 def _quoted_identifier(value: str) -> str:
@@ -2050,7 +2053,7 @@ def _history_version(
     ).fetchall()
     if not rows:
         if allow_empty:
-            return _HistoryObservation(0, None)
+            return _HistoryObservation(0, None, None)
         raise MigrationDirtyError("existing migration ledger is empty")
     if len(rows) > len(migration_set.migrations):
         raise MigrationDirtyError("migration history is newer than the local set")
@@ -2071,7 +2074,7 @@ def _history_version(
             raise MigrationDirtyError("migration history execution identity is malformed")
         if not isinstance(row[9], datetime) or row[9].tzinfo is None:
             raise MigrationDirtyError("migration history diagnostic time is malformed")
-    return _HistoryObservation(len(rows), rows[-1][8])
+    return _HistoryObservation(len(rows), rows[-1][8], rows[-1][7])
 
 
 def _verify_final_service_structure(
@@ -2295,6 +2298,12 @@ def _migrate_service(
 
                 migration = migration_set.migrations[observed_version]
                 source_text = source_texts[observed_version]
+                submit_transition = (
+                    spec == TENANT_PROVISIONING_SPEC
+                    and observed_version == 12
+                    and migration.version == 13
+                    and migration.filename == _SUBMIT_SELECTION_MIGRATION
+                )
                 try:
                     connection.execute(source_text)
                     if connection.info.transaction_status != TransactionStatus.INTRANS:
@@ -2326,15 +2335,26 @@ def _migrate_service(
                                 spec,
                             )
                         )
+                    elif submit_transition:
+                        try:
+                            require_authoritative_migration_set(migration_set)
+                            post_boundary = _tenant_submit_post_source_locked_differences(
+                                connection, spec,
+                            )
+                        except MigrationSetError as exc:
+                            raise MigrationInputError(str(exc)) from exc
+                        except ProvisioningError as exc:
+                            raise MigrationTargetError(str(exc)) from exc
                     else:
                         post_boundary = _locked_boundary_differences(
                             connection,
                             spec,
                         )
                     if post_boundary:
-                        raise MigrationDirtyError(
-                            "migration widened the provisioning boundary"
-                        )
+                        reason = "migration widened the provisioning boundary"
+                        if submit_transition:
+                            reason += ": " + "; ".join(sorted(set(post_boundary)))
+                        raise MigrationDirtyError(reason)
                     _verify_ledger_contract(connection, spec)
                     unchanged_history = _history_version(
                         connection,
@@ -2366,6 +2386,18 @@ def _migrate_service(
                         )
                     observed_head_execution_id = \
                         appended_history.head_execution_id
+                    if submit_transition:
+                        if (
+                            appended_history.head_release_identity != release_identity
+                            or appended_history.head_execution_id != execution_id
+                        ):
+                            raise MigrationDirtyError("Submit migration append identity differs")
+                        appended_differences = _locked_boundary_differences(connection, spec)
+                        if appended_differences:
+                            raise MigrationDirtyError(
+                                "Submit migration appended posture differs: "
+                                + "; ".join(sorted(set(appended_differences)))
+                            )
                     if (
                         spec.tenant_binding_selection_control_admission_sealer
                         is not None
@@ -2590,6 +2622,12 @@ def _migrate_service_for_testing(
     """Exercise runner mechanics with synthetic migration sets in tests only."""
 
     _require_fixed_pair(spec, migration_set)
+    if (
+        spec == TENANT_PROVISIONING_SPEC
+        and len(migration_set.migrations) >= 13
+        and migration_set.migrations[12].filename == _SUBMIT_SELECTION_MIGRATION
+    ):
+        raise MigrationInputError("test migration executor cannot execute tenant Submit migration")
     if (
         spec == TENANT_PROVISIONING_SPEC
         and len(migration_set.migrations) >= 8
