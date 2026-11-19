@@ -5981,6 +5981,386 @@
       "sourcePath": "kernel/tests/test_ofarm_pkg_contract_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_duplicate_property_in_otherwise_valid_original_refuses[envelope_bytes]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_duplicate_property_in_otherwise_valid_original_refuses[request_bytes]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_reads_exact_originals_with_independent_family[InterventionEvent]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_reads_exact_originals_with_independent_family[MaterialEvent]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_refuses_missing_or_foreign_source_bindings[admitted_idempotency_key-key:other]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_refuses_missing_or_foreign_source_bindings[batch_request_id-request:other]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_refuses_missing_or_foreign_source_bindings[classified_family-None]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_refuses_missing_or_foreign_source_bindings[classified_family-ObservationEvent]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_refuses_missing_or_foreign_source_bindings[envelope_bytes-None]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_refuses_missing_or_foreign_source_bindings[request_bytes-None]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_rejects_schema_or_join_mismatch_even_with_matching_raw_hash[envelope_bytes-primaryEventFamily-unknown]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_rejects_schema_or_join_mismatch_even_with_matching_raw_hash[envelope_bytes-schemaVersion-ofarm.semanticeventenvelope.v0.2]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_rejects_schema_or_join_mismatch_even_with_matching_raw_hash[envelope_bytes-timeSemantics-value6]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_rejects_schema_or_join_mismatch_even_with_matching_raw_hash[request_bytes-commitClass-EVIDENCE_RECORD]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_rejects_schema_or_join_mismatch_even_with_matching_raw_hash[request_bytes-ingestedAt-not-a-date]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_rejects_schema_or_join_mismatch_even_with_matching_raw_hash[request_bytes-schemaVersion-ofarm.commitingressrequest.v0.2]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_rejects_schema_or_join_mismatch_even_with_matching_raw_hash[request_bytes-semanticEventRef-event:other]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_whitespace_changes_raw_digest_with_same_json_value[envelope_bytes]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_ingress_sources.py::test_whitespace_changes_raw_digest_with_same_json_value[request_bytes]",
+      "sourceModule": "kernel.tests.test_pending_claim_ingress_sources",
+      "sourcePath": "kernel/tests/test_pending_claim_ingress_sources.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-assertion-digest]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-authorized-id]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-contract-id]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-contract-version]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-different-family]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-extra-edge]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-extra-effect]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-extra-trace]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-foreign-tenant]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-matching]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-missing-edge]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-second-promotion-edge]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-stored-claim-content]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-stored-lane]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-stored-schema]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-stored-trace-content]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-wrong-disposition]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-wrong-emitted-ref]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-wrong-state]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_app-wrong-xid]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-assertion-digest]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-authorized-id]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-contract-id]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-contract-version]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-different-family]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-extra-edge]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-extra-effect]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-extra-trace]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-foreign-tenant]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-matching]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-missing-edge]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-second-promotion-edge]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-stored-claim-content]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-stored-lane]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-stored-schema]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-stored-trace-content]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-wrong-disposition]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-wrong-emitted-ref]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-wrong-state]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_readback.py::test_staged_graph_must_equal_the_expected_bindings[ofarm_worker-wrong-xid]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_readback",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_readback.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_applicable_case_cannot_refuse_or_silently_skip_the_submission[NOT_APPLICABLE]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_applicable_case_cannot_refuse_or_silently_skip_the_submission[REFUSE]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_applicable_case_cannot_refuse_or_silently_skip_the_submission[UNVERIFIED]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_exemption_requires_its_own_basis_and_absent_case",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_gate_swap_omission_and_repetition_are_refused",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_original_request_and_classification_reference_different_artifacts",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_other_artifact_or_outcome_in_any_gate_is_refused[0]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_other_artifact_or_outcome_in_any_gate_is_refused[1]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_other_artifact_or_outcome_in_any_gate_is_refused[2]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_other_artifact_or_outcome_in_any_gate_is_refused[3]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_other_artifact_or_outcome_in_any_gate_is_refused[4]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_other_artifact_or_outcome_in_any_gate_is_refused[5]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_preserves_evidence_owners_review_disposition",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_refused_owner_disposition_cannot_route_to_pending_review[0-normalization_outcome-DENY]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_refused_owner_disposition_cannot_route_to_pending_review[3-applicability_outcome-UNVERIFIED]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_top_level_binding_must_agree_with_its_gate[authorizationDecisionResultRef]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_pending_claim_promotion_trace.py::test_top_level_binding_must_agree_with_its_gate[evidenceSufficiencyCaseRef]",
+      "sourceModule": "kernel.tests.test_pending_claim_promotion_trace",
+      "sourcePath": "kernel/tests/test_pending_claim_promotion_trace.py"
+    },
+    {
       "nodeid": "kernel/tests/test_physical_outcome_crash.py::test_ps05_real_recovery_future_xid_refuses_status[ofarm_app]",
       "sourceModule": "kernel.tests.test_physical_outcome_crash",
       "sourcePath": "kernel/tests/test_physical_outcome_crash.py"
@@ -10384,6 +10764,136 @@
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_verification_currentness_refuses_unsafe_file_types[symlink]",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_caught_producer_refusal_rolls_back_real_graph[ofarm_app-missing-classification]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_caught_producer_refusal_rolls_back_real_graph[ofarm_app-python-readback]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_caught_producer_refusal_rolls_back_real_graph[ofarm_app-sql-readback]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_caught_producer_refusal_rolls_back_real_graph[ofarm_app-sql-savepoint]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_caught_producer_refusal_rolls_back_real_graph[ofarm_worker-missing-classification]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_caught_producer_refusal_rolls_back_real_graph[ofarm_worker-python-readback]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_caught_producer_refusal_rolls_back_real_graph[ofarm_worker-sql-readback]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_caught_producer_refusal_rolls_back_real_graph[ofarm_worker-sql-savepoint]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_caught_real_readback_refusal_rolls_back_batch[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_caught_real_readback_refusal_rolls_back_batch[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_checked_producer_return_is_provisional[ofarm_app-commit]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_checked_producer_return_is_provisional[ofarm_app-outer-rollback]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_checked_producer_return_is_provisional[ofarm_worker-commit]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_checked_producer_return_is_provisional[ofarm_worker-outer-rollback]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_different_checked_sources_refuse_before_proof_inserts[ofarm_app-domain_payload_digest]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_different_checked_sources_refuse_before_proof_inserts[ofarm_app-domain_payload_ref]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_different_checked_sources_refuse_before_proof_inserts[ofarm_app-request-actor]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_different_checked_sources_refuse_before_proof_inserts[ofarm_app-validation_trace_digest]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_different_checked_sources_refuse_before_proof_inserts[ofarm_worker-domain_payload_digest]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_different_checked_sources_refuse_before_proof_inserts[ofarm_worker-domain_payload_ref]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_different_checked_sources_refuse_before_proof_inserts[ofarm_worker-request-actor]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_different_checked_sources_refuse_before_proof_inserts[ofarm_worker-validation_trace_digest]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_edge_insert_conflict_rolls_back_staged_claim[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_edge_insert_conflict_rolls_back_staged_claim[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_second_promotion_call_rolls_back_first_checked_graph[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_pending_claim_promotion.py::test_second_promotion_call_rolls_back_first_checked_graph[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_pending_claim_promotion",
+      "sourcePath": "kernel/tests/test_postgresql_pending_claim_promotion.py"
     },
     {
       "nodeid": "kernel/tests/test_postgresql_physical_clone.py::test_promoted_physical_clone_yields_only_structural_compatibility",
@@ -28961,8 +29471,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "7b923248f2c5c3b4ccd43da1153f95c248f6f3864a72a8b6ddc47b7cf687ddbd",
-  "entryCount": 5792,
+  "entriesSha256": "92fd56b0cab51319955920f10b22b7b8f2880aa3b34df3dddf53a0c2b9776cc2",
+  "entryCount": 5894,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

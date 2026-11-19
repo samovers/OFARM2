@@ -126,3 +126,14 @@ def test_gate_swap_omission_and_repetition_are_refused(case):
     for wrong in ([gates[1], gates[0], *gates[2:]], gates[:-1], [*gates, gates[-1]]):
         with pytest.raises(ValueError):
             _check_gate_references({**trace, "gateSequence": wrong}, refs, claim)
+
+
+@pytest.mark.parametrize(("gate_index", "field", "disposition"), [
+    (0, "normalization_outcome", "DENY"),
+    (3, "applicability_outcome", "UNVERIFIED"),
+])
+def test_refused_owner_disposition_cannot_route_to_pending_review(case, gate_index, field, disposition):
+    trace, refs, claim = case
+    trace["gateSequence"][gate_index]["outcome"] = disposition
+    with pytest.raises(ValueError):
+        _check_gate_references(trace, replace(refs, **{field: disposition}), claim)

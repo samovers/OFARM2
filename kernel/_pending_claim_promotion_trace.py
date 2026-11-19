@@ -34,40 +34,46 @@ class _GateReferences:
     sufficiency_outcome: str
 
 
+def _pending_gates(refs: _GateReferences, claim: CheckedClaimResult):
+    """The six owner bindings permitted for a newly staged pending claim."""
+    if refs.normalization_outcome != "NORMALIZED_DRAFT" or refs.applicability_outcome != "APPLICABLE":
+        raise ValueError("pending promotion requires successful normalization and applicability")
+    if refs.sufficiency_case is None:
+        if refs.sufficiency_outcome != "NOT_APPLICABLE":
+            raise ValueError("promotion trace differs from its sufficiency exemption")
+        sufficiency = (refs.sufficiency_basis,)
+    else:
+        if refs.sufficiency_outcome not in {"ALLOW", "REQUIRE_REVIEW"}:
+            raise ValueError("pending promotion requires a passing sufficiency disposition")
+        sufficiency = (refs.sufficiency_basis, refs.sufficiency_case)
+
+    gates = (
+        ("INGRESS_NORMALIZATION", refs.normalization_outcome, (refs.request_binding, refs.classification_proof)),
+        ("AUTHORITY", "ALLOW", (refs.authorization_result, refs.authorization_trace, refs.selected_rule_binding)),
+        ("VALIDATION", "PASS", (claim.validation_trace_ref,)),
+        ("PACK_PROFILE_APPLICABILITY", refs.applicability_outcome, (refs.applicability_decision, refs.profile_context)),
+        ("EVIDENCE_SUFFICIENCY", refs.sufficiency_outcome, sufficiency),
+        ("REVIEW_PROMOTION", "REQUIRE_REVIEW", (claim.assertion_id,)),
+    )
+    for _, _, bindings in gates:
+        if len(set(bindings)) != len(bindings):
+            raise ValueError("distinct promotion sources have the same reference")
+    return gates
+
+
 def _check_gate_references(trace: dict, refs: _GateReferences, claim: CheckedClaimResult) -> None:
     """Check where owner dispositions and references appear in the pending trace."""
     if trace.get("authorizationDecisionResultRef") != refs.authorization_result:
         raise ValueError("promotion trace names a different authorization result")
-
-    sufficiency_refs = {refs.sufficiency_basis}
-    if refs.sufficiency_case is None:
-        if refs.sufficiency_outcome != "NOT_APPLICABLE" or "evidenceSufficiencyCaseRef" in trace:
-            raise ValueError("promotion trace differs from its sufficiency exemption")
-    else:
-        if (
-            refs.sufficiency_outcome not in {"ALLOW", "REQUIRE_REVIEW"}
-            or trace.get("evidenceSufficiencyCaseRef") != refs.sufficiency_case
-        ):
-            raise ValueError("promotion trace names a different sufficiency case")
-        sufficiency_refs.add(refs.sufficiency_case)
-
-    normalization = {refs.request_binding, refs.classification_proof}
-    authority = {refs.authorization_result, refs.authorization_trace, refs.selected_rule_binding}
-    if len(normalization) != 2 or len(authority) != 3:
-        raise ValueError("distinct promotion sources have the same reference")
-    expected = (
-        ("INGRESS_NORMALIZATION", refs.normalization_outcome, normalization),
-        ("AUTHORITY", "ALLOW", authority),
-        ("VALIDATION", "PASS", {claim.validation_trace_ref}),
-        ("PACK_PROFILE_APPLICABILITY", refs.applicability_outcome, {refs.applicability_decision, refs.profile_context}),
-        ("EVIDENCE_SUFFICIENCY", refs.sufficiency_outcome, sufficiency_refs),
-        ("REVIEW_PROMOTION", "REQUIRE_REVIEW", {claim.assertion_id}),
-    )
-    for entry, (gate, outcome, bindings) in zip(trace["gateSequence"], expected, strict=True):
+    if refs.sufficiency_case is None and "evidenceSufficiencyCaseRef" in trace:
+        raise ValueError("promotion trace differs from its sufficiency exemption")
+    if trace.get("evidenceSufficiencyCaseRef") != refs.sufficiency_case:
+        raise ValueError("promotion trace names a different sufficiency case")
+    for entry, (gate, outcome, bindings) in zip(trace["gateSequence"], _pending_gates(refs, claim), strict=True):
         actual = entry.get("relatedArtifactRefs", [])
         if (
             entry["gate"] != gate or entry["outcome"] != outcome
-            or len(actual) != len(bindings) or set(actual) != bindings
+            or len(actual) != len(bindings) or set(actual) != set(bindings)
         ):
             raise ValueError(f"promotion trace differs from the evidence at {gate}")
 
