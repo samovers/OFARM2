@@ -343,6 +343,10 @@ def test_migration_heads_before_submit_refuse_an_early_name(monkeypatch):
 
     def check_early(conn, verify):
         assert verify(conn, SPEC) == []
+        assert conn.execute(
+            "SELECT oid::pg_catalog.regprocedure FROM pg_catalog.pg_proc "
+            "WHERE proname = 'resolve_submit_operation_claim_runtime_bundle_selection'"
+        ).fetchall() == []
         with conn.transaction(force_rollback=True):
             conn.execute(CREATE)
             conn.execute(f"REVOKE ALL ON FUNCTION {FUNCTION} FROM PUBLIC")
