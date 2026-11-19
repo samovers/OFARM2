@@ -8369,11 +8369,17 @@ def test_selection_storage_is_empty_closed_and_function_only(
                 (function,),
             ).fetchone() == (may_execute,)
             assert connection.execute(
-                "SELECT pg_catalog.has_table_privilege("
-                "CURRENT_USER, "
-                "'ofarm.tenant_command_runtime_bundle_selection', "
-                "'SELECT,INSERT,UPDATE,DELETE')"
-            ).fetchone() == (False,)
+                """
+                SELECT pg_catalog.has_table_privilege(
+                           CURRENT_USER, 'ofarm.tenant_command_runtime_bundle_selection',
+                           'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN'
+                       ),
+                       pg_catalog.has_any_column_privilege(
+                           CURRENT_USER, 'ofarm.tenant_command_runtime_bundle_selection',
+                           'SELECT, INSERT, UPDATE, REFERENCES'
+                       )
+                """
+            ).fetchone() == (False, False)
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
                 connection.execute(
                     "SELECT * FROM "

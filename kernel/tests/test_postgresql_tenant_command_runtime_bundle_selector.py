@@ -48,6 +48,7 @@ from kernel.tests.test_postgresql_tenant_migration import (
     _insert_batch,
     _install_test_bound_context,
     _publish_model_runtime_bundle,
+    _signed_capability_for_new_challenge,
     authority,  # noqa: F401 - imported fixture
     capability_key,  # noqa: F401 - imported fixture
     command_selection_bundle,  # noqa: F401 - imported fixture
@@ -98,6 +99,7 @@ def selected_bundle(request):
 def active_selection(
     target: TenantTarget,
     tenant_authority: TenantAuthority,
+    key_authority: CapabilityKeyAuthority,
     selected_bundle,
 ):
     with psycopg.connect(
@@ -105,7 +107,10 @@ def active_selection(
             "ofarm_command_runtime_bundle_selection_control_login"
         )
     ) as connection:
-        _install_test_bound_context(connection, tenant_authority)
+        capability = _signed_capability_for_new_challenge(
+            connection, authority=tenant_authority, key=key_authority,
+        )
+        connection.execute("SELECT ofarm.bind_tenant_capability(%s)", (capability,))
         return control.activate_commit_operation_claim_draft_runtime_bundle_selection(
             connection,
             selected_bundle,
@@ -126,11 +131,7 @@ def manager(
     value.close()
 
 
-def _tenant_state(
-    target: TenantTarget,
-    tenant_id: UUID,
-    audit_state: dict[str, object],
-) -> tuple[object, ...]:
+def _selection_ledger_state(target: TenantTarget, tenant_id: UUID) -> tuple:
     with psycopg.connect(target.target_admin_dsn) as connection:
         tenant = connection.execute(
             """
@@ -145,11 +146,21 @@ def _tenant_state(
             """,
             (tenant_id, tenant_id, tenant_id),
         ).fetchone()
+    assert tenant is not None
+    return tenant
+
+
+def _tenant_state(
+    target: TenantTarget,
+    tenant_id: UUID,
+    audit_state: dict[str, object],
+) -> tuple[object, ...]:
+    tenant = _selection_ledger_state(target, tenant_id)
     with psycopg.connect(str(audit_state["target_admin_dsn"])) as connection:
         audit = connection.execute(
             "SELECT count(*) FROM ofarm_security.operational_security_event"
         ).fetchone()
-    assert tenant is not None and audit is not None
+    assert audit is not None
     return (*tenant, audit[0])
 
 
@@ -284,21 +295,36 @@ def test_application_runtime_resolves_exact_bundle_once_without_a_write(
 def test_bound_runtime_roles_can_call_only_the_fixed_zero_argument_read(
     target: TenantTarget,
     tenant_authority: TenantAuthority,
-    active_selection,
+    other_tenant_authority: TenantAuthority,
+    key_authority: CapabilityKeyAuthority,
+    active_selection: control.TenantCommandRuntimeBundleSelection,
     role: str,
 ) -> None:
-    del active_selection
+    farms = (tenant_authority.tenant_id, other_tenant_authority.tenant_id)
+    before = [_selection_ledger_state(target, farm) for farm in farms]
     with psycopg.connect(target.role_dsn(role)) as connection:
-        _install_test_bound_context(connection, tenant_authority)
-        row = connection.execute(f"SELECT * FROM {_RESOLVER}").fetchone()
+        capability = _signed_capability_for_new_challenge(
+            connection, authority=tenant_authority, key=key_authority,
+        )
+        connection.execute("SELECT ofarm.bind_tenant_capability(%s)", (capability,))
+        assert connection.execute(
+            "SELECT session_user, current_user, ofarm.current_tenant_id()"
+        ).fetchone() == (role, role, tenant_authority.tenant_id)
+        (row,) = connection.execute(f"SELECT * FROM {_RESOLVER}").fetchall()
         resolved = _resolve_commit_operation_claim_draft_runtime_bundle(
             connection,
             tenant_authority.tenant_id,
         )
 
     assert row[0] == tenant_authority.tenant_id
+    assert row[7:10] == (
+        active_selection.selection_batch_id,
+        active_selection.selection_knowledge_position,
+        active_selection.runtime_bundle_digest,
+    )
     assert row[9] == resolved.runtime_bundle_digest
-    assert row[10] == resolved.selection_knowledge_cut
+    assert row[10] == resolved.selection_knowledge_cut == before[0][2]
+    assert [_selection_ledger_state(target, farm) for farm in farms] == before
     assert tuple(inspect.signature(
         type(resolved).__init__
     ).parameters) == ("self", "args", "kwargs")
