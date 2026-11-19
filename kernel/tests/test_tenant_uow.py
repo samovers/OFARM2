@@ -427,6 +427,7 @@ def test_sql_surface_is_absent_and_later_refusal_rolls_back(principal):
                 "batch",
                 "begin_batch",
                 "binding",
+                "promote_pending_claim",
                 "resolve_commit_operation_claim_draft_runtime_bundle",
                 "stage_operation_claim",
             }
@@ -517,6 +518,7 @@ def test_resolved_bundle_has_no_public_install_or_transfer_path(
             "batch",
             "begin_batch",
             "binding",
+            "promote_pending_claim",
             "resolve_commit_operation_claim_draft_runtime_bundle",
             "stage_operation_claim",
         }
@@ -527,6 +529,7 @@ def test_resolved_bundle_has_no_public_install_or_transfer_path(
         for public_member in (
             "batch",
             "binding",
+            "promote_pending_claim",
             "resolve_commit_operation_claim_draft_runtime_bundle",
             "stage_operation_claim",
         ):
