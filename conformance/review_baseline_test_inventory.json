@@ -11976,6 +11976,11 @@
       "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-missing-act-envelope]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-missing-proof]",
       "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
       "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
@@ -12011,7 +12016,17 @@
       "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-wrong-act-envelope]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-checker-unavailable]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-missing-act-envelope]",
       "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
       "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
     },
@@ -12047,6 +12062,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-validation-phase]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-wrong-act-envelope]",
       "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
       "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
     },
@@ -29381,8 +29401,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "82727d44beddd745159459d25b2f7aacb1b40cba87d144b352826302054bc322",
-  "entryCount": 5876,
+  "entriesSha256": "94ba6c28d91fac810715978145f2439f43306470f42eeda7649dd0fc738d4016",
+  "entryCount": 5880,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

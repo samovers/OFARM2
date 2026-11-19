@@ -29,12 +29,13 @@ def _original_intent(event_kind="ASSOCIATED_WORLD_EVENT", *, event_digest=None):
 
 
 def _case(*, tenant_id=UUID(int=17), request_id="request:submit", actor="party:submitter",
-          event_kind="ASSOCIATED_WORLD_EVENT", event_digest=None):
+          event_kind="ASSOCIATED_WORLD_EVENT", event_digest=None, event_ref=None, proof_ref="proof:earlier"):
     intent = _original_intent(event_kind, event_digest=event_digest)
     attempt = ClaimWriteAttempt(
         _command(tenant_id, "sha256:" + "1" * 64), UUID(int=42), "batch:one", 99, intent,
     )
-    event_ref = "event:field" if event_kind == "ASSOCIATED_WORLD_EVENT" else "event:submission"
+    if event_ref is None:
+        event_ref = "event:field" if event_kind == "ASSOCIATED_WORLD_EVENT" else "event:submission"
     scope = {"scopeType": "FIELD", "scopeRef": "field:first"}
     request = _json({
         "schemaVersion": "ofarm.commitingressrequest.v0.1", "requestId": request_id,
@@ -44,19 +45,21 @@ def _case(*, tenant_id=UUID(int=17), request_id="request:submit", actor="party:s
     })
     envelope = _json({
         "schemaVersion": "ofarm.semanticeventenvelope.v0.1", "semanticEventId": event_ref,
-        "primaryEventFamily": "OccurrenceEvent", "dominantSemanticConsequence": "A fictional occurrence was reported.",
+        "primaryEventFamily": "OccurrenceEvent",
+        "dominantSemanticConsequence": ("A fictional operation claim was submitted." if event_kind == "SUBMISSION_ACT"
+                                        else "A fictional occurrence was reported."),
         "anchorScopes": [scope], "subjectRefs": ["field:first"],
         "timeSemantics": {"eventTime": "2000-01-01T09:00:00Z", "recordTime": "2000-01-01T09:05:00Z"},
     })
-    context = _json({"productionMode": "PREEXISTING_PROOF", "expectedProofId": "proof:earlier"})
+    context = _json({"productionMode": "PREEXISTING_PROOF", "expectedProofId": proof_ref})
     profile = _json({"profileId": "profile:fixture"})
     # Simple ASCII strings in lexical key order give this fictional value known canonical bytes.
-    proof = b'{"productionMode":"PREEXISTING_PROOF","proofId":"proof:earlier"}'
+    proof = _json({"productionMode": "PREEXISTING_PROOF", "proofId": proof_ref})
     selection = _ProofSelection(
         tenant_id=attempt.command.tenant_id, producer_ref="issuer:event", request_sha256=sha256(request).hexdigest(),
         intent_sha256=sha256(intent).hexdigest(), event_kind=event_kind, event_ref=event_ref,
         event_revision=event_ref + ":r1" if event_digest is None else None, event_digest=event_digest,
-        envelope_sha256=sha256(envelope).hexdigest(), proof_ref="proof:earlier",
+        envelope_sha256=sha256(envelope).hexdigest(), proof_ref=proof_ref,
         profile_sha256=sha256(profile).hexdigest(), context_sha256=sha256(context).hexdigest(),
         contract_sha256=sha256(b"fictional contract selection").hexdigest(),
         proof_digest="sha256:" + sha256(proof).hexdigest(),
