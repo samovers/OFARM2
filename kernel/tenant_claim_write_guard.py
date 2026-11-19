@@ -31,6 +31,12 @@ class SelectedClaimCommand:
         ):
             raise ValueError("invalid claim command digest")
 
+    def matches_operation_claim_contract(self) -> bool:
+        return (self.action, self.contract_id, self.contract_version, self.result_schema) == (
+            "ASSERT_OPERATION_CLAIM", "ofarm.protectedeffect.assertionrecord.submit.v0.1",
+            "0.1", "ofarm.assertionrecord.v0.2",
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class ClaimWriteAttempt:
@@ -95,10 +101,7 @@ class ClaimWriteGuard:
             selected, binding_nonce, batch_id, full_xid,
         ) or (selected.tenant_id, selected.action, selected.bundle_digest) != (tenant_id, action, bundle_digest):
             raise RuntimeError("claim write differs from its transaction or selected command")
-        if (selected.action, selected.contract_id, selected.contract_version, selected.result_schema) != (
-            "ASSERT_OPERATION_CLAIM", "ofarm.protectedeffect.assertionrecord.submit.v0.1",
-            "0.1", "ofarm.assertionrecord.v0.2",
-        ):
+        if not selected.matches_operation_claim_contract():
             raise RuntimeError("selected command cannot stage an operation claim")
         require_writable()
         result = operation.stage_and_verify_operation_claim(attempt)

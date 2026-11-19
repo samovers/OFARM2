@@ -4,6 +4,7 @@ from __future__ import annotations
 import inspect
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import Mock
 from uuid import UUID, uuid4
 
 import psycopg
@@ -11,6 +12,7 @@ import pytest
 
 from deployment.postgresql import tenant_command_runtime_bundle_selection as control
 from deployment.postgresql.audit_contract import SECURITY_AUDIT_CONTRACT
+from kernel import tenant_uow
 from kernel.application_runtime import ApplicationRuntime
 from kernel.request_router_audit import RequestRouterAuditProducer
 from kernel.security_audit import CorrelationHmac
@@ -37,6 +39,7 @@ from kernel.tenant_uow import (
     TenantUnitOfWorkManager,
     create_tenant_connection_pool,
 )
+from kernel.tests._physical_outcome_support import physical_harness, request as batch_request
 from kernel.tests.postgresql_audit_support import audit_service_fixture  # noqa: F401
 from kernel.tests.postgresql_audit_support import role_dsn
 from kernel.tests.postgresql_tenant_support import TenantTarget
@@ -126,11 +129,7 @@ def manager(
     value.close()
 
 
-def _tenant_state(
-    target: TenantTarget,
-    tenant_id: UUID,
-    audit_state: dict[str, object],
-) -> tuple[object, ...]:
+def _selection_ledger_state(target: TenantTarget, tenant_id: UUID) -> tuple:
     with psycopg.connect(target.target_admin_dsn) as connection:
         tenant = connection.execute(
             """
@@ -145,12 +144,92 @@ def _tenant_state(
             """,
             (tenant_id, tenant_id, tenant_id),
         ).fetchone()
+    assert tenant is not None
+    return tenant
+
+
+def _tenant_state(
+    target: TenantTarget,
+    tenant_id: UUID,
+    audit_state: dict[str, object],
+) -> tuple[object, ...]:
+    tenant = _selection_ledger_state(target, tenant_id)
     with psycopg.connect(str(audit_state["target_admin_dsn"])) as connection:
         audit = connection.execute(
             "SELECT count(*) FROM ofarm_security.operational_security_event"
         ).fetchone()
-    assert tenant is not None and audit is not None
+    assert audit is not None
     return (*tenant, audit[0])
+
+
+@pytest.mark.parametrize("role", ("ofarm_app", "ofarm_worker"))
+@pytest.mark.parametrize("has_draft", (True, False), ids=("own-draft", "only-other-farm-has-draft"))
+def test_submit_without_a_farm_submit_choice_stops_before_allocation(
+    target, tenant_authority, other_tenant_authority, key_authority, active_selection,
+    selected_bundle, tmp_path, role, has_draft, monkeypatch,
+) -> None:
+    farms = (tenant_authority, other_tenant_authority)
+    before = [_selection_ledger_state(target, farm.tenant_id) for farm in farms]
+    assert before[0][0] == 1 and before[0][2] >= active_selection.selection_knowledge_position
+    assert before[1][0] == 0
+    farm = tenant_authority if has_draft else other_tenant_authority
+    allocate = Mock(side_effect=AssertionError("unexpected allocation"))
+    dispatch = Mock(side_effect=AssertionError("unexpected guard dispatch"))
+    monkeypatch.setattr(tenant_uow, "_allocate_governed_batch", allocate)
+    monkeypatch.setattr(tenant_uow.ClaimWriteGuard, "stage", dispatch)
+
+    with physical_harness(target, farm, key_authority, tmp_path, role) as harness:
+        with pytest.raises(TenantBoundaryError) as failed:
+            with harness.runtime.tenant_unit_of_work(harness.principal) as unit:
+                connection = harness.pool.acquired[-1]
+                assert connection.execute(
+                    "SELECT session_user, current_user, ofarm.current_tenant_id()"
+                ).fetchone() == (role, role, farm.tenant_id)
+                # Both farms own a seal for identical bytes. Only A selected Save draft.
+                assert connection.execute(
+                    "SELECT count(*) FROM ofarm.runtime_bundle "
+                    "WHERE tenant_id = ofarm.current_tenant_id() AND bundle_digest::text = %s",
+                    (selected_bundle.digest,),
+                ).fetchone() == (1,)
+                with pytest.raises(CommandRuntimeBundleSelectionRefused):
+                    unit.resolve_assert_operation_claim_runtime_bundle()
+                assert unit.batch is None
+                assert unit._selected_assert_operation_claim_runtime_bundle() is None
+                with pytest.raises(RuntimeError, match="rollback-only"):
+                    unit.begin_batch(batch_request(farm))
+                with pytest.raises(RuntimeError, match="rollback-only"):
+                    unit.stage_operation_claim(None)
+        assert failed.value.outcome is TenantBoundaryOutcome.TRANSACTION_FAILED
+    allocate.assert_not_called()
+    dispatch.assert_not_called()
+    assert before == [_selection_ledger_state(target, item.tenant_id) for item in farms]
+
+
+@pytest.mark.parametrize("role", ("ofarm_app", "ofarm_worker"))
+def test_submit_lookup_after_physical_batch_rolls_it_back_before_read(
+    target, tenant_authority, key_authority, active_selection, tmp_path, role, monkeypatch,
+) -> None:
+    before = _selection_ledger_state(target, tenant_authority.tenant_id)
+    assert before[0] == 1 and before[2] >= active_selection.selection_knowledge_position
+    read = Mock(side_effect=AssertionError("unexpected late selection read"))
+    allocate = Mock(wraps=tenant_uow._allocate_governed_batch)
+    monkeypatch.setattr(tenant_uow, "_resolve_assert_operation_claim_runtime_bundle", read)
+    monkeypatch.setattr(tenant_uow, "_allocate_governed_batch", allocate)
+    with physical_harness(target, tenant_authority, key_authority, tmp_path, role) as harness:
+        with pytest.raises(TenantBoundaryError) as failed:
+            with harness.runtime.tenant_unit_of_work(harness.principal) as unit:
+                batch = unit.begin_batch(batch_request(tenant_authority))
+                assert batch.tenant_id == tenant_authority.tenant_id
+                with pytest.raises(CommandRuntimeBundleSelectionRefused):
+                    unit.resolve_assert_operation_claim_runtime_bundle()
+                assert unit._selected_assert_operation_claim_runtime_bundle() is None
+                with pytest.raises(RuntimeError, match="rollback-only"):
+                    unit.begin_batch(batch_request(tenant_authority))
+        assert failed.value.outcome is TenantBoundaryOutcome.TRANSACTION_FAILED
+
+    read.assert_not_called()
+    allocate.assert_called_once()
+    assert _selection_ledger_state(target, tenant_authority.tenant_id) == before
 
 
 def _runtime(

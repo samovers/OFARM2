@@ -77,8 +77,11 @@ MODULE_BUDGETS = {
     "kernel/google_kms_signer.py": 120,
     "kernel/tenant_capability_issuer.py": 180,
     "kernel/key_control.py": 350,
-    "kernel/tenant_command_runtime_bundle_selector.py": 420,
     "kernel/tenant_claim_write_guard.py": 120,
+    "kernel/tenant_command_runtime_bundle_selector.py": 185,
+    "kernel/tenant_command_selection_state.py": 65,
+    "kernel/tenant_runtime_bundle_evidence.py": 280,
+    "kernel/tenant_submit_runtime_bundle_selector.py": 115,
     "kernel/tenant_uow.py": 600,
     "kernel/tenant_physical_outcome.py": 260,
     "kernel/api.py": 120,
@@ -168,11 +171,14 @@ GROUP_BUDGETS = {
         ),
     ),
     "tenant transaction": (
-        # Delivery #424 includes the claim guard and keeps the existing file caps.
-        1_388,
+        # Delivery #427 shares sealed evidence and one command-tagged unit cache.
+        1_600,
         (
             "kernel/tenant_claim_write_guard.py",
             "kernel/tenant_command_runtime_bundle_selector.py",
+            "kernel/tenant_command_selection_state.py",
+            "kernel/tenant_runtime_bundle_evidence.py",
+            "kernel/tenant_submit_runtime_bundle_selector.py",
             "kernel/tenant_uow.py",
             "kernel/tenant_physical_outcome.py",
         ),
@@ -447,6 +453,7 @@ TEST_GLOBS = (
     "kernel/tests/*tenant_claim_write_guard*.py",
     "kernel/tests/*physical_outcome*.py",
     "kernel/tests/*tenant_command_runtime_bundle_selector*.py",
+    "kernel/tests/*tenant_submit_runtime_bundle_selector*.py",
     "kernel/tests/*security_audit_client*.py",
     "kernel/tests/*authentication_audit*.py",
     "kernel/tests/*request_router_audit*.py",
@@ -461,6 +468,24 @@ TEST_GLOBS = (
 )
 DIRECT_IMPORT_BOUNDS = {
     "kernel/tenant_claim_write_guard.py": frozenset(),
+    "kernel/tenant_command_runtime_bundle_selector.py": frozenset(
+        {"kernel.runtime_bundle", "kernel.tenant_runtime_bundle_evidence"}
+    ),
+    "kernel/tenant_command_selection_state.py": frozenset(
+        {
+            "kernel.tenant_command_runtime_bundle_selector",
+            "kernel.tenant_submit_runtime_bundle_selector",
+        }
+    ),
+    "kernel/tenant_runtime_bundle_evidence.py": frozenset({"kernel.runtime_bundle"}),
+    "kernel/tenant_submit_runtime_bundle_selector.py": frozenset(
+        {
+            "kernel.runtime_bundle",
+            "kernel.tenant_claim_write_guard",
+            "kernel.tenant_command_runtime_bundle_selector",
+            "kernel.tenant_runtime_bundle_evidence",
+        }
+    ),
     "kernel/profile_selection_validation.py": frozenset(),
     "kernel/runtime_bundle.py": frozenset(
         {"kernel.profile_selection_validation"}
@@ -728,9 +753,9 @@ SECURITY_AUDIT_OBSERVER_ROOT_PROBE = (
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 _TENANT_UOW_MODULE = "kernel.tenant_uow"
-_TENANT_SELECTOR_MODULE = "kernel.tenant_command_runtime_bundle_selector"
-_TENANT_SELECTOR_RELATIVE_PATH = (
-    "kernel/tenant_command_runtime_bundle_selector.py"
+_TENANT_SELECTOR_MODULES = (
+    "kernel.tenant_command_runtime_bundle_selector",
+    "kernel.tenant_submit_runtime_bundle_selector",
 )
 _TENANT_UOW_PUBLIC_SURFACE = frozenset(
     {
@@ -739,6 +764,7 @@ _TENANT_UOW_PUBLIC_SURFACE = frozenset(
         "begin_batch",
         "stage_operation_claim",
         "resolve_commit_operation_claim_draft_runtime_bundle",
+        "resolve_assert_operation_claim_runtime_bundle",
     }
 )
 _TENANT_UOW_INIT_PARAMETERS = (
@@ -747,6 +773,7 @@ _TENANT_UOW_INIT_PARAMETERS = (
     "allocate_batch",
     "resolve_bundle",
     "claim_operation",
+    "resolve_assert_bundle",
 )
 _TENANT_UOW_SLOTS = frozenset(
     {
@@ -754,9 +781,7 @@ _TENANT_UOW_SLOTS = frozenset(
         "__active",
         "__allocate_batch",
         "__batch",
-        "__resolve_bundle",
-        "__selector_state",
-        "__selected_bundle",
+        "__selection",
         "__rollback_only",
         "__claim_guard",
     }
@@ -832,8 +857,10 @@ PRODUCTION_COMPOSITION_MODULES = frozenset(
         "kernel.signing_authority",
         "kernel.signing_receipt",
         "kernel.tenant_capability_issuer",
-        "kernel.tenant_command_runtime_bundle_selector",
-        "kernel.tenant_uow",
+        "kernel.tenant_command_selection_state",
+        "kernel.tenant_runtime_bundle_evidence",
+        *_TENANT_SELECTOR_MODULES,
+        _TENANT_UOW_MODULE,
     }
 )
 LEGACY_RESOURCE_NAMES = frozenset({"schema.sql"})
@@ -3150,6 +3177,42 @@ def _environment_reads(tree: ast.Module) -> list[int]:
     return visitor.lines
 
 
+def _literal_slots(owner: ast.ClassDef) -> frozenset[str] | None:
+    values = [
+        member.value
+        for member in owner.body
+        if isinstance(member, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "__slots__" for target in member.targets)
+    ]
+    if len(values) != 1 or not isinstance(values[0], (ast.Tuple, ast.List)):
+        return None
+    slots = values[0].elts
+    if not all(isinstance(slot, ast.Constant) and type(slot.value) is str for slot in slots):
+        return None
+    return frozenset(slot.value for slot in slots)
+
+
+def _is_cache_read(
+    owner: ast.ClassDef, name: str, projection: str, allowed_calls: set[str],
+) -> bool:
+    if not _has_fixed_method(owner, name, ("self",)):
+        return False
+    method = next(
+        node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == name
+    )
+    returns = {
+        ast.unparse(node.value) if node.value is not None else "None"
+        for node in ast.walk(method) if isinstance(node, ast.Return)
+    }
+    if projection not in returns or not returns <= {projection, "None"}:
+        return False
+    return all(
+        not (isinstance(node, ast.Call) and ast.unparse(node.func) not in allowed_calls)
+        and not (isinstance(node, (ast.Attribute, ast.Subscript)) and not isinstance(node.ctx, ast.Load))
+        for node in ast.walk(method)
+    )
+
+
 def _tenant_uow_class_violations(
     tree: ast.Module,
     expected_shape: tuple[frozenset[str], tuple[str, ...], frozenset[str]] = (
@@ -3173,6 +3236,13 @@ def _tenant_uow_class_violations(
         if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef))
         and not member.name.startswith("_")
     }
+    for member in unit.body:
+        if isinstance(member, (ast.Assign, ast.AnnAssign)):
+            targets = member.targets if isinstance(member, ast.Assign) else (member.target,)
+            public_surface.update(
+                target.id for target in targets
+                if isinstance(target, ast.Name) and not target.id.startswith("_")
+            )
     for node in ast.walk(unit):
         if (
             isinstance(node, ast.Attribute)
@@ -3214,19 +3284,20 @@ def _tenant_uow_class_violations(
         unit, "stage_operation_claim", ("self", "attempt"),
     ):
         violations.append((unit.lineno, "claim staging accepts a non-transaction argument"))
-    slots = None
-    for member in unit.body:
-        if not isinstance(member, ast.Assign) or not any(
-            isinstance(target, ast.Name) and target.id == "__slots__"
-            for target in member.targets
+    if "resolve_assert_operation_claim_runtime_bundle" in expected_public_surface:
+        for name in (
+            "resolve_commit_operation_claim_draft_runtime_bundle",
+            "resolve_assert_operation_claim_runtime_bundle",
         ):
-            continue
-        if isinstance(member.value, (ast.Tuple, ast.List)) and all(
-            isinstance(element, ast.Constant) and type(element.value) is str
-            for element in member.value.elts
+            if not _has_fixed_method(unit, name, ("self",)):
+                violations.append((unit.lineno, f"{name} must take only its owning unit"))
+        if not _is_cache_read(
+            unit, "_selected_assert_operation_claim_runtime_bundle",
+            "self.__selection.selected_assertion()",
+            {"self._owns_selection", "self.__selection.selected_assertion"},
         ):
-            slots = frozenset(element.value for element in member.value.elts)
-    if slots != expected_slots:
+            violations.append((unit.lineno, "assertion guard accessor must read only this unit's cache"))
+    if _literal_slots(unit) != expected_slots:
         violations.append((unit.lineno, "TenantUnitOfWork slots differ"))
     for node in ast.walk(unit):
         if (
@@ -3265,6 +3336,16 @@ def _check_tenant_uow_architecture(
         )
     ]
     failures.extend(_claim_manager_violations(trees[_TENANT_UOW_MODULE]))
+    selection_tree = trees.get("kernel.tenant_command_selection_state")
+    selection_classes = [
+        owner for owner in (selection_tree.body if selection_tree is not None else ())
+        if isinstance(owner, ast.ClassDef) and owner.name == "UnitCommandSelection"
+    ]
+    expected_slots = {"_draft", "_submit", "_selected"}
+    if len(selection_classes) != 1 or _literal_slots(selection_classes[0]) != expected_slots:
+        failures.append("tenant command selection must have two readers and one shared cache slot")
+    elif not _is_cache_read(selection_classes[0], "selected_assertion", "self._selected", {"type"}):
+        failures.append("tenant command selection projection must be a read of the existing cache")
     failures.extend(_claim_operation_violations(trees["kernel.tenant_claim_write_guard"]))
     fixture = "kernel.tests.test_postgresql_tenant_claim_write_guard"
     if fixture in execution_closures.production:
@@ -3374,6 +3455,20 @@ def _claim_manager_violations(tree: ast.Module) -> list[str]:
         and factory.body[0].value.value is None
     ):
         failures.append("kernel/tenant_uow.py: production claim operation must be unavailable")
+    run = methods.get("_run")
+    bound_unit = (
+        "unit = TenantUnitOfWork(binding, allocate, "
+        "lambda: _resolve_commit_operation_claim_draft_runtime_bundle(connection, binding.tenant_id), "
+        "self._bind_claim_operation(connection, binding), "
+        "lambda: _resolve_assert_operation_claim_runtime_bundle(connection, binding.tenant_id))"
+    )
+    unit_constructions = [
+        node for node in ast.walk(managers[0])
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        and node.func.id == "TenantUnitOfWork"
+    ]
+    if len(unit_constructions) != 1 or run is None or _statement_line(run, bound_unit) is None:
+        failures.append("kernel/tenant_uow.py: unit must bind both fixed selectors to its connection and tenant")
     return failures
 
 
@@ -3382,60 +3477,42 @@ def _check_tenant_runtime_bundle_selector_architecture(
     execution_closures: _ImportExecutionClosuresV1,
 ) -> list[str]:
     failures = []
-    unit = snapshot.modules_by_relative_path.get(_TENANT_SELECTOR_RELATIVE_PATH)
-    if unit is None or unit.module_name != _TENANT_SELECTOR_MODULE:
-        return [f"{_TENANT_SELECTOR_RELATIVE_PATH}: selector module differs"]
-    path = execution_closures.production.get(_TENANT_SELECTOR_MODULE)
-    if path is None:
-        failures.append(
-            f"{_TENANT_SELECTOR_RELATIVE_PATH}: selector is not production reachable"
-        )
-    else:
-        targets = tuple(transition.target for transition in path)
-        required = (
-            "kernel.application_runtime",
-            _TENANT_UOW_MODULE,
-            _TENANT_SELECTOR_MODULE,
-        )
-        if targets[-len(required):] != required:
-            failures.append(
-                f"{_TENANT_SELECTOR_RELATIVE_PATH}: production path differs"
-            )
-    if _TENANT_SELECTOR_MODULE in execution_closures.legacy:
-        failures.append(
-            f"{_TENANT_SELECTOR_RELATIVE_PATH}: selector is legacy reachable"
-        )
-    selector_imports = {
-        edge.target for edge in snapshot.import_graph[_TENANT_SELECTOR_MODULE]
-    }
-    forbidden = {
-        target
-        for target in selector_imports
-        if target in _TENANT_SELECTOR_FORBIDDEN_IMPORTS
-        or target.startswith("kernel.legacy_m1.")
-        or target.startswith("kernel.profiles.")
-    }
-    if forbidden:
-        failures.append(
-            f"{_TENANT_SELECTOR_RELATIVE_PATH}: forbidden imports "
-            f"{sorted(forbidden)!r}"
-        )
-    if "kernel.runtime_bundle" not in selector_imports:
-        failures.append(
-            f"{_TENANT_SELECTOR_RELATIVE_PATH}: pure RuntimeBundle model import differs"
-        )
     uow_imports = {
         edge.target for edge in snapshot.import_graph[_TENANT_UOW_MODULE]
     }
-    if _TENANT_SELECTOR_MODULE not in uow_imports:
-        failures.append(
-            "kernel/tenant_uow.py: fixed selector import is absent"
-        )
     api_imports = {
         edge.target for edge in snapshot.import_graph["kernel.api"]
     }
-    if _TENANT_SELECTOR_MODULE in api_imports:
-        failures.append("kernel/api.py: selector is directly route reachable")
+    for module in _TENANT_SELECTOR_MODULES:
+        relative = module.replace(".", "/") + ".py"
+        unit = snapshot.modules_by_relative_path.get(relative)
+        if unit is None or unit.module_name != module:
+            failures.append(f"{relative}: selector module differs")
+            continue
+        path = execution_closures.production.get(module)
+        if path is None:
+            failures.append(f"{relative}: selector is not production reachable")
+        else:
+            required = ("kernel.application_runtime", _TENANT_UOW_MODULE, module)
+            targets = tuple(transition.target for transition in path)
+            if targets[-len(required):] != required:
+                failures.append(f"{relative}: production path differs")
+        if module in execution_closures.legacy:
+            failures.append(f"{relative}: selector is legacy reachable")
+        imports = {edge.target for edge in snapshot.import_graph[module]}
+        forbidden = {
+            target for target in imports
+            if target in _TENANT_SELECTOR_FORBIDDEN_IMPORTS
+            or target.startswith(("kernel.legacy_m1.", "kernel.profiles.", "kernel.tests."))
+        }
+        if forbidden:
+            failures.append(f"{relative}: forbidden imports {sorted(forbidden)!r}")
+        if "kernel.runtime_bundle" not in imports:
+            failures.append(f"{relative}: pure RuntimeBundle model import differs")
+        if module not in uow_imports:
+            failures.append(f"kernel/tenant_uow.py: fixed selector import is absent: {module}")
+        if module in api_imports:
+            failures.append(f"kernel/api.py: selector is directly route reachable: {module}")
     return failures
 
 
