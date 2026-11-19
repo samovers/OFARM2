@@ -2345,18 +2345,15 @@ _VALID_TENANT_UOW_SOURCE = """\
 class TenantUnitOfWork:
     __slots__ = (
         "__binding", "__active", "__allocate_batch", "__batch",
-        "__resolve_bundle", "__selector_state", "__selected_bundle",
-        "__rollback_only", "__claim_guard",
+        "__selection", "__rollback_only", "__claim_guard",
     )
 
-    def __init__(self, binding, allocate_batch, resolve_bundle, claim_operation=None):
+    def __init__(self, binding, allocate_batch, resolve_bundle, claim_operation=None, resolve_assert_bundle=None):
         self.__binding = binding
         self.__active = False
         self.__allocate_batch = allocate_batch
         self.__batch = None
-        self.__resolve_bundle = resolve_bundle
-        self.__selector_state = None
-        self.__selected_bundle = None
+        self.__selection = None
         self.__rollback_only = False
         self.__claim_guard = claim_operation
 
@@ -2373,7 +2370,13 @@ class TenantUnitOfWork:
         return self.__batch
 
     def resolve_commit_operation_claim_draft_runtime_bundle(self):
-        return self.__resolve_bundle()
+        pass
+
+    def resolve_assert_operation_claim_runtime_bundle(self):
+        pass
+
+    def _selected_assert_operation_claim_runtime_bundle(self):
+        return self.__selection.selected_assertion()
 
     def stage_operation_claim(self, attempt):
         pass
@@ -2385,12 +2388,28 @@ class TenantUnitOfWorkManager:
     def unit_of_work(self, principal): pass
     def _bind_claim_operation(self, connection, binding):
         return None
+    def _run(self, connection, principal, capture):
+        unit = TenantUnitOfWork(
+            binding, allocate,
+            lambda: _resolve_commit_operation_claim_draft_runtime_bundle(connection, binding.tenant_id),
+            self._bind_claim_operation(connection, binding),
+            lambda: _resolve_assert_operation_claim_runtime_bundle(connection, binding.tenant_id),
+        )
 """
 
 _VALID_CLAIM_PORT = """\
 class BoundClaimOperation:
     def selected_claim_command(self): ...
     def stage_and_verify_operation_claim(self, attempt): ...
+"""
+
+
+_VALID_UNIT_SELECTION = """\
+class UnitCommandSelection:
+    __slots__ = ("_draft", "_submit", "_selected")
+
+    def selected_assertion(self):
+        return self._selected
 """
 
 
@@ -2416,6 +2435,7 @@ def test_tenant_policy_scans_reached_kernel_initializers(
         "kernel/__init__.py": "",
         "kernel/api.py": api_source,
         "kernel/tenant_uow.py": _VALID_TENANT_UOW_SOURCE,
+        "kernel/tenant_command_selection_state.py": _VALID_UNIT_SELECTION,
         "kernel/tenant_claim_write_guard.py": _VALID_CLAIM_PORT,
         **extra_sources,
     }
@@ -2439,6 +2459,7 @@ def test_production_paths_reject_claim_fixture_import(tmp_path, entry):
         tmp_path,
         {
             "kernel/tenant_uow.py": _VALID_TENANT_UOW_SOURCE,
+            "kernel/tenant_command_selection_state.py": _VALID_UNIT_SELECTION,
             "kernel/tenant_claim_write_guard.py": _VALID_CLAIM_PORT,
             "kernel/tests/test_postgresql_tenant_claim_write_guard.py": "class MarkerManager: pass\n",
             entry: "from kernel.tests.test_postgresql_tenant_claim_write_guard import MarkerManager\n",
@@ -2485,11 +2506,98 @@ def test_guard_rejects_caller_supplied_writer_at_dispatch():
     assert any("non-transaction argument" in error for _line, error in violations)
 
 
+@pytest.mark.parametrize(
+    "name",
+    (
+        "resolve_commit_operation_claim_draft_runtime_bundle",
+        "resolve_assert_operation_claim_runtime_bundle",
+    ),
+)
+def test_tenant_selection_methods_accept_only_the_unit(name):
+    tree = ast.parse(_VALID_TENANT_UOW_SOURCE.replace(f"{name}(self)", f"{name}(self, tenant)"))
+    violations = rewrite_architecture_check._tenant_uow_class_violations(
+        tree, rewrite_architecture_check._TENANT_UOW_SHAPE
+    )
+    assert any(f"{name} must take only its owning unit" in error for _line, error in violations)
+
+
+def test_tenant_unit_cannot_expose_a_generic_selection_alias():
+    tree = ast.parse(_VALID_TENANT_UOW_SOURCE.replace(
+        "    def stage_operation_claim",
+        "    select_command = resolve_assert_operation_claim_runtime_bundle\n"
+        "    def stage_operation_claim",
+    ))
+    violations = rewrite_architecture_check._tenant_uow_class_violations(
+        tree, rewrite_architecture_check._TENANT_UOW_SHAPE
+    )
+    assert any("select_command" in error for _line, error in violations)
+
+
+@pytest.mark.parametrize(
+    "source,reason",
+    (
+        (_VALID_UNIT_SELECTION.replace('"_selected")', '"_selected", "_draft_cache")'), "one shared cache slot"),
+        (_VALID_UNIT_SELECTION.replace("return self._selected", "return self._submit()"), "existing cache"),
+    ),
+)
+def test_tenant_selection_rejects_duplicate_cache_and_projection_lookup(tmp_path, source, reason):
+    root = _snapshot_tree(tmp_path, {
+        "kernel/tenant_uow.py": _VALID_TENANT_UOW_SOURCE,
+        "kernel/tenant_claim_write_guard.py": _VALID_CLAIM_PORT,
+        "kernel/tenant_command_selection_state.py": source,
+    })
+    failures = rewrite_architecture_check._check_tenant_uow_architecture(*_execution_state(root))
+    assert any(reason in failure for failure in failures)
+
+
+@pytest.mark.parametrize(
+    "projection",
+    ("self.resolve_assert_operation_claim_runtime_bundle()", "self.__selection"),
+)
+def test_tenant_guard_accessor_reads_only_the_cached_projection(projection):
+    tree = ast.parse(_VALID_TENANT_UOW_SOURCE.replace(
+        "return self.__selection.selected_assertion()",
+        f"return {projection}",
+    ))
+    violations = rewrite_architecture_check._tenant_uow_class_violations(
+        tree, rewrite_architecture_check._TENANT_UOW_SHAPE
+    )
+    assert any("assertion guard accessor" in error for _line, error in violations)
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    (
+        "_resolve_commit_operation_claim_draft_runtime_bundle(connection, binding.tenant_id)",
+        "_resolve_assert_operation_claim_runtime_bundle(connection, request.tenant_id)",
+        "request.resolve()",
+    ),
+)
+def test_tenant_manager_requires_fixed_submit_reader_on_its_own_lease(replacement):
+    tree = ast.parse(_VALID_TENANT_UOW_SOURCE.replace(
+        "_resolve_assert_operation_claim_runtime_bundle(connection, binding.tenant_id)",
+        replacement,
+    ))
+    failures = rewrite_architecture_check._claim_manager_violations(tree)
+    assert any("bind both fixed selectors" in failure for failure in failures)
+
+
+def test_tenant_manager_cannot_construct_a_second_unit_with_different_readers():
+    tree = ast.parse(_VALID_TENANT_UOW_SOURCE.replace(
+        "        unit = TenantUnitOfWork(",
+        "        other = TenantUnitOfWork(binding, allocate, draft_reader, writer, submit_reader)\n"
+        "        unit = TenantUnitOfWork(",
+    ))
+    failures = rewrite_architecture_check._claim_manager_violations(tree)
+    assert any("bind both fixed selectors" in failure for failure in failures)
+
+
 def test_guard_rejects_second_production_claim_factory(tmp_path):
     root = _snapshot_tree(
         tmp_path,
         {
             "kernel/tenant_uow.py": _VALID_TENANT_UOW_SOURCE,
+            "kernel/tenant_command_selection_state.py": _VALID_UNIT_SELECTION,
             "kernel/tenant_claim_write_guard.py": _VALID_CLAIM_PORT,
             "kernel/application_runtime.py": (
                 "from .tenant_uow import TenantUnitOfWorkManager\n"
@@ -2519,6 +2627,7 @@ def _tenant_selector_execution_state(
     tmp_path,
     selector_extra="",
     legacy_runtime_extra="",
+    submit_extra="",
 ):
     root = _snapshot_tree(
         tmp_path,
@@ -2531,10 +2640,15 @@ def _tenant_selector_execution_state(
             "kernel/tenant_uow.py": (
                 "from .tenant_command_runtime_bundle_selector import "
                 "TrustedCommandRuntimeBundle\n"
+                "from .tenant_submit_runtime_bundle_selector import "
+                "TrustedAssertOperationClaimRuntimeBundle\n"
                 + _VALID_TENANT_UOW_SOURCE
             ),
             "kernel/tenant_command_runtime_bundle_selector.py": (
                 "from .runtime_bundle import RuntimeBundle\n" + selector_extra
+            ),
+            "kernel/tenant_submit_runtime_bundle_selector.py": (
+                "from .runtime_bundle import RuntimeBundle\n" + submit_extra
             ),
             "kernel/runtime_bundle.py": "class RuntimeBundle: pass\n",
             "kernel/legacy_m1/__init__.py": "",
@@ -2583,6 +2697,20 @@ def test_tenant_selector_refuses_the_selection_control_import(tmp_path):
             "['deployment.postgresql.tenant_command_runtime_bundle_selection']"
         ]
     )
+
+
+def test_submit_selector_refuses_the_selection_control_import(tmp_path):
+    snapshot, _trees, closures = _tenant_selector_execution_state(
+        tmp_path,
+        submit_extra="from deployment.postgresql import tenant_command_runtime_bundle_selection\n",
+    )
+    failures = rewrite_architecture_check._check_tenant_runtime_bundle_selector_architecture(
+        snapshot, closures
+    )
+    assert failures == [
+        "kernel/tenant_submit_runtime_bundle_selector.py: forbidden imports "
+        "['deployment.postgresql.tenant_command_runtime_bundle_selection']"
+    ]
 
 
 def test_tenant_selector_refuses_legacy_reachability(tmp_path):

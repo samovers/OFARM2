@@ -11,6 +11,7 @@ import psycopg
 import pytest
 
 import kernel.tenant_command_runtime_bundle_selector as selector
+import kernel.tenant_runtime_bundle_evidence as evidence
 from kernel.runtime_bundle import (
     Canonicalization,
     ContentPlacement,
@@ -53,8 +54,9 @@ class _Cursor:
 
 
 class _Connection:
-    def __init__(self, bundle: RuntimeBundle) -> None:
+    def __init__(self, bundle: RuntimeBundle, *, selection_sql=selector._SELECTION_SQL) -> None:
         self.tenant_id = uuid4()
+        self.selection_sql = selection_sql
         self.calls = []
         self.failure = None
         self.failure_at = None
@@ -114,13 +116,13 @@ class _Connection:
             self.failure_at is None or len(self.calls) == self.failure_at + 1
         ):
             raise self.failure
-        if statement == selector._SELECTION_SQL:
+        if statement == self.selection_sql:
             return _Cursor(self.selection_rows)
-        if statement == selector._BUNDLE_SQL:
+        if statement == evidence._BUNDLE_SQL:
             return _Cursor(self.bundle_rows)
-        if statement == selector._MEMBERSHIP_SQL:
+        if statement == evidence._MEMBERSHIP_SQL:
             return _Cursor(self.membership_rows)
-        if statement == selector._CONTENT_SQL:
+        if statement == evidence._CONTENT_SQL:
             return _Cursor(self.content_rows)
         raise AssertionError("selector issued an unknown statement")
 
@@ -284,7 +286,7 @@ def test_empty_duplicate_oversized_and_malformed_membership_refuse() -> None:
                 changed[2] = "UNKNOWN_ROLE"
             connection.membership_rows[0] = tuple(changed)
         _assert_opaque_refusal(connection)
-        assert not any(call[0] == selector._CONTENT_SQL for call in connection.calls)
+        assert not any(call[0] == evidence._CONTENT_SQL for call in connection.calls)
 
 
 @pytest.mark.parametrize("mutation", ("missing", "wrong-bytes", "two-sources", "order"))

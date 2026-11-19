@@ -27,9 +27,13 @@ from .tenant_command_runtime_bundle_selector import (
     CommandRuntimeBundleSelectionRefused, TrustedCommandRuntimeBundle,
     _resolve_commit_operation_claim_draft_runtime_bundle,
 )
+from .tenant_command_selection_state import CommandBundle, UnitCommandSelection
 from .tenant_physical_outcome import (
     PhysicalObservation, _BoundedTransaction, check_tenant_connection,
     observe_physical_outcome,
+)
+from .tenant_submit_runtime_bundle_selector import (
+    TrustedAssertOperationClaimRuntimeBundle, _resolve_assert_operation_claim_runtime_bundle,
 )
 
 _ASCII_ID = re.compile(r"[A-Za-z0-9._:-]{1,255}")
@@ -207,19 +211,8 @@ class GovernedWriteBatch:
 
 
 _BatchAllocator = Callable[[GovernedBatchRequest], GovernedWriteBatch]
-_BundleResolver = Callable[[], TrustedCommandRuntimeBundle]
-
-class _SelectorState(Enum):
-    UNRESOLVED = "UNRESOLVED"
-    RESOLVING = "RESOLVING"
-    RESOLVED = "RESOLVED"
-    REFUSED_ROLLBACK_ONLY = "REFUSED_ROLLBACK_ONLY"
-    CLOSED = "CLOSED"
 
 def _closed_batch_allocator(_request: GovernedBatchRequest) -> GovernedWriteBatch:
-    raise RuntimeError("tenant UnitOfWork is closed")
-
-def _closed_bundle_resolver() -> TrustedCommandRuntimeBundle:
     raise RuntimeError("tenant UnitOfWork is closed")
 
 def _allocate_governed_batch(
@@ -277,22 +270,22 @@ def _allocate_governed_batch(
 class TenantUnitOfWork:
     __slots__ = (
         "__binding", "__active", "__allocate_batch", "__batch",
-        "__resolve_bundle", "__selector_state", "__selected_bundle",
-        "__rollback_only", "__claim_guard",
+        "__selection", "__rollback_only", "__claim_guard",
     )
 
     def __init__(
         self, binding: TenantBinding, allocate_batch: _BatchAllocator,
-        resolve_bundle: _BundleResolver,
+        resolve_bundle: Callable[[], TrustedCommandRuntimeBundle],
         claim_operation: BoundClaimOperation | None = None,
+        resolve_assert_bundle: Callable[[], TrustedAssertOperationClaimRuntimeBundle] | None = None,
     ) -> None:
         self.__binding = binding
         self.__active = True
         self.__allocate_batch = allocate_batch
         self.__batch: GovernedWriteBatch | None = None
-        self.__resolve_bundle = resolve_bundle
-        self.__selector_state = _SelectorState.UNRESOLVED
-        self.__selected_bundle: TrustedCommandRuntimeBundle | None = None
+        self.__selection: UnitCommandSelection | None = UnitCommandSelection(
+            resolve_bundle, resolve_assert_bundle
+        )
         self.__rollback_only = False
         self.__claim_guard = ClaimWriteGuard(claim_operation)
 
@@ -316,13 +309,12 @@ class TenantUnitOfWork:
         self.__active = False
         self.__claim_guard.close()
         self.__allocate_batch = _closed_batch_allocator
-        self.__resolve_bundle = _closed_bundle_resolver
-        self.__selector_state = _SelectorState.CLOSED
+        self.__selection = None
         return self.__rollback_only
 
     def _refuse_selection(self) -> None:
-        self.__selector_state = _SelectorState.REFUSED_ROLLBACK_ONLY
         self.__rollback_only = True
+        self.__selection = None
 
     def begin_batch(self, request: GovernedBatchRequest) -> GovernedWriteBatch:
         self._require_active()
@@ -353,37 +345,42 @@ class TenantUnitOfWork:
             self.__rollback_only = True
             raise
 
-    def resolve_commit_operation_claim_draft_runtime_bundle(
-        self,
-    ) -> TrustedCommandRuntimeBundle:
-        self._require_active()
-        if self.__batch is not None or self.__rollback_only:
-            self._refuse_selection()
-            raise CommandRuntimeBundleSelectionRefused from None
-        if self.__selector_state is _SelectorState.RESOLVED:
-            if self.__selected_bundle is None:  # pragma: no cover
-                self._refuse_selection()
-                raise RuntimeError("selector cache differs")
-            return self.__selected_bundle
-        if self.__selector_state is not _SelectorState.UNRESOLVED:
-            self._refuse_selection()
-            raise CommandRuntimeBundleSelectionRefused from None
-        self.__selector_state = _SelectorState.RESOLVING
+    def _owns_selection(self) -> bool:
         try:
-            result = self.__resolve_bundle()
-            if self.__selector_state is not _SelectorState.RESOLVING:
+            self.__claim_guard.require_owner()
+        except RuntimeError:
+            return False
+        return True
+
+    def _require_selectable(self) -> None:
+        if not self.__active or self.__rollback_only or self.__batch is not None or not self._owns_selection():
+            raise CommandRuntimeBundleSelectionRefused from None
+
+    def _resolve_command(self, expected: type[CommandBundle]) -> CommandBundle:
+        self._require_active()
+        if not self._owns_selection():
+            raise CommandRuntimeBundleSelectionRefused from None
+        try:
+            if self.__selection is None:
                 raise CommandRuntimeBundleSelectionRefused
-            if type(result) is not TrustedCommandRuntimeBundle:
-                raise RuntimeError("selector result differs")
+            return self.__selection.resolve(expected, self._require_selectable)
         except CommandRuntimeBundleSelectionRefused:
             self._refuse_selection()
             raise CommandRuntimeBundleSelectionRefused from None
         except BaseException:
             self._refuse_selection()
             raise
-        self.__selected_bundle = result
-        self.__selector_state = _SelectorState.RESOLVED
-        return result
+
+    def resolve_commit_operation_claim_draft_runtime_bundle(self) -> TrustedCommandRuntimeBundle:
+        return self._resolve_command(TrustedCommandRuntimeBundle)
+
+    def resolve_assert_operation_claim_runtime_bundle(self) -> TrustedAssertOperationClaimRuntimeBundle:
+        return self._resolve_command(TrustedAssertOperationClaimRuntimeBundle)
+
+    def _selected_assert_operation_claim_runtime_bundle(self) -> TrustedAssertOperationClaimRuntimeBundle | None:
+        if not self.__active or self.__rollback_only or self.__selection is None or not self._owns_selection():
+            return None
+        return self.__selection.selected_assertion()
 
 def _idle(connection: Connection) -> bool:
     try:
@@ -568,6 +565,7 @@ class TenantUnitOfWorkManager:
                 binding.tenant_id,
             ),
             self._bind_claim_operation(connection, binding),
+            lambda: _resolve_assert_operation_claim_runtime_bundle(connection, binding.tenant_id),
         )
         try:
             yield unit

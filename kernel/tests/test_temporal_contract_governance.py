@@ -2571,6 +2571,7 @@ def test_complete_check_uses_one_public_snapshot_and_one_initializer_ast(
     assert ast_calls == [
         temporal.TRUSTED_COMMAND_SELECTOR_MODULE,
         temporal.SELECTION_STORAGE_ADAPTER_MODULE,
+        temporal.SUBMIT_SELECTOR_MODULE,
         temporal.POSTGRESQL_INITIALIZER_MODULE,
     ]
 
@@ -4458,14 +4459,22 @@ def test_trusted_command_selector_refuses_binding_pin_drift(
         )
 
 
+@pytest.mark.parametrize(
+    "module",
+    (
+        temporal.TRUSTED_COMMAND_SELECTOR_MODULE,
+        temporal.SUBMIT_SELECTOR_MODULE,
+        "kernel.tenant_runtime_bundle_evidence",
+    ),
+)
 def test_trusted_command_selector_refuses_control_or_profile_import(
-    trusted_selector_evidence,
+    trusted_selector_evidence, module,
 ):
     _authority, snapshot, _selection, _retention = trusted_selector_evidence
     graph = dict(snapshot.import_graph)
-    edge_type = type(graph[temporal.TRUSTED_COMMAND_SELECTOR_MODULE][0])
-    graph[temporal.TRUSTED_COMMAND_SELECTOR_MODULE] = (
-        *graph[temporal.TRUSTED_COMMAND_SELECTOR_MODULE],
+    edge_type = type(graph[module][0])
+    graph[module] = (
+        *graph[module],
         edge_type(
             "deployment.postgresql.tenant_command_runtime_bundle_selection",
             1,
@@ -4485,14 +4494,14 @@ def test_trusted_command_selector_refuses_control_or_profile_import(
 
 
 @pytest.mark.parametrize("closure", ("production", "legacy"))
+@pytest.mark.parametrize("module", (temporal.TRUSTED_COMMAND_SELECTOR_MODULE, temporal.SUBMIT_SELECTOR_MODULE))
 def test_trusted_command_selector_refuses_reachability_drift(
-    trusted_selector_evidence,
-    closure,
+    trusted_selector_evidence, module, closure,
 ):
     _authority, snapshot, _selection, _retention = trusted_selector_evidence
     if closure == "production":
         reachability = dict(snapshot.production_reachability)
-        reachability.pop(temporal.TRUSTED_COMMAND_SELECTOR_MODULE)
+        reachability.pop(module)
         changed = _selection_storage_snapshot_view(
             snapshot,
             production_reachability=reachability,
@@ -4500,10 +4509,7 @@ def test_trusted_command_selector_refuses_reachability_drift(
         message = "production path differs"
     else:
         reachability = dict(snapshot.legacy_reachability)
-        reachability[temporal.TRUSTED_COMMAND_SELECTOR_MODULE] = (
-            "kernel.legacy_m1.api",
-            temporal.TRUSTED_COMMAND_SELECTOR_MODULE,
-        )
+        reachability[module] = ("kernel.legacy_m1.api", module)
         changed = _selection_storage_snapshot_view(
             snapshot,
             legacy_reachability=reachability,
@@ -4517,20 +4523,19 @@ def test_trusted_command_selector_refuses_reachability_drift(
         )
 
 
+@pytest.mark.parametrize(
+    "function", (temporal.TRUSTED_COMMAND_SELECTOR_FIXED_FUNCTION, temporal.SUBMIT_SELECTOR_FIXED_FUNCTION)
+)
 def test_trusted_command_selector_refuses_a_second_function_marker_owner(
-    trusted_selector_evidence,
+    trusted_selector_evidence, function,
 ):
     _authority, snapshot, _selection, _retention = trusted_selector_evidence
     modules = dict(snapshot.modules_by_relative_path)
-    original = modules[temporal.TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH]
     modules["kernel/second_selector.py"] = SimpleNamespace(
         relative_path="kernel/second_selector.py",
         module_name="kernel.second_selector",
-        source_text=(
-            temporal.TRUSTED_COMMAND_SELECTOR_FIXED_FUNCTION + "()"
-        ),
+        source_text=function + "()",
     )
-    assert original.source_text
     changed = _selection_storage_snapshot_view(
         snapshot,
         modules_by_relative_path=modules,

@@ -372,6 +372,9 @@ TRUSTED_COMMAND_SELECTOR_MIGRATION_CLASSIFIED = (
 TRUSTED_COMMAND_SELECTOR_FIXED_FUNCTION = (
     "ofarm.resolve_commit_operation_claim_draft_runtime_bundle_selection"
 )
+SUBMIT_SELECTOR_MODULE = "kernel.tenant_submit_runtime_bundle_selector"
+SUBMIT_SELECTOR_FIXED_FUNCTION = "ofarm.resolve_submit_operation_claim_runtime_bundle_selection"
+_BUNDLE_EVIDENCE_MODULE = "kernel.tenant_runtime_bundle_evidence"
 _GCRC_REQUIRED_MARKERS = (
     "ofarm.runtime-bundle-global-content-retention-admission.issue176.v0.1",
     "ofarm.retain_runtime_content",
@@ -3828,12 +3831,35 @@ def _validate_trusted_selector_module(
         raise TemporalCandidateError(
             "trusted command selector export surface differs"
         )
+    try:
+        submit_tree = snapshot.ast_for(SUBMIT_SELECTOR_MODULE)
+    except (KeyError, architecture.PythonSourceSnapshotRefusal) as exc:
+        raise TemporalCandidateError("Submit selector AST custody failed") from exc
+    for module, tree, resolver_name, sql_function in (
+        (TRUSTED_COMMAND_SELECTOR_MODULE, selector_tree,
+         "_resolve_commit_operation_claim_draft_runtime_bundle", TRUSTED_COMMAND_SELECTOR_FIXED_FUNCTION),
+        (SUBMIT_SELECTOR_MODULE, submit_tree,
+         "_resolve_assert_operation_claim_runtime_bundle", SUBMIT_SELECTOR_FIXED_FUNCTION),
+    ):
+        _validate_fixed_selector(snapshot, module, tree, resolver_name, sql_function)
+    # The sealed-evidence reader replaces the draft selector's former inline
+    # helpers. Its only repository dependency remains the pure bundle model.
+    for module in (TRUSTED_COMMAND_SELECTOR_MODULE, SUBMIT_SELECTOR_MODULE, _BUNDLE_EVIDENCE_MODULE):
+        source = module.replace(".", "/") + ".py"
+        edges = snapshot.import_graph.get(module)
+        if edges is None or {edge.target for edge in edges} != architecture.DIRECT_IMPORT_BOUNDS[source]:
+            raise TemporalCandidateError(f"trusted command selector import boundary differs: {source}")
+
+
+def _validate_fixed_selector(
+    snapshot: architecture.PythonSourceSnapshotV1,
+    module: str, tree: ast.Module, resolver_name: str, sql_function: str,
+) -> None:
+    source = module.replace(".", "/") + ".py"
     resolvers = [
         node
-        for node in selector_tree.body
-        if isinstance(node, ast.FunctionDef)
-        and node.name
-        == "_resolve_commit_operation_claim_draft_runtime_bundle"
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == resolver_name
     ]
     if len(resolvers) != 1:
         raise TemporalCandidateError(
@@ -3852,48 +3878,40 @@ def _validate_trusted_selector_module(
         raise TemporalCandidateError(
             "trusted command selector resolver signature differs"
         )
-    imports = {
-        edge.target
-        for edge in snapshot.import_graph[TRUSTED_COMMAND_SELECTOR_MODULE]
-    }
-    if imports != {"kernel.runtime_bundle"}:
-        raise TemporalCandidateError(
-            "trusted command selector import boundary differs"
-        )
     uow_imports = {
         edge.target for edge in snapshot.import_graph["kernel.tenant_uow"]
     }
-    if TRUSTED_COMMAND_SELECTOR_MODULE not in uow_imports:
+    if module not in uow_imports:
         raise TemporalCandidateError(
             "tenant UnitOfWork does not import the fixed selector"
         )
-    path = snapshot.production_reachability.get(
-        TRUSTED_COMMAND_SELECTOR_MODULE
-    )
+    path = snapshot.production_reachability.get(module)
     if (
         type(path) is not tuple
         or path[-3:]
         != (
             "kernel.application_runtime",
             "kernel.tenant_uow",
-            TRUSTED_COMMAND_SELECTOR_MODULE,
+            module,
         )
     ):
         raise TemporalCandidateError(
             "trusted command selector production path differs"
         )
-    if TRUSTED_COMMAND_SELECTOR_MODULE in snapshot.legacy_reachability:
+    if module in snapshot.legacy_reachability:
         raise TemporalCandidateError(
             "trusted command selector entered the legacy import closure"
         )
-    function_marker = TRUSTED_COMMAND_SELECTOR_FIXED_FUNCTION + "()"
+    function_marker = sql_function + "()"
+    if _top_level_literal(tree, "_SELECTION_SQL") != "SELECT * FROM " + function_marker:
+        raise TemporalCandidateError("trusted command selector fixed SQL differs")
     owners = [
         unit.relative_path
         for unit in snapshot.modules_by_relative_path.values()
         if function_marker in unit.source_text
         and not _is_python_marker_exemption(unit.relative_path)
     ]
-    if owners != [TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH]:
+    if owners != [source]:
         raise TemporalCandidateError(
             "trusted command selector function marker ownership differs"
         )
@@ -4279,6 +4297,8 @@ def _validate_selection_storage_active_authorities() -> None:
         TRUSTED_COMMAND_SELECTOR_FIXED_FUNCTION,
         TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH,
         TRUSTED_COMMAND_SELECTOR_MODULE,
+        SUBMIT_SELECTOR_FIXED_FUNCTION,
+        SUBMIT_SELECTOR_MODULE,
     )
     for path in SELECTION_STORAGE_ACTIVE_NON_PYTHON_PATHS:
         try:

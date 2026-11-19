@@ -12356,6 +12356,36 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py::test_submit_lookup_after_physical_batch_rolls_it_back_before_read[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_command_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py::test_submit_lookup_after_physical_batch_rolls_it_back_before_read[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_command_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py::test_submit_without_a_farm_submit_choice_stops_before_allocation[only-other-farm-has-draft-ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_command_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py::test_submit_without_a_farm_submit_choice_stops_before_allocation[only-other-farm-has-draft-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_command_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py::test_submit_without_a_farm_submit_choice_stops_before_allocation[own-draft-ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_command_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py::test_submit_without_a_farm_submit_choice_stops_before_allocation[own-draft-ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_command_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py::test_unbound_and_non_runtime_sessions_cannot_execute_the_resolver",
       "sourceModule": "kernel.tests.test_postgresql_tenant_command_runtime_bundle_selector",
       "sourcePath": "kernel/tests/test_postgresql_tenant_command_runtime_bundle_selector.py"
@@ -17866,6 +17896,11 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_submit_selector_refuses_the_selection_control_import",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_temporary_snapshot_compatibility_names_are_removed[LEGACY_IMPORT_ROOTS]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -17891,12 +17926,62 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_guard_accessor_reads_only_the_cached_projection[self.__selection]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_guard_accessor_reads_only_the_cached_projection[self.resolve_assert_operation_claim_runtime_bundle()]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_manager_cannot_construct_a_second_unit_with_different_readers",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_manager_requires_fixed_submit_reader_on_its_own_lease[_resolve_assert_operation_claim_runtime_bundle(connection, request.tenant_id)]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_manager_requires_fixed_submit_reader_on_its_own_lease[_resolve_commit_operation_claim_draft_runtime_bundle(connection, binding.tenant_id)]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_manager_requires_fixed_submit_reader_on_its_own_lease[request.resolve()]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_policy_scans_reached_kernel_initializers[exact-kernel]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_policy_scans_reached_kernel_initializers[nested-kernel]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_selection_methods_accept_only_the_unit[resolve_assert_operation_claim_runtime_bundle]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_selection_methods_accept_only_the_unit[resolve_commit_operation_claim_draft_runtime_bundle]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_selection_rejects_duplicate_cache_and_projection_lookup[class UnitCommandSelection:/n    __slots__ = (\"_draft\", \"_submit\", \"_selected\")/n/n    def selected_assertion(self):/n        return self._submit()/n-existing cache]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_selection_rejects_duplicate_cache_and_projection_lookup[class UnitCommandSelection:/n    __slots__ = (\"_draft\", \"_submit\", \"_selected\", \"_draft_cache\")/n/n    def selected_assertion(self):/n        return self._selected/n-one shared cache slot]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -17912,6 +17997,11 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_selector_refuses_the_selection_control_import",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_unit_cannot_expose_a_generic_selection_alias",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -26986,7 +27076,12 @@
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_trusted_command_selector_refuses_a_second_function_marker_owner",
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_trusted_command_selector_refuses_a_second_function_marker_owner[ofarm.resolve_commit_operation_claim_draft_runtime_bundle_selection]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_trusted_command_selector_refuses_a_second_function_marker_owner[ofarm.resolve_submit_operation_claim_runtime_bundle_selection]",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
@@ -27026,17 +27121,37 @@
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_trusted_command_selector_refuses_control_or_profile_import",
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_trusted_command_selector_refuses_control_or_profile_import[kernel.tenant_command_runtime_bundle_selector]",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_trusted_command_selector_refuses_reachability_drift[legacy]",
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_trusted_command_selector_refuses_control_or_profile_import[kernel.tenant_runtime_bundle_evidence]",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_trusted_command_selector_refuses_reachability_drift[production]",
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_trusted_command_selector_refuses_control_or_profile_import[kernel.tenant_submit_runtime_bundle_selector]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_trusted_command_selector_refuses_reachability_drift[kernel.tenant_command_runtime_bundle_selector-legacy]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_trusted_command_selector_refuses_reachability_drift[kernel.tenant_command_runtime_bundle_selector-production]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_trusted_command_selector_refuses_reachability_drift[kernel.tenant_submit_runtime_bundle_selector-legacy]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_trusted_command_selector_refuses_reachability_drift[kernel.tenant_submit_runtime_bundle_selector-production]",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
@@ -27454,6 +27569,161 @@
       "nodeid": "kernel/tests/test_tenant_command_runtime_bundle_selector.py::test_tenant_reference_uses_the_exact_database_ascii_id_boundary",
       "sourceModule": "kernel.tests.test_tenant_command_runtime_bundle_selector",
       "sourcePath": "kernel/tests/test_tenant_command_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_altering_extra_member_under_selected_digest_refuses",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_each_mismatched_choice_field_refuses[0-foreign]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_each_mismatched_choice_field_refuses[1-]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_each_mismatched_choice_field_refuses[10-0]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_each_mismatched_choice_field_refuses[2-draft-selection]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_each_mismatched_choice_field_refuses[3-sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_each_mismatched_choice_field_refuses[4-COMMIT_OPERATION_CLAIM_DRAFT]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_each_mismatched_choice_field_refuses[5-draft-binding]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_each_mismatched_choice_field_refuses[6-sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_each_mismatched_choice_field_refuses[7-bad-batch]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_each_mismatched_choice_field_refuses[8-8]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_each_mismatched_choice_field_refuses[9-sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_incompatible_rule_refuses_before_selection[action-RECEIVE_READ_DATA]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_incompatible_rule_refuses_before_selection[body_profile-different-body]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_incompatible_rule_refuses_before_selection[contract_digest-malformed]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_incompatible_rule_refuses_before_selection[contract_id-different-contract]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_incompatible_rule_refuses_before_selection[contract_version-0.2]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_incompatible_rule_refuses_before_selection[intent_profile-different-intent]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_incompatible_rule_refuses_before_selection[result_schema-different-result]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_incompatible_rule_refuses_before_selection[result_schema_digest-malformed]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_independently_issued_command_must_match_selection[0-COMMIT_OPERATION_CLAIM_DRAFT]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_independently_issued_command_must_match_selection[1-different-binding]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_independently_issued_command_must_match_selection[2-0.1]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_independently_issued_command_must_match_selection[3-sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_inert_member_is_hashed_but_cannot_change_selected_command",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_missing_reader_or_execute_permission_is_opaque[InsufficientPrivilege]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_missing_reader_or_execute_permission_is_opaque[UndefinedFunction]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_one_committed_row_required[0]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_one_committed_row_required[2]",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_release_unavailable_even_with_an_internally_consistent_record",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py::test_valid_digest_for_same_bytes_under_another_identity_refuses",
+      "sourceModule": "kernel.tests.test_tenant_submit_runtime_bundle_selector",
+      "sourcePath": "kernel/tests/test_tenant_submit_runtime_bundle_selector.py"
     },
     {
       "nodeid": "kernel/tests/test_tenant_transaction_failure.py::test_tf03_tf04_caught_allocator_failure_is_terminal[CancelledError-cached]",
@@ -28289,10 +28559,65 @@
       "nodeid": "kernel/tests/test_tenant_uow_observation.py::test_pre_yield_cancellation_discards_transaction_before_pool_return[task-cancelled-mint]",
       "sourceModule": "kernel.tests.test_tenant_uow_observation",
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_submit_selection.py::test_another_failure_hides_a_previously_verified_choice",
+      "sourceModule": "kernel.tests.test_tenant_uow_submit_selection",
+      "sourcePath": "kernel/tests/test_tenant_uow_submit_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_submit_selection.py::test_submit_after_batch_refuses_without_reader[False]",
+      "sourceModule": "kernel.tests.test_tenant_uow_submit_selection",
+      "sourcePath": "kernel/tests/test_tenant_uow_submit_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_submit_selection.py::test_submit_after_batch_refuses_without_reader[True]",
+      "sourceModule": "kernel.tests.test_tenant_uow_submit_selection",
+      "sourcePath": "kernel/tests/test_tenant_uow_submit_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_submit_selection.py::test_submit_cached_only_on_this_lease_even_when_backend_reused",
+      "sourceModule": "kernel.tests.test_tenant_uow_submit_selection",
+      "sourcePath": "kernel/tests/test_tenant_uow_submit_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_submit_selection.py::test_submit_ignores_foreign_thread_without_affecting_owning_unit",
+      "sourceModule": "kernel.tests.test_tenant_uow_submit_selection",
+      "sourcePath": "kernel/tests/test_tenant_uow_submit_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_submit_selection.py::test_submit_publishes_only_after_rechecking_unit_state[allocate]",
+      "sourceModule": "kernel.tests.test_tenant_uow_submit_selection",
+      "sourcePath": "kernel/tests/test_tenant_uow_submit_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_submit_selection.py::test_submit_publishes_only_after_rechecking_unit_state[latch]",
+      "sourceModule": "kernel.tests.test_tenant_uow_submit_selection",
+      "sourcePath": "kernel/tests/test_tenant_uow_submit_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_submit_selection.py::test_submit_publishes_only_after_rechecking_unit_state[submit-again]",
+      "sourceModule": "kernel.tests.test_tenant_uow_submit_selection",
+      "sourcePath": "kernel/tests/test_tenant_uow_submit_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_submit_selection.py::test_submit_publishes_only_after_rechecking_unit_state[try-draft]",
+      "sourceModule": "kernel.tests.test_tenant_uow_submit_selection",
+      "sourcePath": "kernel/tests/test_tenant_uow_submit_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_submit_selection.py::test_switching_commands_refuses_without_second_read[False]",
+      "sourceModule": "kernel.tests.test_tenant_uow_submit_selection",
+      "sourcePath": "kernel/tests/test_tenant_uow_submit_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow_submit_selection.py::test_switching_commands_refuses_without_second_read[True]",
+      "sourceModule": "kernel.tests.test_tenant_uow_submit_selection",
+      "sourcePath": "kernel/tests/test_tenant_uow_submit_selection.py"
     }
   ],
-  "entriesSha256": "186586f3132e68a8b8209f370bb7269d69a89d6880748b552cf6cc1d5ba4fc41",
-  "entryCount": 5658,
+  "entriesSha256": "868ccd9daedcb0cc2091eef249e5908eaa07227f6c2c35707a2f7d3c2189f2e1",
+  "entryCount": 5723,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
