@@ -31,9 +31,10 @@ from .tenant_physical_outcome import (
     PhysicalObservation, _BoundedTransaction, check_tenant_connection,
     observe_physical_outcome,
 )
+from .tenant_promotion_guard import (
+    SHA256_ID, TENANT_LOCAL_REF, BoundPromotionOperation, PromotionGuard, PromotionInputs,
+)
 
-_ASCII_ID = re.compile(r"[A-Za-z0-9._:-]{1,255}")
-_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 _KID = re.compile(r"[A-Za-z0-9_-]{43}")
 _POOL_MIN_SIZE = 1
 _POOL_MAX_SIZE = 8
@@ -88,7 +89,7 @@ def _uuid(value: object, label: str, *, version_four: bool = False) -> UUID:
 
 
 def _digest(value: object, label: str) -> str:
-    if type(value) is not str or _DIGEST.fullmatch(value) is None:
+    if type(value) is not str or SHA256_ID.fullmatch(value) is None:
         raise ValueError(f"{label} is invalid")
     return value
 
@@ -186,7 +187,7 @@ class GovernedBatchRequest:
     def __post_init__(self) -> None:
         values = (self.batch_id, self.operation, self.request_id)
         if any(
-            type(value) is not str or _ASCII_ID.fullmatch(value) is None
+            type(value) is not str or TENANT_LOCAL_REF.fullmatch(value) is None
             for value in values
         ):
             raise ValueError("governed batch identifier is invalid")
@@ -278,13 +279,14 @@ class TenantUnitOfWork:
     __slots__ = (
         "__binding", "__active", "__allocate_batch", "__batch",
         "__resolve_bundle", "__selector_state", "__selected_bundle",
-        "__rollback_only", "__claim_guard",
+        "__rollback_only", "__claim_guard", "__promotion_guard",
     )
 
     def __init__(
         self, binding: TenantBinding, allocate_batch: _BatchAllocator,
         resolve_bundle: _BundleResolver,
         claim_operation: BoundClaimOperation | None = None,
+        promotion_operation: BoundPromotionOperation | None = None,
     ) -> None:
         self.__binding = binding
         self.__active = True
@@ -295,6 +297,7 @@ class TenantUnitOfWork:
         self.__selected_bundle: TrustedCommandRuntimeBundle | None = None
         self.__rollback_only = False
         self.__claim_guard = ClaimWriteGuard(claim_operation)
+        self.__promotion_guard = PromotionGuard(promotion_operation)
 
     @property
     def binding(self) -> TenantBinding:
@@ -313,7 +316,10 @@ class TenantUnitOfWork:
             raise RuntimeError("tenant UnitOfWork is rollback-only")
 
     def _finish(self) -> bool:
+        if self.__promotion_guard.outstanding:
+            self.__rollback_only = True
         self.__active = False
+        self.__promotion_guard.close()
         self.__claim_guard.close()
         self.__allocate_batch = _closed_batch_allocator
         self.__resolve_bundle = _closed_bundle_resolver
@@ -344,10 +350,24 @@ class TenantUnitOfWork:
             self._require_writable()
             if batch is None:
                 raise RuntimeError("claim write requires an active governed batch")
-            return self.__claim_guard.stage(
+            claim = self.__claim_guard.stage(
                 attempt, self.__binding.tenant_id, self.__binding.capability_nonce,
                 batch.batch_id, batch.full_xid, batch.operation, batch.runtime_bundle_digest,
                 self._require_writable,
+            )
+            self.__promotion_guard.retain(claim, attempt.command)
+            return claim
+        except BaseException:
+            self.__rollback_only = True
+            raise
+
+    def promote_pending_claim(self, inputs: PromotionInputs) -> tuple[str, str]:
+        self._require_active()
+        self.__claim_guard.require_owner()
+        try:
+            self._require_writable()
+            return self.__promotion_guard.promote(
+                inputs, self.__binding, self.__batch, self._require_writable,
             )
         except BaseException:
             self.__rollback_only = True
@@ -448,6 +468,11 @@ class TenantUnitOfWorkManager:
     def _bind_claim_operation(
         self, connection: Connection, binding: TenantBinding,
     ) -> BoundClaimOperation | None:
+        return None
+
+    def _bind_promotion_operation(
+        self, connection: Connection, binding: TenantBinding,
+    ) -> BoundPromotionOperation | None:
         return None
 
     def initialize(self) -> None:
@@ -568,6 +593,7 @@ class TenantUnitOfWorkManager:
                 binding.tenant_id,
             ),
             self._bind_claim_operation(connection, binding),
+            self._bind_promotion_operation(connection, binding),
         )
         try:
             yield unit

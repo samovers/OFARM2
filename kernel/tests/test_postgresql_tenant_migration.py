@@ -1769,9 +1769,9 @@ def test_authoritative_source_ledger_contract_and_apply_noop(
         "write-lock-early-call-refused",
     )
     assert tenant_target.v7_report.applied_versions == (7,)
-    assert tenant_target.first_report.applied_versions == (8, 9, 10, 11)
+    assert tenant_target.first_report.applied_versions == (8, 9, 10, 11, 12)
     assert tenant_target.noop_report.applied_versions == ()
-    assert tenant_target.noop_report.final_version == 11
+    assert tenant_target.noop_report.final_version == 12
 
 
 def test_tenant_knowledge_position_catalog_is_structurally_compatible(
@@ -7558,7 +7558,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:b3e64cd17e288f5753793230cc45da7dd316c374114c9475bc735ce03c1aff51"
+                "sha256:c114062966a5e6a27366cb254ace0e4ba79ef35e57732302341a4fa991b586cc"
             )
         finally:
             migrator.rollback()
@@ -8247,12 +8247,12 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:b3e64cd17e288f5753793230cc45da7dd316c374114c9475bc735ce03c1aff51"
+        "sha256:c114062966a5e6a27366cb254ace0e4ba79ef35e57732302341a4fa991b586cc"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
-    assert row[7] == 11
-    assert row[9] == 11
+    assert row[7] == 12
+    assert row[9] == 12
     assert row[10] is False
 
 

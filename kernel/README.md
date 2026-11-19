@@ -106,6 +106,15 @@ raises `CommandRuntimeBundleSelectionRefused` even when a selection was cached.
 Pre-invocation type and duplicate-call guards preserve an already valid batch
 when caught, because those guards do not enter the allocator.
 
+When a fixed promotion producer is bound, the unit retains the checked result
+of `stage_operation_claim` before returning it. A successful
+`promote_pending_claim` call clears that obligation after the producer reads
+back the trace and link and the unit checks the returned trace ID and digest.
+If the caller skips promotion or catches an error before calling it, the
+outstanding claim makes normal exit roll back. A caught failure within the
+call also makes the unit rollback-only. The production manager leaves the
+producer unbound. [Promotion guard contract](../docs/rfcs/OFARM2_Tenant_Promotion_Call_Guard_v0_1.md)
+
 On normal body exit, the manager closes the facade and refuses COMMIT when
 rollback-only is set or PostgreSQL reports INERROR. It performs existing
 rollback/discard cleanup and reports `TRANSACTION_FAILED`. This also applies

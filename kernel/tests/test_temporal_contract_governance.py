@@ -355,6 +355,9 @@ def _selection_storage_catalog_source(*, classified: bool) -> bytes:
             "current security-audit catalog source is not exact V3 or V4"
         )
     v11_digest = temporal.CHALLENGE_OBSERVATION_CATALOG_DIGEST.encode("utf-8")
+    v12_digest = temporal.ASSERTION_PROMOTION_CATALOG_DIGEST.encode("utf-8")
+    if current.count(v12_digest) == 1:
+        current = current.replace(v12_digest, v11_digest)
     if current.count(v11_digest) == 1:
         current = current.replace(
             v11_digest, _SELECTION_STORAGE_V10_CATALOG_DIGEST.encode("utf-8")
@@ -406,7 +409,7 @@ def _selection_storage_catalog_source(*, classified: bool) -> bytes:
         v7_source = current.replace(v10_digest, v7_digest)
     else:
         raise AssertionError(
-            "current tenant catalog source is not exact V7 through V11"
+            "current tenant catalog source is not exact V7 through V12"
         )
 
     if (
@@ -474,7 +477,7 @@ def _selection_storage_v7_authority(
     current = temporal.load_tenant_migration_authority_snapshot()
     migrations = current.migration_set.migrations
     if (
-        len(migrations) not in (7, 8, 9, 10, 11)
+        len(migrations) not in (7, 8, 9, 10, 11, 12)
         or tuple(migration.version for migration in migrations[:7])
         != tuple(range(1, 8))
         or current.migration_set.prefix_digest(7)
@@ -681,7 +684,7 @@ def _selection_storage_expected_current_state() -> str:
     if len(migrations) == 7 and not adapter_present:
         return temporal.SELECTION_STORAGE_CONFORMANT_ABSENT
     if (
-        len(migrations) in (8, 9, 10, 11)
+        len(migrations) in (8, 9, 10, 11, 12)
         and migrations[7].version == 8
         and migrations[7].filename
         == temporal.SELECTION_STORAGE_MIGRATION_FILENAME
@@ -712,7 +715,7 @@ def _selection_storage_expected_current_state() -> str:
             ):
                 return temporal.SELECTION_STORAGE_CONFORMANT_CLASSIFIED
     raise AssertionError(
-        "current selection-storage pair is not exact V7 through V11"
+        "current selection-storage pair is not exact V7 through V12"
     )
 
 
@@ -4019,17 +4022,10 @@ def test_selection_storage_refuses_invalid_migration_state(
     migrations = current.migration_set.migrations
     if state == "too-short":
         changed = migrations[:6]
-        message = "not exact V7 through V11"
+        message = "not exact V7 through V12"
     elif state == "too-long":
-        changed = (
-            *migrations,
-            migrations[-1],
-            migrations[-1],
-            migrations[-1],
-            migrations[-1],
-            migrations[-1],
-        )
-        message = "not exact V7 through V11"
+        changed = migrations + (migrations[-1],) * (13 - len(migrations))
+        message = "not exact V7 through V12"
     else:
         changed = (
             _changed_migration(migrations[0], version=2),
@@ -4315,8 +4311,8 @@ def test_challenge_observation_rejects_changed_v11_tail(
     change,
 ):
     current = trusted_selector_evidence[0]
-    migrations = list(current.migration_set.migrations)
-    options = {}
+    migrations = list(current.migration_set.migrations[:11])
+    options = {"digest": temporal.CHALLENGE_OBSERVATION_V11_DIGEST}
     if change == "filename":
         migrations[10] = _changed_migration(
             migrations[10], filename="0011_substitute.sql"
@@ -4338,6 +4334,30 @@ def test_challenge_observation_rejects_changed_v11_tail(
         temporal.TemporalCandidateError,
         match="challenge-observation version-11 migration differs",
     ):
+        temporal._validate_selection_storage_migration_prefix(changed)
+
+
+@pytest.mark.parametrize("change", ("filename", "source", "prefix", "release"))
+def test_assertion_promotion_rejects_changed_v12_tail(trusted_selector_evidence, change):
+    current = trusted_selector_evidence[0]
+    migrations = list(current.migration_set.migrations)
+    options = {}
+    if change == "filename":
+        migrations[11] = _changed_migration(migrations[11], filename="0012_substitute.sql")
+    elif change == "source":
+        source = migrations[11].source_bytes + b"\n-- substituted tail\n"
+        migrations[11] = _changed_migration(
+            migrations[11], source_bytes=source, byte_length=len(source),
+            source_sha256="sha256:" + hashlib.sha256(source).hexdigest(),
+        )
+    elif change == "prefix":
+        options["prefix_overrides"] = {12: "sha256:" + "0" * 64}
+    else:
+        options["digest"] = "sha256:" + "0" * 64
+    changed = _changed_global_content_retention_authority(
+        current, migrations=tuple(migrations), **options,
+    )
+    with pytest.raises(temporal.TemporalCandidateError, match="version-12 migration differs"):
         temporal._validate_selection_storage_migration_prefix(changed)
 
 

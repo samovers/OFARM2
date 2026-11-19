@@ -2346,10 +2346,10 @@ class TenantUnitOfWork:
     __slots__ = (
         "__binding", "__active", "__allocate_batch", "__batch",
         "__resolve_bundle", "__selector_state", "__selected_bundle",
-        "__rollback_only", "__claim_guard",
+        "__rollback_only", "__claim_guard", "__promotion_guard",
     )
 
-    def __init__(self, binding, allocate_batch, resolve_bundle, claim_operation=None):
+    def __init__(self, binding, allocate_batch, resolve_bundle, claim_operation=None, promotion_operation=None):
         self.__binding = binding
         self.__active = False
         self.__allocate_batch = allocate_batch
@@ -2359,6 +2359,7 @@ class TenantUnitOfWork:
         self.__selected_bundle = None
         self.__rollback_only = False
         self.__claim_guard = claim_operation
+        self.__promotion_guard = promotion_operation
 
     @property
     def binding(self):
@@ -2378,6 +2379,9 @@ class TenantUnitOfWork:
     def stage_operation_claim(self, attempt):
         pass
 
+    def promote_pending_claim(self, inputs):
+        pass
+
 class TenantUnitOfWorkManager:
     def __init__(self, pool, minter): pass
     def initialize(self): pass
@@ -2385,6 +2389,10 @@ class TenantUnitOfWorkManager:
     def unit_of_work(self, principal): pass
     def _bind_claim_operation(self, connection, binding):
         return None
+    def _bind_promotion_operation(self, connection, binding):
+        return None
+    def _run(self, connection, binding):
+        return TenantUnitOfWork(binding, allocate, resolve, claim, self._bind_promotion_operation(connection, binding))
 """
 
 _VALID_CLAIM_PORT = """\
@@ -2392,6 +2400,17 @@ class BoundClaimOperation:
     def selected_claim_command(self): ...
     def stage_and_verify_operation_claim(self, attempt): ...
 """
+
+_VALID_PROMOTION_PORT = """\
+class BoundPromotionOperation:
+    def stage_and_verify_promotion(self, inputs, claim, batch): ...
+"""
+
+_TENANT_GUARD_SOURCES = {
+    "kernel/tenant_uow.py": _VALID_TENANT_UOW_SOURCE,
+    "kernel/tenant_claim_write_guard.py": _VALID_CLAIM_PORT,
+    "kernel/tenant_promotion_guard.py": _VALID_PROMOTION_PORT,
+}
 
 
 @pytest.mark.parametrize(
@@ -2415,8 +2434,7 @@ def test_tenant_policy_scans_reached_kernel_initializers(
     sources = {
         "kernel/__init__.py": "",
         "kernel/api.py": api_source,
-        "kernel/tenant_uow.py": _VALID_TENANT_UOW_SOURCE,
-        "kernel/tenant_claim_write_guard.py": _VALID_CLAIM_PORT,
+        **_TENANT_GUARD_SOURCES,
         **extra_sources,
     }
     sources[initializer] = "probe = holder._TenantUnitOfWork__connection\n"
@@ -2433,24 +2451,32 @@ def test_tenant_policy_scans_reached_kernel_initializers(
     ]
 
 
-@pytest.mark.parametrize("entry", ("kernel/__init__.py", "kernel/application_runtime.py"))
-def test_production_paths_reject_claim_fixture_import(tmp_path, entry):
+def _assert_fixture_unreachable(tmp_path, entry, fixture):
     root = _snapshot_tree(
         tmp_path,
         {
-            "kernel/tenant_uow.py": _VALID_TENANT_UOW_SOURCE,
-            "kernel/tenant_claim_write_guard.py": _VALID_CLAIM_PORT,
-            "kernel/tests/test_postgresql_tenant_claim_write_guard.py": "class MarkerManager: pass\n",
-            entry: "from kernel.tests.test_postgresql_tenant_claim_write_guard import MarkerManager\n",
+            **_TENANT_GUARD_SOURCES,
+            f"kernel/tests/{fixture}.py": "class MarkerManager: pass\n",
+            entry: f"from kernel.tests.{fixture} import MarkerManager\n",
         },
     )
     snapshot, trees, closures = _execution_state(root)
     failures = rewrite_architecture_check._check_tenant_uow_architecture(snapshot, trees, closures)
     assert any(
         "production tenant path reaches test code" in line
-        and "kernel.tests.test_postgresql_tenant_claim_write_guard" in line
+        and f"kernel.tests.{fixture}" in line
         for line in failures
     )
+
+
+@pytest.mark.parametrize("entry", ("kernel/__init__.py", "kernel/application_runtime.py"))
+def test_production_paths_reject_claim_fixture_import(tmp_path, entry):
+    _assert_fixture_unreachable(tmp_path, entry, "test_postgresql_tenant_claim_write_guard")
+
+
+@pytest.mark.parametrize("entry", ("kernel/__init__.py", "kernel/application_runtime.py"))
+def test_production_paths_reject_promotion_fixture_import(tmp_path, entry):
+    _assert_fixture_unreachable(tmp_path, entry, "test_postgresql_tenant_promotion_guard")
 
 
 @pytest.mark.parametrize(
@@ -2463,43 +2489,76 @@ def test_production_paths_reject_claim_fixture_import(tmp_path, entry):
             "accepts an override",
         ),
         ("def close(self): pass", "def set_writer(self, writer): pass", "public surface differs"),
+        (
+            "_bind_promotion_operation(self, connection, binding)",
+            "_bind_promotion_operation(self, connection, binding, *, factory)",
+            "accepts an override",
+        ),
         ("return None", "return self.writer", "must be unavailable"),
+        ("self._bind_promotion_operation(connection, binding)", "self.producer", "use the bound promotion factory"),
+        (
+            "_bind_promotion_operation(self, connection, binding):\n        return None",
+            "_bind_promotion_operation(self, connection, binding):\n        return self.producer",
+            "production _bind_promotion_operation must be unavailable",
+        ),
     ),
 )
 def test_guard_rejects_manager_writer_overrides(before, after, reason):
     tree = ast.parse(_VALID_TENANT_UOW_SOURCE.replace(before, after))
-    assert any(reason in error for error in rewrite_architecture_check._claim_manager_violations(tree))
+    assert any(reason in error for error in rewrite_architecture_check._tenant_manager_violations(tree))
 
 
-def test_guard_rejects_caller_supplied_writer_at_dispatch():
-    tree = ast.parse(
-        _VALID_TENANT_UOW_SOURCE.replace(
-            "stage_operation_claim(self, attempt)",
-            "stage_operation_claim(self, attempt, writer=None)",
-        )
-    )
+def _assert_rejected_guard_facade(before, after, reason):
+    tree = ast.parse(_VALID_TENANT_UOW_SOURCE.replace(before, after))
     violations = rewrite_architecture_check._tenant_uow_class_violations(
         tree,
         rewrite_architecture_check._TENANT_UOW_SHAPE,
     )
-    assert any("non-transaction argument" in error for _line, error in violations)
+    assert any(reason in error for _line, error in violations)
 
 
-def test_guard_rejects_second_production_claim_factory(tmp_path):
+def test_guard_rejects_caller_supplied_writer_at_dispatch():
+    _assert_rejected_guard_facade(
+        "stage_operation_claim(self, attempt)", "stage_operation_claim(self, attempt, writer=None)",
+        "non-transaction argument",
+    )
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "reason"),
+    (
+        ("promote_pending_claim(self, inputs)", "promote_pending_claim(self, inputs, claim)",
+         "non-transaction argument"),
+        ("promotion_operation=None", "promotion_operation=fixture", "non-facade dependency"),
+        ('"__promotion_guard",', '"connection",', "slots differ"),
+    ),
+)
+def test_guard_rejects_promotion_facade_drift(before, after, reason):
+    _assert_rejected_guard_facade(before, after, reason)
+
+
+def _assert_rejected_production_factory(tmp_path, factory):
     root = _snapshot_tree(
         tmp_path,
         {
-            "kernel/tenant_uow.py": _VALID_TENANT_UOW_SOURCE,
-            "kernel/tenant_claim_write_guard.py": _VALID_CLAIM_PORT,
+            **_TENANT_GUARD_SOURCES,
             "kernel/application_runtime.py": (
                 "from .tenant_uow import TenantUnitOfWorkManager\n"
                 "class ExtraManager(TenantUnitOfWorkManager):\n"
-                "    def _bind_claim_operation(self, connection, binding): return None\n"
+                f"    def {factory}(self, connection, binding): return None\n"
             ),
         },
     )
     errors = rewrite_architecture_check._check_tenant_uow_architecture(*_execution_state(root))
-    assert any("overrides the claim writer factory" in error for error in errors)
+    assert any(f"overrides {factory}" in error for error in errors)
+
+
+def test_guard_rejects_second_production_claim_factory(tmp_path):
+    _assert_rejected_production_factory(tmp_path, "_bind_claim_operation")
+
+
+def test_guard_rejects_second_production_promotion_factory(tmp_path):
+    _assert_rejected_production_factory(tmp_path, "_bind_promotion_operation")
 
 
 @pytest.mark.parametrize(
@@ -2511,8 +2570,30 @@ def test_guard_rejects_second_production_claim_factory(tmp_path):
     ),
 )
 def test_guard_rejects_database_handles_and_new_port_methods(extra, reason):
-    errors = rewrite_architecture_check._claim_operation_violations(ast.parse(_VALID_CLAIM_PORT + extra))
-    assert any(reason in error for error in errors)
+    for port, source in (("BoundClaimOperation", _VALID_CLAIM_PORT), ("BoundPromotionOperation", _VALID_PROMOTION_PORT)):
+        errors = rewrite_architecture_check._guard_operation_violations(ast.parse(source + extra), port)
+        assert any(reason in error for error in errors), port
+
+
+def test_promotion_port_rejects_substitutable_producer():
+    tree = ast.parse(_VALID_PROMOTION_PORT.replace("claim, batch", "claim, batch, producer"))
+    assert rewrite_architecture_check._guard_operation_violations(tree, "BoundPromotionOperation") == [
+        "BoundPromotionOperation operation signature differs"
+    ]
+
+
+def test_tenant_transaction_guard_limits_include_every_module():
+    expected = {
+        "kernel/tenant_uow.py": 630,
+        "kernel/tenant_promotion_guard.py": 110,
+        "kernel/tenant_claim_write_guard.py": 120,
+        "kernel/tenant_command_runtime_bundle_selector.py": 420,
+        "kernel/tenant_physical_outcome.py": 260,
+    }
+    budget, modules = rewrite_architecture_check.GROUP_BUDGETS["tenant transaction"]
+    assert budget == 1528
+    assert len(modules) == len(expected)
+    assert {path: rewrite_architecture_check.MODULE_BUDGETS[path] for path in modules} == expected
 
 
 def _tenant_selector_execution_state(
