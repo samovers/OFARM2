@@ -79,7 +79,8 @@ MODULE_BUDGETS = {
     "kernel/key_control.py": 350,
     "kernel/tenant_command_runtime_bundle_selector.py": 420,
     "kernel/tenant_claim_write_guard.py": 120,
-    "kernel/tenant_uow.py": 600,
+    "kernel/tenant_promotion_guard.py": 110,
+    "kernel/tenant_uow.py": 630,
     "kernel/tenant_physical_outcome.py": 260,
     "kernel/api.py": 120,
     "kernel/deployment_identity.py": 50,
@@ -168,10 +169,11 @@ GROUP_BUDGETS = {
         ),
     ),
     "tenant transaction": (
-        # Delivery #424 includes the claim guard and keeps the existing file caps.
-        1_388,
+        # Delivery #435 counts the promotion guard and its tenant-unit wiring.
+        1_528,
         (
             "kernel/tenant_claim_write_guard.py",
+            "kernel/tenant_promotion_guard.py",
             "kernel/tenant_command_runtime_bundle_selector.py",
             "kernel/tenant_uow.py",
             "kernel/tenant_physical_outcome.py",
@@ -445,6 +447,7 @@ TEST_GLOBS = (
     "kernel/tests/*runtime_config*.py",
     "kernel/tests/*tenant_uow*.py",
     "kernel/tests/*tenant_claim_write_guard*.py",
+    "kernel/tests/*tenant_promotion_guard*.py",
     "kernel/tests/*physical_outcome*.py",
     "kernel/tests/*tenant_command_runtime_bundle_selector*.py",
     "kernel/tests/*security_audit_client*.py",
@@ -461,6 +464,9 @@ TEST_GLOBS = (
 )
 DIRECT_IMPORT_BOUNDS = {
     "kernel/tenant_claim_write_guard.py": frozenset(),
+    "kernel/tenant_promotion_guard.py": frozenset(
+        {"kernel.tenant_claim_write_guard", "kernel.tenant_uow"}
+    ),
     "kernel/profile_selection_validation.py": frozenset(),
     "kernel/runtime_bundle.py": frozenset(
         {"kernel.profile_selection_validation"}
@@ -738,6 +744,7 @@ _TENANT_UOW_PUBLIC_SURFACE = frozenset(
         "batch",
         "begin_batch",
         "stage_operation_claim",
+        "promote_pending_claim",
         "resolve_commit_operation_claim_draft_runtime_bundle",
     }
 )
@@ -747,6 +754,7 @@ _TENANT_UOW_INIT_PARAMETERS = (
     "allocate_batch",
     "resolve_bundle",
     "claim_operation",
+    "promotion_operation",
 )
 _TENANT_UOW_SLOTS = frozenset(
     {
@@ -759,6 +767,7 @@ _TENANT_UOW_SLOTS = frozenset(
         "__selected_bundle",
         "__rollback_only",
         "__claim_guard",
+        "__promotion_guard",
     }
 )
 _LEGACY_TENANT_UOW_SHAPE = (
@@ -3206,6 +3215,10 @@ def _tenant_uow_class_violations(
             or arguments.vararg is not None
             or arguments.kwarg is not None
             or arguments.kwonlyargs
+            or len(arguments.defaults) != sum(
+                name in ("claim_operation", "promotion_operation") for name in expected_init_parameters
+            )
+            or any(not isinstance(value, ast.Constant) or value.value is not None for value in arguments.defaults)
         ):
             violations.append(
                 (initializer.lineno, "TenantUnitOfWork accepts a non-facade dependency")
@@ -3214,6 +3227,10 @@ def _tenant_uow_class_violations(
         unit, "stage_operation_claim", ("self", "attempt"),
     ):
         violations.append((unit.lineno, "claim staging accepts a non-transaction argument"))
+    if "promote_pending_claim" in expected_public_surface and not _has_fixed_method(
+        unit, "promote_pending_claim", ("self", "inputs"),
+    ):
+        violations.append((unit.lineno, "claim promotion accepts a non-transaction argument"))
     slots = None
     for member in unit.body:
         if not isinstance(member, ast.Assign) or not any(
@@ -3264,10 +3281,12 @@ def _check_tenant_uow_architecture(
             trees[_TENANT_UOW_MODULE], _TENANT_UOW_SHAPE
         )
     ]
-    failures.extend(_claim_manager_violations(trees[_TENANT_UOW_MODULE]))
-    failures.extend(_claim_operation_violations(trees["kernel.tenant_claim_write_guard"]))
+    failures.extend(_tenant_manager_violations(trees[_TENANT_UOW_MODULE]))
+    failures.extend(_guard_operation_violations(trees["kernel.tenant_claim_write_guard"], "BoundClaimOperation"))
+    failures.extend(_guard_operation_violations(trees["kernel.tenant_promotion_guard"], "BoundPromotionOperation"))
     for fixture in (
         "kernel.tests.test_postgresql_tenant_claim_write_guard",
+        "kernel.tests.test_postgresql_tenant_promotion_guard",
         "kernel.tests._operation_claim_collector",
     ):
         if fixture in execution_closures.production:
@@ -3277,14 +3296,9 @@ def _check_tenant_uow_architecture(
         for owner in (node for node in ast.walk(trees[module]) if isinstance(node, ast.ClassDef)):
             if module == _TENANT_UOW_MODULE and owner.name == "TenantUnitOfWorkManager":
                 continue
-            if any(
-                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and node.name == "_bind_claim_operation"
-                for node in owner.body
-            ):
-                failures.append(
-                    f"{module}:{owner.lineno}: production class overrides the claim writer factory"
-                )
+            for node in owner.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in _GUARD_FACTORIES:
+                    failures.append(f"{module}:{node.lineno}: production class overrides {node.name}")
         if module == _TENANT_UOW_MODULE or not (module == "kernel" or module.startswith("kernel.")):
             continue
         relative = snapshot.modules_by_name[module].relative_path
@@ -3294,8 +3308,11 @@ def _check_tenant_uow_architecture(
 
 
 def _has_fixed_method(owner: ast.ClassDef, name: str, parameters: tuple[str, ...]) -> bool:
-    matches = [node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == name]
-    if len(matches) != 1:
+    matches = [
+        node for node in owner.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name
+    ]
+    if len(matches) != 1 or not isinstance(matches[0], ast.FunctionDef):
         return False
     args = matches[0].args
     return tuple(arg.arg for arg in (*args.posonlyargs, *args.args)) == parameters and not (
@@ -3303,19 +3320,33 @@ def _has_fixed_method(owner: ast.ClassDef, name: str, parameters: tuple[str, ...
     )
 
 
-def _claim_operation_violations(tree: ast.Module) -> list[str]:
+_GUARD_FACTORIES = ("_bind_claim_operation", "_bind_promotion_operation")
+_GUARD_PORT_METHODS = {
+    "BoundClaimOperation": {
+        "selected_claim_command": ("self",),
+        "stage_and_verify_operation_claim": ("self", "attempt"),
+    },
+    "BoundPromotionOperation": {"stage_and_verify_promotion": ("self", "inputs", "claim", "batch")},
+}
+
+
+def _guard_operation_violations(tree: ast.Module, port_name: str) -> list[str]:
     ports = [
         node
         for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "BoundClaimOperation"
+        if isinstance(node, ast.ClassDef) and node.name == port_name
     ]
-    if len(ports) != 1 or len(ports[0].body) != 2:
-        return ["claim write operation surface differs"]
-    if not (
-        _has_fixed_method(ports[0], "selected_claim_command", ("self",))
-        and _has_fixed_method(ports[0], "stage_and_verify_operation_claim", ("self", "attempt"))
-    ):
-        return ["claim write operation signature differs"]
+    expected = _GUARD_PORT_METHODS[port_name]
+    if len(ports) != 1 or len(ports[0].body) != len(expected):
+        return [f"{port_name} operation surface differs"]
+    if not all(_has_fixed_method(ports[0], name, args) for name, args in expected.items()):
+        return [f"{port_name} operation signature differs"]
+    allowed_types = {}
+    if port_name == "BoundPromotionOperation":
+        allowed_types = {
+            "tenant_claim_write_guard": {"CheckedClaimResult", "SelectedClaimCommand"},
+            "tenant_uow": {"GovernedWriteBatch", "TenantBinding"},
+        }
     allowed_modules = {
         "__future__",
         "collections.abc",
@@ -3329,9 +3360,10 @@ def _claim_operation_violations(tree: ast.Module) -> list[str]:
         if isinstance(node, ast.Import) and any(
             alias.name not in allowed_modules for alias in node.names
         ):
-            return ["claim write guard imports outside its transaction interface"]
+            return [f"{port_name} guard imports outside its transaction interface"]
         if isinstance(node, ast.ImportFrom) and (node.level or node.module not in allowed_modules):
-            return ["claim write guard imports outside its transaction interface"]
+            if node.level != 1 or any(alias.name not in allowed_types.get(node.module, ()) for alias in node.names):
+                return [f"{port_name} guard imports outside its transaction interface"]
         if isinstance(node, ast.Attribute) and node.attr in {
             "connection",
             "cursor",
@@ -3342,11 +3374,11 @@ def _claim_operation_violations(tree: ast.Module) -> list[str]:
             "commit",
             "rollback",
         }:
-            return ["claim write guard uses a raw database or finalization handle"]
+            return [f"{port_name} guard uses a raw database or finalization handle"]
     return []
 
 
-def _claim_manager_violations(tree: ast.Module) -> list[str]:
+def _tenant_manager_violations(tree: ast.Module) -> list[str]:
     managers = [
         node
         for node in tree.body
@@ -3365,18 +3397,32 @@ def _claim_manager_violations(tree: ast.Module) -> list[str]:
     for name, expected in (
         ("__init__", ("self", "pool", "minter")),
         ("unit_of_work", ("self", "principal")),
-        ("_bind_claim_operation", ("self", "connection", "binding")),
     ):
         if not _has_fixed_method(managers[0], name, expected):
             failures.append(f"kernel/tenant_uow.py: tenant manager {name} accepts an override")
-    factory = methods.get("_bind_claim_operation")
-    if factory is None or not (
-        len(factory.body) == 1
-        and isinstance(factory.body[0], ast.Return)
-        and isinstance(factory.body[0].value, ast.Constant)
-        and factory.body[0].value.value is None
-    ):
-        failures.append("kernel/tenant_uow.py: production claim operation must be unavailable")
+    for name in _GUARD_FACTORIES:
+        if not _has_fixed_method(managers[0], name, ("self", "connection", "binding")):
+            failures.append(f"kernel/tenant_uow.py: tenant manager {name} accepts an override")
+        factory = methods.get(name)
+        if factory is None or not (
+            not factory.decorator_list and len(factory.body) == 1
+            and isinstance(factory.body[0], ast.Return)
+            and isinstance(factory.body[0].value, ast.Constant)
+            and factory.body[0].value.value is None
+        ):
+            failures.append(f"kernel/tenant_uow.py: production {name} must be unavailable")
+    # The closed factory must also be the source used on the physical lease.
+    units = [
+        node for node in ast.walk(managers[0])
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "TenantUnitOfWork"
+    ]
+    producers = []
+    if len(units) == 1:
+        producers = units[0].args[4:5] + [
+            keyword.value for keyword in units[0].keywords if keyword.arg == "promotion_operation"
+        ]
+    if len(producers) != 1 or ast.unparse(producers[0]) != "self._bind_promotion_operation(connection, binding)":
+        failures.append("kernel/tenant_uow.py: tenant unit must use the bound promotion factory")
     return failures
 
 

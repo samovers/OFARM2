@@ -13976,6 +13976,416 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_order_or_single_use_violation_is_terminal[ofarm_app-duplicate]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_order_or_single_use_violation_is_terminal[ofarm_app-early]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_order_or_single_use_violation_is_terminal[ofarm_app-reentry]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_order_or_single_use_violation_is_terminal[ofarm_app-unavailable]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_order_or_single_use_violation_is_terminal[ofarm_worker-duplicate]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_order_or_single_use_violation_is_terminal[ofarm_worker-early]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_order_or_single_use_violation_is_terminal[ofarm_worker-reentry]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_order_or_single_use_violation_is_terminal[ofarm_worker-unavailable]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_promotion_error_is_terminal[ofarm_app-input-refusal]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_promotion_error_is_terminal[ofarm_app-process-control]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_promotion_error_is_terminal[ofarm_app-readback-error]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_promotion_error_is_terminal[ofarm_app-savepoint]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_promotion_error_is_terminal[ofarm_app-sql-error]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_promotion_error_is_terminal[ofarm_worker-input-refusal]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_promotion_error_is_terminal[ofarm_worker-process-control]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_promotion_error_is_terminal[ofarm_worker-readback-error]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_promotion_error_is_terminal[ofarm_worker-savepoint]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_caught_promotion_error_is_terminal[ofarm_worker-sql-error]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_checked_promotion_remains_provisional[ofarm_app-caller-rollback]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_checked_promotion_remains_provisional[ofarm_app-commit]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_checked_promotion_remains_provisional[ofarm_app-lost-reply]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_checked_promotion_remains_provisional[ofarm_worker-caller-rollback]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_checked_promotion_remains_provisional[ofarm_worker-commit]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_checked_promotion_remains_provisional[ofarm_worker-lost-reply]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_checked_stage_from_other_command_cannot_arm_promotion[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_checked_stage_from_other_command_cannot_arm_promotion[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_app-bare-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_app-digest-subclass]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_app-empty-id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_app-id-subclass]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_app-invalid-ascii-id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_app-list]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_app-non-string-id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_app-one-element]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_app-oversize-id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_app-three-elements]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_app-tuple-subclass]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_app-uppercase-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_worker-bare-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_worker-digest-subclass]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_worker-empty-id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_worker-id-subclass]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_worker-invalid-ascii-id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_worker-list]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_worker-non-string-id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_worker-one-element]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_worker-oversize-id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_worker-three-elements]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_worker-tuple-subclass]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_invalid_producer_return_after_readback_rolls_back[ofarm_worker-uppercase-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_app-action-ANOTHER_ACTION]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_app-batch_id-other-batch]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_app-binding_nonce-value2]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_app-bundle_digest-sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_app-contract_digest-sha256:9999999999999999999999999999999999999999999999999999999999999999]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_app-evidence_bytes-not-bytes]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_app-full_xid--1]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_app-full_xid-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_app-principal_ref-other-principal]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_app-request_id-other-request]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_app-tenant_id-value0]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_worker-action-ANOTHER_ACTION]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_worker-batch_id-other-batch]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_worker-binding_nonce-value2]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_worker-bundle_digest-sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_worker-contract_digest-sha256:9999999999999999999999999999999999999999999999999999999999999999]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_worker-evidence_bytes-not-bytes]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_worker-full_xid--1]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_worker-full_xid-True]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_worker-principal_ref-other-principal]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_worker-request_id-other-request]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_mismatched_binding_never_dispatches[ofarm_worker-tenant_id-value0]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_no_promotion_obligation[ofarm_app-bound-without-claim]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_no_promotion_obligation[ofarm_app-unbound-claim]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_no_promotion_obligation[ofarm_worker-bound-without-claim]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_no_promotion_obligation[ofarm_worker-unbound-claim]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_staged_claim_requires_checked_promotion[ofarm_app-caught-pre-call]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_staged_claim_requires_checked_promotion[ofarm_app-skipped]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_staged_claim_requires_checked_promotion[ofarm_worker-caught-pre-call]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_staged_claim_requires_checked_promotion[ofarm_worker-skipped]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_stale_and_foreign_calls_leave_new_owner_healthy[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_promotion_guard.py::test_stale_and_foreign_calls_leave_new_owner_healthy[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_promotion_guard",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_promotion_guard.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_empty_unit_of_work_consumes_no_knowledge_position",
       "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
       "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
@@ -17741,6 +18151,16 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_manager_writer_overrides[_bind_promotion_operation(self, connection, binding)-_bind_promotion_operation(self, connection, binding, *, factory)-accepts an override]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_manager_writer_overrides[_bind_promotion_operation(self, connection, binding):/n        return None-_bind_promotion_operation(self, connection, binding):/n        return self.producer-production _bind_promotion_operation must be unavailable]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_manager_writer_overrides[def close(self): pass-def set_writer(self, writer): pass-public surface differs]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -17756,12 +18176,37 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_manager_writer_overrides[self._bind_promotion_operation(connection, binding)-self.producer-use the bound promotion factory]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_manager_writer_overrides[unit_of_work(self, principal)-unit_of_work(self, principal, writer=None)-accepts an override]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_promotion_facade_drift[\"__promotion_guard\",-\"connection\",-slots differ]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_promotion_facade_drift[promote_pending_claim(self, inputs)-promote_pending_claim(self, inputs, claim)-non-transaction argument]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_promotion_facade_drift[promotion_operation=None-promotion_operation=fixture-non-facade dependency]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_second_production_claim_factory",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_guard_rejects_second_production_promotion_factory",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -17851,22 +18296,32 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
-      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_claim_fixture_import[_operation_claim_collector-kernel/__init__.py]",
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_claim_fixture_import[kernel/__init__.py]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
-      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_claim_fixture_import[_operation_claim_collector-kernel/application_runtime.py]",
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_claim_fixture_import[kernel/application_runtime.py]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
-      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_claim_fixture_import[test_postgresql_tenant_claim_write_guard-kernel/__init__.py]",
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_operation_claim_collector_import[kernel/__init__.py]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
-      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_claim_fixture_import[test_postgresql_tenant_claim_write_guard-kernel/application_runtime.py]",
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_operation_claim_collector_import[kernel/application_runtime.py]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_promotion_fixture_import[kernel/__init__.py]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_production_paths_reject_promotion_fixture_import[kernel/application_runtime.py]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -18022,6 +18477,11 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_selection_architecture_rejects_transitive_runtime_import",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_promotion_port_rejects_substitutable_producer",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -18242,6 +18702,11 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_selector_refuses_the_selection_control_import",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_tenant_transaction_guard_limits_include_every_module",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -28621,8 +29086,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "f45b76e83aa6a1d0fbda6042834698901af3112e5de14406fc86f68d26225f29",
-  "entryCount": 5724,
+  "entriesSha256": "f5b0f9cd8fbdea9a2051b69adcbe75c95962242255bee3c881075dc6d17d4eec",
+  "entryCount": 5817,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
