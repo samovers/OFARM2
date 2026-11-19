@@ -345,6 +345,18 @@ CHALLENGE_OBSERVATION_V11_DIGEST = (
 CHALLENGE_OBSERVATION_CATALOG_DIGEST = (
     "sha256:b176bc18d98d4211ac1d2b396db7d277df624717207927a5c4312a1540bfc6e7"
 )
+ASSERTION_PROMOTION_MIGRATION_PIN = (
+    "0012_assertion_promotion_reachability.sql",
+    8676,
+    "sha256:afe83f6d01216e4dac09d9d818909fa1d86c0c14a0885501b4d61fa46a04ef9e",
+)
+ASSERTION_PROMOTION_V12_DIGEST = (
+    "sha256:c37dc025bd65b6d2700f6e0d0d38919506cacbc257e3a02f7951664c9b251b2c"
+)
+ASSERTION_PROMOTION_CATALOG_DIGEST = (
+    "sha256:92f6022f9556a10bc1da74630e744c5d39710ad4850edcd4d72807a972581de1"
+)
+
 TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH = (
     "kernel/tenant_command_runtime_bundle_selector.py"
 )
@@ -3525,9 +3537,9 @@ def _validate_selection_storage_migration_prefix(
 ) -> None:
     migration_set = authority.migration_set
     migrations = migration_set.migrations
-    if len(migrations) not in (7, 8, 9, 10, 11):
+    if len(migrations) not in (7, 8, 9, 10, 11, 12):
         raise TemporalCandidateError(
-            "selection-storage migration state is not exact V7 through V11"
+            "selection-storage migration state is not exact V7 through V12"
         )
     if tuple(migration.version for migration in migrations) != tuple(
         range(1, len(migrations) + 1)
@@ -3556,19 +3568,22 @@ def _validate_selection_storage_migration_prefix(
             raise TemporalCandidateError(
                 f"selection-storage migration {version:04d} differs"
             )
-    if len(migrations) == 11:
-        observation = migrations[10]
+    for version, expected_pin, expected_prefix, kind in (
+        (11, CHALLENGE_OBSERVATION_MIGRATION_PIN,
+         CHALLENGE_OBSERVATION_V11_DIGEST, "challenge-observation"),
+        (12, ASSERTION_PROMOTION_MIGRATION_PIN,
+         ASSERTION_PROMOTION_V12_DIGEST, "assertion-promotion"),
+    ):
+        if len(migrations) < version:
+            break
+        migration = migrations[version - 1]
+        observed_pin = (migration.filename, migration.byte_length, migration.source_sha256)
         if (
-            observation.filename,
-            observation.byte_length,
-            observation.source_sha256,
-        ) != CHALLENGE_OBSERVATION_MIGRATION_PIN or (
-            migration_set.prefix_digest(11) != CHALLENGE_OBSERVATION_V11_DIGEST
-            or migration_set.digest != CHALLENGE_OBSERVATION_V11_DIGEST
+            observed_pin != expected_pin
+            or migration_set.prefix_digest(version) != expected_prefix
+            or (len(migrations) == version and migration_set.digest != expected_prefix)
         ):
-            raise TemporalCandidateError(
-                "challenge-observation version-11 migration differs"
-            )
+            raise TemporalCandidateError(f"{kind} version-{version} migration differs")
     try:
         prefix_3 = migration_set.prefix_digest(3)
         prefix_7 = migration_set.prefix_digest(7)
@@ -3674,9 +3689,9 @@ def _classify_global_content_retention_migration(
     version_8_prefix: str,
 ) -> str:
     migrations = authority.migration_set.migrations
-    if len(migrations) not in (8, 9, 10, 11):
+    if len(migrations) not in (8, 9, 10, 11, 12):
         raise TemporalCandidateError(
-            "global-content-retention migration state is not exact V8 through V11"
+            "global-content-retention migration state is not exact V8 through V12"
         )
     if version_8_prefix != GLOBAL_CONTENT_RETENTION_V8_PREFIX_DIGEST:
         raise TemporalCandidateError(
@@ -3739,7 +3754,7 @@ def _classify_global_content_retention_migration(
         raise TemporalCandidateError(
             "global-content-retention version-9 migration-set identity differs"
         )
-    if len(migrations) in (10, 11) and (
+    if len(migrations) in (10, 11, 12) and (
         prefix_9 != TRUSTED_COMMAND_SELECTOR_V9_PREFIX_DIGEST
         or complete_prefix != authority.migration_set.digest
     ):
@@ -3891,7 +3906,7 @@ def _classify_trusted_command_selector(
     retention_state: str | None,
 ) -> str:
     migrations = authority.migration_set.migrations
-    has_migration = len(migrations) in (10, 11)
+    has_migration = len(migrations) in (10, 11, 12)
     has_module = (
         TRUSTED_COMMAND_SELECTOR_RELATIVE_PATH
         in snapshot.modules_by_relative_path
@@ -3929,13 +3944,15 @@ def _classify_trusted_command_selector(
         raise TemporalCandidateError(
             "trusted command selector migration authentication failed"
         ) from exc
+    release_digest, catalog_digest = {
+        10: (TRUSTED_COMMAND_SELECTOR_V10_DIGEST, TRUSTED_COMMAND_SELECTOR_CATALOG_DIGEST),
+        11: (CHALLENGE_OBSERVATION_V11_DIGEST, CHALLENGE_OBSERVATION_CATALOG_DIGEST),
+        12: (ASSERTION_PROMOTION_V12_DIGEST, ASSERTION_PROMOTION_CATALOG_DIGEST),
+    }[len(migrations)]
     if (
         prefix_9 != TRUSTED_COMMAND_SELECTOR_V9_PREFIX_DIGEST
         or prefix_10 != TRUSTED_COMMAND_SELECTOR_V10_DIGEST
-        or authority.migration_set.digest != (
-            CHALLENGE_OBSERVATION_V11_DIGEST
-            if len(migrations) == 11 else prefix_10
-        )
+        or authority.migration_set.digest != release_digest
     ):
         raise TemporalCandidateError(
             "trusted command selector migration-set identity differs"
@@ -3943,14 +3960,7 @@ def _classify_trusted_command_selector(
     catalog = snapshot.modules_by_relative_path.get(
         "deployment/postgresql/catalog_identity.py"
     )
-    if (
-        catalog is None
-        or (
-            CHALLENGE_OBSERVATION_CATALOG_DIGEST
-            if len(migrations) == 11 else TRUSTED_COMMAND_SELECTOR_CATALOG_DIGEST
-        )
-        not in catalog.source_text
-    ):
+    if catalog is None or catalog_digest not in catalog.source_text:
         raise TemporalCandidateError(
             "trusted command selector catalog identity differs"
         )

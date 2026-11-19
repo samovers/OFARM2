@@ -93,8 +93,8 @@ def tenant_target() -> Iterator[TenantTarget]:
             execution_id=uuid4(),
         )
         assert first_report.previous_version == 0
-        assert first_report.applied_versions == tuple(range(1, 12))
-        assert first_report.final_version == 11
+        assert first_report.applied_versions == tuple(range(1, 13))
+        assert first_report.final_version == 12
         assert first_report.observed_head_execution_id == first_report.execution_id
         noop_report = migrate_service(
             admin_dsn=target.admin_dsn,
@@ -104,7 +104,7 @@ def tenant_target() -> Iterator[TenantTarget]:
             release_identity=RELEASE_IDENTITY,
             execution_id=uuid4(),
         )
-        assert noop_report.previous_version == noop_report.final_version == 11
+        assert noop_report.previous_version == noop_report.final_version == 12
         assert noop_report.applied_versions == ()
         assert noop_report.verified_noop
         assert noop_report.observed_head_execution_id == first_report.execution_id
