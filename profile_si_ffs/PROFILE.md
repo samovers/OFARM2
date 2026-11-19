@@ -44,6 +44,9 @@ resolved product binding (against a dated snapshot) · dose with valid UCUM unit
 
 ## Test harness
 
+- [Local spray draft example](examples/spray_draft/README.md) — enter a fictional
+  spray record, review its findings and save a corrected copy. Review records
+  a draft acknowledgement. Real approval and publication stay blocked.
 - `tests/profile_test_harness.json` — profile-local engineering-test harness.
   It now owns the SI adapter/import, policy metadata, binding wrapper, and
   active SI output lock test modules through root collection bridges, writes no

@@ -1,0 +1,9 @@
+{
+  "name": "ofarm-spray-draft-example",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Browser checks for a local fictional draft example; no publication",
+  "scripts": { "test": "node test_browser.cjs" },
+  "devDependencies": { "playwright": "1.62.1" },
+  "engines": { "node": ">=20" }
+}
