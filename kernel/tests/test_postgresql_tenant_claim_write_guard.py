@@ -104,14 +104,19 @@ def marker_table(tenant_target, authority):
 
 
 @pytest.fixture
-def harness(tenant_target, authority, capability_key, tmp_path, role, marker_table, monkeypatch):
+def marker_manager_type():
+    return MarkerManager
+
+
+@pytest.fixture
+def harness(tenant_target, authority, capability_key, tmp_path, role, marker_table, monkeypatch, marker_manager_type):
     with physical_harness(
         tenant_target,
         authority,
         capability_key,
         tmp_path,
         role,
-        manager_type=MarkerManager,
+        manager_type=marker_manager_type,
     ) as value:
         manager = value.manager
         manager.bundle_digest = authority.runtime_bundle_digest
