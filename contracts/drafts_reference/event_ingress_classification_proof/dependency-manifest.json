@@ -1,0 +1,23 @@
+{
+  "scope": "Local dependency qualification; no runtime download or producer admission.",
+  "pythonTested": "3.14.5",
+  "testedVersions": {
+    "rfc8785": "0.1.4",
+    "jsonschema": "4.26.0",
+    "referencing": "0.37.0",
+    "attrs": "26.1.0",
+    "jsonschema-specifications": "2025.9.1",
+    "rpds-py": "2026.5.1"
+  },
+  "requiredRfc8785Version": "0.1.4",
+  "requiredRfc8785Files": {
+    "__init__.py": "fa44927afd547caf7547247078bcf28863d1e69caf116d258c532b3f20ffd154",
+    "_impl.py": "c25bc3a046528482d53bee3487b837f31dd9c05f33e8f13288c7aab320932cec"
+  },
+  "requirements": [
+    "rfc8785==0.1.4",
+    "jsonschema==4.26.0"
+  ],
+  "runtimePolicy": "Checker verifies RFC8785 version, implementation bytes and an independent canonicalization vector. Missing or unsupported dependencies produce DEPENDENCY_UNAVAILABLE. The report schema is checked without optional dependencies on every return.",
+  "paths": "No absolute dependency path is baked into executable or installed artifacts. Caller may supply --dependency-dir."
+}

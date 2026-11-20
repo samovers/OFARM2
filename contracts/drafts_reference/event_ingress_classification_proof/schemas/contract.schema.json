@@ -1,0 +1,359 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/event-ingress-classification-proof/contract/v0.1",
+  "title": "Non-default classification-proof owned contract",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contractId": {
+      "const": "ofarm.event-ingress.pre-verdict-classification.v0.1"
+    },
+    "version": {
+      "const": "0.1"
+    },
+    "status": {
+      "const": "PROPOSED_NON_DEFAULT"
+    },
+    "ownerRole": {
+      "const": "EVENT_INGRESS_CLASSIFICATION"
+    },
+    "primaryTrustBoundary": {
+      "const": "Event Ingress classification and evidence admission"
+    },
+    "schemas": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "schemaId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "path",
+            "sha256",
+            "schemaId"
+          ]
+        },
+        "proof": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "schemaId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "path",
+            "sha256",
+            "schemaId"
+          ]
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "schemaId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "path",
+            "sha256",
+            "schemaId"
+          ]
+        },
+        "profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "schemaId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "path",
+            "sha256",
+            "schemaId"
+          ]
+        },
+        "report": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "schemaId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "path",
+            "sha256",
+            "schemaId"
+          ]
+        },
+        "envelope": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "schemaId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "path",
+            "sha256",
+            "schemaId"
+          ]
+        },
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "schemaId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "path",
+            "sha256",
+            "schemaId"
+          ]
+        }
+      },
+      "required": [
+        "contract",
+        "proof",
+        "context",
+        "profile",
+        "report",
+        "envelope",
+        "request"
+      ]
+    },
+    "classificationMethod": {
+      "const": "EXACT_DOMINANT_CONSEQUENCE_AND_SUBTYPE"
+    },
+    "semanticSources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourcePath": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourceCommit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "path",
+          "sourcePath",
+          "sourceCommit",
+          "sha256"
+        ]
+      }
+    },
+    "requiredRules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "useModes": {
+      "const": [
+        "INITIAL_EVALUATION",
+        "EXACT_REEVALUATION"
+      ]
+    },
+    "productionModes": {
+      "const": [
+        "PREEXISTING_PROOF",
+        "VALIDATION_PHASE_PROOF"
+      ]
+    },
+    "completionMilestone": {
+      "const": "CLASSIFICATION_COMPLETE_BEFORE_DEPENDENT_VERDICT"
+    },
+    "reuseRule": {
+      "const": "EXACT_ENVELOPE_REQUEST_PROFILE_CONTEXT_AND_PROOF"
+    },
+    "inputRoles": {
+      "const": [
+        "PINNED_CONTRACT",
+        "SELECTED_CLASSIFICATION_PROFILE",
+        "FIXED_ENVELOPE",
+        "FIXED_INGRESS_REQUEST",
+        "INDEPENDENT_OWNER_CONTEXT"
+      ]
+    },
+    "dependencyOrder": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "forbiddenInputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "outputMeaning": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hashRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "const": "SHA256_EXACT_UTF8_BYTES"
+        },
+        "values": {
+          "const": "RFC8785_SHA256"
+        },
+        "contract": {
+          "const": "Exclude exactly top-level contractDigest; no other field exclusions."
+        },
+        "proof": {
+          "const": "Whole value, no embedded self digest."
+        }
+      },
+      "required": [
+        "files",
+        "values",
+        "contract",
+        "proof"
+      ]
+    },
+    "verificationCode": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "verify_event_proof.py": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "report_contract.py": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "verify_event_proof.py",
+        "report_contract.py"
+      ]
+    },
+    "contractDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "contractId",
+    "version",
+    "status",
+    "ownerRole",
+    "primaryTrustBoundary",
+    "schemas",
+    "classificationMethod",
+    "semanticSources",
+    "requiredRules",
+    "useModes",
+    "productionModes",
+    "completionMilestone",
+    "reuseRule",
+    "inputRoles",
+    "dependencyOrder",
+    "forbiddenInputs",
+    "outputMeaning",
+    "hashRules",
+    "verificationCode",
+    "contractDigest"
+  ]
+}

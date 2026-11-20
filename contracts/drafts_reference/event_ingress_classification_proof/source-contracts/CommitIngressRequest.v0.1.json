@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/commitingressrequest/v0.1",
+  "title": "OFARM CommitIngressRequest v0.1",
+  "$comment": "Minimal event-ingress request envelope derived from Platform RC2.1 \u00a7\u00a73.2, 5.5, 6, 12 and the Event Ingress and Promotion Boundary Closure RFC v0.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "requestId",
+    "ingestedAt",
+    "ingressChannel",
+    "commitClass",
+    "semanticEventRef",
+    "targetScopes",
+    "idempotencyKey"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.commitingressrequest.v0.1"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "ingestedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ingressChannel": {
+      "enum": [
+        "MANUAL_UI",
+        "VOICE_CAPTURE",
+        "SCANNER_CAPTURE",
+        "MACHINE_IMPORT",
+        "PARTNER_IMPORT",
+        "EO_SENSOR_IMPORT",
+        "AI_ASSISTED_CAPTURE",
+        "OFFLINE_SYNC_REPLAY"
+      ]
+    },
+    "commitClass": {
+      "enum": [
+        "NOTE",
+        "OBSERVATION_ASSERTION",
+        "HYPOTHESIS_ASSERTION",
+        "STRUCTURE_ASSERTION",
+        "OPERATION_CLAIM",
+        "EVIDENCE_RECORD",
+        "COMPLIANCE_ASSERTION",
+        "GOVERNANCE_DECISION",
+        "ADVISORY_OUTPUT"
+      ]
+    },
+    "semanticEventRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "actingPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "actingAgentRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "targetScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scopeType",
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeType": {
+            "enum": [
+              "FARM",
+              "SITE",
+              "FIELD",
+              "ZONE",
+              "CROP_CYCLE",
+              "LOT",
+              "FACILITY",
+              "OPERATION",
+              "DEPLOYMENT",
+              "TENANT"
+            ]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "sourceTransportRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "sourcePayloadDigest": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "originatingOfflineQueueRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "requestedPromotionTarget": {
+      "enum": [
+        "ACCEPTED_STRUCTURAL_STATE",
+        "ACCEPTED_OBSERVATION_OCCURRENCE_STATE",
+        "ACCEPTED_EXECUTED_INTERVENTION_CONSEQUENCE",
+        "ACCEPTED_MATERIAL_STATE",
+        "COMPLIANCE_FACT"
+      ]
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "anyOf": [
+    {
+      "required": [
+        "actingPartyRef"
+      ]
+    },
+    {
+      "required": [
+        "actingAgentRef"
+      ]
+    }
+  ]
+}

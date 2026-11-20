@@ -1,15 +1,21 @@
-"""A prior fictional proof and a real tenant lease, with no enabled canonical checker."""
+"""Real tenant leases, prior fictional proofs and the accepted offline checker."""
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import replace
+from contextlib import nullcontext
+from dataclasses import asdict, replace
+from hashlib import sha256
 import json
+from uuid import UUID, uuid4
 
 import psycopg
 import pytest
+import rfc8785
 from psycopg.pq import TransactionStatus
+from psycopg.types.json import Jsonb
 
-from kernel._submission_event_admission import _EventAdmission
-from kernel.tenant_claim_write_guard import ClaimWriteAttempt
+from kernel import _submission_event_admission, _submission_event_checker
+from kernel._submission_event_admission import _AdmissionBinding, _EventAdmission, _ProofSelection, _RetainedProof
+from kernel.tenant_claim_write_guard import ClaimWriteAttempt, SelectedClaimCommand
 from kernel.tenant_uow import TenantBoundaryError, TenantBoundaryOutcome
 from kernel.tests._physical_outcome_support import request
 from kernel.tests.test_postgresql_tenant_claim_write_guard import (
@@ -19,49 +25,78 @@ from kernel.tests.test_postgresql_tenant_claim_write_guard import (
 )
 from kernel.tests.test_submission_event_admission import _case
 
-_REQUEST_ID = "request:event-admission-fixture"
-_OTHER_PROOF = "proof:other-submission"
 _ACT_CASES = {"missing-act-envelope", "wrong-act-envelope"}
+_ALLOWED = ("world-initial", "act-initial", "world-exact", "act-exact")
 _READ_FAULT = "SELECT fixture.missing_proof_bytes FROM (VALUES ('fictional'::bytea)) AS fixture(proof_bytes)"
-_READ_ORIGINALS = """SELECT envelope, proof, context, profile FROM claim_guard_fixture.event_originals
+_READ_ORIGINALS = """SELECT selection, production_mode, envelope, proof, context, profile, request, intent
+                     FROM claim_guard_fixture.event_originals
                      WHERE tenant = ofarm.current_tenant_id() AND proof_ref = %s"""
+_READ_ADMISSION = """SELECT binding FROM claim_guard_fixture.event_admission
+                     WHERE tenant = ofarm.current_tenant_id() AND batch_id = %s"""
+
+
+def _fixture_json(value):
+    """Encode the two non-JSON types in the test's original and admission records."""
+    def encode(other):
+        if isinstance(other, UUID):
+            return str(other)
+        if isinstance(other, bytes):
+            return other.hex()
+        raise TypeError(type(other))
+    return json.dumps(value, default=encode)
+
+
+def _selection(document):
+    return _ProofSelection(**{**document, "tenant_id": UUID(document["tenant_id"])})
+
+
+def _recorded_binding(document):
+    document = document.copy()
+    attempt = document.pop("attempt")
+    raw_command = attempt["command"]
+    command = SelectedClaimCommand(**{**raw_command, "tenant_id": UUID(raw_command["tenant_id"])})
+    document["attempt"] = ClaimWriteAttempt(command, UUID(attempt["binding_nonce"]), attempt["batch_id"],
+                                             attempt["full_xid"], bytes.fromhex(attempt["intent_bytes"]))
+    document["selection"] = _selection(document["selection"])
+    return _AdmissionBinding(**document)
+
+
+def _read_originals(connection, proof_ref):
+    row = connection.execute(_READ_ORIGINALS, (proof_ref,)).fetchone()
+    if row is None:
+        return None
+    selection, timing, envelope, proof, context, profile, request_bytes, intent_bytes = row
+    source = _RetainedProof(_selection(selection), timing, envelope, proof, context, profile)
+    return source, request_bytes, intent_bytes
 
 
 @pytest.fixture(scope="module")
-def retained(tenant_target, authority, marker_table):
-    submission, source = _case(tenant_id=authority.tenant_id, actor=authority.party_ref, request_id=_REQUEST_ID)
-    act_args = dict(tenant_id=authority.tenant_id, actor=authority.party_ref, event_kind="SUBMISSION_ACT")
-    missing_act, missing_source = _case(**act_args, request_id=_REQUEST_ID, event_ref="event:missing-act",
-                                        proof_ref="proof:missing-act-envelope")
-    act_submission, act_source = _case(**act_args, request_id=_REQUEST_ID, proof_ref="proof:submission-act")
-    _, other_act = _case(**act_args, request_id="request:other-act", event_ref="event:other-act",
-                         proof_ref="proof:other-act")
+def custody_tables(tenant_target, marker_table):
     with psycopg.connect(tenant_target.target_admin_dsn) as admin:
         admin.execute("""CREATE TABLE claim_guard_fixture.event_originals (
-            tenant uuid NOT NULL, proof_ref text NOT NULL, envelope bytea, proof bytea NOT NULL,
-            context bytea NOT NULL, profile bytea NOT NULL, PRIMARY KEY (tenant, proof_ref))""")
+            tenant uuid NOT NULL, proof_ref text NOT NULL, selection jsonb NOT NULL, production_mode text NOT NULL,
+            envelope bytea, proof bytea NOT NULL, context bytea NOT NULL, profile bytea NOT NULL,
+            request bytea NOT NULL, intent bytea NOT NULL, PRIMARY KEY (tenant, proof_ref))""")
         admin.execute("GRANT SELECT ON claim_guard_fixture.event_originals TO ofarm_app, ofarm_worker")
-        other_event = json.loads(source.envelope_bytes)
-        other_event["semanticEventId"] = "event:another-job"
-        other_proof = json.dumps({**json.loads(source.proof_bytes), "proofId": _OTHER_PROOF}).encode()
-        other_context = json.dumps({**json.loads(source.context_bytes), "expectedProofId": _OTHER_PROOF}).encode()
-        for proof_ref, envelope, proof, context, profile in (
-            (source.selection.proof_ref, source.envelope_bytes, source.proof_bytes,
-             source.context_bytes, source.profile_bytes),
-            (_OTHER_PROOF, json.dumps(other_event).encode(), other_proof, other_context, source.profile_bytes),
-            (missing_source.selection.proof_ref, None, missing_source.proof_bytes,
-             missing_source.context_bytes, missing_source.profile_bytes),
-            (act_source.selection.proof_ref, act_source.envelope_bytes, act_source.proof_bytes,
-             act_source.context_bytes, act_source.profile_bytes),
-            (other_act.selection.proof_ref, other_act.envelope_bytes, other_act.proof_bytes,
-             other_act.context_bytes, other_act.profile_bytes),
-        ):
-            admin.execute(
-                "INSERT INTO claim_guard_fixture.event_originals VALUES (%s, %s, %s, %s, %s, %s)",
-                (authority.tenant_id, proof_ref, envelope, proof, context, profile),
-            )
-    act_cases = {"missing-act-envelope": (missing_act, missing_source), "wrong-act-envelope": (act_submission, act_source)}
-    return (submission, source), act_cases, other_act
+        # A test-only record of the original result, written with the staged marker on its physical lease.
+        admin.execute("""CREATE TABLE claim_guard_fixture.event_admission (
+            tenant uuid NOT NULL DEFAULT ofarm.current_tenant_id(), batch_id text NOT NULL, binding jsonb NOT NULL,
+            PRIMARY KEY (tenant, batch_id))""")
+        admin.execute("ALTER TABLE claim_guard_fixture.event_admission ENABLE ROW LEVEL SECURITY")
+        admin.execute("""CREATE POLICY bound_tenant ON claim_guard_fixture.event_admission
+            USING (tenant = ofarm.current_tenant_id()) WITH CHECK (tenant = ofarm.current_tenant_id())""")
+        admin.execute("GRANT SELECT, INSERT ON claim_guard_fixture.event_admission TO ofarm_app, ofarm_worker")
+
+
+def _seed(admin, original, source, *, missing_envelope=False):
+    admin.execute(
+        """INSERT INTO claim_guard_fixture.event_originals
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+        (source.selection.tenant_id, source.selection.proof_ref, Jsonb(asdict(source.selection), dumps=_fixture_json),
+         source.production_mode, None if missing_envelope else source.envelope_bytes,
+         source.proof_bytes, source.context_bytes, source.profile_bytes, original.request_bytes,
+         original.attempt.intent_bytes),
+    )
 
 
 class _GuardedAdapter(MarkerOperation):
@@ -80,17 +115,18 @@ class _GuardedAdapter(MarkerOperation):
                 manager.owning_unit.stage_operation_claim(manager.submission.attempt)
             with pytest.raises(RuntimeError, match="rollback-only"):
                 manager.owning_unit.stage_operation_claim(manager.submission.attempt)
-        lookup = _OTHER_PROOF if manager.scenario == "other-submission" else proof_ref
-        row = self.connection.execute(_READ_ORIGINALS, (lookup,)).fetchone()
-        if row is None:
             return None
-        envelope, proof, context, profile = row
+        lookup = manager.other_proof_ref if manager.scenario == "other-submission" else proof_ref
+        retained = _read_originals(self.connection, lookup)
+        if retained is None:
+            return None
+        source, _, _ = retained
         if manager.scenario == "wrong-act-envelope":
-            other = self.connection.execute(_READ_ORIGINALS, (manager.other_act.selection.proof_ref,)).fetchone()
-            envelope = other[0]
-        timing = "VALIDATION_PHASE_PROOF" if manager.scenario == "validation-phase" else manager.source.production_mode
-        return replace(manager.source, production_mode=timing, envelope_bytes=envelope, proof_bytes=proof,
-                       context_bytes=context, profile_bytes=profile)
+            other, _, _ = _read_originals(self.connection, manager.other_proof_ref)
+            return replace(source, envelope_bytes=other.envelope_bytes)
+        if manager.scenario == "validation-phase":
+            return replace(source, production_mode="VALIDATION_PHASE_PROOF")
+        return source
 
     def stage_and_verify_operation_claim(self, attempt):
         manager = self.manager
@@ -101,7 +137,7 @@ class _GuardedAdapter(MarkerOperation):
         if recover:
             self.connection.execute("SAVEPOINT before_source_read")
         try:
-            _EventAdmission(manager.submission, self.reader).admit(attempt)
+            binding = _EventAdmission(manager.submission, self.reader).admit(attempt)
         except psycopg.errors.UndefinedColumn as error:
             manager.sql_error = error
             assert self.connection.info.transaction_status is TransactionStatus.INERROR
@@ -111,7 +147,16 @@ class _GuardedAdapter(MarkerOperation):
                 assert self.connection.info.transaction_status is TransactionStatus.INTRANS
                 assert _counts(self.connection, attempt.batch_id) == (1, 0, 0, 0, 0)
             raise
-        return super().stage_and_verify_operation_claim(attempt)
+        assert binding.selection == manager.source.selection and binding.attempt == attempt
+        assert binding.disposition == "CONDITIONAL_CONFORMANCE_PASS" and binding.commit_class == "OPERATION_CLAIM"
+        family = "GovernanceEvent" if binding.selection.event_kind == "SUBMISSION_ACT" else "OccurrenceEvent"
+        assert binding.family == family
+        result = super().stage_and_verify_operation_claim(attempt)
+        self.connection.execute(
+            "INSERT INTO claim_guard_fixture.event_admission (batch_id, binding) VALUES (%s, %s)",
+            (attempt.batch_id, Jsonb(asdict(binding), dumps=_fixture_json)),
+        )
+        return result
 
 
 class _FixtureManager(MarkerManager):
@@ -120,6 +165,9 @@ class _FixtureManager(MarkerManager):
         return self.operation
 
     def _bind_promotion_operation(self, connection, binding):
+        # This fixture tests admission and a local marker. A complete promotion belongs to #428/#178.
+        if self.scenario in _ALLOWED:
+            return super()._bind_promotion_operation(connection, binding)
         return self
 
     def stage_and_verify_promotion(self, inputs, claim, batch):
@@ -142,7 +190,7 @@ def _counts(connection, batch_id):
     ).fetchone()
 
 
-def _observe(harness, target, role, batch, *, expected_batches=0):
+def _observe(harness, target, role, batch, *, expected_batches=0, committed_admission=False):
     manager = harness.manager
     with psycopg.connect(target.role_dsn(role)) as observer:
         binding = manager._bind(observer, harness.principal)
@@ -152,53 +200,153 @@ def _observe(harness, target, role, batch, *, expected_batches=0):
         assert observer.execute(
             "SELECT marker_id FROM claim_guard_fixture.marker WHERE marker_id = 'visible-control'"
         ).fetchall() == [("visible-control",)]
-        source = manager.source
-        expected_envelope = None if manager.scenario == "missing-act-envelope" else source.envelope_bytes
-        if manager.scenario == "wrong-act-envelope":
-            other = manager.other_act
+        source, request_bytes, intent_bytes = _read_originals(observer, manager.source.selection.proof_ref)
+        expected_source = manager.source
+        if manager.scenario == "missing-act-envelope":
+            expected_source = replace(expected_source, envelope_bytes=None)
+        if manager.scenario in {"wrong-act-envelope", "other-submission"}:
+            other, other_request, _ = _read_originals(observer, manager.other_proof_ref)
+            assert other.selection.tenant_id == source.selection.tenant_id
             assert other.selection.event_ref != source.selection.event_ref
-            assert observer.execute(_READ_ORIGINALS, (other.selection.proof_ref,)).fetchone() == (
-                other.envelope_bytes, other.proof_bytes, other.context_bytes, other.profile_bytes,
-            )
-        assert observer.execute(_READ_ORIGINALS, (source.selection.proof_ref,)).fetchall() == [
-            (expected_envelope, source.proof_bytes, source.context_bytes, source.profile_bytes),
-        ]
+            assert other_request != request_bytes
+            assert other.selection.event_kind == source.selection.event_kind
+            assert json.loads(other_request)["actingPartyRef"] == json.loads(request_bytes)["actingPartyRef"]
+            assert json.loads(other.envelope_bytes)["primaryEventFamily"] == json.loads(source.envelope_bytes)["primaryEventFamily"]
+        assert source == expected_source
+        assert request_bytes == manager.original.request_bytes and intent_bytes == manager.original.attempt.intent_bytes
         assert _counts(observer, batch.batch_id) == (expected_batches, 0, 0, 0, 0)
+        markers = observer.execute("SELECT marker_id, backend_pid, full_xid::text FROM claim_guard_fixture.marker "
+                                   "WHERE batch_id = %s", (batch.batch_id,)).fetchall()
+        records = observer.execute(_READ_ADMISSION, (batch.batch_id,)).fetchall()
+        if committed_admission:
+            assert markers == [(manager.marker_id, *manager.allocation)] and len(records) == 1
+            recorded = _recorded_binding(records[0][0])
+            attempt = replace(manager.submission.attempt, intent_bytes=intent_bytes)
+            original = replace(manager.original, request_bytes=request_bytes, attempt=attempt)
+            reader = _EventAdmission(original, lambda ref: _read_originals(observer, ref)[0])
+            assert reader.readback(attempt, recorded) == recorded
+            with pytest.raises(ValueError, match="recorded event admission differs"):
+                reader.readback(attempt, replace(recorded, disposition="FAIL"))
+            if "EXACT_REEVALUATION" in json.loads(source.context_bytes)["permittedUseModes"]:
+                assert reader.readback(attempt, recorded, reevaluate=True) == recorded
+            else:
+                with pytest.raises(ValueError, match="original context forbids exact reevaluation"):
+                    reader.readback(attempt, recorded, reevaluate=True)
+        else:
+            assert markers == [] and records == []
         observer.rollback()
 
 
 @pytest.fixture
 def scenario():
-    return "checker-unavailable"
+    return "world-initial"
 
 
 @pytest.fixture
-def submission(harness, retained, scenario):
-    world, act_cases, harness.manager.other_act = retained
-    original, harness.manager.source = act_cases.get(scenario, world)
-    harness.manager.adapter_calls = 0
-    harness.manager.reads = []
+def submission(harness, authority, tenant_target, custody_tables, scenario):
+    manager = harness.manager
+    identifier = uuid4().hex
+    submission_act = scenario in {*_ACT_CASES, "act-initial", "act-exact", "other-submission"}
+    args = dict(tenant_id=authority.tenant_id, actor=authority.party_ref, request_id="request:" + identifier)
+    original, source = _case(**args, event_kind="SUBMISSION_ACT" if submission_act else "ASSOCIATED_WORLD_EVENT",
+                             proof_ref="proof:" + identifier, allow_reevaluation=scenario.endswith("-exact"))
+    if scenario == "wrong-classification":
+        # The source selectors agree on the bytes. Only the checker can reject this family.
+        proof = json.loads(source.proof_bytes)
+        proof["classification"]["authoritativePrimaryFamily"] = "GovernanceEvent"
+        selected = replace(source.selection, proof_digest="sha256:" + sha256(rfc8785.dumps(proof)).hexdigest())
+        original = replace(original, selection=selected)
+        source = replace(source, selection=selected, proof_bytes=json.dumps(proof).encode())
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        _seed(admin, original, source, missing_envelope=scenario == "missing-act-envelope")
+        if scenario in {"wrong-act-envelope", "other-submission"}:
+            manager.other_proof_ref = "proof:other-" + identifier
+            other, other_source = _case(
+                **{**args, "request_id": "request:other-" + identifier},
+                event_kind="SUBMISSION_ACT", event_ref="event:other-act", proof_ref=manager.other_proof_ref,
+            )
+            _seed(admin, other, other_source)
+    manager.original = original
+    manager.source = source
+    manager.adapter_calls = 0
+    manager.reads = []
     return original
+
+
+def _begin_attempt(unit, manager, authority, submission):
+    batch_request = replace(request(authority), operation="ASSERT_OPERATION_CLAIM", request_id=submission.request_id)
+    batch = unit.begin_batch(batch_request)
+    attempt = ClaimWriteAttempt(manager.operation.command, unit.binding.capability_nonce, batch.batch_id,
+                                batch.full_xid, submission.attempt.intent_bytes)
+    manager.submission = replace(submission, attempt=attempt)
+    manager.owning_unit = unit
+    return batch, attempt
+
+
+@pytest.mark.parametrize("scenario", _ALLOWED)
+@pytest.mark.parametrize("finish", ["commit", "rollback"])
+def test_allowed_submission_and_independent_readback(
+    harness, authority, submission, tenant_target, role, calls, scenario, finish, monkeypatch,
+):
+    manager = harness.manager
+    manager.scenario = scenario
+    modes = []
+    verify = _submission_event_admission._verify_classification
+
+    def count_verify(package, source, original, binding, mode):
+        modes.append(mode)
+        return verify(package, source, original, binding, mode)
+
+    monkeypatch.setattr(_submission_event_admission, "_verify_classification", count_verify)
+    exit_check = nullcontext() if finish == "commit" else pytest.raises(ValueError, match="rollback after admission")
+    with exit_check:
+        with harness.runtime.tenant_unit_of_work(harness.principal) as unit:
+            batch, attempt = _begin_attempt(unit, manager, authority, submission)
+            _observe(harness, tenant_target, role, batch)
+            result = unit.stage_operation_claim(attempt)
+            writer = harness.pool.acquired[-1]
+            assert result.assertion_id == manager.marker_id and manager.dispatches == [attempt]
+            assert manager.adapter_calls == 1 and manager.reads == [submission.selection.proof_ref]
+            assert modes == ["INITIAL_EVALUATION"]
+            recorded = _recorded_binding(writer.execute(_READ_ADMISSION, (batch.batch_id,)).fetchone()[0])
+            assert recorded.attempt == attempt and recorded.selection == submission.selection
+            assert recorded.request_id == submission.request_id
+            assert writer.execute("SELECT marker_id FROM claim_guard_fixture.marker WHERE batch_id = %s",
+                                  (batch.batch_id,)).fetchall() == [(result.assertion_id,)]
+            _observe(harness, tenant_target, role, batch)
+            if finish == "rollback":
+                raise ValueError("rollback after admission")
+    committed = finish == "commit"
+    assert calls["commit"] == ([writer] if committed else [])
+    assert calls["rollback"] == ([] if committed else [writer])
+    _observe(harness, tenant_target, role, batch, expected_batches=int(committed), committed_admission=committed)
+    expected_modes = ["INITIAL_EVALUATION"]
+    if committed and scenario.endswith("-exact"):
+        expected_modes.append("EXACT_REEVALUATION")
+    assert modes == expected_modes
 
 
 @pytest.mark.parametrize(("scenario", "error", "reason"), [
     pytest.param("no-reader", ValueError, "retained proof reader unavailable", id="no-reader"),
     pytest.param("missing-proof", ValueError, "missing retained proof", id="missing-proof"),
-    pytest.param("other-submission", ValueError, "envelope bytes differ", id="other-submission"),
+    pytest.param("other-submission", ValueError, "missing retained proof or different governed source", id="other-submission"),
     pytest.param("missing-act-envelope", ValueError, "^invalid envelope bytes or size$", id="missing-act-envelope"),
     pytest.param("wrong-act-envelope", ValueError, "^envelope bytes differ from the independent selection$",
                  id="wrong-act-envelope"),
+    pytest.param("wrong-classification", ValueError, "event classification did not pass", id="wrong-classification"),
     pytest.param("validation-phase", ValueError, "requires a pre-existing proof", id="validation-phase"),
     pytest.param("checker-unavailable", RuntimeError, "accepted Event Ingress checker unavailable", id="checker-unavailable"),
-    pytest.param("reentry", RuntimeError, "accepted Event Ingress checker unavailable", id="reentry"),
+    pytest.param("reentry", ValueError, "missing retained proof", id="reentry"),
     pytest.param("sql", psycopg.errors.UndefinedColumn, "missing_proof_bytes", id="sql"),
     pytest.param("savepoint", psycopg.errors.UndefinedColumn, "missing_proof_bytes", id="savepoint"),
 ])
 def test_caught_admission_failure_rolls_back_batch(
-    harness, authority, submission, tenant_target, role, calls, scenario, error, reason,
+    harness, authority, submission, tenant_target, role, calls, scenario, error, reason, monkeypatch, tmp_path,
 ):
     manager = harness.manager
     manager.scenario = scenario
+    if scenario == "checker-unavailable":
+        monkeypatch.setattr(_submission_event_checker, "_PACKAGE", tmp_path / "absent-checker")
     if scenario in _ACT_CASES:
         assert submission.selection.event_kind == "SUBMISSION_ACT"
         assert "associatedSemanticEventBinding" not in json.loads(submission.attempt.intent_bytes)
@@ -208,12 +356,7 @@ def test_caught_admission_failure_rolls_back_batch(
         submission = replace(submission, selection=selection)
     with pytest.raises(TenantBoundaryError) as final:
         with harness.runtime.tenant_unit_of_work(harness.principal) as unit:
-            batch_request = replace(request(authority), operation="ASSERT_OPERATION_CLAIM", request_id=_REQUEST_ID)
-            batch = unit.begin_batch(batch_request)
-            attempt = ClaimWriteAttempt(manager.operation.command, unit.binding.capability_nonce, batch.batch_id,
-                                        batch.full_xid, submission.attempt.intent_bytes)
-            manager.submission = replace(submission, attempt=attempt)
-            manager.owning_unit = unit
+            batch, attempt = _begin_attempt(unit, manager, authority, submission)
             writer = harness.pool.acquired[-1]
             assert _counts(writer, batch.batch_id) == (1, 0, 0, 0, 0)
             _observe(harness, tenant_target, role, batch)
@@ -232,7 +375,7 @@ def test_caught_admission_failure_rolls_back_batch(
 
 def test_stale_and_foreign_calls_cannot_read_or_poison_new_lease(harness, authority, submission, tenant_target, role, calls):
     manager = harness.manager
-    manager.scenario = "checker-unavailable"
+    manager.scenario = "world-initial"
     with harness.runtime.tenant_unit_of_work(harness.principal) as old:
         previous_backend = harness.pool.acquired[-1].info.backend_pid
     with harness.runtime.tenant_unit_of_work(harness.principal) as live:

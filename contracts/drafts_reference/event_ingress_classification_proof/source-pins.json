@@ -1,0 +1,87 @@
+{
+  "sourceHead": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+  "sources": [
+    {
+      "repository": "samovers/OFARM",
+      "commit": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+      "path": "03_machine_contracts/schemas/event_ingress/OFARM_SemanticEventEnvelope_schema_v0_1.json",
+      "sha256": "75662a6c4952a62b7e8f8e9de99c23c98899c692914a98ba4b752873f48bd1a4",
+      "bytes": 4238,
+      "copy": "source-contracts/SemanticEventEnvelope.v0.1.json",
+      "transformation": "NONE_VERBATIM"
+    },
+    {
+      "repository": "samovers/OFARM",
+      "commit": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+      "path": "03_machine_contracts/schemas/event_ingress/OFARM_CommitIngressRequest_schema_v0_1.json",
+      "sha256": "397ec3a61ed572b14f9916bc9e7b316ff48150c743c6b7aa2eab94a3be3e8ffc",
+      "bytes": 3405,
+      "copy": "source-contracts/CommitIngressRequest.v0.1.json",
+      "transformation": "NONE_VERBATIM"
+    },
+    {
+      "repository": "samovers/OFARM",
+      "commit": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+      "path": "02_accepted_rfcs/OFARM_Event_Ingress_and_Promotion_Boundary_Closure_RFC_v0_1.md",
+      "sha256": "2f07429f553e8593a149eb2f2dfc8a6baff8c681545787eeaff5ad04f48ca8db",
+      "bytes": 6189,
+      "copy": "sources/event-ingress-rfc.md",
+      "transformation": "NONE_VERBATIM"
+    },
+    {
+      "repository": "samovers/OFARM",
+      "commit": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+      "path": "01_companion_artifacts/OFARM_Event_Grammar_and_Commit_Matrix_v0_1.md",
+      "sha256": "47784169916b66fec510a7a95c86b19b5c222ef987c6d29c26f9a250632a61b3",
+      "bytes": 8326,
+      "copy": "sources/event-grammar.md",
+      "transformation": "NONE_VERBATIM"
+    },
+    {
+      "repository": "samovers/OFARM",
+      "commit": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+      "path": "00_active_baseline/OFARM_Platform_Runtime_and_Product_Architecture_RC2_1.md",
+      "sha256": "76357c6c7c184893f80219720f6343a682a859098f3703eb84c282fba0c02256",
+      "bytes": 96406,
+      "copy": "sources/platform.md",
+      "transformation": "NONE_VERBATIM"
+    },
+    {
+      "repository": "samovers/OFARM",
+      "commit": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+      "path": "00_active_baseline/OFARM_Reference_Model_and_Artifact_Constitution_RC2_1.md",
+      "sha256": "7079e66ab160e2f79bc1a2a6f2c37726c0bea2af921312fcd93b434b9f9c4e3d",
+      "bytes": 169774,
+      "copy": "sources/constitution.md",
+      "transformation": "NONE_VERBATIM"
+    },
+    {
+      "repository": "samovers/OFARM",
+      "commit": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+      "path": "04_implementation_and_conformance/examples_and_fixtures/examples/machine_contracts/agronomic/OFARM_SemanticEventEnvelope_example_pruning_operation_v0_1.json",
+      "sha256": "bdbe24bfb7d602b65ef5b517c21b54f134b1539f12c35c428530d20f49971ac9",
+      "bytes": 918,
+      "copy": "fixtures/envelopes/pruning.json",
+      "transformation": "NONE_VERBATIM"
+    },
+    {
+      "repository": "samovers/OFARM",
+      "commit": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+      "path": "04_implementation_and_conformance/examples_and_fixtures/examples/machine_contracts/agronomic/OFARM_SemanticEventEnvelope_example_field_17_contractor_spot_spray_late_sync_v0_1.json",
+      "sha256": "bfb02b92b2e3d642c715bb9865b6f39131b9a383848b52bbdf1add790b8f6ec8",
+      "bytes": 1608,
+      "copy": "fixtures/envelopes/spot-spray.json",
+      "transformation": "NONE_VERBATIM"
+    },
+    {
+      "repository": "samovers/OFARM",
+      "commit": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+      "path": "04_implementation_and_conformance/examples_and_fixtures/examples/machine_contracts/agronomic/OFARM_CommitIngressRequest_example_pruning_operation_claim_v0_1.json",
+      "sha256": "e0d62ec92b25c6ece1e2f9eb4b1a1d6d8cc106a029edb3cd544eab0b8af1c3ad",
+      "bytes": 1006,
+      "copy": "fixtures/requests/pruning.json",
+      "transformation": "NONE_VERBATIM"
+    }
+  ],
+  "limits": "Existing source copies are verbatim. The new proof/context/profile contracts are proposed non-default interfaces. No source adoption or deployed admission is established."
+}
