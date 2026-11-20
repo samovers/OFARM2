@@ -248,8 +248,11 @@ def submission(harness, authority, tenant_target, custody_tables, scenario):
     identifier = uuid4().hex
     submission_act = scenario in {*_ACT_CASES, "act-initial", "act-exact", "other-submission"}
     args = dict(tenant_id=authority.tenant_id, actor=authority.party_ref, request_id="request:" + identifier)
-    original, source = _case(**args, event_kind="SUBMISSION_ACT" if submission_act else "ASSOCIATED_WORLD_EVENT",
-                             proof_ref="proof:" + identifier, allow_reevaluation=scenario.endswith("-exact"))
+    original, source = _case(
+        **args, event_kind="SUBMISSION_ACT" if submission_act else "ASSOCIATED_WORLD_EVENT",
+        event_ref="event:submission:" + identifier if submission_act else None,
+        proof_ref="proof:" + identifier, allow_reevaluation=scenario.endswith("-exact"),
+    )
     if scenario == "wrong-classification":
         # The source selectors agree on the bytes. Only the checker can reject this family.
         proof = json.loads(source.proof_bytes)
@@ -263,7 +266,8 @@ def submission(harness, authority, tenant_target, custody_tables, scenario):
             manager.other_proof_ref = "proof:other-" + identifier
             other, other_source = _case(
                 **{**args, "request_id": "request:other-" + identifier},
-                event_kind="SUBMISSION_ACT", event_ref="event:other-act", proof_ref=manager.other_proof_ref,
+                event_kind="SUBMISSION_ACT", event_ref="event:other-submission:" + identifier,
+                proof_ref=manager.other_proof_ref,
             )
             _seed(admin, other, other_source)
     manager.original = original
