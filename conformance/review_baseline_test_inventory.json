@@ -426,6 +426,11 @@
       "sourcePath": "kernel/tests/test_capture_normalization.py"
     },
     {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_fractional_timestamp_with_offset_is_preserved_on_readback",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
       "nodeid": "kernel/tests/test_capture_normalization.py::test_genuine_second_request_only_confirms_its_own_submission",
       "sourceModule": "kernel.tests.test_capture_normalization",
       "sourcePath": "kernel/tests/test_capture_normalization.py"
@@ -557,6 +562,11 @@
     },
     {
       "nodeid": "kernel/tests/test_capture_normalization.py::test_schema_checks_wire_values_without_repairing_them[request_id-request:A ]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_timestamp_with_final_newline_refuses_in_conversion_and_independent_read",
       "sourceModule": "kernel.tests.test_capture_normalization",
       "sourcePath": "kernel/tests/test_capture_normalization.py"
     },
@@ -29346,8 +29356,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "4b540aaba240ce50d28e41d1c78d8e6088ed6c62004cc2884f5dca7e1ec75d1c",
-  "entryCount": 5869,
+  "entriesSha256": "681b83b675cc9da2c1ac1b8a4981d0c757f67ea876c984a0fa97d9cb7b3299e9",
+  "entryCount": 5871,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -147,7 +147,10 @@ def _matches(
         or capture.get("operation") != selection.operation
     ):
         return False
-    # JSON Schema's end anchor also matches before a final newline in Python.
+    # Both the pinned date-time checker and identifier patterns use an end
+    # anchor that can match before a final newline. Refuse the original value.
+    if selection.ingested_at != selection.ingested_at.strip():
+        return False
     identifiers = [
         selection.caller_key,
         selection.request_id,

@@ -264,6 +264,24 @@ def test_schema_checks_wire_values_without_repairing_them(field, value):
     assert fixture.reader(selected).read(record.reference) is None
 
 
+def test_timestamp_with_final_newline_refuses_in_conversion_and_independent_read():
+    selected = replace(A, ingested_at=A.ingested_at + "\n")
+    fixture = ManualCaptureFixture()
+    record = _convert(fixture, selected)
+    assert record.disposition == "REFUSED"
+    assert json.loads(fixture._requests[selected.key])["ingestedAt"] == selected.ingested_at
+    assert fixture.reader(selected).read(record.reference) is None
+    # Even a conflicting success on the protected record cannot admit these bytes.
+    fixture._records[selected.key] = replace(record, disposition="NORMALIZED_DRAFT")
+    assert fixture.reader(selected).read(record.reference) is None
+
+
+def test_fractional_timestamp_with_offset_is_preserved_on_readback():
+    selected = replace(A, ingested_at="2000-01-02T03:04:05.123+05:30")
+    _, evidence = _passing(ManualCaptureFixture(), selected)
+    assert json.loads(evidence.request_bytes)["ingestedAt"] == selected.ingested_at
+
+
 @pytest.mark.parametrize(("original", "updates"), [
     ("request", {"commitClass": "NOTE"}),
     ("request", {"actingPartyRef": "party:other"}),
