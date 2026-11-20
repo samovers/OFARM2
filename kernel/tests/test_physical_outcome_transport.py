@@ -11,6 +11,7 @@ import pytest
 
 from kernel import tenant_physical_outcome as physical
 from kernel import signing_authority_io
+from kernel.postgres_wait import PostgresWaitStopped
 from kernel.signing_authority_io import prepare_signing_conninfo
 from kernel.tenant_uow import TenantBoundaryError, TenantBoundaryOutcome
 from kernel.tests._physical_outcome_proxy import PhysicalWireProxy
@@ -26,12 +27,41 @@ from kernel.tests.test_postgresql_tenant_migration import (
 )
 
 
+def _record_stalled_exchange(monkeypatch, proxy):
+    exchange = physical._BoundedTransaction._wait
+    wait = physical.wait
+    exchange_starts = {}
+    stalled = []
+
+    def start_exchange(transaction, generator):
+        exchange_starts[generator] = time.monotonic()
+        return exchange(transaction, generator)
+
+    def measure_wait(generator, fileno, deadline, cancel_event):
+        # The real exchange assigns its deadline between these two timestamps.
+        started = exchange_starts.pop(generator)
+        entered_wait = time.monotonic()
+        already_withheld = proxy.withheld.is_set()
+        try:
+            return wait(generator, fileno, deadline, cancel_event)
+        except PostgresWaitStopped:
+            stopped = time.monotonic()
+            cancelled = cancel_event is not None and cancel_event.is_set()
+            if not already_withheld and proxy.withheld.is_set() and not cancelled:
+                stalled.append((started, entered_wait, deadline, stopped))
+            raise
+
+    monkeypatch.setattr(physical._BoundedTransaction, "_wait", start_exchange)
+    monkeypatch.setattr(physical, "wait", measure_wait)
+    return stalled
+
+
 @pytest.mark.parametrize("phase", (
     "probe", "begin", "timeouts", "challenge", "challenge_read", "bind",
     "context", "status", "batch", "rollback",
 ))
 def test_ps11_each_real_exchange_has_finite_wait_and_one_disposal(
-    tenant_target, authority, capability_key, tmp_path, role, phase,
+    tenant_target, authority, capability_key, tmp_path, role, phase, monkeypatch, capsys,
 ):
     with PhysicalWireProxy(tenant_target.role_dsn(role), fault=phase) as proxy:
         with physical_harness(
@@ -43,12 +73,25 @@ def test_ps11_each_real_exchange_has_finite_wait_and_one_disposal(
                 checked.append(connection)
                 return real_check(connection)
             harness.pool.inner._check = record_check
+            stalled = _record_stalled_exchange(monkeypatch, proxy)
             started = time.monotonic()
-            error = _caught(harness, lambda unit: unit.begin_batch(request(authority)))
-            elapsed = time.monotonic() - started
+            try:
+                error = _caught(harness, lambda unit: unit.begin_batch(request(authority)))
+            finally:
+                whole_call = time.monotonic() - started
+                with capsys.disabled():
+                    print(
+                        f"PS11 {role}/{phase} whole_call={whole_call:.4f}s",
+                        *(f"stalled_wait={end - entry:.4f}s" for _, entry, _, end in stalled),
+                        flush=True,
+                    )
             observation = error.physical_observation
             assert proxy.withheld.is_set()
-            assert 2.0 <= elapsed < 3.5
+            assert len(stalled) == 1
+            exchange_start, entered_wait, deadline, stopped = stalled[0]
+            assert exchange_start + 2.0 <= deadline <= entered_wait + 2.0
+            # Allow the existing scheduling margin only at expiry of the stalled wait.
+            assert deadline <= stopped < deadline + 1.5
             assert observation.physical_status == ("COMMITTED" if phase == "rollback" else "UNKNOWN")
             assert observation.batch_observation == ("MATCHING_COMMITTED" if phase == "rollback" else "UNAVAILABLE")
             assert len(harness.pool.acquired) == (1 if phase == "probe" else 2)
