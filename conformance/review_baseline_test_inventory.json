@@ -351,6 +351,266 @@
       "sourcePath": "kernel/tests/test_authentication_read_api.py"
     },
     {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_caller_supplied_proof_cannot_replace_another_captures_record",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_changed_trusted_selection_refuses[agent_ref-agent:unbound]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_changed_trusted_selection_refuses[caller_key-key:mixed.case]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_changed_trusted_selection_refuses[capture_id-capture:other]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_changed_trusted_selection_refuses[event_ref-event:other]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_changed_trusted_selection_refuses[ingested_at-2000-01-02T03:04:06Z]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_changed_trusted_selection_refuses[mapping_ref-mapping:other]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_changed_trusted_selection_refuses[operation-ASSERT_OBSERVATION]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_changed_trusted_selection_refuses[party_ref-party:other]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_changed_trusted_selection_refuses[request_id-request:other]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_changed_trusted_selection_refuses[revision-2]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_changed_trusted_selection_refuses[target_scopes-value5]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_changed_trusted_selection_refuses[tenant_id-value0]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_conflicting_bind_cannot_replace_the_initial_conversion",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_converter_records_its_own_refusal_while_both_originals_exist",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_genuine_second_request_only_confirms_its_own_submission",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_incomplete_or_ambiguous_capture_records_refusal_without_a_request[{\"operation\":\"first\",\"operation\":\"second\"}]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_incomplete_or_ambiguous_capture_records_refusal_without_a_request[{]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_independently_selected_agent_is_preserved_and_required",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_missing_partial_changed_or_conflicting_record_refuses[capture-digest]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_missing_partial_changed_or_conflicting_record_refuses[changed-capture]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_missing_partial_changed_or_conflicting_record_refuses[missing-capture]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_missing_partial_changed_or_conflicting_record_refuses[missing-record]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_missing_partial_changed_or_conflicting_record_refuses[record-reference]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_missing_partial_changed_or_conflicting_record_refuses[record-selection]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_missing_partial_changed_or_conflicting_record_refuses[request-digest]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_missing_partial_changed_or_conflicting_record_refuses[reserialized-request]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_otherwise_valid_originals_require_owner_recorded_success[None]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_otherwise_valid_originals_require_owner_recorded_success[UNRECOGNIZED]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_otherwise_valid_originals_require_owner_recorded_success[refusal]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_readback_checks_mapping_even_when_changed_bytes_match_recorded_digest[agent]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_readback_checks_mapping_even_when_changed_bytes_match_recorded_digest[capture-event]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_readback_checks_mapping_even_when_changed_bytes_match_recorded_digest[class]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_readback_checks_mapping_even_when_changed_bytes_match_recorded_digest[key]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_readback_checks_mapping_even_when_changed_bytes_match_recorded_digest[party]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_readback_checks_mapping_even_when_changed_bytes_match_recorded_digest[request-id]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_schema_checks_wire_values_without_repairing_them[caller_key- key:Mixed.Case]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_schema_checks_wire_values_without_repairing_them[caller_key-key:Mixed. Case]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_schema_checks_wire_values_without_repairing_them[caller_key-key:Mixed.Case ]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_schema_checks_wire_values_without_repairing_them[caller_key-key:Mixed.Case/n]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_schema_checks_wire_values_without_repairing_them[ingested_at-2000-02-31T05:04:03Z]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_schema_checks_wire_values_without_repairing_them[request_id-request:A ]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_two_reads_recover_originals_and_result_without_writing",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_untrusted_capture_cannot_change_selected_mapping_or_supply_proof[actor]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_untrusted_capture_cannot_change_selected_mapping_or_supply_proof[digest]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_untrusted_capture_cannot_change_selected_mapping_or_supply_proof[event]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_untrusted_capture_cannot_change_selected_mapping_or_supply_proof[operation]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_untrusted_capture_cannot_change_selected_mapping_or_supply_proof[reference]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_untrusted_capture_cannot_change_selected_mapping_or_supply_proof[result]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_untrusted_capture_cannot_change_selected_mapping_or_supply_proof[scope]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_untrusted_capture_cannot_change_selected_mapping_or_supply_proof[unbound-agent]",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_capture_normalization.py::test_withhold_only_original_request_keep_draft_receipt_and_owner_record",
+      "sourceModule": "kernel.tests.test_capture_normalization",
+      "sourcePath": "kernel/tests/test_capture_normalization.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ci_policy_transition.py::TransitionPolicyClosureTests::test_closure_covers_static_imports_inputs_tests_and_exact_tree",
       "sourceModule": "conformance.test_ci_policy_transition_operator",
       "sourcePath": "conformance/test_ci_policy_transition_operator.py"
@@ -29086,8 +29346,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "f5b0f9cd8fbdea9a2051b69adcbe75c95962242255bee3c881075dc6d17d4eec",
-  "entryCount": 5817,
+  "entriesSha256": "4b540aaba240ce50d28e41d1c78d8e6088ed6c62004cc2884f5dca7e1ec75d1c",
+  "entryCount": 5869,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
