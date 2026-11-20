@@ -1,0 +1,45 @@
+# Preserve the original request for one manual submission
+
+**Phase A for [Delivery #451](https://github.com/samovers/OFARM2/issues/451).** Platform Capture/import owns normalization of the submitted request. For one fictional manual operation claim, a consumer must be able to recover the exact request bytes the normalizer produced and the disposition it recorded. This draft proposes the conversion and its read-only lookup. Implementation and the tests below await a separate decision.
+
+## From capture to evidence
+
+1. Trusted composition fixes the capture producer, normalizer and reader. It supplies the authenticated tenant and party and selects the capture identity, exact revision and owner mapping. Read the original capture bytes from that revision. A caller can propose a capture. A reference, hash, receipt, or claim of success in the caller's data cannot select the authoritative source or outcome.
+2. Convert the selected capture into one typed request using the mapping below. Validate the actual output against the pinned wire schema, including required fields, types, date-time and key grammar. Serialize once for that conversion and keep the exact bytes. Preserve the source bytes too. Compute a separate raw SHA-256 for each byte sequence. [CommitIngressRequest schema](../../contracts/kernel/OFARM_CommitIngressRequest_schema_v0_1.json)
+3. The normalizer records the actual disposition together with its tenant, capture identity and revision, mapping identity, request identity, and both originals and hashes under a stable owner reference. Protected references to the exact originals are sufficient only while both are independently retrievable. Only a completed, internally consistent owner record can pass. An incomplete write, conflicting record or unreadable original yields zero passing evidence. Ordinary submission fields cannot write or replace this record.
+4. A separate, fixed reader resolves the selected tenant, revision and reference. It reads both originals, checks each raw hash, validates the request, checks the mapped fields against the selected capture and trusted context, and checks the recorded disposition. Return the unchanged request bytes to Event Ingress and the checked reference and recorded disposition to Commit Ingress. Reading never reruns the conversion or changes a record. In the isolated fixture, a passing result requires the normalizer's own recorded `NORMALIZED_DRAFT` from a successful conversion. A refusal, missing disposition or unknown value yields zero passing references. [Placement in the first gate](https://github.com/samovers/OFARM2/blob/96410b8e62abed00c157d7ef973c6e177e559a4d/docs/rfcs/OFARM2_Pending_Claim_Promotion_Evidence_v0_1.md#where-the-evidence-goes-in-the-trace)
+
+### Mapping for the fictional manual capture
+
+The test producer fixes the following mapping and the trusted inputs before running the normalizer. The checked wire schema is `ofarm.commitingressrequest.v0.1`, raw SHA-256 `397ec3a61ed572b14f9916bc9e7b316ff48150c743c6b7aa2eab94a3be3e8ffc`.
+
+| Request field | Source and check |
+| --- | --- |
+| `schemaVersion`, `ingressChannel`, `commitClass` | The selected manual operation-claim mapping emits the pinned version, `MANUAL_UI` and `OPERATION_CLAIM`. Check that this is the selected `ASSERT_OPERATION_CLAIM` submission. |
+| `requestId`, `ingestedAt` | Use the request identity and ingress time fixed for this capture revision. Preserve both during lookup. |
+| `actingPartyRef`, optional `actingAgentRef` | The positive control uses the authenticated party. Check the capture against that identity. An agent on the wire requires a separately established agent binding. The authenticated tenant scopes the lookup outside the wire request. [Tenant binding](../../kernel/tenant_uow.py) |
+| `targetScopes`, `semanticEventRef` | Use the scope type and reference pairs and the existing event selected for this submission. Check the capture's values against that selection. Event issuance and classification stay with their owners. [Event issuance](https://github.com/samovers/OFARM2/issues/453) · [Classification](https://github.com/samovers/OFARM2/issues/452) |
+| `idempotencyKey` | Carry the original caller key from the selected submission and check its exact value. Preserve case. Refuse spaces that violate wire grammar. The coordinator independently compares its own original key and owns replay and conflict decisions. [Command coordinator](https://github.com/samovers/OFARM2/issues/178) |
+
+## Ownership and containment
+
+The protected assets are the capture and request originals, the farm and submission identity, and the recorded outcome. A genuine request from another submission can otherwise look convincing, even for the same person on the same farm. Require agreement between the independently selected revision, the bound tenant and actor, both originals, and the immutable conversion record. Caller-controlled evidence fields have no authority. The threat model assumes the authenticated identity provider, owner store and trusted composition themselves retain their integrity.
+
+The legacy header parser preserves transport fields. The legacy normalizer builds a dictionary, inserts a record and logs its gate result. The legacy log lacks both protected originals and a tenant-scoped lookup. The proposed isolated test first runs the fixture normalizer, then resolves its result using a separate reader instance. A hand-authored passing record would leave the conversion untested. [Header parser](../../kernel/stages.py#L51-L81) · [Legacy normalizer](../../kernel/stages.py#L256-L298) · [Runtime boundaries](../../kernel/README.md)
+
+The first live save also needs the production capture owner to identify its authorized writer, revision selection, byte retention, read permissions and success vocabulary. Until then the production binding refuses. A new independent storage authority or permission requires its own delivery. #428 records its own gate entry, and #178 binds tenant, principal, operation and attempt before making an eligibility decision. Normalization supplies evidence to those owners. It grants no submission permission. [Promotion evidence](https://github.com/samovers/OFARM2/issues/428) · [Command and receipt](https://github.com/samovers/OFARM2/issues/178)
+
+## Verification plan
+
+Exercise the proposed normalizer and lookup entry points with fictional, independently selected inputs. Each negative starts from a passing control and changes one condition. The owner record, capture draft and any existing receipt are distinct pieces of evidence. [Delivery acceptance criteria](https://github.com/samovers/OFARM2/issues/451)
+
+| Invariant | Planned observation |
+| --- | --- |
+| Original conversion is repeatable to read | Run the normalizer once. Resolve the same tenant, capture revision and reference through two independent reads. Both return the same reference, the exact request bytes retained at conversion and the actual recorded disposition. |
+| Both originals are necessary | Keep the valid draft, receipt, revision, evidence record and hashes. Withhold only the original typed request. Lookup must refuse to confirm it. Repeat with the source capture missing or changed, and with byte-different but schema-equivalent request JSON. Each yields zero passing references. |
+| Evidence belongs to one submission | Create A and B for the same farm and person with distinct request IDs and keys. A passes for A, and B passes for B. Keep A's trusted selection fixed and substitute B's genuine request for A's stored original. The lookup refuses. Repeat for a foreign tenant and a stale revision. |
+| Mapping and identity are checked | Vary the actor, unbound agent, scope, event, command class, request ID or key. Each mismatch refuses. Exercise valid keys differing only in case and a key with spaces. A caller-proposed reference, hash or disposition cannot overwrite protected evidence. |
+| A recorded refusal stays a refusal | Exercise the normalizer's own refusal and read the result under the same selection with both originals available. There are zero passing references. Repeat with the stored disposition missing or unrecognized. A partial or conflicting record also refuses. |
+| Reading carries no save authority | Verify both passing and refused reads leave capture and ledger state intact and produce no new gate row, first-save write, idempotency outcome or submission permission. |
+
+The expected implementation is one private Capture/import module and focused tests against the existing schema, with ordinary test inventory and package updates as needed. Conversion and independent lookup together are the smallest testable change. Before live integration, the capture owner must demonstrate the same invariants with an authorized production source. Changes to writer authority, evidence meaning, effects or deployment posture require fresh design review and, when they change approved scope, a new decision. The next step is review of this Phase A on the named draft.
