@@ -1,0 +1,171 @@
+{
+  "id": "fictional:spray-draft-catalog:2026-11-18:r6",
+  "label": "Example catalog — fictional",
+  "fictional": true,
+  "farmer": {"id": "party:demo-farmer", "label": "Demo farmer"},
+  "farm": {"id": "farm:demo", "label": "Demo farm"},
+  "equipmentId": "equipment:demo-sprayer",
+  "exampleEvidenceSets": [
+    {
+      "format": "spray-example-condition-evidence.v1",
+      "id": "example-evidence:orchard-notes:r1",
+      "revision": "r1",
+      "label": "Fictional orchard notes — version 1",
+      "fictional": true,
+      "qualification": "All three notes are invented examples. Selecting them does not prove spraying happened or satisfy any real job condition.",
+      "jobId": "job:demo-orchard-spray",
+      "jobRevision": "r1",
+      "activityInstanceRef": "activity:demo-orchard-spray:2026-11-11",
+      "reportedContext": {
+        "productId": "binding:demo-product-a",
+        "parcelId": "field:demo-orchard",
+        "cropId": "binding:demo-apples",
+        "methodId": "method:demo-tractor-sprayer",
+        "treatmentTargetId": "organism:demo-pest",
+        "performerId": "party:demo-operator"
+      },
+      "event": {
+        "start": "2026-11-11T09:00:00Z",
+        "end": "2026-11-11T09:45:00Z"
+      },
+      "records": [
+        {
+          "id": "example-note:orchard-start:r1",
+          "revision": "r1",
+          "fictional": true,
+          "conditionId": "start:O01",
+          "phase": "START",
+          "conditionMeaning": "Product begins reaching the specified treatment extent.",
+          "observedAt": "2026-11-11T09:00:00Z",
+          "originalText": "FICTIONAL EXAMPLE — invented for the draft test. At 10:00 Europe/Ljubljana on 11 November 2026, the example operator reports that Example product A first reached the first row of Example orchard from the example tractor-mounted sprayer.",
+          "originalTextSha256": "09f24b6615e378618610e978883d9198cd17025f70c91c0730820b5dfdec8b12",
+          "supports": "Illustrates a report that product began reaching part of the named orchard.",
+          "limitations": "This invented note is not a real observation. It proves no identity, amount, permission or whole-orchard coverage."
+        },
+        {
+          "id": "example-note:orchard-during:r1",
+          "revision": "r1",
+          "fictional": true,
+          "conditionId": "progress:O01",
+          "phase": "IN_PROGRESS",
+          "conditionMeaning": "Specified product application is actively occurring.",
+          "observedAt": "2026-11-11T09:20:00Z",
+          "originalText": "FICTIONAL EXAMPLE — invented for the draft test. At 10:20 Europe/Ljubljana on 11 November 2026, the example operator reports spraying Example product A in the third row of Example orchard with the example tractor-mounted sprayer.",
+          "originalTextSha256": "6940ffc326037657c8340e9842b531c066edb5256ded3dd4e30ab74d2dc18cf6",
+          "supports": "Illustrates a report of spraying at one moment during the job.",
+          "limitations": "This invented note does not prove continuous spraying, the amounts used or coverage of other rows."
+        },
+        {
+          "id": "example-note:orchard-finish:r1",
+          "revision": "r1",
+          "fictional": true,
+          "conditionId": "finish:O01",
+          "phase": "FINISH",
+          "conditionMeaning": "Every selected treatment segment meets the bound application procedure finish criteria.",
+          "observedAt": "2026-11-11T09:45:00Z",
+          "originalText": "FICTIONAL EXAMPLE — invented for the draft test. At 10:45 Europe/Ljubljana on 11 November 2026, the example operator reports that the sprayer stopped. No record of which rows or treatment segments were completed was supplied.",
+          "originalTextSha256": "4a7f465af236b1eeafb4b97aaf6e74f5af210a941f57a594b0c1e3c993dbaa3c",
+          "supports": "Illustrates an end-of-work note linked to the finish condition for review.",
+          "limitations": "Stopping is not proof of finishing the whole job. Evidence for every selected treatment segment is still missing."
+        }
+      ]
+    }
+  ],
+  "exampleAmountRules": {
+    "product": {
+      "format": "spray-example-amount-rule.v1",
+      "id": "example-rule:orchard-product-amount",
+      "revision": "r1",
+      "label": "Example product amount — version 1",
+      "fictional": true,
+      "role": "PRODUCT_DOSE",
+      "jobId": "job:demo-orchard-spray",
+      "jobRevision": "r1",
+      "materialId": "binding:demo-product-a",
+      "comparison": "EXACT_DECIMAL_SAME_UNIT",
+      "expected": {"value": "0.30", "unitId": "litres-per-hectare", "unitRef": "scheme:ucum:L/har", "quantityKindRef": "scheme:qudt:VolumePerArea"},
+      "meaning": "For this example job, compare the reported amount of Product A with 0.30 litres per hectare. Product and water are separate amounts.",
+      "qualification": "Made-up example check, not a safety limit or permission to use the product. No change from dose to rate is authorised."
+    },
+    "water": {
+      "format": "spray-example-amount-rule.v1",
+      "id": "example-rule:orchard-water-amount",
+      "revision": "r1",
+      "label": "Example water amount — version 1",
+      "fictional": true,
+      "role": "WATER_AMOUNT",
+      "jobId": "job:demo-orchard-spray",
+      "jobRevision": "r1",
+      "materialId": "water",
+      "comparison": "EXACT_DECIMAL_SAME_UNIT",
+      "expected": {"value": "200.00", "unitId": "litres-per-hectare", "unitRef": "scheme:ucum:L/har", "quantityKindRef": "scheme:qudt:VolumePerArea"},
+      "meaning": "For this example job, compare water only with 200.00 litres per hectare. Finished spray mixture and a tank total cannot be checked as water per hectare.",
+      "qualification": "Made-up example check, not a safety limit or an approved mixture recipe. It does not prove how much water was used."
+    }
+  },
+  "jobs": [
+    {
+      "id": "job:demo-orchard-spray",
+      "revision": "r1",
+      "label": "Example orchard spray — version 1",
+      "fictional": true,
+      "summary": "Apply Example product A across the whole Example orchard with the example tractor-mounted sprayer, targeting Example pest.",
+      "qualification": "Made-up job for testing only. It is not permission to spray or proof that spraying happened.",
+      "activityInstanceRef": "activity:demo-orchard-spray:2026-11-11",
+      "activity": "APPLY_INPUT",
+      "interventionKind": "CROP_PROTECTION",
+      "target": {"kind": "FIELD", "binding": {"ref": "field:demo-orchard"}},
+      "extent": {"posture": "FULL_TARGET_SCOPE"},
+      "planned": {
+        "productId": "binding:demo-product-a",
+        "parcelId": "field:demo-orchard",
+        "cropId": "binding:demo-apples",
+        "methodId": "method:demo-tractor-sprayer",
+        "treatmentTargetId": "organism:demo-pest",
+        "dose": {"value": "0.30", "unitId": "litres-per-hectare"},
+        "applicationVolume": {"liquidId": "water", "value": "200.00", "unitId": "litres-per-hectare"}
+      },
+      "procedure": {
+        "id": "procedure:demo-orchard-spray",
+        "revision": "r1",
+        "methodRef": "method:demo-tractor-sprayer",
+        "instructions": [
+          "Apply the example product over the whole selected orchard using the example tractor-mounted sprayer.",
+          "The fictional plan specifies 0.30 L/ha of product and 200.00 L/ha of water as separate amounts.",
+          "Completion requires evidence that every selected treatment segment meets the plan."
+        ]
+      },
+      "conditions": [
+        {"id": "start:O01", "phase": "START", "meaning": "Product begins reaching the specified treatment extent."},
+        {"id": "progress:O01", "phase": "IN_PROGRESS", "meaning": "Specified product application is actively occurring."},
+        {"id": "finish:O01", "phase": "FINISH", "meaning": "Every selected treatment segment meets the bound application procedure finish criteria."}
+      ]
+    }
+  ],
+  "products": [
+    {"id": "binding:demo-product-a", "label": "Example product A", "defaultUnitId": "litres-per-hectare"},
+    {"id": "binding:demo-product-b", "label": "Example product B", "defaultUnitId": "kilograms-per-hectare"}
+  ],
+  "parcels": [{"id": "field:demo-orchard", "label": "Example orchard", "cropId": "binding:demo-apples", "cycleId": "cycle:demo-orchard"}],
+  "crops": [{"id": "binding:demo-apples", "label": "Apples"}],
+  "performers": [
+    {"id": "party:demo-operator", "label": "Example operator"},
+    {"id": "party:demo-farmer", "label": "Demo farmer"}
+  ],
+  "methods": [
+    {"id": "method:demo-tractor-sprayer", "label": "Tractor-mounted sprayer (example)"},
+    {"id": "method:demo-handheld-sprayer", "label": "Handheld sprayer (example)"}
+  ],
+  "treatmentTargets": [
+    {"id": "organism:demo-pest", "label": "Example pest"},
+    {"id": "organism:demo-fungal-disease", "label": "Example fungal disease"}
+  ],
+  "applicationLiquids": [
+    {"id": "water", "label": "Water only"},
+    {"id": "spray-mixture", "label": "Finished spray mixture"}
+  ],
+  "units": [
+    {"id": "litres-per-hectare", "label": "L/ha", "ref": "scheme:ucum:L/har", "quantityKindRef": "scheme:qudt:VolumePerArea"},
+    {"id": "kilograms-per-hectare", "label": "kg/ha", "ref": "scheme:ucum:kg/har", "quantityKindRef": "scheme:qudt:MassPerArea"}
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "id": "fictional:spray-draft-catalog:2026-11-18:r3",
+  "label": "Example catalog — fictional",
+  "fictional": true,
+  "farmer": {"id": "party:demo-farmer", "label": "Demo farmer"},
+  "farm": {"id": "farm:demo", "label": "Demo farm"},
+  "equipmentId": "equipment:demo-sprayer",
+  "products": [
+    {"id": "binding:demo-product-a", "label": "Example product A", "defaultUnitId": "litres-per-hectare"},
+    {"id": "binding:demo-product-b", "label": "Example product B", "defaultUnitId": "kilograms-per-hectare"}
+  ],
+  "parcels": [{"id": "field:demo-orchard", "label": "Example orchard", "cropId": "binding:demo-apples", "cycleId": "cycle:demo-orchard"}],
+  "crops": [{"id": "binding:demo-apples", "label": "Apples"}],
+  "performers": [
+    {"id": "party:demo-operator", "label": "Example operator"},
+    {"id": "party:demo-farmer", "label": "Demo farmer"}
+  ],
+  "methods": [
+    {"id": "method:demo-tractor-sprayer", "label": "Tractor-mounted sprayer (example)"},
+    {"id": "method:demo-handheld-sprayer", "label": "Handheld sprayer (example)"}
+  ],
+  "treatmentTargets": [
+    {"id": "organism:demo-pest", "label": "Example pest"},
+    {"id": "organism:demo-fungal-disease", "label": "Example fungal disease"}
+  ],
+  "applicationLiquids": [
+    {"id": "water", "label": "Water only"},
+    {"id": "spray-mixture", "label": "Finished spray mixture"}
+  ],
+  "units": [
+    {"id": "litres-per-hectare", "label": "L/ha", "ref": "scheme:ucum:L/har", "quantityKindRef": "scheme:qudt:VolumePerArea"},
+    {"id": "kilograms-per-hectare", "label": "kg/ha", "ref": "scheme:ucum:kg/har", "quantityKindRef": "scheme:qudt:MassPerArea"}
+  ]
+}

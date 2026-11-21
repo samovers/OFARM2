@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#244d3d">
+  <title>Spray notebook · OFARM</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" type="module"></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/">OFARM <span>Spray notebook</span></a><span class="test-label">Local test · fictional farm</span></header>
+  <div class="connection"><span id="connection-dot" class="dot"></span><span id="connection">Loading the example list…</span><button id="sync" class="text-button" type="button">Retry sync</button></div>
+  <main>
+    <div class="intro"><p class="eyebrow">Demo farm / Example orchard</p><h1>Record a spray</h1><p>Save what you used. Check the draft before it goes any further.</p></div>
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+    <div class="workspace">
+      <section class="entry" aria-labelledby="entry-title">
+        <div class="section-heading"><h2 id="entry-title">1. Enter the details</h2><span>Whole parcel</span></div>
+        <button id="new-record" class="secondary entry-new-record" type="button" disabled>Start new spray record</button>
+        <div id="correction-context" class="notice" hidden><p>Making a corrected copy. The original stays unchanged.</p><button id="separate-draft" class="inline-action" type="button">Use these details as a separate draft</button></div>
+        <form id="capture" novalidate>
+          <fieldset id="entry-fields" disabled>
+            <div class="field"><label for="job">Example job</label><select id="job" name="jobId"></select><p class="hint">Choose the planned job, then record what actually happened. Differences will be shown for review.</p></div>
+            <details id="entry-background" class="original field" hidden><summary>See the example job and amount rules</summary><section id="entry-job" class="limits remaining" hidden></section><section id="entry-amount-rules" class="limits remaining" aria-label="Example amount rules" hidden></section></details>
+            <div class="field"><label for="example-evidence">Example evidence (optional)</label><select id="example-evidence" name="exampleEvidenceSetId"></select><p class="hint">These are invented notes for this exercise. Choosing them does not prove the job happened.</p></div>
+            <details id="example-evidence-preview" class="original field" hidden><summary>Read the fictional notes</summary><div id="example-evidence-notes" class="limits"></div></details>
+            <div class="field"><label for="product">Product</label><select id="product" name="productId"><option value="">Choose a product</option></select><p class="hint">Example choices, not a live product register.</p></div>
+            <div class="field"><label for="dose">Dose per hectare</label><div class="dose-row"><input id="dose" name="dose" type="text" inputmode="decimal" placeholder="e.g. 0.3" autocomplete="off" maxlength="80"><label class="sr-only" for="unit">Dose unit</label><select id="unit" name="unitId"></select></div><p class="hint">Product amount. Do not enter the amount of water.</p></div>
+            <div class="field"><label for="liquid-kind">Liquid measured</label><select id="liquid-kind" name="liquidId"></select><p class="hint">Choose water only or the finished spray mixture. They are different amounts.</p></div>
+            <div class="field"><label for="application-volume">Water or mixture per hectare</label><div class="dose-row"><input id="application-volume" name="applicationVolume" type="text" inputmode="decimal" autocomplete="off" maxlength="80"><label class="sr-only" for="volume-unit">Water or mixture unit</label><select id="volume-unit" name="applicationVolumeUnitId"></select></div><p class="hint">Litres of the selected liquid per hectare. Keep the product dose in its separate field; this field does not take a tank total.</p></div>
+            <div class="field"><label for="parcel">Parcel</label><select id="parcel" name="parcelId"></select></div>
+            <div class="field"><label for="crop">Crop</label><select id="crop" name="cropId"></select></div>
+            <div class="field"><label for="performer">Who sprayed?</label><select id="performer" name="performerId"></select><p class="hint">Choose the person who did the spraying. They may be different from the person entering this record.</p></div>
+            <div class="field"><label for="method">Spraying method</label><select id="method" name="methodId"></select></div>
+            <div class="field"><label for="treatment-target">What were you treating?</label><select id="treatment-target" name="treatmentTargetId"></select><p class="hint">Example choices for this test. These do not confirm that a product or method is allowed.</p></div>
+            <div class="field"><span class="field-label">Application time</span><div class="time-row"><div><label class="small-label" for="start">Started</label><input id="start" name="start" type="datetime-local"></div><div><label class="small-label" for="end">Finished</label><input id="end" name="end" type="datetime-local"></div></div><p id="timezone" class="hint"></p></div>
+            <p class="scope-note">Recorded by Demo farmer. A photo is optional and is not needed for this test.</p>
+            <button id="save" class="primary" type="submit">Save draft and check <span aria-hidden="true">→</span></button>
+            <p class="hint save-hint">Saves on this device first. Syncs to this computer when available.</p>
+          </fieldset>
+        </form>
+      </section>
+      <aside class="inbox" aria-labelledby="inbox-title"><div class="section-heading"><h2 id="inbox-title">Your drafts</h2><span id="draft-count">0</span></div><div id="draft-list"><p class="empty">Your first draft will appear here.</p></div><p class="inbox-note">This list belongs to this browser. A saved draft is not an approved farm record.</p></aside>
+    </div>
+    <section id="review" class="review" aria-labelledby="review-title" hidden>
+      <div class="section-heading"><div><p class="eyebrow">Selected draft</p><h2 id="review-title" tabindex="-1">2. Review the record</h2></div><span id="review-state" class="state">Draft</span></div>
+      <p id="review-outcome" class="review-outcome" role="status"></p>
+      <div id="review-sync" class="notice" hidden></div>
+      <div id="entry-issues" role="alert" hidden><h3 id="entry-issues-title" tabindex="-1">Check these details</h3><ul id="issue-list"></ul></div>
+      <section id="review-correction" class="limits remaining" aria-label="Corrected copy" hidden></section>
+      <dl id="review-summary" class="summary"></dl>
+      <div class="review-columns"><section><h3>Example amount checks</h3><ul id="amount-outcomes" class="checks"></ul><p class="hint">Matches compare numbers with the example only.</p></section><section><h3>Job conditions</h3><ul id="condition-outcomes" class="condition-outcomes"></ul><p class="hint">Fictional notes cannot prove that spraying happened or the whole job was finished.</p></section></div>
+      <div class="review-actions"><button id="acknowledge" class="primary" type="button" disabled>Finish draft review</button><button id="edit" class="secondary" type="button">Make a corrected copy</button><button id="new-record-review" class="secondary" type="button" disabled>Start new spray record</button><p id="review-help">This marks only the draft as reviewed. It does not approve or publish it.</p></div>
+      <details id="review-background" class="original"><summary>Job, rules and fictional notes</summary><section id="review-job" class="limits job-review" aria-label="Example job and conditions"></section><section id="review-condition-evidence" class="limits remaining" aria-label="Example evidence links"></section><section id="review-amount-rules" class="limits remaining" aria-label="Example amount results"></section></details>
+      <details id="check-details" class="original"><summary>Entry checks and verifier report</summary><div class="review-columns"><section><h3>Entry and format checks</h3><p class="hint">These check the entered values and record format. They do not verify identities, permission or what happened.</p><ul id="check-list" class="checks"></ul></section><section class="limits"><h3>Existing verifier</h3><p id="verifier-message">Not checked yet.</p><button id="recheck" class="secondary" type="button" hidden>Run verifier</button></section></div><details id="verifier-error" class="original" hidden><summary>Why the check could not run</summary><pre id="verifier-error-detail"></pre></details><details id="verifier-details" class="original" hidden><summary>See the actual verifier findings</summary><p id="verifier-identity"></p><p id="verifier-counts" class="hint"></p><p class="hint">These results belong to an incomplete proposal. Passing an entry check does not mean the spraying was verified or approved.</p><div class="finding-scroll"><table class="finding-table"><thead><tr><th scope="col">Check</th><th scope="col">Result</th><th scope="col">Detail</th></tr></thead><tbody id="verifier-findings"></tbody></table></div></details></details>
+      <details id="missing-input-details" class="original"><summary>What a real approved record would still need</summary><section class="limits remaining"><ul id="unresolved"></ul></section></details>
+      <details class="original"><summary>See the original entry and times</summary><dl id="times"></dl><p id="digest"></p><pre id="original"></pre></details>
+    </section>
+    <footer><strong>Drafts only.</strong> Nothing is approved or published.</footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "manifestRawSha256": "d4325b754615e937a0f2d0f6ab5187e9e9f822e9299905cb796b3cd3870d76dc",
+  "members": 283,
+  "ownerTransportSha256": "2b94e606981f3a560256e2338e8cad128f5cbd89c15b5dc26dd3c8470158a1be",
+  "scope": "Incomplete draft diagnostics only; source-use admission, live C4 and publication remain unresolved.",
+  "locationEnvironmentVariable": "SPRAY_DRAFT_VERIFIER"
+}

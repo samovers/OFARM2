@@ -1,0 +1,29 @@
+{
+  "files": {
+    "spray_builder": {
+      "root": "repository",
+      "path": "profile_si_ffs/test_fixtures/demo_payloads.py",
+      "sha256": "bb675ae69c490206414bc3db20b62daf7f5cfa73a03513a8bc83f64858594513"
+    },
+    "execution_schema": {
+      "root": "repository",
+      "path": "contracts/core/OFARM_ExecutionRecordPayload_schema_v0_1.json",
+      "sha256": "ca62f01d056794ee588d55c3f5df652fc039124b76af5631d417714bc7059ff0"
+    },
+    "evidence_schema": {
+      "root": "repository",
+      "path": "contracts/kernel/OFARM_EvidenceRecord_schema_v0_1.json",
+      "sha256": "ee68822ae45e6a013412ef5173810747340c14671f44b593ee6f35ee113f2be6"
+    },
+    "time_parser": {
+      "root": "verifier",
+      "path": "components/revision-02/time_validation.py",
+      "sha256": "371611e88068e641ab21adc146bec1af1fc77b8c6bcb1ac94e3ec6aaeeca5951"
+    },
+    "library_manifest": {
+      "root": "environment",
+      "path": "libraries.json",
+      "sha256": "59574554539f3dc1337eea6d754b404cb4243560c5e65f0ab7c98130e3aeafb5"
+    }
+  }
+}
