@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/event-ingress-classification-proof/profile/v0.1",
+  "title": "Non-default owner-selected exact event classification profile",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.eventClassificationProfile.v0.1"
+    },
+    "profileId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$",
+      "minLength": 1
+    },
+    "profileRevision": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$",
+      "minLength": 1
+    },
+    "contractBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "ref",
+        "digest"
+      ]
+    },
+    "ownerRole": {
+      "const": "EVENT_INGRESS_CLASSIFICATION"
+    },
+    "selectionMethod": {
+      "const": "EXACT_DOMINANT_CONSEQUENCE_AND_SUBTYPE"
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]+$",
+            "minLength": 1
+          },
+          "dominantSemanticConsequence": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subtype": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "presence": {
+                    "const": "ABSENT"
+                  }
+                },
+                "required": [
+                  "presence"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "presence": {
+                    "const": "PRESENT"
+                  },
+                  "value": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9._:/-]+$",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "presence",
+                  "value"
+                ]
+              }
+            ]
+          },
+          "authoritativePrimaryFamily": {
+            "enum": [
+              "StructureEvent",
+              "ObservationEvent",
+              "OccurrenceEvent",
+              "InterventionEvent",
+              "MaterialEvent",
+              "EvidenceEvent",
+              "GovernanceEvent"
+            ]
+          },
+          "semanticSourceBinding": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "ref": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9._:/-]+$",
+                "minLength": 1
+              },
+              "digest": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            },
+            "required": [
+              "ref",
+              "digest"
+            ]
+          },
+          "sourceClause": {
+            "type": "string",
+            "minLength": 1
+          },
+          "classificationReason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "caseId",
+          "dominantSemanticConsequence",
+          "subtype",
+          "authoritativePrimaryFamily",
+          "semanticSourceBinding",
+          "sourceClause",
+          "classificationReason"
+        ]
+      }
+    },
+    "limits": {
+      "const": "Classification of the supplied event description only; no occurrence, acceptance, authority or runtime admission."
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "profileId",
+    "profileRevision",
+    "contractBinding",
+    "ownerRole",
+    "selectionMethod",
+    "cases",
+    "limits"
+  ]
+}

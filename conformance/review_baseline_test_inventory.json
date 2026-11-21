@@ -12241,6 +12241,206 @@
       "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_app-commit-act-exact]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_app-commit-act-initial]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_app-commit-world-exact]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_app-commit-world-initial]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_app-rollback-act-exact]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_app-rollback-act-initial]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_app-rollback-world-exact]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_app-rollback-world-initial]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_worker-commit-act-exact]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_worker-commit-act-initial]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_worker-commit-world-exact]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_worker-commit-world-initial]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_worker-rollback-act-exact]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_worker-rollback-act-initial]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_worker-rollback-world-exact]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_allowed_submission_and_independent_readback[ofarm_worker-rollback-world-initial]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-checker-unavailable]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-missing-act-envelope]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-missing-proof]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-no-reader]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-other-submission]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-reentry]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-savepoint]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-sql]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-validation-phase]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-wrong-act-envelope]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_app-wrong-classification]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-checker-unavailable]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-missing-act-envelope]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-missing-proof]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-no-reader]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-other-submission]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-reentry]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-savepoint]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-sql]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-validation-phase]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-wrong-act-envelope]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_caught_admission_failure_rolls_back_batch[ofarm_worker-wrong-classification]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_stale_and_foreign_calls_cannot_read_or_poison_new_lease[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_submission_event_admission.py::test_stale_and_foreign_calls_cannot_read_or_poison_new_lease[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_submission_event_admission",
+      "sourcePath": "kernel/tests/test_postgresql_submission_event_admission.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_submit_provisioning.py::TestSubmitRefusals::test_bad_append_rolls_back[execution]",
       "sourceModule": "kernel.tests.test_postgresql_submit_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_submit_provisioning.py"
@@ -26026,6 +26226,286 @@
       "sourcePath": "kernel/tests/test_stages.py"
     },
     {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_changed_package_member_prevents_admission[dependency-manifest.json]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_changed_package_member_prevents_admission[report_contract.py]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_changed_package_member_prevents_admission[schemas/report.schema.json]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_changed_package_member_prevents_admission[sources/event-grammar.md]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_changed_package_member_prevents_admission[verify_event_proof.py]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_checker_unavailable_when_accepted_source_is_missing",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_content_digest_selects_only_its_original_envelope",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_equivalent_json_cannot_replace_original_octets[context_bytes]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_equivalent_json_cannot_replace_original_octets[envelope_bytes]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_equivalent_json_cannot_replace_original_octets[profile_bytes]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_equivalent_json_cannot_replace_original_octets[request_bytes]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_event_requires_exactly_one_immutable_selector[change0]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_event_requires_exactly_one_immutable_selector[change1]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_genuine_checker_refuses_selected_but_invalid_proof",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_matching_malformed_pins_never_reach_checker[context_sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_matching_malformed_pins_never_reach_checker[contract_sha256-None]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_matching_malformed_pins_never_reach_checker[profile_sha256-sha256:3333333333333333333333333333333333333333333333333333333333333333]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_matching_malformed_pins_never_reach_checker[proof_digest-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_matching_originals_pass_accepted_checker[ASSOCIATED_WORLD_EVENT]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_matching_originals_pass_accepted_checker[SUBMISSION_ACT]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_matching_raw_pin_alone_cannot_bind_changed_request_fields[actingAgentRef-agent:unbound]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_matching_raw_pin_alone_cannot_bind_changed_request_fields[actingPartyRef-party:other]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_matching_raw_pin_alone_cannot_bind_changed_request_fields[commitClass-NOTE]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_matching_raw_pin_alone_cannot_bind_changed_request_fields[idempotencyKey-retry:one]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_matching_raw_pin_alone_cannot_bind_changed_request_fields[requestId-request:other]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_matching_raw_pin_alone_cannot_bind_changed_request_fields[semanticEventRef-event:other]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_matching_raw_pin_alone_cannot_bind_changed_request_fields[targetScopes-value6]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_other_attempt_cannot_read_even_with_same_proof_ref[batch_id-batch:two]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_other_attempt_cannot_read_even_with_same_proof_ref[binding_nonce-change0]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_other_attempt_cannot_read_even_with_same_proof_ref[full_xid-100]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_other_attempt_cannot_read_even_with_same_proof_ref[intent_bytes-{\"effectSubject\":{\"subjectRef\":\"assertion:other\"}}]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_proof_and_context_must_name_the_selected_proof[context_bytes-expectedProofId]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_proof_and_context_must_name_the_selected_proof[proof_bytes-proofId]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_readback_rejects_changed_proof_octets_or_different_attempt",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_readback_rejects_changed_recorded_result[commit_class-NOTE]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_readback_rejects_changed_recorded_result[disposition-CONDITIONAL_CONFORMANCE_FAIL]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_readback_rejects_changed_recorded_result[family-EvidenceEvent]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_readback_rejects_changed_recorded_result[proof_sha256-0000000000000000000000000000000000000000000000000000000000000000]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_readback_rejects_changed_recorded_result[request_id-request:different]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_readback_uses_recorded_result_and_original_use_permission[False]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_readback_uses_recorded_result_and_original_use_permission[True]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_selected_original_cannot_exceed_two_mib",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_selected_profile_cannot_exceed_allowed_nesting",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_two_mib_checker_limit_excludes_original_effect_intent",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_validation_time_proof_cannot_enter_preexisting_path[context_bytes]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_validation_time_proof_cannot_enter_preexisting_path[production_mode]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_validation_time_proof_cannot_enter_preexisting_path[proof_bytes]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_world_event_and_submission_act_cannot_trade_sources",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_world_event_revision_must_match_the_intent",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_wrong_retained_provenance_refuses[contract_sha256-2222222222222222222222222222222222222222222222222222222222222222]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_wrong_retained_provenance_refuses[event_revision-event:field:r2]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_wrong_retained_provenance_refuses[intent_sha256-1111111111111111111111111111111111111111111111111111111111111111]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_wrong_retained_provenance_refuses[producer_ref-issuer:other]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_wrong_retained_provenance_refuses[proof_digest-sha256:3333333333333333333333333333333333333333333333333333333333333333]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_wrong_retained_provenance_refuses[proof_ref-proof:other]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_submission_event_admission.py::test_wrong_retained_provenance_refuses[tenant_id-change0]",
+      "sourceModule": "kernel.tests.test_submission_event_admission",
+      "sourcePath": "kernel/tests/test_submission_event_admission.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_carriers.py::test_binding_identity_is_artifact_owned_and_api_is_closed",
       "sourceModule": "kernel.tests.test_temporal_carriers",
       "sourcePath": "kernel/tests/test_temporal_carriers.py"
@@ -29356,8 +29836,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow_observation.py"
     }
   ],
-  "entriesSha256": "681b83b675cc9da2c1ac1b8a4981d0c757f67ea876c984a0fa97d9cb7b3299e9",
-  "entryCount": 5871,
+  "entriesSha256": "b4b3584a00d7ebcb0ab0dc6f9b587cadcb45da94e3ab477ecb5b69973b65a695",
+  "entryCount": 5967,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/event-ingress-classification-proof/proof/v0.1",
+  "title": "Non-default pre-verdict Event Ingress classification proof",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.preVerdictEventClassificationProof.v0.1"
+    },
+    "proofId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$",
+      "minLength": 1
+    },
+    "ownerRole": {
+      "const": "EVENT_INGRESS_CLASSIFICATION"
+    },
+    "contractBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "ref",
+        "digest"
+      ]
+    },
+    "ownerContextBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "ref",
+        "digest"
+      ]
+    },
+    "classificationProfileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "ref",
+        "digest"
+      ]
+    },
+    "envelopeBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "ref",
+        "digest"
+      ]
+    },
+    "ingressRequestBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "ref",
+        "digest"
+      ]
+    },
+    "envelopeBytesSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "ingressRequestBytesSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "caseId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$",
+          "minLength": 1
+        },
+        "authoritativePrimaryFamily": {
+          "enum": [
+            "StructureEvent",
+            "ObservationEvent",
+            "OccurrenceEvent",
+            "InterventionEvent",
+            "MaterialEvent",
+            "EvidenceEvent",
+            "GovernanceEvent"
+          ]
+        },
+        "commitClass": {
+          "enum": [
+            "NOTE",
+            "OBSERVATION_ASSERTION",
+            "HYPOTHESIS_ASSERTION",
+            "STRUCTURE_ASSERTION",
+            "OPERATION_CLAIM",
+            "EVIDENCE_RECORD",
+            "COMPLIANCE_ASSERTION",
+            "GOVERNANCE_DECISION",
+            "ADVISORY_OUTPUT"
+          ]
+        },
+        "dominantSemanticConsequence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subtype": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "presence": {
+                  "const": "ABSENT"
+                }
+              },
+              "required": [
+                "presence"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "presence": {
+                  "const": "PRESENT"
+                },
+                "value": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._:/-]+$",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "presence",
+                "value"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "caseId",
+        "authoritativePrimaryFamily",
+        "commitClass",
+        "dominantSemanticConsequence",
+        "subtype"
+      ]
+    },
+    "productionMode": {
+      "enum": [
+        "PREEXISTING_PROOF",
+        "VALIDATION_PHASE_PROOF"
+      ]
+    },
+    "completionMilestone": {
+      "const": "CLASSIFICATION_COMPLETE_BEFORE_DEPENDENT_VERDICT"
+    },
+    "reuseRule": {
+      "const": "EXACT_ENVELOPE_REQUEST_PROFILE_CONTEXT_AND_PROOF"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "proofId",
+    "ownerRole",
+    "contractBinding",
+    "ownerContextBinding",
+    "classificationProfileBinding",
+    "envelopeBinding",
+    "ingressRequestBinding",
+    "envelopeBytesSha256",
+    "ingressRequestBytesSha256",
+    "classification",
+    "productionMode",
+    "completionMilestone",
+    "reuseRule"
+  ]
+}

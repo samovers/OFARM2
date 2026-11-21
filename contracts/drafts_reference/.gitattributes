@@ -1,0 +1,4 @@
+# These three verbatim, SHA-256-pinned upstream files use Markdown hard line breaks.
+event_ingress_classification_proof/sources/constitution.md whitespace=-blank-at-eol
+event_ingress_classification_proof/sources/event-grammar.md whitespace=-blank-at-eol
+event_ingress_classification_proof/sources/platform.md whitespace=-blank-at-eol

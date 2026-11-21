@@ -1,0 +1,136 @@
+{
+  "contractId": "ofarm.event-ingress.pre-verdict-classification.v0.1",
+  "version": "0.1",
+  "status": "PROPOSED_NON_DEFAULT",
+  "ownerRole": "EVENT_INGRESS_CLASSIFICATION",
+  "primaryTrustBoundary": "Event Ingress classification and evidence admission",
+  "schemas": {
+    "contract": {
+      "path": "schemas/contract.schema.json",
+      "sha256": "928cbdce10cdade12cdbfef29ca7b15e216659d420ab308abf84127dec400aa3",
+      "schemaId": "https://ofarm.dev/schema/drafts/non-default/event-ingress-classification-proof/contract/v0.1"
+    },
+    "proof": {
+      "path": "schemas/proof.schema.json",
+      "sha256": "8a28e28e6d311edace1d98ab9eb01c7da29c24f20728df9462ca747ac537dbfa",
+      "schemaId": "https://ofarm.dev/schema/drafts/non-default/event-ingress-classification-proof/proof/v0.1"
+    },
+    "context": {
+      "path": "schemas/context.schema.json",
+      "sha256": "c4842c0c7297100d2674fa6bccb6d5b4e557f1db62580e329e2cdb11bdc8aee6",
+      "schemaId": "https://ofarm.dev/schema/drafts/non-default/event-ingress-classification-proof/context/v0.1"
+    },
+    "profile": {
+      "path": "schemas/profile.schema.json",
+      "sha256": "98d4cb9ebd1e455a5772ffa4f018fa2222929635e0f5a347c9cb58df67ca6221",
+      "schemaId": "https://ofarm.dev/schema/drafts/non-default/event-ingress-classification-proof/profile/v0.1"
+    },
+    "report": {
+      "path": "schemas/report.schema.json",
+      "sha256": "2dd914c6405979339128cf7ef6bd250c5685bcbaa2de4818af3caf230e1fdf8a",
+      "schemaId": "https://ofarm.dev/schema/drafts/non-default/event-ingress-classification-proof/report/v0.1"
+    },
+    "envelope": {
+      "path": "source-contracts/SemanticEventEnvelope.v0.1.json",
+      "sha256": "75662a6c4952a62b7e8f8e9de99c23c98899c692914a98ba4b752873f48bd1a4",
+      "schemaId": "https://ofarm.dev/schema/semanticeventenvelope/v0.1"
+    },
+    "request": {
+      "path": "source-contracts/CommitIngressRequest.v0.1.json",
+      "sha256": "397ec3a61ed572b14f9916bc9e7b316ff48150c743c6b7aa2eab94a3be3e8ffc",
+      "schemaId": "https://ofarm.dev/schema/commitingressrequest/v0.1"
+    }
+  },
+  "classificationMethod": "EXACT_DOMINANT_CONSEQUENCE_AND_SUBTYPE",
+  "semanticSources": [
+    {
+      "path": "sources/event-ingress-rfc.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_Event_Ingress_and_Promotion_Boundary_Closure_RFC_v0_1.md",
+      "sourceCommit": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+      "sha256": "2f07429f553e8593a149eb2f2dfc8a6baff8c681545787eeaff5ad04f48ca8db"
+    },
+    {
+      "path": "sources/event-grammar.md",
+      "sourcePath": "01_companion_artifacts/OFARM_Event_Grammar_and_Commit_Matrix_v0_1.md",
+      "sourceCommit": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+      "sha256": "47784169916b66fec510a7a95c86b19b5c222ef987c6d29c26f9a250632a61b3"
+    },
+    {
+      "path": "sources/platform.md",
+      "sourcePath": "00_active_baseline/OFARM_Platform_Runtime_and_Product_Architecture_RC2_1.md",
+      "sourceCommit": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+      "sha256": "76357c6c7c184893f80219720f6343a682a859098f3703eb84c282fba0c02256"
+    },
+    {
+      "path": "sources/constitution.md",
+      "sourcePath": "00_active_baseline/OFARM_Reference_Model_and_Artifact_Constitution_RC2_1.md",
+      "sourceCommit": "4a3d88ea6eff4b3f8a2c521dc621595cbfd1657b",
+      "sha256": "7079e66ab160e2f79bc1a2a6f2c37726c0bea2af921312fcd93b434b9f9c4e3d"
+    }
+  ],
+  "requiredRules": [
+    "PACKAGE_PINS",
+    "STRICT_JSON",
+    "EXACT_SCHEMA_CLOSURE",
+    "INDEPENDENT_CONTEXT_PIN",
+    "INDEPENDENT_PROFILE_PIN",
+    "EXACT_PROOF_SELECTOR",
+    "WHOLE_INPUT_DIGESTS",
+    "EXACT_SOURCE_BYTES",
+    "CONTRACT_BINDINGS",
+    "OWNER_CONTEXT",
+    "REQUEST_CONTEXT",
+    "UNIQUE_CASE_SELECTION",
+    "INDEPENDENT_CLASSIFICATION",
+    "COMPLETE_DOMINANT_CONTEXT",
+    "FAMILY_EQUALITY",
+    "COMMIT_CLASS_EQUALITY",
+    "PRE_VERDICT_INPUT_CLOSURE",
+    "EXACT_REUSE"
+  ],
+  "useModes": [
+    "INITIAL_EVALUATION",
+    "EXACT_REEVALUATION"
+  ],
+  "productionModes": [
+    "PREEXISTING_PROOF",
+    "VALIDATION_PHASE_PROOF"
+  ],
+  "completionMilestone": "CLASSIFICATION_COMPLETE_BEFORE_DEPENDENT_VERDICT",
+  "reuseRule": "EXACT_ENVELOPE_REQUEST_PROFILE_CONTEXT_AND_PROOF",
+  "inputRoles": [
+    "PINNED_CONTRACT",
+    "SELECTED_CLASSIFICATION_PROFILE",
+    "FIXED_ENVELOPE",
+    "FIXED_INGRESS_REQUEST",
+    "INDEPENDENT_OWNER_CONTEXT"
+  ],
+  "dependencyOrder": [
+    "schema and semantic source closure",
+    "contract",
+    "owner classification profile",
+    "fixed envelope and ingress request",
+    "independently selected owner context",
+    "completed classification proof",
+    "consumer verification and later dependent verdict"
+  ],
+  "forbiddenInputs": [
+    "dependent domain verdict",
+    "dependent domain trace",
+    "final assertion effect",
+    "this attempt receipt",
+    "later ingress result or promotion trace used as earlier proof"
+  ],
+  "outputMeaning": "Conditional offline conformance only. Actual source selection, runtime identity and admission remain governed by existing owners; this component creates no keys, signatures, acceptance or authorization.",
+  "hashRules": {
+    "files": "SHA256_EXACT_UTF8_BYTES",
+    "values": "RFC8785_SHA256",
+    "contract": "Exclude exactly top-level contractDigest; no other field exclusions.",
+    "proof": "Whole value, no embedded self digest."
+  },
+  "verificationCode": {
+    "verify_event_proof.py": "c78528f3374d9aa4a4dac5f5dfbb88d22320b7c38391cff7fa99ccd1cd83efb8",
+    "report_contract.py": "4b216922c7d47193e45a3cabb36981f97da6dea52278896eebc0c08f3879ac13"
+  },
+  "contractDigest": "sha256:3f17e7aff4379f671a989d5e7aeb88c1a0bedea45861f453396179de62e7f4c1"
+}

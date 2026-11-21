@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/event-ingress-classification-proof/context/v0.1",
+  "title": "Non-default independently selected classification verification context",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.eventClassificationContext.v0.1"
+    },
+    "contextId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$",
+      "minLength": 1
+    },
+    "ownerRole": {
+      "const": "EVENT_INGRESS_CLASSIFICATION"
+    },
+    "contractBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "ref",
+        "digest"
+      ]
+    },
+    "classificationProfileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "ref",
+        "digest"
+      ]
+    },
+    "selectedCaseId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$",
+      "minLength": 1
+    },
+    "envelopeBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "ref",
+        "digest"
+      ]
+    },
+    "ingressRequestBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "ref",
+        "digest"
+      ]
+    },
+    "envelopeBytesSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "ingressRequestBytesSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "expectedCommitClass": {
+      "enum": [
+        "NOTE",
+        "OBSERVATION_ASSERTION",
+        "HYPOTHESIS_ASSERTION",
+        "STRUCTURE_ASSERTION",
+        "OPERATION_CLAIM",
+        "EVIDENCE_RECORD",
+        "COMPLIANCE_ASSERTION",
+        "GOVERNANCE_DECISION",
+        "ADVISORY_OUTPUT"
+      ]
+    },
+    "expectedTargetScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scopeType": {
+            "enum": [
+              "FARM",
+              "SITE",
+              "FIELD",
+              "ZONE",
+              "CROP_CYCLE",
+              "LOT",
+              "FACILITY",
+              "OPERATION",
+              "DEPLOYMENT",
+              "TENANT"
+            ]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]+$",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "scopeType",
+          "scopeRef"
+        ]
+      }
+    },
+    "expectedProofId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$",
+      "minLength": 1
+    },
+    "productionMode": {
+      "enum": [
+        "PREEXISTING_PROOF",
+        "VALIDATION_PHASE_PROOF"
+      ]
+    },
+    "permittedUseModes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "enum": [
+          "INITIAL_EVALUATION",
+          "EXACT_REEVALUATION"
+        ]
+      },
+      "uniqueItems": true,
+      "contains": {
+        "const": "INITIAL_EVALUATION"
+      }
+    },
+    "reuseRule": {
+      "const": "EXACT_ENVELOPE_REQUEST_PROFILE_CONTEXT_AND_PROOF"
+    },
+    "requiredMilestone": {
+      "const": "CLASSIFICATION_COMPLETE_BEFORE_DEPENDENT_VERDICT"
+    },
+    "inputRoles": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "PINNED_CONTRACT"
+        },
+        {
+          "const": "SELECTED_CLASSIFICATION_PROFILE"
+        },
+        {
+          "const": "FIXED_ENVELOPE"
+        },
+        {
+          "const": "FIXED_INGRESS_REQUEST"
+        },
+        {
+          "const": "INDEPENDENT_OWNER_CONTEXT"
+        }
+      ],
+      "items": false,
+      "minItems": 5,
+      "maxItems": 5
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "contextId",
+    "ownerRole",
+    "contractBinding",
+    "classificationProfileBinding",
+    "selectedCaseId",
+    "envelopeBinding",
+    "ingressRequestBinding",
+    "envelopeBytesSha256",
+    "ingressRequestBytesSha256",
+    "expectedCommitClass",
+    "expectedTargetScopes",
+    "expectedProofId",
+    "productionMode",
+    "permittedUseModes",
+    "reuseRule",
+    "requiredMilestone",
+    "inputRoles"
+  ]
+}
